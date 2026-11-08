@@ -1,0 +1,11 @@
+#!/bin/sh
+set -e
+
+DOLPHIN=/usr/share/dbus-1/services/org.kde.dolphin.FileManager1.service
+
+if [ "$1" = "remove" ] || [ "$1" = "purge" ] || [ "$1" = "abort-install" ]; then
+    dpkg-divert --package wildos-files --remove --rename \
+        --divert "$DOLPHIN.dolphin" "$DOLPHIN" >/dev/null || true
+fi
+
+#DEBHELPER#

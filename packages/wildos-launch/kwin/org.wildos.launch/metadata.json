@@ -1,0 +1,20 @@
+{
+    "KPackageStructure": "KWin/Script",
+    "KPlugin": {
+        "Authors": [
+            {
+                "Email": "dev@wildos.io",
+                "Name": "Wild OS"
+            }
+        ],
+        "Description": "Tells Wild OS when an app's window has opened, so the taskbar knows the app has finished starting",
+        "EnabledByDefault": true,
+        "Id": "org.wildos.launch",
+        "License": "GPL-3.0-or-later",
+        "Name": "App start tracking",
+        "Version": "0.1.0",
+        "Website": "https://wildos.io"
+    },
+    "X-Plasma-API": "declarativescript",
+    "X-Plasma-MainScript": "ui/main.qml"
+}

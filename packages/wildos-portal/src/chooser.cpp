@@ -1,0 +1,540 @@
+#include "chooser.h"
+
+#include "dirmodel.h"
+
+#include <KService>
+#include <QDBusArgument>
+#include <QDir>
+#include <QFileInfo>
+#include <QMimeDatabase>
+#include <QRegularExpression>
+#include <QStandardPaths>
+
+namespace
+{
+// GTK writes the access key as _Open and Qt as &Open; neither is shown.
+QString plainLabel(QString text)
+{
+    text.remove(QRegularExpression(QStringLiteral("[_&](?=\\w)")));
+    return text.trimmed();
+}
+
+QStringList suffixesOf(const Portal::Filter &filter)
+{
+    static QMimeDatabase db;
+    QStringList list;
+    for (const Portal::FilterRule &rule : filter.rules) {
+        if (rule.type == 0) {
+            if (rule.pattern.startsWith(QStringLiteral("*.")) && rule.pattern != QStringLiteral("*.*")) {
+                const QString suffix = rule.pattern.mid(1).toLower();
+                if (!list.contains(suffix)) {
+                    list.append(suffix);
+                }
+            }
+        } else {
+            const QMimeType mime = db.mimeTypeForName(rule.pattern);
+            for (const QString &s : mime.suffixes()) {
+                const QString suffix = QLatin1Char('.') + s.toLower();
+                if (!list.contains(suffix)) {
+                    list.append(suffix);
+                }
+            }
+        }
+    }
+    return list;
+}
+
+bool matchesAll(const Portal::Filter &filter)
+{
+    return filter.rules.isEmpty() || std::any_of(filter.rules.cbegin(), filter.rules.cend(), [](const Portal::FilterRule &r) {
+               return r.pattern == QStringLiteral("*") || r.pattern == QStringLiteral("*.*") || r.pattern == QStringLiteral("*/*")
+                   || r.pattern == QStringLiteral("application/octet-stream");
+           });
+}
+
+QString filterLabel(const Portal::Filter &filter)
+{
+    // Apps call this "All Files", "All files (*)" or, for
+    // application/octet-stream, "Unknown"; it reads the same everywhere.
+    if (matchesAll(filter)) {
+        return QStringLiteral("All files");
+    }
+    QString name = filter.name.trimmed();
+    // Qt keeps the patterns in the name ("Text files (*.txt)"); they are
+    // written the Wild OS way below instead.
+    const int bracket = name.indexOf(QStringLiteral(" ("));
+    if (bracket > 0 && name.endsWith(QLatin1Char(')'))) {
+        name = name.left(bracket);
+    }
+    const QStringList suffixes = suffixesOf(filter);
+    if (suffixes.isEmpty()) {
+        return name;
+    }
+    QStringList shown = suffixes.mid(0, 3);
+    if (suffixes.size() > 3) {
+        shown.append(QStringLiteral("..."));
+    }
+    return QStringLiteral("%1 (%2)").arg(name.isEmpty() ? QStringLiteral("Files") : name, shown.join(QStringLiteral(", ")));
+}
+}
+
+Chooser::Chooser(const Request &request, QObject *parent)
+    : QObject(parent)
+    , m_request(request)
+    , m_folder(new DirModel(this))
+{
+    if (m_request.filters.isEmpty() && m_request.mode != Folder && m_request.mode != SaveFiles) {
+        m_request.filters.append({QStringLiteral("All files"), {{0, QStringLiteral("*")}}});
+    }
+    m_currentFilter = m_request.filters.isEmpty() ? -1 : std::clamp(m_request.currentFilter, 0, int(m_request.filters.size()) - 1);
+    for (const Portal::Choice &c : std::as_const(m_request.choices)) {
+        m_chosen.insert(c.id, c.initial.isEmpty() && c.options.isEmpty() ? QStringLiteral("false") : c.initial);
+    }
+
+    m_folder->setMultiple(m_request.multiple && m_request.mode == Open);
+    m_folder->setFoldersOnly(m_request.mode == Folder || m_request.mode == SaveFiles);
+    // Save lists every file, as the board does: what is already in the
+    // folder helps pick a name. Open lists only the chosen type.
+    if (m_currentFilter >= 0 && m_request.mode == Open) {
+        m_folder->setFilter(m_request.filters.at(m_currentFilter));
+    }
+
+    QUrl start = m_request.folder;
+    // An app started from / (or any folder that cannot be saved in) would
+    // open Save there; Windows starts in Documents instead.
+    const bool saving = m_request.mode == Save || m_request.mode == SaveFiles;
+    if (!start.isValid() || (start.isLocalFile() && (!QFileInfo(start.toLocalFile()).isDir() || (saving && !QFileInfo(start.toLocalFile()).isWritable())))) {
+        const QString documents = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation);
+        start = QUrl::fromLocalFile(QFileInfo(documents).isDir() ? documents : QDir::homePath());
+    }
+    m_folder->openUrl(start);
+    m_initialName = displayName(m_request.name);
+}
+
+QString Chooser::mode() const
+{
+    switch (m_request.mode) {
+    case Save:
+        return QStringLiteral("save");
+    case SaveFiles:
+        return QStringLiteral("saveFiles");
+    case Folder:
+        return QStringLiteral("folder");
+    default:
+        return QStringLiteral("open");
+    }
+}
+
+QString Chooser::title() const
+{
+    const QString own = m_request.title.trimmed();
+    if (!own.isEmpty()) {
+        return own;
+    }
+    switch (m_request.mode) {
+    case Save:
+        return QStringLiteral("Save as");
+    case SaveFiles:
+        return QStringLiteral("Choose where to save");
+    case Folder:
+        return QStringLiteral("Select folder");
+    default:
+        return QStringLiteral("Open");
+    }
+}
+
+QString Chooser::acceptLabel() const
+{
+    const QString own = plainLabel(m_request.acceptLabel);
+    if (!own.isEmpty()) {
+        return own;
+    }
+    switch (m_request.mode) {
+    case Save:
+    case SaveFiles:
+        return QStringLiteral("Save");
+    case Folder:
+        return QStringLiteral("Select folder");
+    default:
+        return QStringLiteral("Open");
+    }
+}
+
+QString Chooser::appIcon() const
+{
+    if (m_request.appId.isEmpty()) {
+        return QString();
+    }
+    const KService::Ptr service = KService::serviceByDesktopName(m_request.appId);
+    return service ? service->icon() : QString();
+}
+
+QVariantList Chooser::filters() const
+{
+    QVariantList list;
+    for (int i = 0; i < m_request.filters.size(); ++i) {
+        list.append(QVariantMap{{QStringLiteral("value"), i}, {QStringLiteral("text"), filterLabel(m_request.filters.at(i))}});
+    }
+    return list;
+}
+
+void Chooser::setCurrentFilter(int index)
+{
+    if (index == m_currentFilter || index < 0 || index >= m_request.filters.size()) {
+        return;
+    }
+    m_currentFilter = index;
+    if (m_request.mode == Open) {
+        m_folder->setFilter(m_request.filters.at(index));
+    }
+    Q_EMIT currentFilterChanged();
+}
+
+QVariantList Chooser::choices() const
+{
+    QVariantList list;
+    for (const Portal::Choice &c : m_request.choices) {
+        QVariantList options;
+        for (const Portal::ChoiceOption &o : c.options) {
+            options.append(QVariantMap{{QStringLiteral("value"), o.id}, {QStringLiteral("text"), plainLabel(o.label)}});
+        }
+        list.append(QVariantMap{
+            {QStringLiteral("id"), c.id},
+            {QStringLiteral("label"), plainLabel(c.label)},
+            {QStringLiteral("options"), options},
+            {QStringLiteral("value"), m_chosen.value(c.id)},
+        });
+    }
+    return list;
+}
+
+QString Chooser::nameLabel() const
+{
+    return m_request.mode == Folder || m_request.mode == SaveFiles ? QStringLiteral("Folder") : QStringLiteral("File name");
+}
+
+QString Chooser::typeLabel() const
+{
+    return m_request.mode == Save ? QStringLiteral("Save as type") : QStringLiteral("File type");
+}
+
+void Chooser::setChoice(const QString &id, const QString &value)
+{
+    if (m_chosen.contains(id) && m_chosen.value(id) != value) {
+        m_chosen.insert(id, value);
+        Q_EMIT choicesChanged();
+    }
+}
+
+int Chooser::allFilesIndex() const
+{
+    for (int i = 0; i < m_request.filters.size(); ++i) {
+        if (matchesAll(m_request.filters.at(i))) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+QString Chooser::suffixFor(int filter) const
+{
+    if (filter < 0 || filter >= m_request.filters.size() || matchesAll(m_request.filters.at(filter))) {
+        return QString();
+    }
+    const QStringList suffixes = suffixesOf(m_request.filters.at(filter));
+    return suffixes.isEmpty() ? QString() : suffixes.constFirst();
+}
+
+bool Chooser::hasKnownSuffix(const QString &name) const
+{
+    static QMimeDatabase db;
+    if (m_currentFilter >= 0) {
+        for (const QString &suffix : suffixesOf(m_request.filters.at(m_currentFilter))) {
+            if (name.endsWith(suffix, Qt::CaseInsensitive) && name.size() > suffix.size()) {
+                return true;
+            }
+        }
+    }
+    return !db.suffixForFileName(name).isEmpty();
+}
+
+QString Chooser::displayName(const QString &fileName) const
+{
+    if (fileName.isEmpty() || DirModel::showExtensions()) {
+        return fileName;
+    }
+    // The extension the chosen type adds anyway is not shown, as Files
+    // hides known extensions.
+    const QString suffix = suffixFor(m_currentFilter);
+    if (!suffix.isEmpty() && fileName.endsWith(suffix, Qt::CaseInsensitive) && fileName.size() > suffix.size()) {
+        return fileName.left(fileName.size() - suffix.size());
+    }
+    return fileName;
+}
+
+QString Chooser::finalName(const QString &typed) const
+{
+    QString name = typed.trimmed();
+    if (m_request.mode != Save || name.isEmpty()) {
+        return name;
+    }
+    const QString suffix = suffixFor(m_currentFilter);
+    if (!suffix.isEmpty() && !hasKnownSuffix(name)) {
+        name += suffix;
+    }
+    return name;
+}
+
+QString Chooser::nameForSelection() const
+{
+    const int row = m_folder->currentIndex();
+    if (m_request.mode == Folder || m_request.mode == SaveFiles) {
+        return row >= 0 && m_folder->isDirAt(row) && m_folder->selectedCount() > 0 ? m_folder->nameAt(row) : QString();
+    }
+    QStringList names;
+    for (int i = 0; i < m_folder->count(); ++i) {
+        if (m_folder->data(m_folder->index(i), DirModel::SelectedRole).toBool() && !m_folder->isDirAt(i)) {
+            names.append(m_request.mode == Save ? displayName(m_folder->fileNameAt(i)) : m_folder->nameAt(i));
+        }
+    }
+    if (names.size() == 1) {
+        return names.constFirst();
+    }
+    QStringList quoted;
+    for (const QString &n : std::as_const(names)) {
+        quoted.append(QLatin1Char('"') + n + QLatin1Char('"'));
+    }
+    return quoted.join(QLatin1Char(' '));
+}
+
+QString Chooser::accept(const QString &typedText)
+{
+    if (m_done) {
+        return QString();
+    }
+    const QString typed = typedText.trimmed();
+    DirModel *folder = m_folder;
+
+    // A folder typed or picked is opened rather than chosen, except when a
+    // folder is what is being chosen.
+    auto openIfFolder = [folder](const QString &text) {
+        if (text.isEmpty() || text.contains(QLatin1Char('"'))) {
+            return false;
+        }
+        if (text.startsWith(QLatin1Char('/')) || text.startsWith(QLatin1Char('~')) || text.contains(QStringLiteral(":/")) || text == QStringLiteral("..")) {
+            return text == QStringLiteral("..") ? (folder->up(), true) : folder->openText(text);
+        }
+        const int row = folder->rowForFileName(text);
+        if (row >= 0 && folder->isDirAt(row)) {
+            folder->openUrl(folder->urlAt(row));
+            return true;
+        }
+        return false;
+    };
+
+    if (m_request.mode == Folder || m_request.mode == SaveFiles) {
+        if (folder->isComputer()) {
+            const int row = folder->currentIndex();
+            if (row >= 0 && folder->selectedCount() > 0) {
+                folder->openUrl(folder->urlAt(row));
+            }
+            return QString();
+        }
+        QUrl target = folder->url();
+        if (!typed.isEmpty() && typed != folder->title()) {
+            const int row = folder->rowForFileName(typed);
+            if (row >= 0 && folder->isDirAt(row)) {
+                target = folder->urlAt(row);
+            } else if (!openIfFolder(typed)) {
+                return QStringLiteral("There is no folder called \"%1\" here.").arg(typed);
+            } else {
+                return QString();
+            }
+        } else if (folder->selectedCount() == 1 && folder->isDirAt(folder->currentIndex())) {
+            target = folder->urlAt(folder->currentIndex());
+        }
+        if (m_request.mode == Folder) {
+            finish({target});
+            return QString();
+        }
+        QList<QUrl> urls;
+        QStringList clashes;
+        for (const QString &file : std::as_const(m_request.files)) {
+            QUrl u = target;
+            u.setPath(target.path() + (target.path().endsWith(QLatin1Char('/')) ? QString() : QStringLiteral("/")) + file);
+            urls.append(u);
+            if (u.isLocalFile() && QFileInfo::exists(u.toLocalFile())) {
+                clashes.append(file);
+            }
+        }
+        if (!clashes.isEmpty()) {
+            m_pending = urls;
+            return QStringLiteral("replace:") + (clashes.size() == 1 ? clashes.constFirst() : QString::number(clashes.size()));
+        }
+        finish(urls);
+        return QString();
+    }
+
+    if (folder->isComputer() && typed.isEmpty()) {
+        const int row = folder->currentIndex();
+        if (row >= 0) {
+            folder->openUrl(folder->urlAt(row));
+        }
+        return QString();
+    }
+
+    if (m_request.mode == Open) {
+        if (openIfFolder(typed)) {
+            return QString();
+        }
+        QList<QUrl> urls;
+        if (typed.contains(QLatin1Char('"'))) {
+            static const QRegularExpression quoted(QStringLiteral("\"([^\"]+)\""));
+            auto it = quoted.globalMatch(typed);
+            while (it.hasNext()) {
+                const QString name = it.next().captured(1);
+                int row = -1;
+                for (int i = 0; i < folder->count(); ++i) {
+                    if (folder->nameAt(i) == name || folder->fileNameAt(i) == name) {
+                        row = i;
+                    }
+                }
+                if (row < 0) {
+                    return QStringLiteral("\"%1\" is not in this folder.").arg(name);
+                }
+                urls.append(folder->urlAt(row));
+            }
+        } else if (!typed.isEmpty()) {
+            int row = folder->rowForFileName(typed);
+            for (int i = 0; row < 0 && i < folder->count(); ++i) {
+                if (folder->nameAt(i) == typed && !folder->isDirAt(i)) {
+                    row = i;
+                }
+            }
+            if (row >= 0) {
+                urls.append(folder->urlAt(row));
+            } else {
+                const QUrl url = folder->childUrl(typed);
+                if (url.isLocalFile() && !QFileInfo::exists(url.toLocalFile())) {
+                    return QStringLiteral("\"%1\" is not in this folder. Check the name, or pick the file in the list.").arg(typed);
+                }
+                urls.append(url);
+            }
+        } else {
+            const QList<QUrl> picked = folder->selectedUrls();
+            for (int i = 0; i < folder->count(); ++i) {
+                if (picked.contains(folder->urlAt(i))) {
+                    if (folder->isDirAt(i)) {
+                        if (picked.size() == 1) {
+                            folder->openUrl(folder->urlAt(i));
+                            return QString();
+                        }
+                        continue;
+                    }
+                    urls.append(folder->urlAt(i));
+                }
+            }
+        }
+        if (urls.isEmpty()) {
+            return QString();
+        }
+        if (!m_request.multiple && urls.size() > 1) {
+            urls = {urls.constFirst()};
+        }
+        finish(urls);
+        return QString();
+    }
+
+    // Save.
+    if (typed.isEmpty()) {
+        const int row = folder->currentIndex();
+        if (row >= 0 && folder->isDirAt(row) && folder->selectedCount() > 0) {
+            folder->openUrl(folder->urlAt(row));
+        }
+        return QString();
+    }
+    if (openIfFolder(typed)) {
+        return QString();
+    }
+    QString name = typed;
+    QUrl base = folder->url();
+    if (typed.contains(QLatin1Char('/'))) {
+        // A path typed in full saves there, as on Windows.
+        QString path = typed.startsWith(QStringLiteral("~/")) ? QDir::homePath() + typed.mid(1) : typed;
+        if (!path.startsWith(QLatin1Char('/')) && base.isLocalFile()) {
+            path = QDir(base.toLocalFile()).absoluteFilePath(path);
+        }
+        const QFileInfo info(path);
+        if (!info.absoluteDir().exists()) {
+            return QStringLiteral("The folder \"%1\" does not exist.").arg(info.absolutePath());
+        }
+        base = QUrl::fromLocalFile(info.absolutePath());
+        name = info.fileName();
+    }
+    static const QRegularExpression bad(QStringLiteral("^\\.{1,2}$"));
+    if (bad.match(name).hasMatch() || name.isEmpty()) {
+        return QStringLiteral("A file name cannot be just dots. Type a different name.");
+    }
+    if (base.isLocalFile() && !QFileInfo(base.toLocalFile()).isWritable()) {
+        return QStringLiteral("You cannot save in this folder. Pick a folder of your own, such as Documents.");
+    }
+    if (folder->isComputer()) {
+        return QStringLiteral("Pick a folder to save in first.");
+    }
+    const QString fileName = finalName(name);
+    QUrl url = base;
+    url.setPath(base.path() + (base.path().endsWith(QLatin1Char('/')) ? QString() : QStringLiteral("/")) + fileName);
+    const bool exists = url.isLocalFile() ? QFileInfo::exists(url.toLocalFile()) : folder->rowForFileName(fileName) >= 0;
+    if (exists) {
+        if (url.isLocalFile() && QFileInfo(url.toLocalFile()).isDir()) {
+            folder->openUrl(url);
+            return QString();
+        }
+        m_pending = {url};
+        return QStringLiteral("replace:") + displayName(fileName);
+    }
+    finish({url});
+    return QString();
+}
+
+void Chooser::confirmReplace()
+{
+    if (!m_pending.isEmpty()) {
+        finish(m_pending);
+    }
+}
+
+void Chooser::cancel()
+{
+    if (m_done) {
+        return;
+    }
+    m_done = true;
+    QVariantMap results;
+    Q_EMIT finished(1, results);
+}
+
+void Chooser::finish(const QList<QUrl> &urls)
+{
+    if (m_done) {
+        return;
+    }
+    m_done = true;
+    QStringList uris;
+    for (const QUrl &url : urls) {
+        uris.append(url.toString(QUrl::FullyEncoded));
+    }
+    QVariantMap results;
+    results.insert(QStringLiteral("uris"), uris);
+    if (!m_request.choices.isEmpty()) {
+        Portal::ChosenList chosen;
+        for (const Portal::Choice &c : std::as_const(m_request.choices)) {
+            chosen.append({c.id, m_chosen.value(c.id)});
+        }
+        results.insert(QStringLiteral("choices"), QVariant::fromValue(chosen));
+    }
+    if (m_currentFilter >= 0 && m_currentFilter < m_request.filters.size()) {
+        results.insert(QStringLiteral("current_filter"), QVariant::fromValue(m_request.filters.at(m_currentFilter)));
+    }
+    Q_EMIT finished(0, results);
+}

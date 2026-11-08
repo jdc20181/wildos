@@ -1,0 +1,17 @@
+# The password store opens silently at sign-in (pam_kwallet). These are the
+# words people see on the rare account that signs in without a password.
+
+msgid "KDE Wallet Service"
+msgstr "Saved passwords"
+
+msgid "KWallet"
+msgstr "Saved passwords"
+
+msgid "<qt>The application '<b>%1</b>' has requested to create a new wallet named '<b>%2</b>'. Please choose a password for this wallet, or cancel to deny the application's request.</qt>"
+msgstr "<qt><b>%1</b> wants to save passwords in %2 on this computer. Choose a password to protect them, or cancel to say no.</qt>"
+
+msgid "<qt>The application '<b>%1</b>' has requested to open the KDE wallet. This is used to store sensitive data in a secure fashion. Please enter a password to use with this wallet or click cancel to deny the application's request.</qt>"
+msgstr "<qt><b>%1</b> wants to use your saved passwords. Enter the password that protects them, or cancel to keep them closed.</qt>"
+
+msgid "<qt>The application '<b>%1</b>' has requested to open the wallet '<b>%2</b>'. Please enter the password for this wallet below.</qt>"
+msgstr "<qt><b>%1</b> wants to use your saved passwords (%2). Enter the password that protects them.</qt>"

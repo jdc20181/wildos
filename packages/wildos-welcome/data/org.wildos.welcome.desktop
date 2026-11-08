@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Welcome to Wild OS
+Comment=Set up your taskbar, colours, privacy and apps, and bring your files across from Windows
+Exec=wildos-welcome
+Icon=wildos
+Categories=System;
+NoDisplay=true
+StartupNotify=false
+X-KDE-StartupNotify=false

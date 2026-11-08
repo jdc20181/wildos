@@ -1,0 +1,48 @@
+Source: wildos-files
+Section: utils
+Priority: optional
+Maintainer: Wild OS Developers <dev@wildos.io>
+Build-Depends:
+ debhelper-compat (= 13),
+ cmake,
+ qt6-base-dev,
+ qt6-declarative-dev,
+ qt6-svg-dev,
+ libkf6kio-dev,
+ libkf6solid-dev,
+ libkf6config-dev,
+ libkf6coreaddons-dev,
+ libkf6service-dev,
+ libkf6windowsystem-dev,
+ libkf6purpose-dev,
+ libkf6archive-dev,
+ libkf6filemetadata-dev,
+Standards-Version: 4.7.0
+Rules-Requires-Root: no
+
+Package: wildos-files
+Architecture: any
+Depends:
+ ${shlibs:Depends},
+ ${misc:Depends},
+ kio6,
+ qml6-module-qtcore,
+ qml6-module-qtquick,
+ qml6-module-qtquick-controls,
+ qml6-module-qtquick-effects,
+ qml6-module-qtquick-layouts,
+ qml6-module-qtquick-shapes,
+ qml6-module-qtquick-templates,
+ qml6-module-qtquick-window,
+ qt6-svg-plugins,
+ wildos-ui,
+Recommends:
+ kio-extras,
+ xdg-utils,
+ wildos-branding,
+Description: Wild OS Files, the file manager
+ Files is the Wild OS file manager, laid out like File Explorer on
+ Windows 11: tabs in the title bar, a breadcrumb address bar, a command
+ bar, and Home folders, drives and the Recycle Bin in the sidebar. File name
+ extensions are hidden for known types. Folders are read and changed
+ through KIO, so the Recycle Bin, network places and removable drives all work.

@@ -1,0 +1,77 @@
+#!/usr/bin/make -f
+
+WALL := debian/wildos-branding/usr/share/wallpapers/WildOS
+SRC_WALL := branding/wallpaper/misty-lake.jpg
+LOGO := branding/logo
+AVATAR_DIR := debian/wildos-branding/usr/share/wildos
+
+%:
+	dh $@
+
+# The wallpaper ships at the sizes Plasma picks from, generated from the one
+# original so a new photo is a one-file change.
+execute_after_dh_install:
+	install -d $(WALL)/contents/images
+	for size in 7680x4320 5120x2880 3840x2160 2560x1600 2560x1440 1920x1200 1920x1080 1680x1050 1366x768 1280x800; do \
+		magick $(SRC_WALL) -resize "$$size^" -gravity center -extent $$size \
+			-quality 90 $(WALL)/contents/images/$$size.jpg; \
+	done
+	magick $(SRC_WALL) -resize 600x375^ -gravity center -extent 600x375 \
+		-quality 85 $(WALL)/contents/screenshot.jpg
+	install -Dm644 files/wallpaper-metadata.json $(WALL)/metadata.json
+	# The default account picture is a square of the same photo centred on
+	# the island, so it stays a proper picture when cropped to a circle.
+	# The offsets are the island's place in misty-lake.jpg (7792x5197).
+	install -d $(AVATAR_DIR)
+	magick $(SRC_WALL) -crop 2600x2600+2320+2000 +repage -resize 512x512 \
+		-strip $(AVATAR_DIR)/avatar-default.png
+	magick $(SRC_WALL) -crop 2600x2600+2320+2000 +repage -resize 256x256 \
+		-strip $(AVATAR_DIR)/avatar-default-256.png
+	# New accounts start with it as their picture: the desktop reads
+	# ~/.face.icon and AccountsService falls back to ~/.face. A copy rather
+	# than a link, so tools that save a new picture over it cannot reach the
+	# shared file.
+	install -Dm644 $(AVATAR_DIR)/avatar-default-256.png debian/wildos-branding/etc/skel/.face.icon
+	ln -sf .face.icon debian/wildos-branding/etc/skel/.face
+	# The logo is the W with a spark on its square tile, one drawing at every
+	# size: "wildos" is the app icon. The Start and Task view buttons use the
+	# design system's interface glyphs, each with a light-mode variant.
+	install -Dm644 $(LOGO)/wild-os-icon.svg \
+		debian/wildos-branding/usr/share/icons/hicolor/scalable/apps/wildos.svg
+	install -Dm644 $(LOGO)/start-glyph.svg \
+		debian/wildos-branding/usr/share/icons/hicolor/scalable/apps/wildos-start.svg
+	install -Dm644 $(LOGO)/start-glyph-light.svg \
+		debian/wildos-branding/usr/share/icons/hicolor/scalable/apps/wildos-start-light.svg
+	install -Dm644 $(LOGO)/task-view-glyph.svg \
+		debian/wildos-branding/usr/share/icons/hicolor/scalable/apps/wildos-task-view.svg
+	install -Dm644 $(LOGO)/task-view-glyph-light.svg \
+		debian/wildos-branding/usr/share/icons/hicolor/scalable/apps/wildos-task-view-light.svg
+	for px in 16 22 24 32 48 64 128 256; do \
+		install -d debian/wildos-branding/usr/share/icons/hicolor/$${px}x$${px}/apps; \
+		rsvg-convert -w $$px -h $$px $(LOGO)/wild-os-icon.svg \
+			-o debian/wildos-branding/usr/share/icons/hicolor/$${px}x$${px}/apps/wildos.png; \
+	done
+	install -d debian/wildos-branding/usr/share/plasma/look-and-feel/org.wildos.desktop/contents/previews
+	magick $(SRC_WALL) -resize 960x540^ -gravity center -extent 960x540 -quality 85 \
+		debian/wildos-branding/usr/share/plasma/look-and-feel/org.wildos.desktop/contents/previews/fullscreenpreview.jpg
+	magick $(SRC_WALL) -resize 320x200^ -gravity center -extent 320x200 \
+		debian/wildos-branding/usr/share/plasma/look-and-feel/org.wildos.desktop/contents/previews/preview.png
+	# Every colour of the WildOS scheme goes into the system kdeglobals,
+	# generated from WildOS.colors so the two cannot drift apart.
+	{ echo; echo "# Generated at build time from WildOS.colors."; \
+		awk -f debian/scheme-to-kdeglobals.awk files/WildOS.colors; } \
+		>> debian/wildos-branding/etc/xdg/kdeglobals
+	# The start-up animation and disk unlock screen, every frame drawn from
+	# the logo masters and Inter at each screen scale (see the tool for why).
+	python3 tools/render-boot-assets.py debian/wildos-branding/usr/share/plymouth/themes/wildos \
+		debian/wildos-branding/usr/share/wildos/boot-handoff
+	# The start-up menu, drawn by the same generator as the USB stick's so
+	# the two cannot drift apart. GRUB reads it from /boot: the installer
+	# leaves /boot unencrypted, and the root file system may not be.
+	bash tools/grub-theme.sh installed debian/wildos-branding/boot/grub/themes/wildos \
+		$(LOGO)/wild-os-icon.svg
+
+# The build normalises every source file to 0644, so helpers lose their
+# executable bit and have to get it back here.
+execute_after_dh_fixperms:
+	chmod 0755 debian/wildos-branding/usr/libexec/wildos/*

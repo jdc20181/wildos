@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Exec=/usr/libexec/wildos-live/live-session
+TryExec=/usr/bin/startplasma-wayland
+DesktopNames=KDE
+Name=Wild OS (live)
+Comment=Try or install Wild OS from the USB stick

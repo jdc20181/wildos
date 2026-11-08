@@ -1,0 +1,30 @@
+Source: wildos-live
+Section: misc
+Priority: optional
+Maintainer: Wild OS Developers <dev@wildos.io>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.7.0
+Rules-Requires-Root: no
+
+Package: wildos-live
+Architecture: all
+Depends:
+ ${misc:Depends},
+ wildos-desktop,
+ wildos-installer,
+ dracut-live,
+ isomd5sum,
+ x11-xserver-utils,
+ passwd,
+ sudo,
+ kwin-wayland,
+ qemu-guest-agent,
+Description: Wild OS live session
+ Configuration that only belongs on the live ISO: a passwordless live user
+ that logs straight into the desktop, and the installer launcher. The
+ installer removes this package from the installed system, which also removes
+ the live user.
+ .
+ With wildos.dev=1 on the boot command line, which only the developer
+ tools pass, it also starts the QEMU guest agent so they can install
+ rebuilt packages into a test machine.

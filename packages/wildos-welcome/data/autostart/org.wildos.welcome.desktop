@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Welcome to Wild OS
+Exec=wildos-welcome --autostart
+Icon=wildos
+NoDisplay=true
+OnlyShowIn=KDE;
+X-KDE-autostart-phase=2
+X-KDE-autostart-condition=wildos-welcomerc:General:ShowWelcome:true

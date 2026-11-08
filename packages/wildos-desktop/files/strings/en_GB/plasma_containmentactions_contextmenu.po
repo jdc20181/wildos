@@ -1,0 +1,8 @@
+# Desktop right-click menu: the Windows names for the same two entries.
+
+msgctxt "plasma_containmentactions_contextmenu"
+msgid "Display Configuration"
+msgstr "Display settings"
+
+msgid "Open Terminal"
+msgstr "Open in Terminal"

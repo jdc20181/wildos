@@ -1,0 +1,246 @@
+#!/usr/bin/python3
+"""Checks this computer before Wild OS is installed, for the installer's
+"Before we start" page. Prints one JSON object:
+
+  {"checks": [{"id", "status", "title", "detail", "steps", "help"}...],
+   "alongsideBlocked": "", "windowsFound": bool}
+
+status is "ok", "info" or "warn". A warning about a Windows setting (BitLocker,
+Fast Startup or hibernation, too little free space in Windows) blocks only
+"Install alongside Windows"; replacing Windows stays possible. Nothing here
+writes to a disk: NTFS volumes are only probed and read.
+
+Runs as root, from the installer, which reruns it for "Check again".
+"""
+
+import json
+import os
+import re
+import subprocess
+
+GB = 1000 ** 3
+NEEDED = 40 * GB
+# Room the alongside layout takes on top of the 40 GB: the new start-up
+# partition and some slack, as the partition module reckons it.
+MARGIN = 3 * GB
+
+
+def run(*args):
+    try:
+        return subprocess.run(args, capture_output=True, text=True, timeout=60)
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+
+
+def gb(n):
+    return "%d GB" % round(n / GB)
+
+
+def live_medium():
+    """The disk the live system runs from, which is never a target."""
+    r = run("findmnt", "-n", "-o", "SOURCE", "/run/initramfs/live")
+    src = r.stdout.strip() if r and r.returncode == 0 else ""
+    if not src:
+        return ""
+    r = run("lsblk", "-n", "-o", "PKNAME", src)
+    return "/dev/" + r.stdout.strip() if r and r.stdout.strip() else src
+
+
+def partitions():
+    r = run("lsblk", "-J", "-b", "-p", "-o", "NAME,TYPE,FSTYPE,SIZE,RM,RO,PKNAME,PARTLABEL,LABEL,PARTTYPE")
+    if not r or r.returncode != 0:
+        return [], []
+    data = json.loads(r.stdout)
+    skip = live_medium()
+    disks, parts = [], []
+    # Loop devices only for testing the installer against disk images.
+    types = ("disk", "loop") if os.environ.get("WILDOS_CHECK_LOOP") else ("disk",)
+    for d in data.get("blockdevices", []):
+        if d.get("type") not in types or d.get("rm") in (True, "1") or d.get("ro") in (True, "1"):
+            continue
+        if d["name"] == skip:
+            continue
+        disks.append(d)
+        for p in d.get("children", []) or []:
+            if p.get("type") in ("part", "loop"):
+                parts.append(p)
+    return disks, parts
+
+
+def fstype(part):
+    """lsblk's answer, or blkid's when lsblk has no udev data to go on."""
+    if not part.get("fstype"):
+        r = run("blkid", "-o", "value", "-s", "TYPE", part["name"])
+        part["fstype"] = r.stdout.strip() if r and r.returncode == 0 else ""
+    return part["fstype"]
+
+
+def is_bitlocker(part):
+    if fstype(part).lower() == "bitlocker":
+        return True
+    try:
+        with open(part["name"], "rb") as f:
+            return f.read(11)[3:11] == b"-FVE-FS-"
+    except OSError:
+        return False
+
+
+def ntfs_state(dev):
+    """0 fine, 14 hibernated (Fast Startup or hibernation), 15 not shut down cleanly."""
+    r = run("ntfs-3g.probe", "--readwrite", dev)
+    return r.returncode if r else 0
+
+
+def ntfs_free(dev):
+    """Bytes Windows could give up, from ntfsresize's smallest possible size."""
+    r = run("ntfsresize", "--info", "--force", "--no-action", dev)
+    if not r:
+        return None
+    size = re.search(r"Current volume size: (\d+) bytes", r.stdout)
+    least = re.search(r"You might resize at (\d+) bytes", r.stdout)
+    if size and least:
+        return int(size.group(1)) - int(least.group(1))
+    return None
+
+
+def is_recovery(part):
+    label = ((part.get("partlabel") or "") + " " + (part.get("label") or "")).lower()
+    return "recovery" in label or (part.get("parttype") or "").lower() == "de94bba4-06d1-4d40-a16a-bfd50179d6ac" \
+        or int(part.get("size") or 0) < 3 * GB
+
+
+def secure_boot():
+    if not os.path.isdir("/sys/firmware/efi"):
+        return None
+    path = "/sys/firmware/efi/efivars/SecureBoot-8be4df61-93ca-11d2-aa0d-00e098032b8c"
+    try:
+        with open(path, "rb") as f:
+            return f.read()[-1] == 1
+    except OSError:
+        return False
+
+
+def power():
+    """"mains", "battery" or "unknown"."""
+    base = "/sys/class/power_supply"
+    mains, battery = False, False
+    try:
+        names = os.listdir(base)
+    except OSError:
+        return "unknown"
+    for n in names:
+        try:
+            kind = open(os.path.join(base, n, "type")).read().strip()
+        except OSError:
+            continue
+        if kind == "Battery":
+            battery = True
+        elif kind in ("Mains", "USB"):
+            try:
+                if open(os.path.join(base, n, "online")).read().strip() == "1":
+                    mains = True
+            except OSError:
+                pass
+    if mains or not battery:
+        return "mains"
+    return "battery"
+
+
+def main():
+    disks, parts = partitions()
+    checks = []
+    blocked = ""
+
+    bitlocker = [p for p in parts if is_bitlocker(p)]
+    ntfs = [p for p in parts if fstype(p) == "ntfs" and not is_recovery(p)]
+    windows = max(ntfs + bitlocker, key=lambda p: int(p.get("size") or 0), default=None)
+
+    if bitlocker:
+        blocked = blocked or "bitlocker"
+        checks.append({
+            "id": "bitlocker", "status": "warn",
+            "title": "Windows is using BitLocker",
+            "detail": "BitLocker is Windows' own drive encryption. To make room for Wild OS we need to "
+                      "resize the Windows drive, which BitLocker blocks. Pause it in Windows for one "
+                      "restart; Windows switches it back on afterwards.",
+            "steps": ["Restart into Windows and open Settings",
+                      "Go to Privacy and security, then Device encryption (or search \"Manage BitLocker\")",
+                      "Choose Suspend protection, then restart back into this installer"],
+            "help": "bitlocker"})
+
+    states = {p["name"]: ntfs_state(p["name"]) for p in ntfs}
+    if any(s == 14 for s in states.values()):
+        blocked = blocked or "faststartup"
+        checks.append({
+            "id": "faststartup", "status": "warn",
+            "title": "Windows Fast Startup is on",
+            "detail": "This Windows setting keeps Windows half-asleep, which can damage files you open "
+                      "from both systems. Turning it off makes Windows start a few seconds slower.",
+            "steps": ["In Windows, open Control Panel, then Power Options",
+                      "Choose \"Choose what the power buttons do\"",
+                      "Untick \"Turn on fast startup\" and save"],
+            "help": "faststartup"})
+    elif any(s == 15 for s in states.values()):
+        blocked = blocked or "dirty"
+        checks.append({
+            "id": "dirty", "status": "warn",
+            "title": "Windows did not shut down fully",
+            "detail": "The Windows drive was left in the middle of something, so it is not safe to "
+                      "resize it yet. Shutting Windows down properly sorts this out.",
+            "steps": ["Start Windows and sign in",
+                      "Hold Shift while you choose Shut down",
+                      "Start this installer again"],
+            "help": "dirty"})
+
+    # ntfsresize reads a hibernated volume's size without changing it.
+    if windows is not None and windows not in bitlocker:
+        free = ntfs_free(windows["name"])
+        if free is not None and free >= NEEDED + MARGIN:
+            checks.append({"id": "space", "status": "ok", "title": "Enough space",
+                           "detail": "%s free on Windows (C:). Wild OS needs 40 GB." % gb(free)})
+        elif free is not None:
+            blocked = blocked or "space"
+            checks.append({
+                "id": "space", "status": "warn", "title": "Windows (C:) is nearly full",
+                "detail": "Windows has %s free. Wild OS needs 40 GB of it to sit alongside Windows." % gb(free),
+                "steps": ["In Windows, open Settings, then System, then Storage",
+                          "Use Cleanup recommendations, or move big files to another drive",
+                          "Restart into this installer when there is 45 GB free"],
+                "help": "space"})
+    elif windows is None:
+        biggest = max((int(d.get("size") or 0) for d in disks), default=0)
+        if biggest >= NEEDED:
+            checks.append({"id": "space", "status": "ok", "title": "Enough space",
+                           "detail": "Your %s disk has room. Wild OS needs 40 GB." % gb(biggest)})
+        else:
+            checks.append({"id": "space", "status": "warn", "title": "Not enough space",
+                           "detail": "Wild OS needs a disk of at least 40 GB. The biggest one here has %s."
+                                     % gb(biggest),
+                           "steps": [], "help": "space"})
+
+    sb = secure_boot()
+    if sb is True:
+        checks.append({"id": "secureboot", "status": "ok", "title": "Secure Boot is on",
+                       "detail": "Wild OS works with Secure Boot, so you can leave it on."})
+    elif sb is False:
+        checks.append({"id": "secureboot", "status": "info", "title": "Secure Boot is off",
+                       "detail": "Wild OS works either way. You don't need to change it."})
+    else:
+        checks.append({"id": "secureboot", "status": "info", "title": "This computer starts in legacy BIOS mode",
+                       "detail": "Wild OS installs this way too. There is nothing to change."})
+
+    if power() == "battery":
+        checks.append({"id": "power", "status": "warn", "title": "Running on battery",
+                       "detail": "Plug the computer in before you install. If the battery runs out "
+                                 "halfway, Wild OS will not start.",
+                       "steps": [], "help": ""})
+    else:
+        checks.append({"id": "power", "status": "ok", "title": "Plugged in",
+                       "detail": "Keep it plugged in until setup finishes."})
+
+    print(json.dumps({"checks": checks, "alongsideBlocked": blocked,
+                      "windowsFound": windows is not None}))
+
+
+if __name__ == "__main__":
+    main()

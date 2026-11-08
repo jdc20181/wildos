@@ -1,0 +1,12 @@
+[Unit]
+Description=Shutdown screen as soon as the desktop has gone
+After=plymouth-quit.service systemd-logind.service
+# Restarted with logind, which forgets the wall message setting.
+PartOf=systemd-logind.service
+ConditionKernelCommandLine=splash
+
+[Service]
+ExecStart=/usr/libexec/wildos/shutdown-splash
+
+[Install]
+WantedBy=multi-user.target

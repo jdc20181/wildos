@@ -1,0 +1,22 @@
+[Desktop Entry]
+Type=Application
+Name=Clipboard and emoji
+GenericName=Clipboard history and emoji
+Comment=Paste something you copied earlier, or type an emoji or symbol
+Icon=edit-paste
+Exec=/usr/bin/wildos-clipboard
+Categories=Utility;
+Keywords=clipboard;history;paste;emoji;symbols;special characters;
+StartupNotify=false
+NoDisplay=true
+Actions=Emoji;
+# Win+V and Win+full stop, as in Windows 11.
+X-KDE-Shortcuts=Meta+V
+X-KDE-Wayland-Interfaces=org_kde_kwin_fake_input,org_kde_plasma_window_management
+X-DBUS-StartupType=Unique
+X-DBUS-ServiceName=org.wildos.clipboard
+
+[Desktop Action Emoji]
+Name=Emoji and symbols
+Exec=/usr/bin/wildos-clipboard --emoji
+X-KDE-Shortcuts=Meta+.

@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=App start tracking
+Exec=/usr/libexec/wildos/wildos-launchd
+NoDisplay=true
+OnlyShowIn=KDE;
+X-KDE-autostart-phase=1

@@ -1,0 +1,19 @@
+{
+    "KPackageStructure": "Plasma/LookAndFeel",
+    "KPlugin": {
+        "Authors": [
+            {
+                "Email": "dev@wildos.io",
+                "Name": "Wild OS"
+            }
+        ],
+        "Category": "",
+        "Description": "Dark glass, Inter and a floating taskbar",
+        "Id": "org.wildos.desktop",
+        "License": "GPL-3.0-or-later",
+        "Name": "Wild OS",
+        "Version": "0.1.0",
+        "Website": "https://wildos.io"
+    },
+    "X-Plasma-APIVersion": "2"
+}

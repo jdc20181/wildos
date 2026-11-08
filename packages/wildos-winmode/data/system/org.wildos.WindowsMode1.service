@@ -1,0 +1,5 @@
+[D-BUS Service]
+Name=org.wildos.WindowsMode1
+Exec=/usr/libexec/wildos/winmoded
+User=root
+SystemdService=wildos-winmoded.service

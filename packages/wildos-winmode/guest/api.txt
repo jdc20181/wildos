@@ -1,0 +1,458 @@
+member [System.Core]System.IO.Pipes.NamedPipeClientStream..ctor :: instance void(string, string, valuetype [System.Core]System.IO.Pipes.PipeDirection, valuetype [System.Core]System.IO.Pipes.PipeOptions)
+member [System.Core]System.IO.Pipes.NamedPipeClientStream.Connect :: instance void(int32)
+member [System.Core]System.IO.Pipes.NamedPipeServerStream..ctor :: instance void(string, valuetype [System.Core]System.IO.Pipes.PipeDirection, int32, valuetype [System.Core]System.IO.Pipes.PipeTransmissionMode, valuetype [System.Core]System.IO.Pipes.PipeOptions, int32, int32, class [System.Core]System.IO.Pipes.PipeSecurity)
+member [System.Core]System.IO.Pipes.NamedPipeServerStream.WaitForConnection :: instance void()
+member [System.Core]System.IO.Pipes.PipeAccessRule..ctor :: instance void(class [mscorlib]System.Security.Principal.IdentityReference, valuetype [System.Core]System.IO.Pipes.PipeAccessRights, valuetype [mscorlib]System.Security.AccessControl.AccessControlType)
+member [System.Core]System.IO.Pipes.PipeSecurity..ctor :: instance void()
+member [System.Core]System.IO.Pipes.PipeSecurity.AddAccessRule :: instance void(class [System.Core]System.IO.Pipes.PipeAccessRule)
+member [System.Core]System.IO.Pipes.PipeStream.get_SafePipeHandle :: instance class [System.Core]Microsoft.Win32.SafeHandles.SafePipeHandle()
+member [System.ServiceProcess]System.ServiceProcess.ServiceBase..ctor :: instance void()
+member [System.ServiceProcess]System.ServiceProcess.ServiceBase.Run :: void(class [System.ServiceProcess]System.ServiceProcess.ServiceBase)
+member [System.ServiceProcess]System.ServiceProcess.ServiceBase.set_CanHandleSessionChangeEvent :: instance void(bool)
+member [System.ServiceProcess]System.ServiceProcess.ServiceBase.set_CanShutdown :: instance void(bool)
+member [System.ServiceProcess]System.ServiceProcess.ServiceBase.set_ServiceName :: instance void(string)
+member [System.ServiceProcess]System.ServiceProcess.SessionChangeDescription.get_Reason :: instance valuetype [System.ServiceProcess]System.ServiceProcess.SessionChangeReason()
+member [System.ServiceProcess]System.ServiceProcess.SessionChangeDescription.get_SessionId :: instance int32()
+member [System]System.ComponentModel.Win32Exception.get_NativeErrorCode :: instance int32()
+member [System]System.Diagnostics.Process.GetCurrentProcess :: class [System]System.Diagnostics.Process()
+member [System]System.Diagnostics.Process.Start :: class [System]System.Diagnostics.Process(class [System]System.Diagnostics.ProcessStartInfo)
+member [System]System.Diagnostics.Process.get_Id :: instance int32()
+member [System]System.Diagnostics.ProcessStartInfo..ctor :: instance void(string, string)
+member [System]System.Diagnostics.ProcessStartInfo.set_UseShellExecute :: instance void(bool)
+member [System]System.Diagnostics.ProcessStartInfo.set_WorkingDirectory :: instance void(string)
+member [System]System.Text.RegularExpressions.Regex..ctor :: instance void(string, valuetype [System]System.Text.RegularExpressions.RegexOptions)
+member [System]System.Text.RegularExpressions.Regex.IsMatch :: instance bool(string)
+member [mscorlib]Microsoft.Win32.Registry.CurrentUser :: class [mscorlib]Microsoft.Win32.RegistryKey
+member [mscorlib]Microsoft.Win32.Registry.LocalMachine :: class [mscorlib]Microsoft.Win32.RegistryKey
+member [mscorlib]Microsoft.Win32.RegistryKey.CreateSubKey :: instance class [mscorlib]Microsoft.Win32.RegistryKey(string)
+member [mscorlib]Microsoft.Win32.RegistryKey.GetValue :: instance object(string)
+member [mscorlib]Microsoft.Win32.RegistryKey.OpenSubKey :: instance class [mscorlib]Microsoft.Win32.RegistryKey(string)
+member [mscorlib]Microsoft.Win32.RegistryKey.SetValue :: instance void(string, object, valuetype [mscorlib]Microsoft.Win32.RegistryValueKind)
+member [mscorlib]System.Action..ctor :: instance void(object, native int)
+member [mscorlib]System.Action.Invoke :: instance void()
+member [mscorlib]System.Activator.CreateInstance :: object(class [mscorlib]System.Type)
+member [mscorlib]System.AppDomain.add_UnhandledException :: instance void(class [mscorlib]System.UnhandledExceptionEventHandler)
+member [mscorlib]System.AppDomain.get_CurrentDomain :: class [mscorlib]System.AppDomain()
+member [mscorlib]System.Array.Copy :: void(class [mscorlib]System.Array, int32, class [mscorlib]System.Array, int32, int32)
+member [mscorlib]System.Array.Empty :: !!0[]()
+member [mscorlib]System.BitConverter.ToUInt16 :: unsigned int16(unsigned int8[], int32)
+member [mscorlib]System.Char.IsWhiteSpace :: bool(char)
+member [mscorlib]System.Collections.DictionaryEntry.get_Key :: instance object()
+member [mscorlib]System.Collections.DictionaryEntry.get_Value :: instance object()
+member [mscorlib]System.Collections.IDictionary.GetEnumerator :: instance class [mscorlib]System.Collections.IDictionaryEnumerator()
+member [mscorlib]System.Collections.IEnumerable.GetEnumerator :: instance class [mscorlib]System.Collections.IEnumerator()
+member [mscorlib]System.Collections.IEnumerator.MoveNext :: instance bool()
+member [mscorlib]System.Collections.IEnumerator.get_Current :: instance object()
+member [mscorlib]System.Convert.FromBase64String :: unsigned int8[](string)
+member [mscorlib]System.Convert.ToBase64String :: string(unsigned int8[])
+member [mscorlib]System.Convert.ToDouble :: float64(object, class [mscorlib]System.IFormatProvider)
+member [mscorlib]System.Convert.ToInt64 :: int64(object, class [mscorlib]System.IFormatProvider)
+member [mscorlib]System.Convert.ToString :: string(object)
+member [mscorlib]System.DateTime..ctor :: instance void(int32, int32, int32, int32, int32, int32, valuetype [mscorlib]System.DateTimeKind)
+member [mscorlib]System.DateTime.AddMilliseconds :: instance valuetype [mscorlib]System.DateTime(float64)
+member [mscorlib]System.DateTime.AddSeconds :: instance valuetype [mscorlib]System.DateTime(float64)
+member [mscorlib]System.DateTime.MinValue :: valuetype [mscorlib]System.DateTime
+member [mscorlib]System.DateTime.ToString :: instance string(string)
+member [mscorlib]System.DateTime.get_Day :: instance int32()
+member [mscorlib]System.DateTime.get_DayOfWeek :: instance valuetype [mscorlib]System.DayOfWeek()
+member [mscorlib]System.DateTime.get_Hour :: instance int32()
+member [mscorlib]System.DateTime.get_Millisecond :: instance int32()
+member [mscorlib]System.DateTime.get_Minute :: instance int32()
+member [mscorlib]System.DateTime.get_Month :: instance int32()
+member [mscorlib]System.DateTime.get_Now :: valuetype [mscorlib]System.DateTime()
+member [mscorlib]System.DateTime.get_Second :: instance int32()
+member [mscorlib]System.DateTime.get_UtcNow :: valuetype [mscorlib]System.DateTime()
+member [mscorlib]System.DateTime.get_Year :: instance int32()
+member [mscorlib]System.DateTime.op_GreaterThan :: bool(valuetype [mscorlib]System.DateTime, valuetype [mscorlib]System.DateTime)
+member [mscorlib]System.DateTime.op_GreaterThanOrEqual :: bool(valuetype [mscorlib]System.DateTime, valuetype [mscorlib]System.DateTime)
+member [mscorlib]System.DateTime.op_Subtraction :: valuetype [mscorlib]System.TimeSpan(valuetype [mscorlib]System.DateTime, valuetype [mscorlib]System.DateTime)
+member [mscorlib]System.Double.Parse :: float64(string, valuetype [mscorlib]System.Globalization.NumberStyles, class [mscorlib]System.IFormatProvider)
+member [mscorlib]System.Double.ToString :: instance string(string, class [mscorlib]System.IFormatProvider)
+member [mscorlib]System.Environment.Exit :: void(int32)
+member [mscorlib]System.Environment.ExpandEnvironmentVariables :: string(string)
+member [mscorlib]System.Environment.GetEnvironmentVariable :: string(string)
+member [mscorlib]System.Environment.GetFolderPath :: string(valuetype [mscorlib]System.Environment/SpecialFolder)
+member [mscorlib]System.Environment.get_NewLine :: string()
+member [mscorlib]System.Environment.get_TickCount :: int32()
+member [mscorlib]System.Exception.get_Message :: instance string()
+member [mscorlib]System.FormatException..ctor :: instance void(string)
+member [mscorlib]System.Globalization.CultureInfo.get_InvariantCulture :: class [mscorlib]System.Globalization.CultureInfo()
+member [mscorlib]System.IDisposable.Dispose :: instance void()
+member [mscorlib]System.IO.BinaryWriter..ctor :: instance void(class [mscorlib]System.IO.Stream)
+member [mscorlib]System.IO.BinaryWriter.Flush :: instance void()
+member [mscorlib]System.IO.BinaryWriter.Write :: instance void(unsigned int16)
+member [mscorlib]System.IO.BinaryWriter.Write :: instance void(unsigned int32)
+member [mscorlib]System.IO.BinaryWriter.Write :: instance void(unsigned int8[])
+member [mscorlib]System.IO.BinaryWriter.Write :: instance void(unsigned int8[], int32, int32)
+member [mscorlib]System.IO.Directory.CreateDirectory :: class [mscorlib]System.IO.DirectoryInfo(string)
+member [mscorlib]System.IO.Directory.Exists :: bool(string)
+member [mscorlib]System.IO.Directory.GetFiles :: string[](string, string, valuetype [mscorlib]System.IO.SearchOption)
+member [mscorlib]System.IO.File.AppendAllText :: void(string, string)
+member [mscorlib]System.IO.File.Copy :: void(string, string, bool)
+member [mscorlib]System.IO.File.Delete :: void(string)
+member [mscorlib]System.IO.File.Exists :: bool(string)
+member [mscorlib]System.IO.File.ReadAllText :: string(string)
+member [mscorlib]System.IO.File.WriteAllText :: void(string, string)
+member [mscorlib]System.IO.FileInfo..ctor :: instance void(string)
+member [mscorlib]System.IO.FileInfo.get_Length :: instance int64()
+member [mscorlib]System.IO.FileSystemInfo.get_Exists :: instance bool()
+member [mscorlib]System.IO.IOException..ctor :: instance void(string)
+member [mscorlib]System.IO.MemoryStream..ctor :: instance void()
+member [mscorlib]System.IO.MemoryStream.ToArray :: instance unsigned int8[]()
+member [mscorlib]System.IO.Path.Combine :: string(string, string)
+member [mscorlib]System.IO.Path.GetDirectoryName :: string(string)
+member [mscorlib]System.IO.Path.GetFileNameWithoutExtension :: string(string)
+member [mscorlib]System.IO.Stream..ctor :: instance void()
+member [mscorlib]System.IO.Stream.Dispose :: instance void()
+member [mscorlib]System.IO.Stream.Dispose :: instance void(bool)
+member [mscorlib]System.IO.Stream.Flush :: instance void()
+member [mscorlib]System.IO.Stream.Read :: instance int32(unsigned int8[], int32, int32)
+member [mscorlib]System.IO.Stream.Write :: instance void(unsigned int8[], int32, int32)
+member [mscorlib]System.Int32.Parse :: int32(string, valuetype [mscorlib]System.Globalization.NumberStyles, class [mscorlib]System.IFormatProvider)
+member [mscorlib]System.Int32.ToString :: instance string(string, class [mscorlib]System.IFormatProvider)
+member [mscorlib]System.Int32.TryParse :: bool(string, valuetype [mscorlib]System.Globalization.NumberStyles, class [mscorlib]System.IFormatProvider, [out] int32&)
+member [mscorlib]System.Int64.ToString :: instance string(class [mscorlib]System.IFormatProvider)
+member [mscorlib]System.IntPtr..ctor :: instance void(int32)
+member [mscorlib]System.IntPtr..ctor :: instance void(int64)
+member [mscorlib]System.IntPtr.ToInt64 :: instance int64()
+member [mscorlib]System.IntPtr.Zero :: native int
+member [mscorlib]System.IntPtr.get_Size :: int32()
+member [mscorlib]System.IntPtr.op_Equality :: bool(native int, native int)
+member [mscorlib]System.IntPtr.op_Inequality :: bool(native int, native int)
+member [mscorlib]System.Math.Max :: int32(int32, int32)
+member [mscorlib]System.Math.Min :: int32(int32, int32)
+member [mscorlib]System.NotSupportedException..ctor :: instance void()
+member [mscorlib]System.Object..ctor :: instance void()
+member [mscorlib]System.Object.GetType :: instance class [mscorlib]System.Type()
+member [mscorlib]System.Object.ToString :: instance string()
+member [mscorlib]System.ParamArrayAttribute..ctor :: instance void()
+member [mscorlib]System.Reflection.Assembly.GetExecutingAssembly :: class [mscorlib]System.Reflection.Assembly()
+member [mscorlib]System.Reflection.Assembly.get_Location :: instance string()
+member [mscorlib]System.Reflection.AssemblyProductAttribute..ctor :: instance void(string)
+member [mscorlib]System.Reflection.AssemblyTitleAttribute..ctor :: instance void(string)
+member [mscorlib]System.Runtime.CompilerServices.CompilerGeneratedAttribute..ctor :: instance void()
+member [mscorlib]System.Runtime.CompilerServices.RuntimeCompatibilityAttribute..ctor :: instance void()
+member [mscorlib]System.Runtime.CompilerServices.RuntimeHelpers.InitializeArray :: void(class [mscorlib]System.Array, valuetype [mscorlib]System.RuntimeFieldHandle)
+member [mscorlib]System.Runtime.InteropServices.GCHandle.AddrOfPinnedObject :: instance native int()
+member [mscorlib]System.Runtime.InteropServices.GCHandle.Alloc :: valuetype [mscorlib]System.Runtime.InteropServices.GCHandle(object, valuetype [mscorlib]System.Runtime.InteropServices.GCHandleType)
+member [mscorlib]System.Runtime.InteropServices.GCHandle.Free :: instance void()
+member [mscorlib]System.Runtime.InteropServices.Marshal.AllocHGlobal :: native int(int32)
+member [mscorlib]System.Runtime.InteropServices.Marshal.Copy :: void(native int, unsigned int8[], int32, int32)
+member [mscorlib]System.Runtime.InteropServices.Marshal.FreeHGlobal :: void(native int)
+member [mscorlib]System.Runtime.InteropServices.Marshal.GetLastWin32Error :: int32()
+member [mscorlib]System.Runtime.InteropServices.Marshal.PtrToStringUni :: string(native int)
+member [mscorlib]System.Runtime.InteropServices.Marshal.PtrToStructure :: object(native int, class [mscorlib]System.Type)
+member [mscorlib]System.Runtime.InteropServices.Marshal.ReleaseComObject :: int32(object)
+member [mscorlib]System.Runtime.InteropServices.Marshal.SizeOf :: int32(class [mscorlib]System.Type)
+member [mscorlib]System.Runtime.InteropServices.Marshal.WriteByte :: void(native int, int32, unsigned int8)
+member [mscorlib]System.Runtime.InteropServices.Marshal.WriteIntPtr :: void(native int, int32, native int)
+member [mscorlib]System.Runtime.InteropServices.SafeHandle.DangerousGetHandle :: instance native int()
+member [mscorlib]System.Runtime.InteropServices.SafeHandle.Dispose :: instance void()
+member [mscorlib]System.Runtime.InteropServices.SafeHandle.get_IsInvalid :: instance bool()
+member [mscorlib]System.STAThreadAttribute..ctor :: instance void()
+member [mscorlib]System.Security.Principal.SecurityIdentifier..ctor :: instance void(valuetype [mscorlib]System.Security.Principal.WellKnownSidType, class [mscorlib]System.Security.Principal.SecurityIdentifier)
+member [mscorlib]System.String.CompareOrdinal :: int32(string, int32, string, int32, int32)
+member [mscorlib]System.String.Concat :: string(object, object)
+member [mscorlib]System.String.Concat :: string(object, object, object)
+member [mscorlib]System.String.Concat :: string(object[])
+member [mscorlib]System.String.Concat :: string(string, string)
+member [mscorlib]System.String.Concat :: string(string, string, string, string)
+member [mscorlib]System.String.Empty :: string
+member [mscorlib]System.String.EndsWith :: instance bool(string, valuetype [mscorlib]System.StringComparison)
+member [mscorlib]System.String.Equals :: bool(string, string, valuetype [mscorlib]System.StringComparison)
+member [mscorlib]System.String.IndexOf :: instance int32(char)
+member [mscorlib]System.String.IndexOfAny :: instance int32(char[])
+member [mscorlib]System.String.IsNullOrEmpty :: bool(string)
+member [mscorlib]System.String.StartsWith :: instance bool(string, valuetype [mscorlib]System.StringComparison)
+member [mscorlib]System.String.Substring :: instance string(int32, int32)
+member [mscorlib]System.String.ToLowerInvariant :: instance string()
+member [mscorlib]System.String.TrimEnd :: instance string(char[])
+member [mscorlib]System.String.TrimStart :: instance string(char[])
+member [mscorlib]System.String.get_Chars :: instance char(int32)
+member [mscorlib]System.String.get_Length :: instance int32()
+member [mscorlib]System.String.op_Equality :: bool(string, string)
+member [mscorlib]System.String.op_Inequality :: bool(string, string)
+member [mscorlib]System.StringComparer.get_OrdinalIgnoreCase :: class [mscorlib]System.StringComparer()
+member [mscorlib]System.Text.Encoding.GetBytes :: instance unsigned int8[](string)
+member [mscorlib]System.Text.Encoding.GetString :: instance string(unsigned int8[])
+member [mscorlib]System.Text.Encoding.get_UTF8 :: class [mscorlib]System.Text.Encoding()
+member [mscorlib]System.Text.StringBuilder..ctor :: instance void()
+member [mscorlib]System.Text.StringBuilder..ctor :: instance void(int32)
+member [mscorlib]System.Text.StringBuilder..ctor :: instance void(string)
+member [mscorlib]System.Text.StringBuilder.Append :: instance class [mscorlib]System.Text.StringBuilder(char)
+member [mscorlib]System.Text.StringBuilder.Append :: instance class [mscorlib]System.Text.StringBuilder(char, int32)
+member [mscorlib]System.Text.StringBuilder.Append :: instance class [mscorlib]System.Text.StringBuilder(object)
+member [mscorlib]System.Text.StringBuilder.Append :: instance class [mscorlib]System.Text.StringBuilder(string)
+member [mscorlib]System.Text.StringBuilder.Insert :: instance class [mscorlib]System.Text.StringBuilder(int32, string)
+member [mscorlib]System.Text.StringBuilder.get_Capacity :: instance int32()
+member [mscorlib]System.Text.StringBuilder.get_Length :: instance int32()
+member [mscorlib]System.Threading.EventWaitHandle.Set :: instance bool()
+member [mscorlib]System.Threading.ManualResetEvent..ctor :: instance void(bool)
+member [mscorlib]System.Threading.Monitor.Enter :: void(object, [out] bool&)
+member [mscorlib]System.Threading.Monitor.Exit :: void(object)
+member [mscorlib]System.Threading.Monitor.PulseAll :: void(object)
+member [mscorlib]System.Threading.Monitor.Wait :: bool(object, int32)
+member [mscorlib]System.Threading.Thread..ctor :: instance void(class [mscorlib]System.Threading.ThreadStart)
+member [mscorlib]System.Threading.Thread.SetApartmentState :: instance void(valuetype [mscorlib]System.Threading.ApartmentState)
+member [mscorlib]System.Threading.Thread.Sleep :: void(int32)
+member [mscorlib]System.Threading.Thread.Start :: instance void()
+member [mscorlib]System.Threading.Thread.set_IsBackground :: instance void(bool)
+member [mscorlib]System.Threading.Thread.set_Name :: instance void(string)
+member [mscorlib]System.Threading.ThreadPool.QueueUserWorkItem :: bool(class [mscorlib]System.Threading.WaitCallback)
+member [mscorlib]System.Threading.ThreadStart..ctor :: instance void(object, native int)
+member [mscorlib]System.Threading.Timer..ctor :: instance void(class [mscorlib]System.Threading.TimerCallback, object, int32, int32)
+member [mscorlib]System.Threading.Timer.Dispose :: instance void()
+member [mscorlib]System.Threading.TimerCallback..ctor :: instance void(object, native int)
+member [mscorlib]System.Threading.WaitCallback..ctor :: instance void(object, native int)
+member [mscorlib]System.Threading.WaitHandle.Close :: instance void()
+member [mscorlib]System.Threading.WaitHandle.WaitOne :: instance bool(int32)
+member [mscorlib]System.Threading.WaitHandle.get_SafeWaitHandle :: instance class [mscorlib]Microsoft.Win32.SafeHandles.SafeWaitHandle()
+member [mscorlib]System.TimeSpan.get_TotalMilliseconds :: instance float64()
+member [mscorlib]System.TimeSpan.get_TotalSeconds :: instance float64()
+member [mscorlib]System.TimeoutException..ctor :: instance void(string)
+member [mscorlib]System.Type.GetTypeFromHandle :: class [mscorlib]System.Type(valuetype [mscorlib]System.RuntimeTypeHandle)
+member [mscorlib]System.Type.GetTypeFromProgID :: class [mscorlib]System.Type(string)
+member [mscorlib]System.Type.InvokeMember :: instance object(string, valuetype [mscorlib]System.Reflection.BindingFlags, class [mscorlib]System.Reflection.Binder, object, object[])
+member [mscorlib]System.Type.op_Equality :: bool(class [mscorlib]System.Type, class [mscorlib]System.Type)
+member [mscorlib]System.UIntPtr.Zero :: native unsigned int
+member [mscorlib]System.UnhandledExceptionEventArgs.get_ExceptionObject :: instance object()
+member [mscorlib]System.UnhandledExceptionEventHandler..ctor :: instance void(object, native int)
+member class WildOS.Guest.WarmPool/'<Call>c__AnonStorey0`1'<!!0>..ctor :: instance void()
+member class WildOS.Guest.WarmPool/'<Call>c__AnonStorey0`1'<!!0>.<>m__0 :: instance void()
+member class WildOS.Guest.WarmPool/'<Call>c__AnonStorey0`1'<!!0>.done :: class [mscorlib]System.Threading.ManualResetEvent
+member class WildOS.Guest.WarmPool/'<Call>c__AnonStorey0`1'<!!0>.error :: class [mscorlib]System.Exception
+member class WildOS.Guest.WarmPool/'<Call>c__AnonStorey0`1'<!!0>.fn :: class [mscorlib]System.Func`1<!0>
+member class WildOS.Guest.WarmPool/'<Call>c__AnonStorey0`1'<!!0>.result :: !0
+member class WildOS.Guest.WarmPool/'<Call>c__AnonStorey0`1'<!0>.done :: class [mscorlib]System.Threading.ManualResetEvent
+member class WildOS.Guest.WarmPool/'<Call>c__AnonStorey0`1'<!0>.error :: class [mscorlib]System.Exception
+member class WildOS.Guest.WarmPool/'<Call>c__AnonStorey0`1'<!0>.fn :: class [mscorlib]System.Func`1<!0>
+member class WildOS.Guest.WarmPool/'<Call>c__AnonStorey0`1'<!0>.result :: !0
+member class [mscorlib]System.Collections.Generic.Dictionary`2/KeyCollection<unsigned int32,class WildOS.Guest.SessionClient>.GetEnumerator :: instance valuetype [mscorlib]System.Collections.Generic.Dictionary`2/KeyCollection/Enumerator<!0,!1>()
+member class [mscorlib]System.Collections.Generic.Dictionary`2/ValueCollection<string,object>.GetEnumerator :: instance valuetype [mscorlib]System.Collections.Generic.Dictionary`2/ValueCollection/Enumerator<!0,!1>()
+member class [mscorlib]System.Collections.Generic.Dictionary`2/ValueCollection<unsigned int32,class WildOS.Guest.SessionClient>.GetEnumerator :: instance valuetype [mscorlib]System.Collections.Generic.Dictionary`2/ValueCollection/Enumerator<!0,!1>()
+member class [mscorlib]System.Collections.Generic.Dictionary`2<string,bool>..ctor :: instance void(class [mscorlib]System.Collections.Generic.IEqualityComparer`1<!0>)
+member class [mscorlib]System.Collections.Generic.Dictionary`2<string,bool>.ContainsKey :: instance bool(!0)
+member class [mscorlib]System.Collections.Generic.Dictionary`2<string,bool>.set_Item :: instance void(!0, !1)
+member class [mscorlib]System.Collections.Generic.Dictionary`2<string,int32>..ctor :: instance void(int32)
+member class [mscorlib]System.Collections.Generic.Dictionary`2<string,int32>.Add :: instance void(!0, !1)
+member class [mscorlib]System.Collections.Generic.Dictionary`2<string,int32>.TryGetValue :: instance bool(!0, [out] !1&)
+member class [mscorlib]System.Collections.Generic.Dictionary`2<string,object>..ctor :: instance void()
+member class [mscorlib]System.Collections.Generic.Dictionary`2<string,object>..ctor :: instance void(class [mscorlib]System.Collections.Generic.IDictionary`2<!0,!1>)
+member class [mscorlib]System.Collections.Generic.Dictionary`2<string,object>.Clear :: instance void()
+member class [mscorlib]System.Collections.Generic.Dictionary`2<string,object>.ContainsKey :: instance bool(!0)
+member class [mscorlib]System.Collections.Generic.Dictionary`2<string,object>.Remove :: instance bool(!0)
+member class [mscorlib]System.Collections.Generic.Dictionary`2<string,object>.TryGetValue :: instance bool(!0, [out] !1&)
+member class [mscorlib]System.Collections.Generic.Dictionary`2<string,object>.get_Item :: instance !1(!0)
+member class [mscorlib]System.Collections.Generic.Dictionary`2<string,object>.get_Values :: instance class [mscorlib]System.Collections.Generic.Dictionary`2/ValueCollection<!0,!1>()
+member class [mscorlib]System.Collections.Generic.Dictionary`2<string,object>.set_Item :: instance void(!0, !1)
+member class [mscorlib]System.Collections.Generic.Dictionary`2<string,string>..ctor :: instance void(class [mscorlib]System.Collections.Generic.IEqualityComparer`1<!0>)
+member class [mscorlib]System.Collections.Generic.Dictionary`2<string,string>.Add :: instance void(!0, !1)
+member class [mscorlib]System.Collections.Generic.Dictionary`2<string,string>.ContainsKey :: instance bool(!0)
+member class [mscorlib]System.Collections.Generic.Dictionary`2<string,string>.TryGetValue :: instance bool(!0, [out] !1&)
+member class [mscorlib]System.Collections.Generic.Dictionary`2<unsigned int32,class WildOS.Guest.SessionClient>..ctor :: instance void()
+member class [mscorlib]System.Collections.Generic.Dictionary`2<unsigned int32,class WildOS.Guest.SessionClient>.ContainsKey :: instance bool(!0)
+member class [mscorlib]System.Collections.Generic.Dictionary`2<unsigned int32,class WildOS.Guest.SessionClient>.Remove :: instance bool(!0)
+member class [mscorlib]System.Collections.Generic.Dictionary`2<unsigned int32,class WildOS.Guest.SessionClient>.TryGetValue :: instance bool(!0, [out] !1&)
+member class [mscorlib]System.Collections.Generic.Dictionary`2<unsigned int32,class WildOS.Guest.SessionClient>.get_Keys :: instance class [mscorlib]System.Collections.Generic.Dictionary`2/KeyCollection<!0,!1>()
+member class [mscorlib]System.Collections.Generic.Dictionary`2<unsigned int32,class WildOS.Guest.SessionClient>.get_Values :: instance class [mscorlib]System.Collections.Generic.Dictionary`2/ValueCollection<!0,!1>()
+member class [mscorlib]System.Collections.Generic.Dictionary`2<unsigned int32,class WildOS.Guest.SessionClient>.set_Item :: instance void(!0, !1)
+member class [mscorlib]System.Collections.Generic.Dictionary`2<unsigned int32,valuetype [mscorlib]System.DateTime>..ctor :: instance void()
+member class [mscorlib]System.Collections.Generic.Dictionary`2<unsigned int32,valuetype [mscorlib]System.DateTime>.TryGetValue :: instance bool(!0, [out] !1&)
+member class [mscorlib]System.Collections.Generic.Dictionary`2<unsigned int32,valuetype [mscorlib]System.DateTime>.set_Item :: instance void(!0, !1)
+member class [mscorlib]System.Collections.Generic.List`1<class WildOS.Guest.SessionClient>..ctor :: instance void(class [mscorlib]System.Collections.Generic.IEnumerable`1<!0>)
+member class [mscorlib]System.Collections.Generic.List`1<class WildOS.Guest.SessionClient>.GetEnumerator :: instance valuetype [mscorlib]System.Collections.Generic.List`1/Enumerator<!0>()
+member class [mscorlib]System.Collections.Generic.List`1<class WildOS.Guest.WarmPool/Entry>..ctor :: instance void()
+member class [mscorlib]System.Collections.Generic.List`1<class WildOS.Guest.WarmPool/Entry>.Add :: instance void(!0)
+member class [mscorlib]System.Collections.Generic.List`1<class WildOS.Guest.WarmPool/Entry>.Exists :: instance bool(class [mscorlib]System.Predicate`1<!0>)
+member class [mscorlib]System.Collections.Generic.List`1<class WildOS.Guest.WarmPool/Entry>.Find :: instance !0(class [mscorlib]System.Predicate`1<!0>)
+member class [mscorlib]System.Collections.Generic.List`1<class WildOS.Guest.WarmPool/Entry>.GetEnumerator :: instance valuetype [mscorlib]System.Collections.Generic.List`1/Enumerator<!0>()
+member class [mscorlib]System.Collections.Generic.List`1<class WildOS.Guest.WarmPool/Entry>.Remove :: instance bool(!0)
+member class [mscorlib]System.Collections.Generic.List`1<class WildOS.Guest.WarmPool/Entry>.RemoveAll :: instance int32(class [mscorlib]System.Predicate`1<!0>)
+member class [mscorlib]System.Collections.Generic.List`1<class WildOS.Guest.WarmPool/Entry>.ToArray :: instance !0[]()
+member class [mscorlib]System.Collections.Generic.List`1<class [mscorlib]System.Action>..ctor :: instance void()
+member class [mscorlib]System.Collections.Generic.List`1<class [mscorlib]System.Action>.Add :: instance void(!0)
+member class [mscorlib]System.Collections.Generic.List`1<class [mscorlib]System.Action>.RemoveAt :: instance void(int32)
+member class [mscorlib]System.Collections.Generic.List`1<class [mscorlib]System.Action>.get_Count :: instance int32()
+member class [mscorlib]System.Collections.Generic.List`1<class [mscorlib]System.Action>.get_Item :: instance !0(int32)
+member class [mscorlib]System.Collections.Generic.List`1<class [mscorlib]System.Collections.Generic.Dictionary`2<string,object>>..ctor :: instance void()
+member class [mscorlib]System.Collections.Generic.List`1<class [mscorlib]System.Collections.Generic.Dictionary`2<string,object>>.Add :: instance void(!0)
+member class [mscorlib]System.Collections.Generic.List`1<class [mscorlib]System.Collections.Generic.Dictionary`2<string,object>>.GetEnumerator :: instance valuetype [mscorlib]System.Collections.Generic.List`1/Enumerator<!0>()
+member class [mscorlib]System.Collections.Generic.List`1<class [mscorlib]System.Collections.Generic.Dictionary`2<string,object>>.get_Count :: instance int32()
+member class [mscorlib]System.Collections.Generic.List`1<class [mscorlib]System.Collections.Generic.Dictionary`2<string,object>>.get_Item :: instance !0(int32)
+member class [mscorlib]System.Collections.Generic.List`1<object>..ctor :: instance void()
+member class [mscorlib]System.Collections.Generic.List`1<object>.Add :: instance void(!0)
+member class [mscorlib]System.Collections.Generic.List`1<object>.Clear :: instance void()
+member class [mscorlib]System.Collections.Generic.List`1<object>.GetEnumerator :: instance valuetype [mscorlib]System.Collections.Generic.List`1/Enumerator<!0>()
+member class [mscorlib]System.Collections.Generic.List`1<object>.RemoveAt :: instance void(int32)
+member class [mscorlib]System.Collections.Generic.List`1<object>.get_Count :: instance int32()
+member class [mscorlib]System.Collections.Generic.List`1<object>.get_Item :: instance !0(int32)
+member class [mscorlib]System.Collections.Generic.List`1<string>..ctor :: instance void()
+member class [mscorlib]System.Collections.Generic.List`1<string>.Add :: instance void(!0)
+member class [mscorlib]System.Collections.Generic.List`1<string>.Contains :: instance bool(!0)
+member class [mscorlib]System.Collections.Generic.List`1<string>.GetEnumerator :: instance valuetype [mscorlib]System.Collections.Generic.List`1/Enumerator<!0>()
+member class [mscorlib]System.Collections.Generic.List`1<string>.get_Count :: instance int32()
+member class [mscorlib]System.Collections.Generic.List`1<string>.get_Item :: instance !0(int32)
+member class [mscorlib]System.Collections.Generic.List`1<unsigned int8>..ctor :: instance void()
+member class [mscorlib]System.Collections.Generic.List`1<unsigned int8>.Add :: instance void(!0)
+member class [mscorlib]System.Collections.Generic.List`1<unsigned int8>.Clear :: instance void()
+member class [mscorlib]System.Collections.Generic.List`1<unsigned int8>.ToArray :: instance !0[]()
+member class [mscorlib]System.Collections.Generic.List`1<unsigned int8>.get_Count :: instance int32()
+member class [mscorlib]System.Collections.Generic.List`1<unsigned int8[]>..ctor :: instance void()
+member class [mscorlib]System.Collections.Generic.List`1<unsigned int8[]>.Add :: instance void(!0)
+member class [mscorlib]System.Collections.Generic.List`1<unsigned int8[]>.GetEnumerator :: instance valuetype [mscorlib]System.Collections.Generic.List`1/Enumerator<!0>()
+member class [mscorlib]System.Collections.Generic.List`1<unsigned int8[]>.get_Count :: instance int32()
+member class [mscorlib]System.Collections.Generic.List`1<unsigned int8[]>.get_Item :: instance !0(int32)
+member class [mscorlib]System.Func`1<!0>.Invoke :: instance !0()
+member class [mscorlib]System.Func`1<class [mscorlib]System.Collections.Generic.Dictionary`2<string,object>>..ctor :: instance void(object, native int)
+member class [mscorlib]System.Func`1<class [mscorlib]System.Collections.Generic.List`1<object>>..ctor :: instance void(object, native int)
+member class [mscorlib]System.Predicate`1<class WildOS.Guest.WarmPool/Entry>..ctor :: instance void(object, native int)
+member valuetype [mscorlib]System.Collections.Generic.Dictionary`2/KeyCollection/Enumerator<unsigned int32,class WildOS.Guest.SessionClient>.MoveNext :: instance bool()
+member valuetype [mscorlib]System.Collections.Generic.Dictionary`2/KeyCollection/Enumerator<unsigned int32,class WildOS.Guest.SessionClient>.get_Current :: instance !0()
+member valuetype [mscorlib]System.Collections.Generic.Dictionary`2/ValueCollection/Enumerator<string,object>.MoveNext :: instance bool()
+member valuetype [mscorlib]System.Collections.Generic.Dictionary`2/ValueCollection/Enumerator<string,object>.get_Current :: instance !1()
+member valuetype [mscorlib]System.Collections.Generic.Dictionary`2/ValueCollection/Enumerator<unsigned int32,class WildOS.Guest.SessionClient>.MoveNext :: instance bool()
+member valuetype [mscorlib]System.Collections.Generic.Dictionary`2/ValueCollection/Enumerator<unsigned int32,class WildOS.Guest.SessionClient>.get_Current :: instance !1()
+member valuetype [mscorlib]System.Collections.Generic.List`1/Enumerator<class WildOS.Guest.SessionClient>.MoveNext :: instance bool()
+member valuetype [mscorlib]System.Collections.Generic.List`1/Enumerator<class WildOS.Guest.SessionClient>.get_Current :: instance !0()
+member valuetype [mscorlib]System.Collections.Generic.List`1/Enumerator<class WildOS.Guest.WarmPool/Entry>.MoveNext :: instance bool()
+member valuetype [mscorlib]System.Collections.Generic.List`1/Enumerator<class WildOS.Guest.WarmPool/Entry>.get_Current :: instance !0()
+member valuetype [mscorlib]System.Collections.Generic.List`1/Enumerator<class [mscorlib]System.Collections.Generic.Dictionary`2<string,object>>.MoveNext :: instance bool()
+member valuetype [mscorlib]System.Collections.Generic.List`1/Enumerator<class [mscorlib]System.Collections.Generic.Dictionary`2<string,object>>.get_Current :: instance !0()
+member valuetype [mscorlib]System.Collections.Generic.List`1/Enumerator<object>.MoveNext :: instance bool()
+member valuetype [mscorlib]System.Collections.Generic.List`1/Enumerator<object>.get_Current :: instance !0()
+member valuetype [mscorlib]System.Collections.Generic.List`1/Enumerator<string>.MoveNext :: instance bool()
+member valuetype [mscorlib]System.Collections.Generic.List`1/Enumerator<string>.get_Current :: instance !0()
+member valuetype [mscorlib]System.Collections.Generic.List`1/Enumerator<unsigned int8[]>.MoveNext :: instance bool()
+member valuetype [mscorlib]System.Collections.Generic.List`1/Enumerator<unsigned int8[]>.get_Current :: instance !0()
+type [System.Core]Microsoft.Win32.SafeHandles.SafePipeHandle
+type [System.Core]System.IO.Pipes.NamedPipeClientStream
+type [System.Core]System.IO.Pipes.NamedPipeServerStream
+type [System.Core]System.IO.Pipes.PipeAccessRights
+type [System.Core]System.IO.Pipes.PipeAccessRule
+type [System.Core]System.IO.Pipes.PipeDirection
+type [System.Core]System.IO.Pipes.PipeOptions
+type [System.Core]System.IO.Pipes.PipeSecurity
+type [System.Core]System.IO.Pipes.PipeStream
+type [System.Core]System.IO.Pipes.PipeTransmissionMode
+type [System.ServiceProcess]System.ServiceProcess.ServiceBase
+type [System.ServiceProcess]System.ServiceProcess.SessionChangeDescription
+type [System.ServiceProcess]System.ServiceProcess.SessionChangeReason
+type [System]System.ComponentModel.Win32Exception
+type [System]System.Diagnostics.Process
+type [System]System.Diagnostics.ProcessStartInfo
+type [System]System.Text.RegularExpressions.Regex
+type [System]System.Text.RegularExpressions.RegexOptions
+type [mscorlib]Microsoft.Win32.Registry
+type [mscorlib]Microsoft.Win32.RegistryKey
+type [mscorlib]Microsoft.Win32.RegistryValueKind
+type [mscorlib]Microsoft.Win32.SafeHandles.SafeFileHandle
+type [mscorlib]Microsoft.Win32.SafeHandles.SafeWaitHandle
+type [mscorlib]System.Action
+type [mscorlib]System.Activator
+type [mscorlib]System.AppDomain
+type [mscorlib]System.Array
+type [mscorlib]System.AsyncCallback
+type [mscorlib]System.BitConverter
+type [mscorlib]System.Boolean
+type [mscorlib]System.Byte
+type [mscorlib]System.Char
+type [mscorlib]System.Collections.DictionaryEntry
+type [mscorlib]System.Collections.Generic.Dictionary`2
+type [mscorlib]System.Collections.Generic.Dictionary`2/KeyCollection
+type [mscorlib]System.Collections.Generic.Dictionary`2/KeyCollection/Enumerator
+type [mscorlib]System.Collections.Generic.Dictionary`2/ValueCollection
+type [mscorlib]System.Collections.Generic.Dictionary`2/ValueCollection/Enumerator
+type [mscorlib]System.Collections.Generic.IDictionary`2
+type [mscorlib]System.Collections.Generic.IEnumerable`1
+type [mscorlib]System.Collections.Generic.IEqualityComparer`1
+type [mscorlib]System.Collections.Generic.List`1
+type [mscorlib]System.Collections.Generic.List`1/Enumerator
+type [mscorlib]System.Collections.IDictionary
+type [mscorlib]System.Collections.IDictionaryEnumerator
+type [mscorlib]System.Collections.IEnumerable
+type [mscorlib]System.Collections.IEnumerator
+type [mscorlib]System.Convert
+type [mscorlib]System.DateTime
+type [mscorlib]System.DateTimeKind
+type [mscorlib]System.DayOfWeek
+type [mscorlib]System.DllNotFoundException
+type [mscorlib]System.Double
+type [mscorlib]System.Environment
+type [mscorlib]System.Environment/SpecialFolder
+type [mscorlib]System.Exception
+type [mscorlib]System.FormatException
+type [mscorlib]System.Func`1
+type [mscorlib]System.Globalization.CultureInfo
+type [mscorlib]System.Globalization.NumberStyles
+type [mscorlib]System.IAsyncResult
+type [mscorlib]System.IDisposable
+type [mscorlib]System.IFormatProvider
+type [mscorlib]System.IO.BinaryWriter
+type [mscorlib]System.IO.Directory
+type [mscorlib]System.IO.DirectoryInfo
+type [mscorlib]System.IO.File
+type [mscorlib]System.IO.FileInfo
+type [mscorlib]System.IO.FileSystemInfo
+type [mscorlib]System.IO.IOException
+type [mscorlib]System.IO.MemoryStream
+type [mscorlib]System.IO.Path
+type [mscorlib]System.IO.SearchOption
+type [mscorlib]System.IO.SeekOrigin
+type [mscorlib]System.IO.Stream
+type [mscorlib]System.Int16
+type [mscorlib]System.Int32
+type [mscorlib]System.Int64
+type [mscorlib]System.IntPtr
+type [mscorlib]System.Math
+type [mscorlib]System.MulticastDelegate
+type [mscorlib]System.NotSupportedException
+type [mscorlib]System.Object
+type [mscorlib]System.OperationCanceledException
+type [mscorlib]System.ParamArrayAttribute
+type [mscorlib]System.Predicate`1
+type [mscorlib]System.Reflection.Assembly
+type [mscorlib]System.Reflection.AssemblyProductAttribute
+type [mscorlib]System.Reflection.AssemblyTitleAttribute
+type [mscorlib]System.Reflection.Binder
+type [mscorlib]System.Reflection.BindingFlags
+type [mscorlib]System.Runtime.CompilerServices.CompilerGeneratedAttribute
+type [mscorlib]System.Runtime.CompilerServices.IsVolatile
+type [mscorlib]System.Runtime.CompilerServices.RuntimeCompatibilityAttribute
+type [mscorlib]System.Runtime.CompilerServices.RuntimeHelpers
+type [mscorlib]System.Runtime.InteropServices.GCHandle
+type [mscorlib]System.Runtime.InteropServices.GCHandleType
+type [mscorlib]System.Runtime.InteropServices.Marshal
+type [mscorlib]System.Runtime.InteropServices.SafeHandle
+type [mscorlib]System.RuntimeFieldHandle
+type [mscorlib]System.RuntimeTypeHandle
+type [mscorlib]System.STAThreadAttribute
+type [mscorlib]System.Security.AccessControl.AccessControlType
+type [mscorlib]System.Security.Principal.IdentityReference
+type [mscorlib]System.Security.Principal.SecurityIdentifier
+type [mscorlib]System.Security.Principal.WellKnownSidType
+type [mscorlib]System.Single
+type [mscorlib]System.String
+type [mscorlib]System.StringComparer
+type [mscorlib]System.StringComparison
+type [mscorlib]System.Text.Encoding
+type [mscorlib]System.Text.StringBuilder
+type [mscorlib]System.Threading.ApartmentState
+type [mscorlib]System.Threading.EventWaitHandle
+type [mscorlib]System.Threading.ManualResetEvent
+type [mscorlib]System.Threading.Monitor
+type [mscorlib]System.Threading.Thread
+type [mscorlib]System.Threading.ThreadPool
+type [mscorlib]System.Threading.ThreadStart
+type [mscorlib]System.Threading.Timer
+type [mscorlib]System.Threading.TimerCallback
+type [mscorlib]System.Threading.WaitCallback
+type [mscorlib]System.Threading.WaitHandle
+type [mscorlib]System.TimeSpan
+type [mscorlib]System.TimeoutException
+type [mscorlib]System.Type
+type [mscorlib]System.UInt32
+type [mscorlib]System.UInt64
+type [mscorlib]System.UIntPtr
+type [mscorlib]System.UnhandledExceptionEventArgs
+type [mscorlib]System.UnhandledExceptionEventHandler
+type [mscorlib]System.ValueType

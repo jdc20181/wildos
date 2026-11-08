@@ -1,0 +1,5 @@
+[D-BUS Service]
+Name=org.wildos.Setup1
+Exec=/usr/libexec/wildos/wildos-setup-helper
+User=root
+SystemdService=wildos-setup-helper.service

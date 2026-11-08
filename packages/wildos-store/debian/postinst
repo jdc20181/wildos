@@ -1,0 +1,12 @@
+#!/bin/sh
+set -e
+
+# A PC where flatpak already set Flathub up from Kicksecure's definition keeps
+# the free software subset in its own configuration; widen it to the whole of
+# Flathub, as the Store adds it.
+if [ "$1" = "configure" ] && command -v flatpak >/dev/null 2>&1 &&
+        grep -qs '^xa.subset=verified_floss' /var/lib/flatpak/repo/config; then
+    flatpak remote-modify --subset= --title=Flathub flathub >/dev/null 2>&1 || true
+fi
+
+#DEBHELPER#

@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    SPDX-FileCopyrightText: 2012-2016 Eike Hein <hein@kde.org>
+    SPDX-License-Identifier: GPL-2.0-or-later
+
+    Wild OS fork of the Plasma task manager's settings, cut down to the ones
+    the Wild OS taskbar reads.
+-->
+<kcfg xmlns="http://www.kde.org/standards/kcfg/1.0"
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xsi:schemaLocation="http://www.kde.org/standards/kcfg/1.0
+      http://www.kde.org/standards/kcfg/1.0/kcfg.xsd" >
+  <kcfgfile name=""/>
+
+  <group name="General">
+    <entry name="launchers" type="StringList">
+      <label>The apps pinned to the taskbar, in order.</label>
+      <default>applications:org.wildos.files.desktop,applications:org.wildos.store.desktop,applications:org.wildos.settings.desktop</default>
+    </entry>
+    <entry name="groupingAppIdBlacklist" type="StringList">
+      <default></default>
+    </entry>
+    <entry name="groupingLauncherUrlBlacklist" type="StringList">
+      <default></default>
+    </entry>
+    <entry name="indicateAudioStreams" type="Bool">
+      <label>Show a speaker on apps playing sound; clicking it mutes the app.</label>
+      <default>true</default>
+    </entry>
+    <entry name="minimizeActiveTaskOnClick" type="Bool">
+      <default>true</default>
+    </entry>
+  </group>
+</kcfg>

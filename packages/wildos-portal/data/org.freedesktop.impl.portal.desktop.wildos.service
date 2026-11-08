@@ -1,0 +1,4 @@
+[D-BUS Service]
+Name=org.freedesktop.impl.portal.desktop.wildos
+Exec=/usr/libexec/wildos/wildos-portal
+SystemdService=wildos-portal.service

@@ -1,0 +1,14 @@
+#!/bin/sh
+set -e
+
+# Dolphin also claims org.freedesktop.FileManager1, the service apps call for
+# "Show in folder". With two activation files for one name, D-Bus may start
+# either, so Dolphin's is moved aside and Files answers.
+DOLPHIN=/usr/share/dbus-1/services/org.kde.dolphin.FileManager1.service
+
+if [ "$1" = "install" ] || [ "$1" = "upgrade" ]; then
+    dpkg-divert --package wildos-files --add --rename \
+        --divert "$DOLPHIN.dolphin" "$DOLPHIN" >/dev/null
+fi
+
+#DEBHELPER#

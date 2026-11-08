@@ -1,0 +1,32 @@
+#!/bin/sh
+set -e
+
+# Files from Plasma and KWin that Wild OS replaces with patched copies, kept
+# under another name so package updates do not overwrite the Wild OS ones:
+#   the panel view, which draws the taskbar as the design's two pills;
+#   the taskbar pop-ups, which keep the design's 14 px from the pills;
+#   Aurorae's caption, which shows "Documents - Files" with a hyphen.
+REPLACED="
+/usr/share/plasma/shells/org.kde.plasma.desktop/contents/views/Panel.qml
+/usr/share/plasma/shells/org.kde.plasma.desktop/contents/applet/CompactApplet.qml
+/usr/share/kwin/aurorae/aurorae.qml
+"
+
+# Plasma's own session entries would put "Plasma (Wayland)" and "Plasma
+# (X11)" beside Wild OS on the sign-in screen. The display manager only
+# reads files ending in .desktop, so a renamed copy is hidden.
+HIDDEN="
+/usr/share/wayland-sessions/plasma.desktop
+/usr/share/xsessions/plasmax11.desktop
+"
+
+if [ "$1" = "install" ] || [ "$1" = "upgrade" ]; then
+    for f in $REPLACED; do
+        dpkg-divert --package wildos-shell --add --rename --divert "$f.plasma" "$f" >/dev/null
+    done
+    for f in $HIDDEN; do
+        dpkg-divert --package wildos-shell --add --rename --divert "$f.hidden" "$f" >/dev/null
+    done
+fi
+
+#DEBHELPER#

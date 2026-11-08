@@ -1,0 +1,15 @@
+[Unit]
+Description=Carry on setting up Windows mode
+# Only while a setup is under way; Windows mode never starts at boot
+# otherwise (brief 5.6).
+ConditionPathExists=/var/lib/wildos/winmode/setting-up
+Wants=network-online.target
+After=network-online.target libvirtd.service virtqemud.socket
+
+[Service]
+Type=oneshot
+# Asking the service anything starts it, and it carries on by itself.
+ExecStart=/usr/bin/busctl --system call org.wildos.WindowsMode1 /org/wildos/WindowsMode1 org.wildos.WindowsMode1.Host Status
+
+[Install]
+WantedBy=multi-user.target

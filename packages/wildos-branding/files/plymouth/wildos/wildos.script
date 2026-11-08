@@ -1,0 +1,610 @@
+# Wild OS start-up animation, from design/BootIntro.dc.html and
+# BootStory.dc.html, with the disk unlock prompt from Boot.dc.html and the
+# glide out of it from AfterUnlockD.dc.html.
+#
+# A spark flashes into being and the W draws itself on a fixed 1.5 s timeline,
+# then the W fills and "Wild OS" settles in. Then the W dims to glass and a
+# point of light runs round its outline while the spark breathes and
+# "Starting securely" rises into place: that loop is the loading indicator,
+# and simply keeps going until the system is ready.
+#
+# With an encrypted disk the unlock prompt comes up once the name has settled.
+# When the password is entered the prompt fades, the W glides out of its tile
+# down to the middle of the screen and dims to glass, and the same loop runs
+# there, smaller.
+#
+# On quit the screen is left on a fixed frame of the loop (plymouth quit
+# --retain-splash): the light at the start of the outline, the spark at full
+# strength. The sign-in screen opens on exactly that picture and plays the
+# rest: the final trace, the W filling and the flight through it into the
+# wallpaper (sddm/wildos/components/BootHandoff.qml).
+#
+# Every image is pre-rendered by tools/render-boot-assets.py, one folder per
+# screen scale. Positions are in the design's 1440x900 CSS pixels, measured
+# from the centre of the screen, and must stay in step with that script and
+# with BootHandoff.qml.
+
+INTRO_BG_R = 0.0196; INTRO_BG_G = 0.0275; INTRO_BG_B = 0.0510;
+UNLOCK_BG_R = 0.0431; UNLOCK_BG_G = 0.0588; UNLOCK_BG_B = 0.1176;
+Window.SetBackgroundTopColor(INTRO_BG_R, INTRO_BG_G, INTRO_BG_B);
+Window.SetBackgroundBottomColor(INTRO_BG_R, INTRO_BG_G, INTRO_BG_B);
+
+FPS = 50;
+SPARK_FRAMES = 26;
+STROKE_FRAMES = 54;
+WORD_FRAMES = 41;
+BULLET_MAX = 25;
+GLIDE_FRAMES = 50;
+# One lap of the light, and the frames it is drawn in, for the W in the
+# start-up animation (i) and after unlocking (u).
+LAP_I = 1.75; LAP_I_FRAMES = 88;
+LAP_U = 1.6; LAP_U_FRAMES = 80;
+
+# The artboard is scaled to the screen height (or width, on a narrow screen)
+# and drawn with the nearest pre-rendered scale, so artwork is never resampled.
+scales[0] = 0.8; scales[1] = 1.0; scales[2] = 1.2; scales[3] = 1.6; scales[4] = 2.0; scales[5] = 2.4;
+dirs[0] = "s080/"; dirs[1] = "s100/"; dirs[2] = "s120/"; dirs[3] = "s160/"; dirs[4] = "s200/"; dirs[5] = "s240/";
+
+fun measure() {
+    global.screen_w = Window.GetWidth();
+    global.screen_h = Window.GetHeight();
+    want = global.screen_h / 900;
+    if (global.screen_w < 1200 * want)
+        want = global.screen_w / 1200;
+    pick = 0;
+    for (i = 1; i < 6; i++) {
+        if (Math.Abs(scales[i] - want) < Math.Abs(scales[pick] - want))
+            pick = i;
+    }
+    global.s = scales[pick];
+    global.dir = dirs[pick];
+    global.cx = Window.GetX() + Math.Int(global.screen_w / 2);
+    global.cy = Window.GetY() + Math.Int(global.screen_h / 2);
+}
+measure();
+
+fun px(v) {
+    if (v < 0)
+        return -Math.Int(-v * s + 0.5);
+    return Math.Int(v * s + 0.5);
+}
+
+fun pad(k) {
+    if (k < 10)
+        return "0" + k;
+    return "" + k;
+}
+
+# CSS cubic-bezier(.4,0,.2,1), the design's timing for every keyframe.
+fun ease(u) {
+    if (u <= 0)
+        return 0;
+    if (u >= 1)
+        return 1;
+    lo = 0;
+    hi = 1;
+    for (n = 0; n < 24; n++) {
+        m = (lo + hi) / 2;
+        x = 3 * (1 - m) * (1 - m) * m * 0.4 + 3 * (1 - m) * m * m * 0.2 + m * m * m;
+        if (x < u)
+            lo = m;
+        else
+            hi = m;
+    }
+    m = (lo + hi) / 2;
+    return 3 * (1 - m) * m * m + m * m * m;
+}
+
+fun segment(d, d0, d1) {
+    return ease((d - d0) / (d1 - d0));
+}
+
+# Where a repeating cycle of the given length is, from 0 to 1.
+fun cycle(d, length) {
+    if (d < 0)
+        return 0;
+    return (d - Math.Int(d / length) * length) / length;
+}
+
+# The spark's breathing in the loop: from full strength down to low and back
+# once per period.
+fun breath(d, period, low) {
+    u = cycle(d, period);
+    if (u < 0.5)
+        return 1 - (1 - low) * ease(u * 2);
+    return low + (1 - low) * ease(u * 2 - 1);
+}
+
+# The splash clock t against the design's time d: the spark and the W drawing
+# itself (design 0.7 s to 3.1 s) take 1.5 s, the rest plays at design speed.
+fun design_time(t) {
+    if (t <= 1.5)
+        return 0.7 + 1.6 * t;
+    return t + 1.6;
+}
+
+fun splash_time(d) {
+    if (d <= 3.1)
+        return (d - 0.7) / 1.6;
+    return d - 1.6;
+}
+
+fun frame(name, k) {
+    return Image(dir + name + "-" + pad(k) + ".png");
+}
+
+# Every placed sprite is listed with its artboard position and image, so the
+# whole picture can be laid out again when the screen changes size.
+placed_n = 0;
+
+fun place(file, x, y, z) {
+    sp = Sprite();
+    if (file != "")
+        sp.SetImage(Image(dir + file));
+    sp.SetX(cx + px(x));
+    sp.SetY(cy + px(y));
+    sp.SetZ(z);
+    sp.SetOpacity(0);
+    global.placed[global.placed_n] = sp;
+    global.placed_x[global.placed_n] = x;
+    global.placed_y[global.placed_n] = y;
+    global.placed_file[global.placed_n] = file;
+    global.placed_n++;
+    return sp;
+}
+
+# Moves a placed sprite by an offset in artboard pixels.
+fun shift(sp, x, y, dy) {
+    sp.SetX(cx + px(x));
+    sp.SetY(cy + px(y + dy));
+}
+
+flash_image = Image(dir + "flash.png");
+flash = Sprite();
+flash.SetZ(3);
+flash.SetOpacity(0);
+flash_size = -1;
+
+# The start-up animation's W, in the 240px logo box.
+fill = place("fill.png", -115, -180, 4);
+base_i = place("base-i.png", -135, -200, 5);
+stroke = place("", -115, -180, 6);
+stroke_k = -1;
+light_i = place("", -135, -200, 7);
+light_i_k = -1;
+spark = place("", 35, -195, 8);
+spark_k = -1;
+word = place("", -150, 45, 9);
+word_k = -1;
+status_i = place("status-i.png", -100, 50, 9);
+
+# The unlock prompt.
+tile = place("tile.png", -45, -200, 20);
+name = place("name.png", -100, -95, 20);
+prompt_file = "prompt.png";
+prompt = place(prompt_file, -200, -35, 20);
+field = place("field.png", -160, 0, 20);
+hint = place("hint.png", -200, 70, 20);
+caps = place("caps.png", -200, 95, 20);
+for (i = 0; i < BULLET_MAX; i++)
+    bullets[i] = place("bullet.png", -145 + 10 * i, 20, 21);
+
+# The W after unlocking: the glide out of the tile, then its own loop.
+glide = place("", -50, -205, 22);
+glide_k = -1;
+fill_u = place("fill-u.png", -100, -85, 22);
+base_u = place("base-u.png", -100, -85, 23);
+light_u = place("", -100, -85, 24);
+light_u_k = -1;
+spark_u = place("spark-u.png", 40, -75, 25);
+status_u = place("status-u.png", -100, 95, 25);
+
+# The screen often changes size during boot, when the graphics driver takes
+# over from the firmware's display. Everything is then placed again, at the
+# scale that suits the new size, so nothing is left cut off or off centre.
+fun relayout() {
+    measure();
+    global.flash_image = Image(dir + "flash.png");
+    for (i = 0; i < global.placed_n; i++) {
+        sp = global.placed[i];
+        if (global.placed_file[i] != "")
+            sp.SetImage(Image(dir + global.placed_file[i]));
+        sp.SetX(cx + px(global.placed_x[i]));
+        sp.SetY(cy + px(global.placed_y[i]));
+    }
+    prompt.SetImage(Image(dir + global.prompt_file));
+    global.flash_size = -1;
+    global.spark_k = -1;
+    global.stroke_k = -1;
+    global.word_k = -1;
+    global.light_i_k = -1;
+    global.light_u_k = -1;
+    global.glide_k = -1;
+}
+
+mode = Plymouth.GetMode();
+booting = (mode == "boot");
+
+t = 0;
+rate = FPS;
+wall = -1;
+wall_origin = -1;
+brand = 0;
+if (booting)
+    brand = 1;
+unlock_alpha = 0;
+unlock_bg = -1;
+want_unlock = 0;
+quitting = 0;
+
+in_password = 0;
+submitted = 0;
+last_prompt = "";
+typed = 0;
+question_sprite = NULL;
+answer_sprite = NULL;
+# Set once the password has been entered: the time it was, on the splash
+# clock. The glide and the loop after it run from there.
+unlocked = 0;
+unlocked_at = 0;
+
+fun approach(value, goal, step) {
+    if (value < goal)
+        return Math.Min(value + step, goal);
+    return Math.Max(value - step, goal);
+}
+
+fun show_frame(sp, name, k, last) {
+    if (k != last)
+        sp.SetImage(frame(name, k));
+    return k;
+}
+
+# The start-up animation's W at design time d. On shutdown and other modes
+# only the finished logo and wordmark show, without the loop.
+fun draw_intro(d, alpha) {
+    if (!global.booting)
+        d = 4.9;
+
+    # The spark: flashing in, settled, then breathing in the loop.
+    if (d < 0.7) {
+        spark.SetOpacity(0);
+    } else if (d < 1.5) {
+        k = Math.Int((splash_time(d) - splash_time(0.7)) / (splash_time(1.5) - splash_time(0.7)) * (SPARK_FRAMES - 1) + 0.5);
+        global.spark_k = show_frame(spark, "spark", k, global.spark_k);
+        spark.SetOpacity(alpha);
+    } else {
+        global.spark_k = show_frame(spark, "spark", SPARK_FRAMES - 1, global.spark_k);
+        if (d < 5.32 || !global.booting)
+            spark.SetOpacity(alpha);
+        else
+            spark.SetOpacity(breath(d - 5.32, 1.68, 0.4) * alpha);
+    }
+
+    if (d > 0.8 && d < 2.2) {
+        if (d < 1.2) {
+            e = segment(d, 0.8, 1.2);
+            size = 0.2 + 0.8 * e;
+            glow = 0.9 * e;
+        } else {
+            e = segment(d, 1.2, 2.2);
+            size = 1 + 0.8 * e;
+            glow = 0.9 * (1 - e);
+        }
+        edge = Math.Int(200 * s * size / 1.8 + 0.5);
+        if (edge < 2)
+            edge = 2;
+        if (edge != global.flash_size) {
+            flash.SetImage(flash_image.Scale(edge, edge));
+            global.flash_size = edge;
+        }
+        flash.SetX(cx + px(89) - Math.Int(edge / 2));
+        flash.SetY(cy + px(-139) - Math.Int(edge / 2));
+        flash.SetOpacity(glow * alpha);
+    } else if (global.flash_size >= 0) {
+        flash.SetOpacity(0);
+        global.flash_size = -1;
+    }
+
+    # The W drawing itself.
+    if (d >= 1.4 && d < 3.8) {
+        if (d < 3.1) {
+            k = Math.Int((splash_time(d) - splash_time(1.4)) / (splash_time(3.1) - splash_time(1.4)) * (STROKE_FRAMES - 1) + 0.5);
+            line = 1;
+        } else {
+            k = STROKE_FRAMES - 1;
+            line = 1 - segment(d, 3.1, 3.8);
+        }
+        global.stroke_k = show_frame(stroke, "stroke", k, global.stroke_k);
+        stroke.SetOpacity(line * alpha);
+    } else {
+        stroke.SetOpacity(0);
+    }
+
+    # Filled, then dimmed to glass for the loop.
+    if (d < 5.04)
+        fill.SetOpacity(segment(d, 2.9, 3.7) * alpha);
+    else
+        fill.SetOpacity((1 - 0.9 * segment(d, 5.04, 5.67)) * alpha);
+
+    # "Wild OS" settles in, and makes way for the status line.
+    if (d < 3.6) {
+        word.SetOpacity(0);
+    } else if (d < 4.4) {
+        global.word_k = show_frame(word, "word", Math.Int((splash_time(d) - splash_time(3.6)) / (splash_time(4.4) - splash_time(3.6)) * (WORD_FRAMES - 1) + 0.5), global.word_k);
+        word.SetOpacity(alpha);
+    } else {
+        global.word_k = show_frame(word, "word", WORD_FRAMES - 1, global.word_k);
+        if (global.booting)
+            word.SetOpacity((1 - segment(d, 5.04, 5.6)) * alpha);
+        else
+            word.SetOpacity(alpha);
+    }
+
+    if (!global.booting) {
+        base_i.SetOpacity(0);
+        light_i.SetOpacity(0);
+        status_i.SetOpacity(0);
+        return;
+    }
+
+    # The loop: the glass outline, the light running round it, the status.
+    base_i.SetOpacity(segment(d, 5.18, 5.74) * alpha);
+    if (d < 5.46) {
+        light_i.SetOpacity(0);
+    } else {
+        k = Math.Int(cycle(d - 5.46, LAP_I) * LAP_I_FRAMES);
+        if (k >= LAP_I_FRAMES)
+            k = 0;
+        global.light_i_k = show_frame(light_i, "light-i", k, global.light_i_k);
+        light_i.SetOpacity(segment(d, 5.46, 5.88) * alpha);
+    }
+    e = segment(d, 5.32, 5.88);
+    shift(status_i, -100, 50, 56 * (1 - e));
+    status_i.SetOpacity(0.75 * e * alpha);
+}
+
+fun draw_unlock(alpha) {
+    tile.SetOpacity(alpha);
+    name.SetOpacity(alpha);
+    shift(name, -100, -95, 0);
+    prompt.SetOpacity(alpha);
+    field.SetOpacity(alpha);
+    hint.SetOpacity(alpha);
+    if (Plymouth.GetCapslockState())
+        caps.SetOpacity(alpha);
+    else
+        caps.SetOpacity(0);
+    for (i = 0; i < BULLET_MAX; i++) {
+        if (i < global.typed)
+            bullets[i].SetOpacity(alpha);
+        else
+            bullets[i].SetOpacity(0);
+    }
+    set_background(alpha);
+}
+
+# The unlock screen and everything after it sit on the slightly lighter navy
+# of Boot.dc.html.
+fun set_background(alpha) {
+    if (alpha != global.unlock_bg) {
+        r = INTRO_BG_R + (UNLOCK_BG_R - INTRO_BG_R) * alpha;
+        g = INTRO_BG_G + (UNLOCK_BG_G - INTRO_BG_G) * alpha;
+        b = INTRO_BG_B + (UNLOCK_BG_B - INTRO_BG_B) * alpha;
+        Window.SetBackgroundTopColor(r, g, b);
+        Window.SetBackgroundBottomColor(r, g, b);
+        global.unlock_bg = alpha;
+    }
+}
+
+fun hide_after_unlock() {
+    glide.SetOpacity(0);
+    fill_u.SetOpacity(0);
+    base_u.SetOpacity(0);
+    light_u.SetOpacity(0);
+    spark_u.SetOpacity(0);
+    status_u.SetOpacity(0);
+}
+
+# AfterUnlockD.dc.html at its time a, which is 1.6 s when the password goes in:
+# the prompt fades, the W glides out of its tile and dims to glass, and the
+# loop starts where it lands.
+fun draw_after_unlock(a) {
+    set_background(1);
+    e = segment(a, 1.6, 2.2);
+    name.SetOpacity(1 - e);
+    shift(name, -100, -95, 10 * e);
+    away = 1 - segment(a, 1.8, 2.3);
+    prompt.SetOpacity(away);
+    field.SetOpacity(away);
+    hint.SetOpacity(away);
+    caps.SetOpacity(0);
+    for (i = 0; i < BULLET_MAX; i++) {
+        if (i < global.typed)
+            bullets[i].SetOpacity(away);
+        else
+            bullets[i].SetOpacity(0);
+    }
+    tile.SetOpacity(0);
+
+    if (a < 2.6) {
+        k = Math.Int((a - 1.6) * (GLIDE_FRAMES - 1) + 0.5);
+        global.glide_k = show_frame(glide, "glide", k, global.glide_k);
+        glide.SetOpacity(1);
+        fill_u.SetOpacity(0);
+        base_u.SetOpacity(0);
+        spark_u.SetOpacity(0);
+        light_u.SetOpacity(0);
+        status_u.SetOpacity(0);
+        return;
+    }
+    glide.SetOpacity(0);
+    fill_u.SetOpacity(0.1);
+    base_u.SetOpacity(1);
+    spark_u.SetOpacity(breath(a - 2.4, 1.6, 0.35));
+    k = Math.Int(cycle(a - 2.6, LAP_U) * LAP_U_FRAMES);
+    if (k >= LAP_U_FRAMES)
+        k = 0;
+    global.light_u_k = show_frame(light_u, "light-u", k, global.light_u_k);
+    light_u.SetOpacity(segment(a, 2.6, 2.8));
+    e = segment(a, 2.6, 3.1);
+    shift(status_u, -100, 95, 6 * (1 - e));
+    status_u.SetOpacity(0.75 * e);
+}
+
+fun refresh_callback() {
+    if (global.quitting)
+        return;
+    if (Window.GetWidth() != global.screen_w || Window.GetHeight() != global.screen_h)
+        relayout();
+    step = 1 / global.rate;
+    global.t = Math.Max(global.t + step, global.wall);
+
+    if (!global.booting)
+        global.brand = approach(global.brand, 1, step / 0.4);
+
+    if (global.unlocked) {
+        draw_after_unlock(global.t - global.unlocked_at + 1.6);
+        return;
+    }
+
+    # The prompt comes up once the name has settled (storyboard step 3);
+    # keys typed before then still count.
+    if (global.want_unlock && global.t >= splash_time(4.4))
+        global.unlock_alpha = approach(global.unlock_alpha, 1, step / 0.25);
+    else
+        global.unlock_alpha = approach(global.unlock_alpha, 0, step / 0.25);
+
+    shown = global.brand * (1 - global.unlock_alpha);
+    draw_intro(design_time(global.t), shown);
+    if (global.unlock_alpha > 0 || global.unlock_bg > 0)
+        draw_unlock(global.unlock_alpha);
+}
+Plymouth.SetRefreshFunction(refresh_callback);
+
+fun progress_callback(duration, progress) {
+    if (global.wall_origin < 0)
+        global.wall_origin = duration - global.t;
+    global.wall = duration - global.wall_origin;
+}
+Plymouth.SetBootProgressFunction(progress_callback);
+
+fun password_callback(prompt_text, bullet_count) {
+    if (!global.in_password) {
+        # systemd asks again with the same prompt when the passphrase was wrong.
+        if (global.submitted && prompt_text == global.last_prompt)
+            global.prompt_file = "prompt-retry.png";
+        else
+            global.prompt_file = "prompt.png";
+        prompt.SetImage(Image(dir + global.prompt_file));
+        global.in_password = 1;
+        global.submitted = 0;
+        # A wrong password: back from the glide to the prompt.
+        if (global.unlocked) {
+            global.unlocked = 0;
+            global.unlock_alpha = 1;
+            hide_after_unlock();
+        }
+    }
+    global.last_prompt = prompt_text;
+    global.typed = bullet_count;
+    global.want_unlock = 1;
+    clear_question();
+}
+Plymouth.SetDisplayPasswordFunction(password_callback);
+
+fun normal_callback() {
+    if (global.in_password) {
+        global.submitted = 1;
+        global.in_password = 0;
+        # The password went in from the prompt on screen: glide out of it.
+        if (global.unlock_alpha > 0.5) {
+            global.unlocked = 1;
+            global.unlocked_at = global.t;
+        }
+    }
+    if (!global.unlocked)
+        global.typed = 0;
+    global.want_unlock = 0;
+    clear_question();
+}
+Plymouth.SetDisplayNormalFunction(normal_callback);
+
+fun clear_question() {
+    if (global.question_sprite) {
+        global.question_sprite.SetOpacity(0);
+        global.answer_sprite.SetOpacity(0);
+    }
+}
+
+# Questions are rare at boot and their text is not known in advance, so they
+# use Plymouth's own text rendering in the prompt's place.
+fun question_callback(prompt_text, entry) {
+    global.want_unlock = 0;
+    q = Image.Text(prompt_text, 0.91, 0.925, 0.973, 0.85, "Inter " + Math.Int(14 * s));
+    a = Image.Text(entry + " ", 1, 1, 1, 1, "Inter " + Math.Int(14 * s));
+    if (!global.question_sprite) {
+        global.question_sprite = Sprite();
+        global.answer_sprite = Sprite();
+    }
+    global.question_sprite.SetImage(q);
+    global.question_sprite.SetPosition(cx - Math.Int(q.GetWidth() / 2), cy + px(-31), 30);
+    global.question_sprite.SetOpacity(1);
+    global.answer_sprite.SetImage(a);
+    global.answer_sprite.SetPosition(cx - Math.Int(a.GetWidth() / 2), cy + px(17), 30);
+    global.answer_sprite.SetOpacity(1);
+}
+Plymouth.SetDisplayQuestionFunction(question_callback);
+
+# Plymouth draws once more after this, and with --retain-splash that frame
+# stays on screen until the sign-in screen replaces it. It is always the same
+# frame of the loop, the light at the start of the outline and the spark at
+# full strength, so the sign-in screen can start from it without being told
+# how far the boot got. Only which W it is, the start-up animation's or the
+# one after unlocking, depends on the boot; the helper that quits Plymouth
+# tells the sign-in screen (files/libexec/boot-handoff).
+fun quit_callback() {
+    if (Window.GetWidth() != global.screen_w || Window.GetHeight() != global.screen_h)
+        relayout();
+    clear_question();
+    global.unlock_alpha = 0;
+    global.brand = 1;
+    if (global.unlocked) {
+        for (i = 0; i < BULLET_MAX; i++)
+            bullets[i].SetOpacity(0);
+        name.SetOpacity(0);
+        prompt.SetOpacity(0);
+        field.SetOpacity(0);
+        hint.SetOpacity(0);
+        caps.SetOpacity(0);
+        tile.SetOpacity(0);
+        glide.SetOpacity(0);
+        fill_u.SetOpacity(0.1);
+        base_u.SetOpacity(1);
+        spark_u.SetOpacity(1);
+        global.light_u_k = show_frame(light_u, "light-u", 0, global.light_u_k);
+        light_u.SetOpacity(1);
+        shift(status_u, -100, 95, 0);
+        status_u.SetOpacity(0.75);
+    } else if (global.booting) {
+        global.typed = 0;
+        draw_unlock(0);
+        set_background(0);
+        flash.SetOpacity(0);
+        stroke.SetOpacity(0);
+        word.SetOpacity(0);
+        fill.SetOpacity(0.1);
+        base_i.SetOpacity(1);
+        global.spark_k = show_frame(spark, "spark", SPARK_FRAMES - 1, global.spark_k);
+        spark.SetOpacity(1);
+        global.light_i_k = show_frame(light_i, "light-i", 0, global.light_i_k);
+        light_i.SetOpacity(1);
+        shift(status_i, -100, 50, 0);
+        status_i.SetOpacity(0.75);
+    } else {
+        draw_unlock(0);
+        draw_intro(4.9, 1);
+    }
+    global.quitting = 1;
+}
+Plymouth.SetQuitFunction(quit_callback);

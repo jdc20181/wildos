@@ -1,0 +1,94 @@
+#!/bin/sh
+# The Wild OS entries of the start-up menu: "Wild OS" and "Wild OS (safe
+# graphics)", both starting the newest kernel, and "Wild OS (previous
+# version)" when an older kernel is still installed. They take the place of
+# Kicksecure's boot mode entries, whose scripts wildos-base moves out of
+# /etc/grub.d (see its preinst).
+#
+# The titles are written here rather than built from GRUB_DISTRIBUTOR, which
+# has to stay the bare "wildos" that names the EFI folder (40_wildos.cfg).
+#
+# The class of each entry picks its picture in the Wild OS GRUB theme
+# (wildos-branding), which draws every title as an image.
+set -e
+
+. "$pkgdatadir/grub-mkconfig_lib"
+
+# Newest first. apt keeps the kernel before the newest one installed until a
+# later update replaces it, which is what "Wild OS (previous version)" starts.
+kernels=$(for f in /boot/vmlinuz-*; do
+    if grub_file_is_not_garbage "$f"; then echo "$f"; fi
+done | version_sort -r | head -n 2)
+[ -n "$kernels" ] || exit 0
+
+# "" when /boot is its own partition, as the installer makes it, else "/boot".
+dir=$(make_system_path_relative_to_its_root /boot | sed 's,/*$,,')
+prepare=$(prepare_grub_to_access_device "$GRUB_DEVICE_BOOT" | grub_add_tab)
+device_id=$(grub_get_device_id "$GRUB_DEVICE")
+
+# use_kernel PATH: sets kernel, initrd and root for the kernel at PATH.
+use_kernel() {
+    gettext_printf "Found linux image: %s\n" "$1" >&2
+    kernel=${1##*/}
+    version=${kernel#vmlinuz-}
+    initrd=
+    for f in $GRUB_EARLY_INITRD_LINUX_STOCK $GRUB_EARLY_INITRD_LINUX_CUSTOM; do
+        if [ -e "/boot/$f" ]; then initrd="$initrd $dir/$f"; fi
+    done
+    main_initrd=
+    for f in "initrd.img-$version" "initrd-$version.img" "initramfs-$version.img"; do
+        if [ -e "/boot/$f" ]; then main_initrd=$f; break; fi
+    done
+    if [ -n "$main_initrd" ]; then
+        initrd="$initrd $dir/$main_initrd"
+        gettext_printf "Found initrd image: %s\n" "/boot/$main_initrd" >&2
+    fi
+    # root=UUID= needs the initramfs to resolve it, and LVM volumes are named
+    # by device instead, as Debian's own 10_linux does.
+    if [ -n "$main_initrd" ] && [ -n "$GRUB_DEVICE_UUID" ] \
+        && [ "$GRUB_DISABLE_LINUX_UUID" != true ] \
+        && [ -e "/dev/disk/by-uuid/$GRUB_DEVICE_UUID" ] \
+        && ! { [ -e "$GRUB_DEVICE" ] && uses_abstraction "$GRUB_DEVICE" lvm; }; then
+        root=UUID=$GRUB_DEVICE_UUID
+    else
+        root=$GRUB_DEVICE
+    fi
+}
+
+# entry TITLE CLASS ID KERNEL_ARGUMENTS, for the kernel use_kernel last chose.
+#
+# No "Loading Linux" lines: GRUB would print them over the menu's background
+# for the second before the boot splash appears.
+entry() {
+    echo "menuentry '$(echo "$1" | grub_quote)' --class $2 --class gnu-linux --class gnu --class os \$menuentry_id_option '$3' {"
+    save_default_entry | grub_add_tab
+    echo "	load_video"
+    if [ -n "$GRUB_GFXPAYLOAD_LINUX" ]; then
+        echo "	set gfxpayload=$GRUB_GFXPAYLOAD_LINUX"
+    fi
+    echo "	insmod gzio"
+    printf '%s\n' "$prepare"
+    echo "	linux	$dir/$kernel root=$root ro $4"
+    if [ -n "$initrd" ]; then
+        echo "	initrd	${initrd# }"
+    fi
+    echo "}"
+}
+
+args="$GRUB_CMDLINE_LINUX $GRUB_CMDLINE_LINUX_DEFAULT"
+
+use_kernel "$(echo "$kernels" | sed -n 1p)"
+# The id Debian gives its default entry, so a saved default or grub-reboot
+# from before Wild OS took over the menu still finds it.
+entry "Wild OS" wildos "gnulinux-simple-$device_id" "$args"
+# The USB stick's "safe graphics" fix: the firmware's framebuffer instead of
+# the graphics driver, for screens that stay black or garbled.
+entry "Wild OS (safe graphics)" wildos-safe-graphics "wildos-safe-graphics-$device_id" "$args nomodeset"
+
+previous=$(echo "$kernels" | sed -n 2p)
+if [ -n "$previous" ]; then
+    use_kernel "$previous"
+    # The way back when an update leaves Wild OS unable to start. The id
+    # leaves the version out, so it stays the same as kernels come and go.
+    entry "Wild OS (previous version)" wildos-previous "wildos-previous-$device_id" "$args"
+fi

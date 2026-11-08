@@ -1,0 +1,6 @@
+[Desktop Entry]
+Type=Application
+Name=Tidy Windows app shortcuts
+Exec=wildos-appbridge --tidy
+NoDisplay=true
+X-KDE-autostart-phase=2

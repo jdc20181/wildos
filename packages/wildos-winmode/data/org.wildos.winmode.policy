@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE policyconfig PUBLIC "-//freedesktop//DTD PolicyKit Policy Configuration 1.0//EN"
+ "http://www.freedesktop.org/standards/PolicyKit/1/policyconfig.dtd">
+<policyconfig>
+  <vendor>Wild OS</vendor>
+  <vendor_url>https://wildos.io</vendor_url>
+  <!-- The person at the PC opens Windows apps without a password: starting,
+       pausing and saving Windows mode is what opening an app does. Remote
+       and inactive sessions need the administrator. -->
+  <action id="org.wildos.winmode.use">
+    <description>Use Windows mode</description>
+    <message>Opening Windows apps from here needs the administrator password.</message>
+    <icon_name>wildos-windows-app</icon_name>
+    <defaults>
+      <allow_any>auth_admin</allow_any>
+      <allow_inactive>auth_admin</allow_inactive>
+      <allow_active>yes</allow_active>
+    </defaults>
+  </action>
+</policyconfig>

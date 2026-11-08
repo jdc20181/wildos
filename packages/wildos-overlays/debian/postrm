@@ -1,0 +1,11 @@
+#!/bin/sh
+set -e
+
+SHIM=/usr/share/plasma/shells/org.kde.plasma.desktop/contents/osd/Osd.qml
+
+if [ "$1" = "remove" ] || [ "$1" = "purge" ] || [ "$1" = "abort-install" ]; then
+    dpkg-divert --package wildos-overlays --remove --rename \
+        --divert "$SHIM.plasma" "$SHIM" >/dev/null || true
+fi
+
+#DEBHELPER#

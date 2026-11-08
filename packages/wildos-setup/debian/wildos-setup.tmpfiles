@@ -1,0 +1,2 @@
+d /run/wildos-setup 0700 wildos-setup wildos-setup -
+d /var/lib/wildos 0755 root root -

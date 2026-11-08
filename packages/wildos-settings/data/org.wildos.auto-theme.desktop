@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Automatic theme
+Comment=Switches between the light and dark themes at sunrise and sunset
+Exec=/usr/bin/wildos-auto-theme
+NoDisplay=true
+OnlyShowIn=KDE;
+X-KDE-autostart-phase=1

@@ -1,0 +1,10 @@
+#!/bin/sh
+set -e
+
+if [ "$1" = "remove" ] || [ "$1" = "purge" ]; then
+    if getent passwd live >/dev/null; then
+        userdel --remove live 2>/dev/null || userdel live
+    fi
+fi
+
+#DEBHELPER#

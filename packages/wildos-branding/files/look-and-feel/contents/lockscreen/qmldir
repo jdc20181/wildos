@@ -1,0 +1,7 @@
+singleton PasswordSync 1.0 PasswordSync.qml
+LockScreen 1.0 LockScreen.qml
+LockScreenUi 1.0 LockScreenUi.qml
+MainBlock 1.0 MainBlock.qml
+NoPasswordUnlock 1.0 NoPasswordUnlock.qml
+MediaControls 1.0 MediaControls.qml
+LockOsd 1.0 LockOsd.qml

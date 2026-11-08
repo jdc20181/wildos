@@ -1,0 +1,34 @@
+# Files uses File Explorer's command names: New, Delete (to the recycle bin),
+# Sort, View, and a Details pane.
+
+msgctxt "@title:menu Create new folder, file, link, etc."
+msgid "Create New"
+msgstr "New"
+
+msgctxt "@action:inmenu"
+msgid "Move to Trash"
+msgstr "Delete"
+
+msgctxt "@action:inmenu"
+msgid "Delete"
+msgstr "Delete permanently"
+
+msgctxt "@action:intoolbar"
+msgid "Change View Mode"
+msgstr "View"
+
+msgctxt "@action:inmenu View"
+msgid "Sort By"
+msgstr "Sort"
+
+msgctxt "@title:window"
+msgid "Information"
+msgstr "Details"
+
+msgctxt "@action:inmenu Tools"
+msgid "Open Terminal"
+msgstr "Open in Terminal"
+
+msgctxt "@action:inmenu Tools"
+msgid "Open Terminal Here"
+msgstr "Open in Terminal"

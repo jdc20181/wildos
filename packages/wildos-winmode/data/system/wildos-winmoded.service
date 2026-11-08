@@ -1,0 +1,12 @@
+[Unit]
+Description=Windows mode
+After=libvirtd.service virtqemud.service network.target
+
+[Service]
+# Started on demand over D-Bus, never at boot: Windows itself only starts
+# when someone opens a Windows app (brief 5.6).
+Type=dbus
+BusName=org.wildos.WindowsMode1
+ExecStart=/usr/libexec/wildos/winmoded
+# Pausing or saving Windows can take a while with several GB in memory.
+TimeoutStopSec=120

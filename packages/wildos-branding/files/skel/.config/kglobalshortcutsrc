@@ -1,0 +1,86 @@
+# Windows keyboard shortcuts for new accounts. The shortcut service reads
+# only the account's own file, so these cannot live in /etc/xdg. People can
+# change any of them in Settings.
+#
+# Win+R and Win+S open Start, where typing searches apps, files and
+# settings; the activity shortcuts that held Win+A, Win+Q and Win+S are
+# cleared because Wild OS does not use activities.
+[plasmashell]
+activate application launcher=Meta\tMeta+R\tMeta+S\tAlt+F1,Meta\tAlt+F1,Activate Application Launcher
+next activity=none,none,Walk through activities
+previous activity=none,none,Walk through activities (Reverse)
+stop current activity=none,Meta+S,Stop Current Activity
+manage activities=none,Meta+Q,Show Activity Switcher
+
+# Win+Tab is Task view. Alt+Space opens the window menu, as on Windows
+# (wildos-shell draws it); KRunner, which Wild OS does not use, gives the
+# keys up.
+[kwin]
+Overview=Meta+W\tMeta+Tab,Meta+W,Toggle Overview
+Window Operations Menu=Alt+Space,Alt+F3,Window Operations Menu
+
+[services][org.kde.krunner.desktop]
+_launch=none
+
+# Win+Shift+S and Print Screen open the Wild OS screenshot toolbar, as
+# Snipping Tool does; Win+Shift+R starts it ready to record. Spectacle stays
+# installed but gives up the keys.
+[services][org.wildos.screenshot.desktop]
+_launch=Meta+Shift+S\tPrint
+Record=Meta+Shift+R
+
+[services][org.kde.spectacle.desktop]
+_launch=none
+RectangularRegionScreenShot=none
+RecordRegion=none
+
+# Win+V is clipboard history and Win+full stop the emoji panel, one panel
+# with tabs. KDE's emoji picker gives up Win+full stop.
+[services][org.wildos.clipboard.desktop]
+_launch=Meta+V
+Emoji=Meta+.
+
+[services][org.kde.plasma.emojier.desktop]
+_launch=none
+
+# Ctrl+Shift+Esc opens Task Manager, as on Windows. KDE's System Monitor may
+# still be installed and its launcher claims the same keys.
+[services][org.wildos.taskmanager.desktop]
+_launch=Ctrl+Shift+Esc
+
+[services][org.kde.plasma-systemmonitor.desktop]
+_launch=none
+
+# Ctrl+Alt+Del opens the Wild OS security screen (lock, switch user, sign
+# out, change password, Task Manager). KWin starts it directly, so it comes
+# up even when the desktop or an app has frozen. The session manager's
+# sign-out screen gives up the keys and stays for the power menu.
+[services][org.wildos.security.desktop]
+_launch=Ctrl+Alt+Del
+
+[ksmserver]
+Log Out=none,Ctrl+Alt+Del,Show Logout Screen
+
+# Win+I opens Settings. KDE's System Settings stays installed for the modules
+# Settings shows, but has no shortcut of its own.
+[services][org.wildos.settings.desktop]
+_launch=Meta+I
+
+[services][systemsettings.desktop]
+_launch=none
+
+# Win+E opens Files. Dolphin stays installed for its services but is not the
+# file manager people see.
+[services][org.wildos.files.desktop]
+_launch=Meta+E
+
+[services][org.kde.dolphin.desktop]
+_launch=none
+
+# Ctrl+Alt+T opens Wild OS Terminal. Konsole may still be installed through
+# KDE's recommends, and its launcher claims the same keys.
+[services][org.wildos.terminal.desktop]
+_launch=Ctrl+Alt+T
+
+[services][org.kde.konsole.desktop]
+_launch=none

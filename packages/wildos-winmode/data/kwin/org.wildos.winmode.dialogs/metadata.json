@@ -1,0 +1,20 @@
+{
+    "KPackageStructure": "KWin/Script",
+    "KPlugin": {
+        "Authors": [
+            {
+                "Email": "dev@wildos.io",
+                "Name": "Wild OS"
+            }
+        ],
+        "Description": "Keeps a Windows app's dialogs above the app's own window",
+        "EnabledByDefault": true,
+        "Id": "org.wildos.winmode.dialogs",
+        "License": "GPL-3.0-or-later",
+        "Name": "Windows app dialogs",
+        "Version": "0.1.0",
+        "Website": "https://wildos.io"
+    },
+    "X-Plasma-API": "declarativescript",
+    "X-Plasma-MainScript": "ui/main.qml"
+}

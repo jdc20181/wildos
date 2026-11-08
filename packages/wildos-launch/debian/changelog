@@ -1,0 +1,12 @@
+wildos-launch (0.2.0) trixie; urgency=medium
+
+  * No more placeholder windows: the daemon only follows each launch for
+    the taskbar's starting line and keeps preloading the most used apps.
+
+ -- Wild OS Developers <dev@wildos.io>  Sun, 08 Nov 2026 08:00:00 +0000
+
+wildos-launch (0.1.0) trixie; urgency=medium
+
+  * Initial release.
+
+ -- Wild OS Developers <dev@wildos.io>  Sat, 07 Nov 2026 12:00:00 +0000

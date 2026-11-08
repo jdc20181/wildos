@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="380" viewBox="0 0 960 380" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, Helvetica, Arial, sans-serif" role="img" aria-label="How Wild OS handles a Windows program: wild-run sends most programs to Windows mode, which shows them as normal windows; programs with a Linux version install that from the Store; games with kernel anti-cheat are not supported, and Wild OS says so.">
+<defs><marker id="head" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#5b6789"/></marker></defs>
+<rect width="960" height="380" rx="18" fill="#0b1020"/>
+<rect x="24" y="154" width="150" height="72" rx="14" fill="#141b31" stroke="#2a3456" stroke-width="1.5"/>
+<text x="99.0" y="186.0" text-anchor="middle" font-size="16" font-weight="600" fill="#eef1f8">You double-click</text>
+<text x="99.0" y="207.0" text-anchor="middle" font-size="13" fill="#9aa3bd">Setup.exe</text>
+<path d="M174 190 L206 190" fill="none" stroke="#5b6789" stroke-width="1.8" stroke-linejoin="round" marker-end="url(#head)"/>
+<rect x="210" y="154" width="140" height="72" rx="14" fill="#1a2547" stroke="#8fb4ff" stroke-width="1.5"/>
+<text x="280.0" y="186.0" text-anchor="middle" font-size="16" font-weight="600" fill="#8fb4ff">wild-run</text>
+<text x="280.0" y="207.0" text-anchor="middle" font-size="13" fill="#9aa3bd">checks who made it</text>
+<path d="M350 180 L366 180 L366 72 L520 72" fill="none" stroke="#5b6789" stroke-width="1.8" stroke-linejoin="round" marker-end="url(#head)"/>
+<text x="378" y="63" font-size="12.5" fill="#9aa3bd">Most programs</text>
+<path d="M350 190 L520 190" fill="none" stroke="#5b6789" stroke-width="1.8" stroke-linejoin="round" marker-end="url(#head)"/>
+<text x="378" y="181" font-size="12.5" fill="#9aa3bd">Has a Linux version</text>
+<path d="M350 200 L366 200 L366 308 L520 308" fill="none" stroke="#5b6789" stroke-width="1.8" stroke-linejoin="round" marker-end="url(#head)"/>
+<text x="378" y="299" font-size="12.5" fill="#9aa3bd">Kernel anti-cheat</text>
+<rect x="524" y="36" width="200" height="72" rx="14" fill="#1a2547" stroke="#8fb4ff" stroke-width="1.5"/>
+<text x="624.0" y="68.0" text-anchor="middle" font-size="16" font-weight="600" fill="#8fb4ff">Windows mode</text>
+<text x="624.0" y="89.0" text-anchor="middle" font-size="13" fill="#9aa3bd">Windows 11 Pro, out of sight</text>
+<path d="M724 72 L756 72" fill="none" stroke="#5b6789" stroke-width="1.8" stroke-linejoin="round" marker-end="url(#head)"/>
+<rect x="760" y="36" width="176" height="72" rx="14" fill="#13291f" stroke="#a8ecc8" stroke-width="1.5"/>
+<text x="848.0" y="68.0" text-anchor="middle" font-size="16" font-weight="600" fill="#a8ecc8">A normal window</text>
+<text x="848.0" y="89.0" text-anchor="middle" font-size="13" fill="#9aa3bd">on your desktop</text>
+<rect x="524" y="154" width="200" height="72" rx="14" fill="#141b31" stroke="#2a3456" stroke-width="1.5"/>
+<text x="624.0" y="186.0" text-anchor="middle" font-size="16" font-weight="600" fill="#eef1f8">Linux app from the Store</text>
+<text x="624.0" y="207.0" text-anchor="middle" font-size="13" fill="#9aa3bd">Zoom, Slack, Steam</text>
+<rect x="524" y="272" width="200" height="72" rx="14" fill="#2c1a18" stroke="#f3c6bc" stroke-width="1.5"/>
+<text x="624.0" y="304.0" text-anchor="middle" font-size="16" font-weight="600" fill="#f3c6bc">Not supported</text>
+<text x="624.0" y="325.0" text-anchor="middle" font-size="13" fill="#9aa3bd">and we say so plainly</text>
+</svg>

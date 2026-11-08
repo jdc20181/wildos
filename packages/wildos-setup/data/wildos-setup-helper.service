@@ -1,0 +1,14 @@
+[Unit]
+Description=Wild OS first boot setup helper
+
+[Service]
+Type=dbus
+BusName=org.wildos.Setup1
+ExecStart=/usr/libexec/wildos/wildos-setup-helper
+Environment=LANG=C.UTF-8
+PrivateTmp=yes
+ProtectKernelModules=yes
+ProtectKernelTunables=yes
+ProtectControlGroups=yes
+RestrictRealtime=yes
+LockPersonality=yes

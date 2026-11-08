@@ -1,0 +1,4 @@
+[D-BUS Service]
+Name=org.wildos.WindowsMode1
+Exec=/usr/bin/wildos-winmode agent
+SystemdService=wildos-winmode-agent.service

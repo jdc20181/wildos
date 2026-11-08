@@ -1,0 +1,22 @@
+#!/bin/sh
+# Turns the system's daily update check on or off: apt's two timers, which
+# belong to the whole computer rather than one account. It runs as root
+# through pkexec under the org.wildos.update-checks policy, so it takes only
+# "on" or "off" and touches nothing else.
+set -eu
+
+case "${1:-}" in
+    on) verb=enable ;;
+    off) verb=disable ;;
+    *) echo "usage: update-checks on|off" >&2; exit 2 ;;
+esac
+
+timers=""
+for timer in apt-daily.timer apt-daily-upgrade.timer; do
+    if systemctl cat "$timer" >/dev/null 2>&1; then
+        timers="$timers $timer"
+    fi
+done
+[ -n "$timers" ] || exit 0
+# shellcheck disable=SC2086
+exec systemctl "$verb" --now $timers

@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=Wild OS setup
+Comment=Sets up a newly installed computer
+Exec=/usr/libexec/wildos/wildos-setup-session
+DesktopNames=KDE
+NoDisplay=true

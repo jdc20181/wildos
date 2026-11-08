@@ -1,0 +1,46 @@
+#!/bin/bash
+# Installs the GRUB integration package that matches this machine's firmware
+# into the target, from the package pool on the ISO.
+#
+# The live image cannot carry both: grub-pc (BIOS) and grub-efi-amd64 (UEFI)
+# conflict. Without one of them installed, GRUB updates would never reach the
+# installed boot loader.
+
+set -euo pipefail
+
+root=$1
+pool=/run/initramfs/live/pool
+
+if [ -d /sys/firmware/efi ]; then
+    pool_dir="$pool/efi"
+else
+    pool_dir="$pool/bios"
+fi
+
+if [ ! -d "$pool_dir" ]; then
+    echo "Package pool $pool_dir not found on the install media" >&2
+    exit 1
+fi
+
+staging="$root/var/cache/wildos-installer"
+mkdir -p "$staging"
+cp "$pool_dir"/*.deb "$staging/"
+
+# The paths apt sees are inside the chroot, so the list is built from the
+# staging directory here rather than left as a glob for the live system.
+debs=()
+for deb in "$staging"/*.deb; do
+    debs+=("/var/cache/wildos-installer/$(basename "$deb")")
+done
+
+# dpkg rather than apt: the pool is built to be self-contained (everything its
+# packages need is in the image or the pool), and apt mishandles local .deb
+# paths when offline ("Pathname to install is not absolute").
+# A clean environment: Kicksecure's libpam-tmpdir points TMPDIR at a
+# per-session /tmp/user/0 that exists on the live system but not in the
+# target, and maintainer scripts calling mktemp then fail.
+chroot "$root" /usr/bin/env -i \
+    PATH=/usr/sbin:/usr/bin:/sbin:/bin DEBIAN_FRONTEND=noninteractive LANG=C.UTF-8 \
+    dpkg --install "${debs[@]}"
+
+rm -rf "$staging"

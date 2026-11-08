@@ -1,0 +1,32 @@
+Source: wildos-setup
+Section: admin
+Priority: optional
+Maintainer: Wild OS Developers <dev@wildos.io>
+Build-Depends:
+ debhelper-compat (= 13),
+ cmake,
+ qt6-base-dev,
+Standards-Version: 4.7.0
+Rules-Requires-Root: no
+
+Package: wildos-setup
+Architecture: any
+Depends:
+ ${shlibs:Depends},
+ ${misc:Depends},
+ wildos-welcome,
+ kwin-wayland,
+ sddm,
+ dbus-daemon | dbus,
+ polkitd,
+ network-manager,
+ accountsservice,
+ passwd,
+ procps,
+ systemd,
+Description: Wild OS first boot setup
+ The one-time session a newly installed computer starts in: it joins
+ Wi-Fi, sets the time zone and creates the first account, then signs in to
+ it. Runs as a locked system user in a compositor showing nothing but the
+ setup pages, with a small root service, checked by polkit, for the steps
+ that need root.

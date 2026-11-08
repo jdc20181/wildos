@@ -1,0 +1,33 @@
+#!/bin/sh
+# Starts Calamares as root from the live session. Calamares runs through
+# XWayland: a root Wayland client cannot reliably reach the user's compositor,
+# while X11 lets us grant root access for exactly this one run.
+set -e
+
+# The USB start-up menu passes the chosen language on the kernel command
+# line (locale.LANG=). The installer speaks it, and picks the keyboard and
+# time zone from it.
+boot_lang=$(tr ' ' '\n' < /proc/cmdline | sed -n 's/^locale\.LANG=//p' | tail -n 1)
+lang=${boot_lang:-${LANG:-en_GB.UTF-8}}
+
+# Started with the session (install mode), XWayland may still be coming
+# up; give it a few seconds rather than failing and dropping to the desktop.
+i=0
+until xhost +si:localuser:root >/dev/null 2>&1; do
+    i=$((i + 1))
+    [ $i -lt 40 ] || { echo "install-wildos: no X display" >&2; exit 1; }
+    sleep 0.25
+done
+trap 'xhost -si:localuser:root >/dev/null' EXIT
+
+# TMPDIR=/tmp overrides the per-session /tmp/user/0 that Kicksecure's
+# libpam-tmpdir sets in sudo's PAM session. Calamares passes its environment
+# into the target chroot, where that directory does not exist, and anything
+# there using mktemp (grub-install, maintainer scripts) would fail.
+sudo env \
+    TMPDIR=/tmp \
+    DISPLAY="$DISPLAY" \
+    XAUTHORITY="${XAUTHORITY:-}" \
+    QT_QPA_PLATFORM=xcb \
+    LANG="$lang" \
+    calamares "$@"

@@ -1,0 +1,53 @@
+#!/bin/sh
+# Ends the boot screen. Runs as plymouth-quit.service in place of a plain
+# "plymouth quit".
+#
+# When the sign-in screen is about to start, Plymouth quits with
+# --retain-splash: its last frame (always the same frame of its loading loop)
+# stays on screen until the sign-in screen draws the same frame and plays the
+# rest of the start-up animation. A marker in /run tells it to, for one
+# minute; without one, a sign-in screen after signing out opens straight on
+# its controls. When the system signs in by itself the session splash plays
+# the animation instead, so it gets its own marker.
+#
+# Nothing waits for the animation: this returns as soon as Plymouth has quit.
+
+export LC_ALL=C
+PATH=/usr/sbin:/usr/bin:/sbin:/bin
+
+plymouth --ping 2>/dev/null || exit 0
+
+# Without a display manager on its way (rescue, multi-user) the console must
+# come back, so the splash is not kept.
+if ! systemctl list-jobs --no-legend --plain 2>/dev/null |
+        grep -qE '[[:space:]](sddm|display-manager)\.service[[:space:]]'; then
+    exec plymouth quit
+fi
+
+# SDDM reads these in order and the last [Autologin] User= wins.
+autologin=$(cat /usr/lib/sddm/sddm.conf.d/*.conf /etc/sddm.conf.d/*.conf /etc/sddm.conf 2>/dev/null |
+    awk '/^\[/ { section = $0 } section == "[Autologin]" && /^User=/ { user = substr($0, 6) } END { print user }')
+if [ -n "$autologin" ]; then
+    marker=/run/wildos/boot-handoff-session.png
+else
+    marker=/run/wildos/boot-handoff-greeter.png
+fi
+
+# Both screens check for the marker by loading it as an image.
+install -d -m 0755 /run/wildos
+install -m 0644 /usr/share/icons/hicolor/16x16/apps/wildos.png "$marker" 2>/dev/null || marker=
+
+# With an encrypted disk Plymouth asked for its password, and its loop runs
+# where the W landed after gliding out of the unlock screen, so the end of the
+# animation has to start there too. Wild OS always unlocks with a password.
+unlocked=
+if [ -n "$marker" ] && dmsetup ls --target crypt 2>/dev/null | grep -q .; then
+    unlocked=/run/wildos/boot-handoff-unlocked.png
+    install -m 0644 /usr/share/icons/hicolor/16x16/apps/wildos.png "$unlocked" 2>/dev/null || unlocked=
+fi
+
+[ -n "$marker" ] &&
+    systemd-run --quiet --no-block --on-active=60 --timer-property=AccuracySec=1s \
+        --unit=wildos-boot-handoff-clear rm -f "$marker" $unlocked >/dev/null 2>&1
+
+exec plymouth quit --retain-splash

@@ -1,0 +1,12 @@
+#!/bin/sh
+set -e
+
+# Wild OS's Brave launcher (files/brave/brave-browser-stable) takes the place
+# of the link Brave's package ships. The diversion has to exist before this
+# package unpacks its own copy over that path.
+if [ "$1" = "install" ] || [ "$1" = "upgrade" ]; then
+    dpkg-divert --package wildos-desktop --add --rename \
+        --divert /usr/bin/brave-browser-stable.brave /usr/bin/brave-browser-stable >/dev/null
+fi
+
+#DEBHELPER#

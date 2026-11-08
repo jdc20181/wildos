@@ -1,0 +1,5 @@
+<!DOCTYPE RCC><RCC version="1.0">
+<qresource prefix="/wildos/roundcorners/">
+    <file alias="roundcorners.frag">shaders/roundcorners.frag</file>
+</qresource>
+</RCC>

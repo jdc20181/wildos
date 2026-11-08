@@ -1,0 +1,33 @@
+#!/bin/sh
+# The first boot setup session, started by SDDM as the wildos-setup user
+# (see wildos-setup-boot). KWin runs the setup pages and nothing else: no
+# desktop, no taskbar, no global shortcuts, no lock screen, and it ends when
+# the pages close. The keyboard is the one the installer wrote, through
+# systemd-localed, as on the sign-in screen.
+
+[ "$(id -un)" = wildos-setup ] || {
+    echo "wildos-setup-session is only for the setup account" >&2
+    exit 1
+}
+
+if [ -r /etc/default/locale ]; then
+    . /etc/default/locale
+    export LANG
+fi
+export XDG_SESSION_TYPE=wayland XDG_CURRENT_DESKTOP=KDE QT_QPA_PLATFORMTHEME=kde
+
+# A clean configuration on every start, so nothing from an earlier try (or
+# from anyone who got this far by other means) carries over.
+mkdir -p "$HOME/.config"
+cp /usr/share/wildos-setup/kwinrc "$HOME/.config/kwinrc"
+printf '[Wallet]\nEnabled=false\n' > "$HOME/.config/kwalletrc"
+
+if [ -z "${DBUS_SESSION_BUS_ADDRESS:-}" ]; then
+    exec dbus-run-session -- "$0" "$@"
+fi
+
+# Output goes to the journal (wildos-setup-session): the home is in /run and
+# SDDM's session log goes with it, so a setup that fails would leave no trace.
+exec systemd-cat -t wildos-setup-session \
+    kwin_wayland --drm --locale1 --no-lockscreen --no-global-shortcuts --no-kactivities \
+    --exit-with-session "/usr/bin/wildos-welcome --setup"

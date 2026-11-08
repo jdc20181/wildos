@@ -1,0 +1,126 @@
+#!/bin/sh
+# Applies the protection level chosen in Settings > Privacy and security.
+# Runs as root through pkexec (org.wildos.settings.policy), and at start-up
+# from wildos-protection.service to load the firewall again. Takes only the
+# requests below.
+#
+#   standard   What Wild OS ships: the hardened system with no extra limits.
+#   strict     Adds a firewall that turns away anything arriving unasked,
+#              and USB devices found at start-up wait for permission like
+#              ones plugged in later.
+#   maximum    Strict, plus the firewall blocks network discovery (finding
+#              printers and screens), Bluetooth is off and the camera's
+#              driver is blocked.
+#   boot       Loads the firewall for the saved level (the service's job).
+#
+# The screen lock times that go with each level belong to the person, not
+# the system, so Settings sets those itself.
+
+set -eu
+
+LEVEL_FILE=/etc/wildos/protection-level
+USBGUARD_CONF=/etc/usbguard/usbguard-daemon.conf
+USBGUARD_RULES=/etc/usbguard/rules.d/50-wildos-protection.conf
+CAMERA_BLOCK=/etc/modprobe.d/60-wildos-protection-camera.conf
+TABLE=wildos_protection
+
+saved_level() {
+    level=$(cat "$LEVEL_FILE" 2>/dev/null || true)
+    case "$level" in strict | maximum) echo "$level" ;; *) echo standard ;; esac
+}
+
+# Incoming connections are refused unless they answer something this
+# computer asked for. The Windows mode bridge stays open, since Windows
+# reaches its shared folders and printers through it, and so does mDNS at
+# Strict, which is how printers and screens on the network are found.
+firewall() {
+    nft delete table inet "$TABLE" 2>/dev/null || true
+    [ "$1" = standard ] && return 0
+    command -v nft >/dev/null || return 0
+    discovery='udp dport 5353 accept'
+    [ "$1" = maximum ] && discovery=''
+    nft -f - <<EOF
+table inet $TABLE {
+    chain input {
+        type filter hook input priority filter; policy drop;
+        ct state established,related accept
+        ct state invalid drop
+        iif lo accept
+        iifname "wildos-win*" accept
+        meta l4proto ipv6-icmp accept
+        icmp type { echo-reply, destination-unreachable, time-exceeded, parameter-problem } accept
+        udp sport 67 udp dport 68 accept
+        udp sport 547 udp dport 546 accept
+        $discovery
+    }
+}
+EOF
+}
+
+# Every device attached when Strict is chosen is allowed first, so nothing
+# the person is using stops working; after that, a device that is present
+# at start-up but was never allowed waits for permission.
+usb() {
+    [ -f "$USBGUARD_CONF" ] || return 0
+    if [ "$1" = standard ]; then
+        sed -i 's/^PresentDevicePolicy=.*/PresentDevicePolicy=allow/' "$USBGUARD_CONF"
+        rm -f "$USBGUARD_RULES"
+    else
+        if [ ! -s "$USBGUARD_RULES" ] && command -v usbguard >/dev/null; then
+            mkdir -p "$(dirname "$USBGUARD_RULES")"
+            usbguard generate-policy --no-hashes > "$USBGUARD_RULES.new" 2>/dev/null || : > "$USBGUARD_RULES.new"
+            chmod 600 "$USBGUARD_RULES.new"
+            mv -f "$USBGUARD_RULES.new" "$USBGUARD_RULES"
+        fi
+        sed -i 's/^PresentDevicePolicy=.*/PresentDevicePolicy=apply-policy/' "$USBGUARD_CONF"
+    fi
+    systemctl try-restart usbguard.service || true
+}
+
+# Bluetooth and the camera are only touched going into or out of Maximum,
+# so a choice made elsewhere (Bluetooth off in quick settings) is left
+# alone.
+bluetooth() {
+    if [ "$1" = maximum ]; then
+        systemctl disable --now bluetooth.service >/dev/null 2>&1 || true
+        rfkill block bluetooth 2>/dev/null || true
+    elif [ "$2" = maximum ]; then
+        rfkill unblock bluetooth 2>/dev/null || true
+        systemctl enable --now bluetooth.service >/dev/null 2>&1 || true
+    fi
+}
+
+camera() {
+    if [ "$1" = maximum ]; then
+        printf '%s\n' '# Written by Wild OS Settings: Maximum protection blocks the camera.' \
+            'install uvcvideo /bin/false' > "$CAMERA_BLOCK"
+        modprobe -r uvcvideo 2>/dev/null || true
+    elif [ -f "$CAMERA_BLOCK" ]; then
+        rm -f "$CAMERA_BLOCK"
+        # The camera works again without a restart.
+        modprobe uvcvideo 2>/dev/null || true
+    fi
+}
+
+case "${1:-}" in
+    standard | strict | maximum)
+        previous=$(saved_level)
+        mkdir -p "$(dirname "$LEVEL_FILE")"
+        firewall "$1"
+        usb "$1"
+        bluetooth "$1" "$previous"
+        camera "$1"
+        if [ "$1" = standard ]; then
+            rm -f "$LEVEL_FILE"
+        else
+            echo "$1" > "$LEVEL_FILE"
+        fi
+        ;;
+    boot)
+        firewall "$(saved_level)"
+        ;;
+    *)
+        echo "usage: settings-protection standard|strict|maximum|boot" >&2
+        exit 2
+        ;;
+esac

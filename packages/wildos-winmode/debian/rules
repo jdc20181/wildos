@@ -1,0 +1,31 @@
+#!/usr/bin/make -f
+
+MCS = mcs -langversion:5 -target:winexe -platform:anycpu -optimize+ -warnaserror+ \
+	-r:System.ServiceProcess.dll -r:System.Core.dll
+
+%:
+	dh $@
+
+# The setup wizard (setup/) is Qt and built with CMake; the services are
+# Python and need no build.
+override_dh_auto_configure:
+	cmake -S setup -B build/setup -DCMAKE_INSTALL_PREFIX=/usr -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_LIBEXECDIR=libexec
+
+# wild-guest runs inside Windows on .NET Framework 4.8, but mono's compiler
+# builds it against mono's own libraries, so check-api.py holds it to API
+# that has been run inside Windows or checked against it (guest/api.txt).
+override_dh_auto_build:
+	cmake --build build/setup --parallel
+	$(MCS) -out:build/wild-guest.exe guest/wild-guest/*.cs
+	python3 guest/check-api.py build/wild-guest.exe guest/api.txt
+
+override_dh_auto_test:
+ifeq (,$(filter nocheck,$(DEB_BUILD_OPTIONS)))
+	PYTHONPATH=. PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -v
+endif
+
+override_dh_auto_install:
+	DESTDIR=$(CURDIR)/debian/wildos-winmode cmake --install build/setup
+
+override_dh_auto_clean:
+	rm -rf build

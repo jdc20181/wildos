@@ -1,0 +1,8 @@
+# App name as Start shows it; it also ends every window title.
+
+msgctxt "@title:window"
+msgid "KDE Partition Manager"
+msgstr "Disks"
+
+msgid "KDE Partition Manager"
+msgstr "Disks"

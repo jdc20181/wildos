@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=Install Wild OS
+GenericName=System Installer
+Comment=Install Wild OS to this computer
+Exec=install-wildos
+Icon=wildos
+Terminal=false
+Categories=Qt;System;
+Keywords=install;installer;calamares;setup;
+StartupWMClass=calamares
+StartupNotify=true

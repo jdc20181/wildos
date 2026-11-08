@@ -1,0 +1,23 @@
+#!/bin/sh
+set -e
+
+REPLACED="
+/usr/share/plasma/shells/org.kde.plasma.desktop/contents/views/Panel.qml
+/usr/share/plasma/shells/org.kde.plasma.desktop/contents/applet/CompactApplet.qml
+/usr/share/kwin/aurorae/aurorae.qml
+"
+HIDDEN="
+/usr/share/wayland-sessions/plasma.desktop
+/usr/share/xsessions/plasmax11.desktop
+"
+
+if [ "$1" = "remove" ] || [ "$1" = "purge" ] || [ "$1" = "abort-install" ]; then
+    for f in $REPLACED; do
+        dpkg-divert --package wildos-shell --remove --rename --divert "$f.plasma" "$f" >/dev/null || true
+    done
+    for f in $HIDDEN; do
+        dpkg-divert --package wildos-shell --remove --rename --divert "$f.hidden" "$f" >/dev/null || true
+    done
+fi
+
+#DEBHELPER#

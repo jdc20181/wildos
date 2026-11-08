@@ -1,0 +1,8 @@
+#!/usr/bin/make -f
+
+%:
+	dh $@
+
+# The build normalises every source file to 0644.
+execute_after_dh_fixperms:
+	chmod 0755 debian/wildos-live/usr/libexec/wildos-live/live-session

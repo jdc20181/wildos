@@ -1,0 +1,749 @@
+{
+ "format": 1,
+ "about": "The Windows programs Wild OS knows. wild-run reads every *.json here; entries match on the file's SHA-256, its Authenticode signer, the names in its version information, or words in any of those and the file name, the most specific match winning. engine is windows-mode, native or unsupported; anything not listed runs in Windows mode. alternative is the Wild OS version offered first (storeId for the Store, webApp for a web app window, text to show). reason is shown for unsupported. calls marks a calling app.",
+ "entries": [
+  {
+   "id": "spotify",
+   "name": "Spotify",
+   "match": {
+    "words": [
+     "spotify"
+    ]
+   },
+   "engine": "native",
+   "alternative": {
+    "storeId": "com.spotify.Client",
+    "text": "Spotify has a Wild OS version in the Store, so it doesn't need Windows app support."
+   }
+  },
+  {
+   "id": "discord",
+   "name": "Discord",
+   "match": {
+    "words": [
+     "discord"
+    ]
+   },
+   "engine": "native",
+   "calls": true,
+   "alternative": {
+    "storeId": "com.discordapp.Discord",
+    "text": "Discord has a Wild OS version in the Store, so it doesn't need Windows app support."
+   }
+  },
+  {
+   "id": "steam",
+   "name": "Steam",
+   "match": {
+    "words": [
+     "steamsetup",
+     "steam setup",
+     "valve corporation"
+    ]
+   },
+   "engine": "native",
+   "alternative": {
+    "storeId": "com.valvesoftware.Steam",
+    "text": "Steam has a Wild OS version in the Store, and it runs most Windows games itself."
+   }
+  },
+  {
+   "id": "zoom",
+   "name": "Zoom",
+   "match": {
+    "words": [
+     "zoominstaller",
+     "zoom video",
+     "zoomus"
+    ]
+   },
+   "engine": "native",
+   "calls": true,
+   "alternative": {
+    "storeId": "us.zoom.Zoom",
+    "text": "Zoom has a Wild OS version in the Store, so it doesn't need Windows app support."
+   }
+  },
+  {
+   "id": "slack",
+   "name": "Slack",
+   "match": {
+    "words": [
+     "slacksetup",
+     "slack technologies"
+    ]
+   },
+   "engine": "native",
+   "calls": true,
+   "alternative": {
+    "storeId": "com.slack.Slack",
+    "text": "Slack has a Wild OS version in the Store, so it doesn't need Windows app support."
+   }
+  },
+  {
+   "id": "microsoft-teams",
+   "name": "Microsoft Teams",
+   "match": {
+    "words": [
+     "teamssetup",
+     "teams_windows",
+     "microsoft teams",
+     "msteams"
+    ]
+   },
+   "engine": "native",
+   "calls": true,
+   "alternative": {
+    "webApp": "https://teams.microsoft.com",
+    "text": "Teams works best as a Wild OS app, with calls and sharing your whole screen."
+   }
+  },
+  {
+   "id": "microsoft-office",
+   "name": "Microsoft Office",
+   "match": {
+    "words": [
+     "officesetup",
+     "microsoft office",
+     "setupprod_offscrub",
+     "o365"
+    ]
+   },
+   "engine": "windows-mode",
+   "alternative": {
+    "storeId": "org.libreoffice.LibreOffice",
+    "text": "LibreOffice opens and saves Word, Excel and PowerPoint files, and it's free in the Store."
+   }
+  },
+  {
+   "id": "google-chrome",
+   "name": "Google Chrome",
+   "match": {
+    "words": [
+     "chromesetup",
+     "google chrome"
+    ]
+   },
+   "engine": "native",
+   "alternative": {
+    "storeId": "com.google.Chrome",
+    "text": "Chrome has a Wild OS version in the Store, so it doesn't need Windows app support."
+   }
+  },
+  {
+   "id": "firefox",
+   "name": "Firefox",
+   "match": {
+    "words": [
+     "firefox",
+     "mozilla corporation"
+    ]
+   },
+   "engine": "native",
+   "alternative": {
+    "storeId": "org.mozilla.firefox",
+    "text": "Firefox has a Wild OS version in the Store, so it doesn't need Windows app support."
+   }
+  },
+  {
+   "id": "microsoft-edge",
+   "name": "Microsoft Edge",
+   "match": {
+    "words": [
+     "microsoftedgesetup",
+     "microsoft edge",
+     "msedge"
+    ]
+   },
+   "engine": "native",
+   "alternative": {
+    "storeId": "com.microsoft.Edge",
+    "text": "Edge has a Wild OS version in the Store, so it doesn't need Windows app support."
+   }
+  },
+  {
+   "id": "brave",
+   "name": "Brave",
+   "match": {
+    "words": [
+     "bravebrowsersetup",
+     "brave software",
+     "bravesetup"
+    ]
+   },
+   "engine": "native",
+   "alternative": {
+    "storeId": "com.brave.Browser",
+    "text": "Brave is already part of Wild OS. Find it in Start."
+   }
+  },
+  {
+   "id": "opera",
+   "name": "Opera",
+   "match": {
+    "words": [
+     "operasetup",
+     "opera software",
+     "opera_gx"
+    ]
+   },
+   "engine": "native",
+   "alternative": {
+    "storeId": "com.opera.Opera",
+    "text": "Opera has a Wild OS version in the Store, so it doesn't need Windows app support."
+   }
+  },
+  {
+   "id": "thunderbird",
+   "name": "Thunderbird",
+   "match": {
+    "words": [
+     "thunderbird"
+    ]
+   },
+   "engine": "native",
+   "alternative": {
+    "storeId": "org.mozilla.Thunderbird",
+    "text": "Thunderbird has a Wild OS version in the Store, so it doesn't need Windows app support."
+   }
+  },
+  {
+   "id": "libreoffice",
+   "name": "LibreOffice",
+   "match": {
+    "words": [
+     "libreoffice",
+     "the document foundation"
+    ]
+   },
+   "engine": "native",
+   "alternative": {
+    "storeId": "org.libreoffice.LibreOffice",
+    "text": "LibreOffice has a Wild OS version in the Store, so it doesn't need Windows app support."
+   }
+  },
+  {
+   "id": "openoffice",
+   "name": "OpenOffice",
+   "match": {
+    "words": [
+     "openoffice"
+    ]
+   },
+   "engine": "native",
+   "alternative": {
+    "storeId": "org.libreoffice.LibreOffice",
+    "text": "LibreOffice is the newer version of OpenOffice, and it's free in the Store."
+   }
+  },
+  {
+   "id": "vlc",
+   "name": "VLC",
+   "match": {
+    "words": [
+     "vlc",
+     "videolan"
+    ]
+   },
+   "engine": "native",
+   "alternative": {
+    "storeId": "org.videolan.VLC",
+    "text": "VLC has a Wild OS version in the Store, so it doesn't need Windows app support."
+   }
+  },
+  {
+   "id": "gimp",
+   "name": "GIMP",
+   "match": {
+    "words": [
+     "gimp"
+    ]
+   },
+   "engine": "native",
+   "alternative": {
+    "storeId": "org.gimp.GIMP",
+    "text": "GIMP has a Wild OS version in the Store, so it doesn't need Windows app support."
+   }
+  },
+  {
+   "id": "inkscape",
+   "name": "Inkscape",
+   "match": {
+    "words": [
+     "inkscape"
+    ]
+   },
+   "engine": "native",
+   "alternative": {
+    "storeId": "org.inkscape.Inkscape",
+    "text": "Inkscape has a Wild OS version in the Store, so it doesn't need Windows app support."
+   }
+  },
+  {
+   "id": "krita",
+   "name": "Krita",
+   "match": {
+    "words": [
+     "krita"
+    ]
+   },
+   "engine": "native",
+   "alternative": {
+    "storeId": "org.kde.krita",
+    "text": "Krita has a Wild OS version in the Store, so it doesn't need Windows app support."
+   }
+  },
+  {
+   "id": "blender",
+   "name": "Blender",
+   "match": {
+    "words": [
+     "blender"
+    ]
+   },
+   "engine": "native",
+   "alternative": {
+    "storeId": "org.blender.Blender",
+    "text": "Blender has a Wild OS version in the Store, so it doesn't need Windows app support."
+   }
+  },
+  {
+   "id": "audacity",
+   "name": "Audacity",
+   "match": {
+    "words": [
+     "audacity"
+    ]
+   },
+   "engine": "native",
+   "alternative": {
+    "storeId": "org.audacityteam.Audacity",
+    "text": "Audacity has a Wild OS version in the Store, so it doesn't need Windows app support."
+   }
+  },
+  {
+   "id": "obs-studio",
+   "name": "OBS Studio",
+   "match": {
+    "words": [
+     "obs-studio",
+     "obs studio",
+     "obsproject"
+    ]
+   },
+   "engine": "native",
+   "alternative": {
+    "storeId": "com.obsproject.Studio",
+    "text": "OBS Studio has a Wild OS version in the Store, so it doesn't need Windows app support."
+   }
+  },
+  {
+   "id": "handbrake",
+   "name": "HandBrake",
+   "match": {
+    "words": [
+     "handbrake"
+    ]
+   },
+   "engine": "native",
+   "alternative": {
+    "storeId": "fr.handbrake.ghb",
+    "text": "HandBrake has a Wild OS version in the Store, so it doesn't need Windows app support."
+   }
+  },
+  {
+   "id": "telegram",
+   "name": "Telegram",
+   "match": {
+    "words": [
+     "telegram"
+    ]
+   },
+   "engine": "native",
+   "alternative": {
+    "storeId": "org.telegram.desktop",
+    "text": "Telegram has a Wild OS version in the Store, so it doesn't need Windows app support."
+   }
+  },
+  {
+   "id": "signal",
+   "name": "Signal",
+   "match": {
+    "words": [
+     "signal-desktop",
+     "signal messenger"
+    ]
+   },
+   "engine": "native",
+   "alternative": {
+    "storeId": "org.signal.Signal",
+    "text": "Signal has a Wild OS version in the Store, so it doesn't need Windows app support."
+   }
+  },
+  {
+   "id": "whatsapp",
+   "name": "WhatsApp",
+   "match": {
+    "words": [
+     "whatsapp"
+    ]
+   },
+   "engine": "native",
+   "calls": true,
+   "alternative": {
+    "webApp": "https://web.whatsapp.com",
+    "text": "WhatsApp works in its own window from web.whatsapp.com, with calls."
+   }
+  },
+  {
+   "id": "dropbox",
+   "name": "Dropbox",
+   "match": {
+    "words": [
+     "dropbox"
+    ]
+   },
+   "engine": "native",
+   "alternative": {
+    "storeId": "com.dropbox.Client",
+    "text": "Dropbox has a Wild OS version in the Store, so it doesn't need Windows app support."
+   }
+  },
+  {
+   "id": "visual-studio-code",
+   "name": "Visual Studio Code",
+   "match": {
+    "words": [
+     "vscodesetup",
+     "vscodeusersetup",
+     "visual studio code"
+    ]
+   },
+   "engine": "native",
+   "alternative": {
+    "storeId": "com.visualstudio.code",
+    "text": "Visual Studio Code has a Wild OS version in the Store, so it doesn't need Windows app support."
+   }
+  },
+  {
+   "id": "epic-games-launcher",
+   "name": "Epic Games Launcher",
+   "match": {
+    "words": [
+     "epicinstaller",
+     "epic games"
+    ]
+   },
+   "engine": "native",
+   "alternative": {
+    "storeId": "com.heroicgameslauncher.hgl",
+    "text": "Heroic, free in the Store, signs in to Epic and GOG and runs most of their games."
+   }
+  },
+  {
+   "id": "gog-galaxy",
+   "name": "GOG Galaxy",
+   "match": {
+    "words": [
+     "gog galaxy",
+     "goggalaxy"
+    ]
+   },
+   "engine": "native",
+   "alternative": {
+    "storeId": "com.heroicgameslauncher.hgl",
+    "text": "Heroic, free in the Store, signs in to GOG and Epic and runs most of their games."
+   }
+  },
+  {
+   "id": "battle-net",
+   "name": "Battle.net",
+   "match": {
+    "words": [
+     "battle.net",
+     "battlenet",
+     "blizzard"
+    ]
+   },
+   "engine": "native",
+   "alternative": {
+    "storeId": "net.lutris.Lutris",
+    "text": "Lutris, free in the Store, installs Battle.net with the settings it needs."
+   }
+  },
+  {
+   "id": "riot-client",
+   "name": "Riot Client",
+   "match": {
+    "words": [
+     "riotclient",
+     "riot client",
+     "valorant",
+     "league of legends",
+     "vanguard"
+    ]
+   },
+   "engine": "unsupported",
+   "reason": "Riot's games use anti-cheat that refuses to run inside Windows mode, so they can't run on Wild OS."
+  },
+  {
+   "id": "anti-cheat",
+   "name": "Anti-cheat",
+   "match": {
+    "words": [
+     "faceit",
+     "easyanticheat_setup",
+     "battleye"
+    ]
+   },
+   "engine": "unsupported",
+   "reason": "Anti-cheat software won't run inside Windows mode, so games that need it can't run on Wild OS."
+  },
+  {
+   "id": "minecraft",
+   "name": "Minecraft",
+   "match": {
+    "words": [
+     "minecraft"
+    ]
+   },
+   "engine": "native",
+   "alternative": {
+    "storeId": "com.mojang.Minecraft",
+    "text": "Minecraft has a Wild OS version in the Store, so it doesn't need Windows app support."
+   }
+  },
+  {
+   "id": "itunes",
+   "name": "iTunes",
+   "match": {
+    "words": [
+     "itunes"
+    ]
+   },
+   "engine": "native",
+   "alternative": {
+    "storeId": "org.gnome.Rhythmbox3",
+    "text": "Rhythmbox, free in the Store, plays and organises your music library."
+   }
+  },
+  {
+   "id": "paint-net",
+   "name": "Paint.NET",
+   "match": {
+    "words": [
+     "paint.net",
+     "paintdotnet"
+    ]
+   },
+   "engine": "windows-mode",
+   "alternative": {
+    "storeId": "com.github.PintaProject.Pinta",
+    "text": "Pinta, free in the Store, works a lot like Paint.NET."
+   }
+  },
+  {
+   "id": "adobe-acrobat-reader",
+   "name": "Adobe Acrobat Reader",
+   "match": {
+    "words": [
+     "acroread",
+     "acrobat reader",
+     "adobe acrobat",
+     "readerdc"
+    ]
+   },
+   "engine": "native",
+   "alternative": {
+    "storeId": "org.kde.okular",
+    "text": "Wild OS opens PDFs already, with Okular. It can fill in and sign forms too."
+   }
+  },
+  {
+   "id": "foxit-pdf-reader",
+   "name": "Foxit PDF Reader",
+   "match": {
+    "words": [
+     "foxit"
+    ]
+   },
+   "engine": "native",
+   "alternative": {
+    "storeId": "org.kde.okular",
+    "text": "Wild OS opens PDFs already, with Okular. It can fill in and sign forms too."
+   }
+  },
+  {
+   "id": "7-zip",
+   "name": "7-Zip",
+   "match": {
+    "words": [
+     "7z",
+     "7-zip",
+     "igor pavlov"
+    ]
+   },
+   "engine": "native",
+   "alternative": {
+    "storeId": "org.kde.ark",
+    "text": "Wild OS opens zip, 7z and rar files already, right in Files."
+   }
+  },
+  {
+   "id": "winrar",
+   "name": "WinRAR",
+   "match": {
+    "words": [
+     "winrar",
+     "rarlab"
+    ]
+   },
+   "engine": "native",
+   "alternative": {
+    "storeId": "org.kde.ark",
+    "text": "Wild OS opens rar, zip and 7z files already, right in Files."
+   }
+  },
+  {
+   "id": "notepad",
+   "name": "Notepad++",
+   "match": {
+    "words": [
+     "npp.",
+     "notepad++",
+     "notepadplusplus"
+    ]
+   },
+   "engine": "native",
+   "alternative": {
+    "storeId": "org.kde.kate",
+    "text": "Kate, free in the Store, is a programmer's editor much like Notepad++."
+   }
+  },
+  {
+   "id": "putty",
+   "name": "PuTTY",
+   "match": {
+    "words": [
+     "putty",
+     "simon tatham"
+    ]
+   },
+   "engine": "windows-mode"
+  },
+  {
+   "id": "filezilla",
+   "name": "FileZilla",
+   "match": {
+    "words": [
+     "filezilla"
+    ]
+   },
+   "engine": "native",
+   "alternative": {
+    "storeId": "org.filezillaproject.Filezilla",
+    "text": "FileZilla has a Wild OS version in the Store, so it doesn't need Windows app support."
+   }
+  },
+  {
+   "id": "qbittorrent",
+   "name": "qBittorrent",
+   "match": {
+    "words": [
+     "qbittorrent"
+    ]
+   },
+   "engine": "native",
+   "alternative": {
+    "storeId": "org.qbittorrent.qBittorrent",
+    "text": "qBittorrent has a Wild OS version in the Store, so it doesn't need Windows app support."
+   }
+  },
+  {
+   "id": "keepass",
+   "name": "KeePass",
+   "match": {
+    "words": [
+     "keepass"
+    ]
+   },
+   "engine": "native",
+   "alternative": {
+    "storeId": "org.keepassxc.KeePassXC",
+    "text": "KeePassXC is already part of Wild OS and opens your KeePass files. Find it in Start."
+   }
+  },
+  {
+   "id": "bitwarden",
+   "name": "Bitwarden",
+   "match": {
+    "words": [
+     "bitwarden"
+    ]
+   },
+   "engine": "native",
+   "alternative": {
+    "storeId": "com.bitwarden.desktop",
+    "text": "Bitwarden has a Wild OS version in the Store, so it doesn't need Windows app support."
+   }
+  },
+  {
+   "id": "proton-vpn",
+   "name": "Proton VPN",
+   "match": {
+    "words": [
+     "protonvpn",
+     "proton vpn"
+    ]
+   },
+   "engine": "native",
+   "alternative": {
+    "storeId": "com.protonvpn.www",
+    "text": "Proton VPN has a Wild OS version in the Store, so it doesn't need Windows app support."
+   }
+  },
+  {
+   "id": "python",
+   "name": "Python",
+   "match": {
+    "words": [
+     "python-3",
+     "python software foundation"
+    ]
+   },
+   "engine": "native",
+   "alternative": {
+    "text": "Python is already part of Wild OS. Open Terminal and type python3."
+   }
+  },
+  {
+   "id": "nvidia-drivers",
+   "name": "NVIDIA drivers",
+   "match": {
+    "words": [
+     "nvidia",
+     "geforce"
+    ]
+   },
+   "engine": "unsupported",
+   "reason": "Windows drivers don't work on Wild OS. Wild OS already has drivers for your graphics card."
+  },
+  {
+   "id": "drivers",
+   "name": "Drivers",
+   "match": {
+    "words": [
+     "realtek",
+     "intel driver",
+     "amd software",
+     "radeon",
+     "chipset",
+     "driver setup",
+     "driversetup"
+    ]
+   },
+   "engine": "unsupported",
+   "reason": "Windows drivers don't work on Wild OS. It already includes drivers for most hardware."
+  }
+ ]
+}

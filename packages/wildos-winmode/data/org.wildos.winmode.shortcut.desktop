@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Windows mode
+Comment=Opens a Windows shortcut in Windows mode
+Exec=wildos-winmode open %f
+Icon=wildos-windows-mode
+NoDisplay=true
+MimeType=application/x-ms-shortcut;

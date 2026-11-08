@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Windows mode
+Comment=Run Windows programs in their own windows, using this PC's Windows licence
+Exec=wildos-winmode
+Icon=wildos-windows-mode
+Categories=System;
+Keywords=Windows;exe;Office;Word;Excel;setup;
+StartupNotify=true

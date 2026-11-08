@@ -1,0 +1,11 @@
+#!/bin/sh
+set -e
+
+if [ "$1" = "remove" ] || [ "$1" = "purge" ]; then
+    dpkg-divert --package wildos-store --remove --rename \
+        --divert /usr/share/wildos/flatpak-remotes-disabled/flathub.flatpakrepo \
+        /etc/flatpak/remotes.d/flathub.flatpakrepo >/dev/null || true
+    rmdir /usr/share/wildos/flatpak-remotes-disabled 2>/dev/null || true
+fi
+
+#DEBHELPER#

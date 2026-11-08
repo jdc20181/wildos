@@ -1,0 +1,4 @@
+# App names as Start shows them; they also end every window title.
+
+msgid "System Settings"
+msgstr "Settings"

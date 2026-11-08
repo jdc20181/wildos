@@ -1,0 +1,14 @@
+# Glass: panels and popups stay translucent over the wallpaper. The design's
+# blur tokens only saturate what is behind the glass (saturate 140-160%), so
+# contrast and intensity are left neutral rather than darkening it.
+[AdaptiveTransparency]
+enabled=false
+
+[BlurBehindEffect]
+enabled=true
+
+[ContrastEffect]
+enabled=true
+contrast=1.0
+intensity=1.0
+saturation=1.6

@@ -1,0 +1,17 @@
+#!/bin/sh
+# "UEFI firmware settings" in the start-up menu, on computers whose firmware
+# offers it. It replaces GRUB's own 30_uefi-firmware, which wildos-base moves
+# out of /etc/grub.d, so the entry is in sentence case, comes after Windows
+# (30_windows, 30_os-prober) and has the class the Wild OS theme draws it by.
+set -e
+
+cat <<'EOF'
+if [ "$grub_platform" = efi ]; then
+	fwsetup --is-supported
+	if [ "$?" = 0 ]; then
+		menuentry 'UEFI firmware settings' --class wildos-firmware $menuentry_id_option 'uefi-firmware' {
+			fwsetup
+		}
+	fi
+fi
+EOF

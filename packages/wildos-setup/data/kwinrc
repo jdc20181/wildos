@@ -1,0 +1,34 @@
+# KWin for the first boot setup session, copied to the setup account's
+# home by wildos-setup-session. Global shortcuts are already off; this takes
+# away the screen corners and edges, which would otherwise open the
+# overview or move the one window.
+[ElectricBorders]
+Top=None
+TopRight=None
+Right=None
+BottomRight=None
+Bottom=None
+BottomLeft=None
+Left=None
+TopLeft=None
+
+[Effect-overview]
+BorderActivate=9
+TouchBorderActivate=9
+
+[Effect-windowview]
+BorderActivateAll=9
+TouchBorderActivate=9
+
+[TouchEdges]
+Top=None
+Right=None
+Bottom=None
+Left=None
+
+[Windows]
+ElectricBorders=0
+FocusStealingPreventionLevel=0
+
+[Plugins]
+screenedgeEnabled=false

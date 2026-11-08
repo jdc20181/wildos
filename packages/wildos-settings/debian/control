@@ -1,0 +1,75 @@
+Source: wildos-settings
+Section: admin
+Priority: optional
+Maintainer: Wild OS Developers <dev@wildos.io>
+Build-Depends:
+ debhelper-compat (= 13),
+ cmake,
+ qt6-base-dev,
+ qt6-declarative-dev,
+ libkf6kcmutils-dev,
+ libkf6config-dev,
+ libkf6coreaddons-dev,
+ libkf6service-dev,
+ libkf6i18n-dev,
+ libkf6colorscheme-dev,
+ libpackagekitqt6-dev,
+ libcups2-dev,
+ libglib2.0-dev,
+ pkgconf,
+Standards-Version: 4.7.0
+Rules-Requires-Root: no
+
+Package: wildos-settings
+Architecture: any
+Depends:
+ ${shlibs:Depends},
+ ${misc:Depends},
+ nftables,
+ qml6-module-qtquick-controls,
+ qml6-module-qtquick-templates,
+ qml6-module-qtquick-layouts,
+ qml6-module-qtquick-shapes,
+ qml6-module-qtquick-dialogs,
+ qml6-module-qtquick-effects,
+ qml6-module-qtqml-workerscript,
+ qml6-module-qtcore,
+ qml6-module-org-kde-kirigami,
+ qml6-module-org-kde-kcmutils,
+ qml6-module-org-kde-desktop,
+ qml6-module-org-kde-bluezqt,
+ qml6-module-org-kde-plasma-plasma5support,
+ plasma-nm,
+ plasma-workspace,
+ plasma-desktop,
+ wildos-branding,
+ wildos-ui,
+ kio6,
+ packagekit,
+ pkexec,
+ unattended-upgrades,
+ cups-client,
+ xkb-data,
+ locales,
+ accountsservice,
+ passwd,
+Recommends:
+ systemsettings,
+ flatpak,
+ cups,
+ cups-filters,
+ xdg-desktop-portal,
+Description: Wild OS Settings
+ The Settings app of Wild OS, laid out and worded the way Windows 11
+ Settings is: system, devices, network, personalisation, apps, Windows apps,
+ accounts, time and language, privacy and security, and updates. Wild OS's
+ own pages drive the system through the same services the desktop uses;
+ KDE's settings modules are shown inside it where Wild OS has no page of its
+ own yet.
+ .
+ Its keyboard, printer, account, language and app permission pages work
+ through kxkbrc and KWin, CUPS, AccountsService and two small root helpers,
+ the regional settings KDE uses and Flatpak's override files.
+ .
+ It also points the desktop's right-click "Personalise" entry at Settings
+ and installs the small helper that sets automatic security updates.

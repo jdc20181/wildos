@@ -1,0 +1,28 @@
+{
+    "KPackageStructure": "Plasma/Applet",
+    "KPlugin": {
+        "Authors": [
+            {
+                "Email": "dev@wildos.io",
+                "Name": "Wild OS"
+            },
+            {
+                "Email": "hein@kde.org",
+                "Name": "Eike Hein"
+            }
+        ],
+        "Category": "Windows and Tasks",
+        "Description": "Pinned and running apps on the taskbar",
+        "EnabledByDefault": true,
+        "Icon": "preferences-system-windows",
+        "Id": "org.wildos.tasks",
+        "License": "GPL-2.0-or-later",
+        "Name": "Taskbar apps",
+        "Version": "1.0.0",
+        "Website": "https://wildos.io"
+    },
+    "X-Plasma-API-Minimum-Version": "6.0",
+    "X-Plasma-Provides": [
+        "org.kde.plasma.multitasking"
+    ]
+}

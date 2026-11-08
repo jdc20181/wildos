@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<kcfg xmlns="http://www.kde.org/standards/kcfg/1.0"
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xsi:schemaLocation="http://www.kde.org/standards/kcfg/1.0 http://www.kde.org/standards/kcfg/1.0/kcfg.xsd">
+  <kcfgfile name=""/>
+
+  <group name="General">
+    <!-- View: 0 small, 1 medium, 2 large icons. -->
+    <entry name="iconSize" type="Int">
+      <default>1</default>
+    </entry>
+    <entry name="autoArrange" type="Bool">
+      <default>false</default>
+    </entry>
+    <entry name="alignToGrid" type="Bool">
+      <default>true</default>
+    </entry>
+    <entry name="showIcons" type="Bool">
+      <default>true</default>
+    </entry>
+    <!-- Sort by: name, size, type or modified. -->
+    <entry name="sortKey" type="String">
+      <default>name</default>
+    </entry>
+    <entry name="sortDescending" type="Bool">
+      <default>false</default>
+    </entry>
+    <!-- Where each icon was put, in grid cells, as JSON keyed by file name. -->
+    <entry name="positions" type="String">
+      <default></default>
+    </entry>
+  </group>
+</kcfg>

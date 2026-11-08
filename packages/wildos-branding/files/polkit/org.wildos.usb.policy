@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE policyconfig PUBLIC
+ "-//freedesktop//DTD PolicyKit Policy Configuration 1.0//EN"
+ "http://www.freedesktop.org/standards/PolicyKit/1/policyconfig.dtd">
+<!-- The password prompt behind "Allow once" on a blocked USB device. Only
+     /usr/libexec/wildos/usb-allow runs under it, and that takes nothing but
+     a port, so the prompt cannot be borrowed for anything else. -->
+<policyconfig>
+  <vendor>Wild OS</vendor>
+  <vendor_url>https://wildos.io</vendor_url>
+
+  <action id="org.wildos.usb.allow-device">
+    <description>Allow a blocked USB device</description>
+    <message>Allow the USB device Wild OS blocked? It will work until you unplug it.</message>
+    <icon_name>security-high</icon_name>
+    <defaults>
+      <allow_any>no</allow_any>
+      <allow_inactive>no</allow_inactive>
+      <allow_active>auth_admin_keep</allow_active>
+    </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/libexec/wildos/usb-allow</annotate>
+  </action>
+</policyconfig>

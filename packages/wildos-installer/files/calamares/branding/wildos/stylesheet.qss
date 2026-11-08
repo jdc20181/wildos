@@ -1,0 +1,698 @@
+/* Wild OS installer stylesheet for the pages Calamares draws with widgets
+ * (partitioning, the install progress and every dialog).
+ *
+ * QSS cannot import the WildOS.UI QML module, so the values are copied from
+ * its canonical spec (AUDIT.md section 2, packages/wildos-ui/qml/Style.qml,
+ * dark Glacier): medium buttons 36px radius 8 with 13px text, large 40px
+ * radius 10 with 14px, hover 0.09, pressed 0.12, fields on the sunken
+ * surface with a 0.10 edge, menus r14 in menu glass.
+ *
+ * The installer is a glass sheet drawn by Calamares itself (sheet mode, see
+ * branding.desc), so widgets on it are transparent. Windows of their own,
+ * such as dialogs, menus and drop-down lists, get an opaque background.
+ *
+ * Qt resolves url() in a stylesheet against the working directory, not this
+ * file, so images use the installed path.
+ */
+
+QWidget {
+    background-color: transparent;
+    color: #eef1f8;
+    font-family: "Inter";
+    font-size: 13px;
+    selection-background-color: rgba(143, 180, 255, 0.35);
+    selection-color: #eef1f8;
+}
+
+QDialog,
+QMessageBox,
+QMenu,
+QComboBox QAbstractItemView {
+    background-color: #1a1e33;
+}
+
+QLabel:disabled,
+QCheckBox:disabled,
+QRadioButton:disabled {
+    color: rgba(232, 236, 248, 0.58);
+}
+
+/* The page area gets the design's inner padding once, here, so module pages
+ * built with widgets and with QML line up the same way. */
+QStackedWidget#viewManagerStack {
+    padding: 36px 40px 0px 40px;
+    border: none;
+}
+
+QToolTip {
+    background-color: #1b2038;
+    color: #eef1f8;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 6px;
+    padding: 6px 8px;
+}
+
+/* Buttons */
+
+QPushButton {
+    min-height: 34px;
+    padding: 0px 16px;
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    border-radius: 8px;
+    background-color: rgba(255, 255, 255, 0.06);
+    color: #eef1f8;
+    font-size: 13px;
+    font-weight: 500;
+}
+
+QPushButton:hover {
+    background-color: rgba(255, 255, 255, 0.09);
+}
+
+QPushButton:pressed {
+    background-color: rgba(255, 255, 255, 0.12);
+}
+
+QPushButton:focus {
+    border: 2px solid #8fb4ff;
+}
+
+QPushButton:default {
+    border: none;
+    background-color: #8fb4ff;
+    color: #0f1530;
+    font-weight: 600;
+}
+
+QPushButton:default:hover {
+    background-color: #9ac2ff;
+}
+
+QPushButton:default:pressed {
+    background-color: #84a6eb;
+}
+
+QPushButton:disabled {
+    color: rgba(232, 236, 248, 0.40);
+    border-color: rgba(255, 255, 255, 0.08);
+    background-color: rgba(255, 255, 255, 0.03);
+}
+
+QToolButton {
+    border: none;
+    border-radius: 8px;
+    background: transparent;
+    padding: 4px;
+}
+
+QToolButton:hover {
+    background-color: rgba(255, 255, 255, 0.09);
+}
+
+QToolBar {
+    border: none;
+    background: transparent;
+}
+
+/* Text entry */
+
+QLineEdit,
+QSpinBox,
+QDoubleSpinBox,
+QPlainTextEdit,
+QTextEdit {
+    min-height: 34px;
+    padding: 0px 12px;
+    border: 1px solid rgba(255, 255, 255, 0.10);
+    border-radius: 8px;
+    background-color: rgba(6, 8, 20, 0.35);
+    color: #f3f5fb;
+}
+
+QPlainTextEdit,
+QTextEdit {
+    padding: 8px 10px;
+}
+
+QLineEdit:focus,
+QSpinBox:focus,
+QDoubleSpinBox:focus,
+QPlainTextEdit:focus,
+QTextEdit:focus {
+    border: 1px solid #8fb4ff;
+}
+
+QLineEdit:disabled,
+QSpinBox:disabled {
+    color: rgba(232, 236, 248, 0.58);
+    border-color: rgba(255, 255, 255, 0.08);
+}
+
+QSpinBox::up-button,
+QSpinBox::down-button {
+    width: 0px;
+    border: none;
+}
+
+/* Combo boxes */
+
+QComboBox {
+    min-height: 32px;
+    padding: 0px 12px;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 8px;
+    background-color: rgba(255, 255, 255, 0.06);
+    color: #eef1f8;
+}
+
+QComboBox:hover {
+    background-color: rgba(255, 255, 255, 0.09);
+}
+
+QComboBox:focus,
+QComboBox:on {
+    border: 1px solid #8fb4ff;
+}
+
+QComboBox:disabled {
+    color: rgba(232, 236, 248, 0.58);
+    border-color: rgba(255, 255, 255, 0.08);
+}
+
+QComboBox::drop-down {
+    width: 32px;
+    border: none;
+    background: transparent;
+}
+
+QComboBox::down-arrow {
+    image: url(/etc/calamares/branding/wildos/images/chevron-down.png);
+    width: 14px;
+    height: 14px;
+}
+
+QComboBox QAbstractItemView {
+    padding: 6px;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 14px;
+    background-color: rgba(22, 26, 46, 0.94);
+    color: #eef1f8;
+    outline: none;
+    selection-background-color: rgba(255, 255, 255, 0.10);
+}
+
+QComboBox QAbstractItemView::item {
+    min-height: 30px;
+    padding: 0px 8px;
+    border-radius: 6px;
+}
+
+/* Radio buttons and check boxes. Check boxes are drawn as switches, the
+ * control the design uses for every on and off choice. */
+
+QRadioButton,
+QCheckBox {
+    spacing: 12px;
+}
+
+/* Both states come to 18 pixels including the border, so text beside a
+ * radio button does not shift when it is picked. */
+QRadioButton::indicator {
+    width: 15px;
+    height: 15px;
+    border-radius: 9px;
+    border: 1.5px solid rgba(238, 241, 248, 0.6);
+    background: transparent;
+}
+
+QRadioButton::indicator:hover {
+    border-color: #eef1f8;
+}
+
+QRadioButton::indicator:checked {
+    width: 8px;
+    height: 8px;
+    border: 5px solid #8fb4ff;
+    border-radius: 9px;
+    background-color: #0f1530;
+}
+
+QRadioButton::indicator:disabled {
+    border-color: rgba(238, 241, 248, 0.25);
+}
+
+QCheckBox::indicator {
+    width: 42px;
+    height: 24px;
+    image: url(/etc/calamares/branding/wildos/images/switch-off.png);
+}
+
+QCheckBox::indicator:checked {
+    image: url(/etc/calamares/branding/wildos/images/switch-on.png);
+}
+
+QCheckBox::indicator:disabled {
+    image: url(/etc/calamares/branding/wildos/images/switch-off-disabled.png);
+}
+
+QCheckBox::indicator:checked:disabled {
+    image: url(/etc/calamares/branding/wildos/images/switch-on-disabled.png);
+}
+
+/* Lists, trees and tables */
+
+QListView,
+QTreeView,
+QTableView,
+QListWidget,
+QTreeWidget {
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    border-radius: 12px;
+    background-color: rgba(255, 255, 255, 0.05);
+    alternate-background-color: rgba(255, 255, 255, 0.03);
+    color: #eef1f8;
+    outline: none;
+    padding: 4px;
+}
+
+QListView::item,
+QTreeView::item,
+QListWidget::item,
+QTreeWidget::item {
+    min-height: 30px;
+    border-radius: 6px;
+    padding: 0px 6px;
+}
+
+QListView::item:hover,
+QTreeView::item:hover {
+    background-color: rgba(255, 255, 255, 0.06);
+}
+
+QListView::item:selected,
+QTreeView::item:selected,
+QTableView::item:selected {
+    background-color: rgba(143, 180, 255, 0.20);
+    color: #eef1f8;
+}
+
+QTreeView::branch {
+    background: transparent;
+}
+
+QHeaderView {
+    background: transparent;
+    border: none;
+}
+
+QHeaderView::section {
+    background: transparent;
+    color: rgba(232, 236, 248, 0.72);
+    border: none;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+    padding: 6px 8px;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+QTableView {
+    gridline-color: rgba(255, 255, 255, 0.05);
+}
+
+QTableCornerButton::section {
+    background: transparent;
+    border: none;
+}
+
+/* Scroll areas and scroll bars */
+
+QScrollArea {
+    border: none;
+    background: transparent;
+}
+
+QScrollBar:vertical {
+    width: 10px;
+    margin: 2px;
+    background: transparent;
+    border: none;
+}
+
+QScrollBar:horizontal {
+    height: 10px;
+    margin: 2px;
+    background: transparent;
+    border: none;
+}
+
+QScrollBar::handle:vertical {
+    min-height: 32px;
+    border-radius: 3px;
+    background-color: rgba(255, 255, 255, 0.18);
+}
+
+QScrollBar::handle:horizontal {
+    min-width: 32px;
+    border-radius: 3px;
+    background-color: rgba(255, 255, 255, 0.18);
+}
+
+QScrollBar::handle:hover {
+    background-color: rgba(255, 255, 255, 0.30);
+}
+
+QScrollBar::add-line,
+QScrollBar::sub-line {
+    width: 0px;
+    height: 0px;
+    border: none;
+    background: none;
+}
+
+QScrollBar::add-page,
+QScrollBar::sub-page {
+    background: none;
+}
+
+/* Group boxes, frames, splitters and tabs */
+
+QGroupBox {
+    margin-top: 22px;
+    padding: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    border-radius: 12px;
+    background-color: rgba(255, 255, 255, 0.05);
+    font-weight: 600;
+}
+
+QGroupBox::title {
+    subcontrol-origin: margin;
+    subcontrol-position: top left;
+    left: 4px;
+    padding: 0px 4px;
+    color: #eef1f8;
+}
+
+QSplitter::handle {
+    background: transparent;
+}
+
+QTabWidget::pane {
+    border: none;
+}
+
+QTabBar::tab {
+    padding: 6px 14px;
+    border: none;
+    border-radius: 8px;
+    background: transparent;
+    color: rgba(232, 236, 248, 0.8);
+}
+
+QTabBar::tab:selected {
+    background-color: rgba(255, 255, 255, 0.10);
+    color: #eef1f8;
+}
+
+QMenu {
+    padding: 6px;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 14px;
+    background-color: rgba(22, 26, 46, 0.94);
+}
+
+QMenu::item {
+    padding: 6px 14px;
+    border-radius: 6px;
+}
+
+QMenu::item:selected {
+    background-color: rgba(255, 255, 255, 0.09);
+}
+
+/* Progress */
+
+QProgressBar {
+    min-height: 8px;
+    max-height: 8px;
+    border: none;
+    border-radius: 4px;
+    background-color: rgba(255, 255, 255, 0.12);
+    color: transparent;
+    text-align: center;
+}
+
+QProgressBar::chunk {
+    border-radius: 4px;
+    background-color: #8fb4ff;
+}
+
+/* The install page (show.qml) shows progress itself, so the bar, status
+ * line and log button Calamares puts under it take no room. */
+QProgressBar#exec-progress,
+QLabel#exec-message,
+#slideshow QToolBar {
+    min-height: 0px;
+    max-height: 0px;
+    margin: 0px;
+    padding: 0px;
+    border: none;
+}
+
+/* Partitioning: the disk page (ChoicePage), "Where should Wild OS go?" in
+ * the design. Its layout and wording come from wildos-disk-page.patch. */
+
+#ChoicePage QLabel#m_drivesLabel {
+    font-size: 28px;
+    font-weight: 600;
+}
+
+#ChoicePage QLabel#m_messageLabel {
+    font-size: 14px;
+    color: rgba(232, 236, 248, 0.8);
+}
+
+#ChoicePage QLabel#m_diskLabel {
+    font-size: 13px;
+    font-weight: 500;
+}
+
+#ChoicePage QComboBox {
+    min-height: 40px;
+}
+
+/* Each choice is a card; the picked one has the accent edge. */
+#ChoicePage Calamares--Widgets--PrettyRadioButton {
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 14px;
+    background-color: rgba(255, 255, 255, 0.04);
+}
+
+#ChoicePage Calamares--Widgets--PrettyRadioButton:hover {
+    background-color: rgba(255, 255, 255, 0.09);
+}
+
+#ChoicePage Calamares--Widgets--PrettyRadioButton[checked="true"] {
+    border: 2px solid #8fb4ff;
+    background-color: rgba(143, 180, 255, 0.10);
+}
+
+#ChoicePage QLabel#alongsideUsed,
+#ChoicePage QLabel#alongsideDisk,
+#ChoicePage QLabel#encryptDetail,
+#ChoicePage QLabel#encryptState {
+    font-size: 12px;
+    color: rgba(232, 236, 248, 0.72);
+}
+
+#ChoicePage #m_encryptWidget {
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    border-radius: 12px;
+    background-color: rgba(255, 255, 255, 0.05);
+}
+
+#ChoicePage QLabel#encryptTitle {
+    font-size: 14px;
+}
+
+/* An alongside choice blocked by a Windows setting stays visible. */
+#ChoicePage Calamares--Widgets--PrettyRadioButton:disabled {
+    background-color: rgba(255, 255, 255, 0.02);
+    border-color: rgba(255, 255, 255, 0.07);
+}
+
+/* Its text dims through QLabel:disabled above: Qt ignores a pseudo-state
+ * on anything but the last part of a selector. */
+
+/* The disk editor ("Something else", InstallerManual.dc). Its layout is
+ * DiskEditorPage in wildos-disk-page.patch. */
+#DiskEditorPage QLabel#editorTitle {
+    font-size: 28px;
+    font-weight: 600;
+}
+
+#DiskEditorPage QLabel#editorSubtitle {
+    font-size: 14px;
+    color: rgba(232, 236, 248, 0.8);
+}
+
+#DiskEditorPage #editorCard {
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    border-radius: 12px;
+    background-color: rgba(255, 255, 255, 0.05);
+}
+
+#DiskEditorPage QLabel#panelTitle {
+    font-size: 15px;
+    font-weight: 600;
+}
+
+#DiskEditorPage QLabel#panelNote,
+#DiskEditorPage QLabel#panelCaption {
+    font-size: 12px;
+    color: rgba(232, 236, 248, 0.72);
+}
+
+#DiskEditorPage QPushButton#roleChip {
+    min-height: 30px;
+    padding: 0px 12px;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 8px;
+    background-color: rgba(255, 255, 255, 0.04);
+    font-size: 12px;
+    font-weight: 400;
+}
+
+#DiskEditorPage QPushButton#roleChip:hover {
+    background-color: rgba(255, 255, 255, 0.09);
+}
+
+#DiskEditorPage QPushButton#roleChip:checked {
+    border: 2px solid #8fb4ff;
+    background-color: rgba(143, 180, 255, 0.12);
+}
+
+#DiskEditorPage QPushButton#smallButton {
+    min-height: 28px;
+    padding: 0px 14px;
+    font-size: 12px;
+}
+
+#DiskEditorPage QLineEdit#sizeField {
+    min-height: 30px;
+    padding: 0px 10px;
+    font-size: 13px;
+}
+
+#DiskEditorPage QLabel#switchTitle {
+    font-size: 13px;
+}
+
+#DiskEditorPage QLabel#switchDetail {
+    font-size: 11px;
+    color: rgba(232, 236, 248, 0.72);
+}
+
+#DiskEditorPage QLabel#devicePath {
+    font-family: "monospace";
+    font-size: 11px;
+    color: rgba(232, 236, 248, 0.6);
+}
+
+#DiskEditorPage QLabel#editorSummary {
+    padding: 12px 16px;
+    border: 1px solid rgba(143, 180, 255, 0.24);
+    border-radius: 12px;
+    background-color: rgba(143, 180, 255, 0.10);
+    font-size: 13px;
+}
+
+QSlider::groove:horizontal {
+    height: 4px;
+    border-radius: 2px;
+    background-color: rgba(255, 255, 255, 0.14);
+}
+
+QSlider::sub-page:horizontal {
+    border-radius: 2px;
+    background-color: #8fb4ff;
+}
+
+QSlider::handle:horizontal {
+    width: 16px;
+    height: 16px;
+    margin: -6px 0px;
+    border-radius: 8px;
+    background-color: #ffffff;
+}
+
+QSlider::handle:horizontal:disabled,
+QSlider::sub-page:horizontal:disabled {
+    background-color: rgba(255, 255, 255, 0.3);
+}
+
+/* The legend under partition bars on the manual page. */
+PartitionLabelsView {
+    background: transparent;
+    color: #eef1f8;
+    border: 0px;
+}
+
+/* Summary (widget fallback) */
+
+QLabel#summaryTitle {
+    font-size: 22px;
+    font-weight: 600;
+}
+
+QLabel#summaryItemTitle {
+    font-size: 15px;
+    font-weight: 600;
+}
+
+QLabel#summaryItemBody {
+    color: rgba(232, 236, 248, 0.8);
+}
+
+/* Dialogs. On the sheet, Calamares' questions are frameless sheets too
+ * (sheetDialog, from wildos-installer-sheet.patch), with the title as the
+ * first line. */
+
+QMessageBox QLabel {
+    font-size: 14px;
+}
+
+/* Dialog footers use the large button: 40px, radius 10, 14px. */
+QDialogButtonBox QPushButton {
+    min-width: 84px;
+    min-height: 38px;
+    padding: 0px 22px;
+    border-radius: 10px;
+    font-size: 14px;
+}
+
+QMessageBox#sheetDialog {
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 16px;
+    background-color: #1a1e33;
+}
+
+QMessageBox#sheetDialog QLabel#qt_msgbox_label {
+    min-width: 380px;
+    font-size: 17px;
+    font-weight: 600;
+}
+
+QMessageBox#sheetDialog QLabel#qt_msgbox_informativelabel {
+    font-size: 14px;
+    color: rgba(232, 236, 248, 0.8);
+}
+
+/* Qt's stock question mark has no place in the Wild OS dialogs; the title
+   already asks the question. */
+QMessageBox QLabel#qt_msgboxex_icon_label {
+    image: none;
+    min-width: 0px;
+    max-width: 0px;
+    margin: 0px;
+}

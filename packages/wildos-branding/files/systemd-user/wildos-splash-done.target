@@ -1,0 +1,5 @@
+# Started by the session splash when the start-up animation has finished
+# playing; splash-hold waits for it.
+[Unit]
+Description=Start-up animation finished
+PartOf=graphical-session.target

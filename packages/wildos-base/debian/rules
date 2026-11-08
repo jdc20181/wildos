@@ -1,0 +1,9 @@
+#!/usr/bin/make -f
+
+%:
+	dh $@
+
+# The build normalises every source file to 0644; grub-mkconfig only runs the
+# scripts in /etc/grub.d that are executable.
+execute_after_dh_fixperms:
+	chmod 0755 debian/wildos-base/usr/lib/wildos/grub.d/*

@@ -1,0 +1,7 @@
+# Wild OS leaves out packages' documentation (changelogs, READMEs and
+# examples nobody opens on a desktop). Copyright notices stay, as Debian
+# requires. Manual pages and translations stay: Wild OS offers every
+# language the desktop is translated into.
+# Installed by the image build, so it covers every package installed later.
+path-exclude /usr/share/doc/*
+path-include /usr/share/doc/*/copyright

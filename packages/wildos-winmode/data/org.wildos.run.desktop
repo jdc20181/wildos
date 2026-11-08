@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Windows program
+Comment=Opens Windows programs and installers
+Exec=wild-run %f
+Icon=wildos-windows-app
+MimeType=application/x-ms-dos-executable;application/x-msi;application/x-msdownload;application/vnd.microsoft.portable-executable;application/x-ms-installer;application/vnd.ms-appx;application/msix;
+NoDisplay=true
+Terminal=false
+StartupNotify=false

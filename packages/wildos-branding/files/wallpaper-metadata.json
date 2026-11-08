@@ -1,0 +1,12 @@
+{
+    "KPlugin": {
+        "Authors": [
+            {
+                "Name": "Quang Nguyen Vinh"
+            }
+        ],
+        "Id": "WildOS",
+        "License": "Pexels License",
+        "Name": "Wild OS"
+    }
+}

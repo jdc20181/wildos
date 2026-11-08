@@ -1,0 +1,16 @@
+#!/bin/sh
+set -e
+
+case "$(dpkg --print-architecture)" in
+    amd64) triplet=x86_64-linux-gnu ;;
+    arm64) triplet=aarch64-linux-gnu ;;
+    *) triplet="$(dpkg --print-architecture)-linux-gnu" ;;
+esac
+helper=/usr/lib/$triplet/libexec/kwin_killer_helper
+
+if [ "$1" = remove ] || [ "$1" = abort-install ] || [ "$1" = disappear ]; then
+    dpkg-divert --package wildos-system-dialogs --remove --rename \
+        --divert "$helper.kde" "$helper"
+fi
+
+#DEBHELPER#

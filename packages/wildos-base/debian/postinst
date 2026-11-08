@@ -1,0 +1,70 @@
+#!/bin/sh
+set -e
+
+hidden=/usr/share/wildos-base/grub.d-hidden
+
+# A package unpacked in the same run as wildos-base but before its preinst
+# made the diversions (the image build installs everything in one go) leaves
+# its script as /etc/grub.d/NAME.dpkg-new. dpkg looks for it under the
+# diverted name instead, never finds it, and records the script as not yet
+# installed. grub-mkconfig skips *.dpkg-* files, but these would sit in
+# /etc/grub.d executable for good, so each one moves to the name dpkg does
+# look for, NAME.dpkg-new in grub.d-hidden. A package not yet configured then
+# installs it there itself, the next update replaces it silently, and the
+# postrm can put it back if wildos-base goes. Moving it to the diverted name
+# itself would make the package's next update stop and ask about a changed
+# configuration file, which unattended updates cannot answer.
+hand_over_unconfigured_scripts() {
+    dpkg-divert --list '/etc/grub.d/*' \
+        | sed -n "s|^diversion of \(/etc/grub.d/[^ ]*\) to $hidden/[^ ]* by wildos-base\$|\1|p" \
+        | while read -r script; do
+            if [ -f "$script.dpkg-new" ]; then
+                mv -f "$script.dpkg-new" "$hidden/${script##*/}.dpkg-new"
+            fi
+        done
+}
+
+# The menu scripts the preinst diverted come back executable whenever their
+# packages update. grub-mkconfig does not look in this directory, but nothing
+# that does find them (a script calling another by name, someone copying one
+# back) should be able to run them either.
+disarm_hidden_scripts() {
+    for script in "$hidden"/*; do
+        if [ -f "$script" ]; then chmod a-x "$script"; fi
+    done
+}
+
+if [ "$1" = "configure" ]; then
+    # base-files owns /usr/lib/os-release. A diversion keeps its copy on disk
+    # under another name, so base-files upgrades never overwrite the Wild OS
+    # identity.
+    dpkg-divert --package wildos-base --add --rename \
+        --divert /usr/lib/os-release.debian /usr/lib/os-release
+    ln -sfn wildos/os-release /usr/lib/os-release
+
+    hand_over_unconfigured_scripts
+    disarm_hidden_scripts
+
+    # Installed systems pick up the new menu now. The image has no grub.cfg
+    # (the installer makes one), so its build skips this.
+    if [ -e /boot/grub/grub.cfg ] && command -v update-grub >/dev/null; then
+        update-grub || echo "wildos-base: update-grub failed; the start-up menu changes on its next successful run" >&2
+    fi
+fi
+
+if [ "$1" = "triggered" ]; then
+    hand_over_unconfigured_scripts
+    disarm_hidden_scripts
+fi
+
+# Kicksecure's privleap only serves its own account names and the privleap
+# group, so leapctl failed at every sign-in for accounts Wild OS made. New
+# accounts get the group (wildos-setup, settings-users); everyone who can
+# sign in (the console group) gets it here.
+if [ "$1" = "configure" ] && getent group privleap >/dev/null && getent group console >/dev/null; then
+    for account in $(getent group console | cut -d: -f4 | tr ',' ' '); do
+        id -nG "$account" 2>/dev/null | tr ' ' '\n' | grep -qx privleap || usermod -aG privleap "$account" || true
+    done
+fi
+
+#DEBHELPER#

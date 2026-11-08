@@ -1,0 +1,18 @@
+[Desktop Entry]
+Type=Application
+Name=Files
+GenericName=File manager
+Comment=Browse, open and organise your files
+Exec=wildos-files %U
+Icon=system-file-manager
+Terminal=false
+StartupNotify=true
+StartupWMClass=wildos-files
+Categories=Qt;System;FileTools;FileManager;Core;
+MimeType=inode/directory;
+Keywords=explorer;file explorer;folders;documents;browse;
+Actions=new-window;
+
+[Desktop Action new-window]
+Name=New window
+Exec=wildos-files

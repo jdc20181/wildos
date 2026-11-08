@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=App start tracking
+Comment=Follows apps as they start, and reads the most used ones into memory after sign-in
+Exec=/usr/libexec/wildos/wildos-launchd
+Icon=wildos
+NoDisplay=true
+# KWin only tells privileged programs about launches; it finds this file by
+# the program's path.
+X-KDE-Wayland-Interfaces=org_kde_plasma_activation_feedback

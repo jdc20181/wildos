@@ -1,0 +1,42 @@
+# The Wild OS Aurorae decoration draws the design's 42px title bar, thin
+# glyphs, calm red close and 14px corners, which Breeze cannot be configured
+# to do. Breeze settings in breezerc remain as the fallback.
+# Windows order: minimise, maximise, close on the right, nothing on the left.
+[org.kde.kdecoration2]
+library=org.kde.kwin.aurorae
+theme=__aurorae__svg__WildOS
+# Tiny is the size at which Aurorae uses the theme's own 1px glass edge.
+BorderSize=Tiny
+BorderSizeAuto=false
+ButtonsOnLeft=
+ButtonsOnRight=IAX
+# Breeze's own "Maximize" tooltip would land on top of the snap layout picker
+# that appears when hovering the maximise button.
+ShowToolTips=false
+
+[Plugins]
+blurEnabled=true
+contrastEnabled=true
+org.wildos.snapEnabled=true
+org.wildos.launchEnabled=true
+
+# The Wild OS window switcher, with a plain dim behind it instead of KWin
+# fading the other windows.
+[TabBox]
+LayoutName=org.wildos.switcher
+HighlightWindows=false
+
+# Window open and close, as on Windows 11: a short fade with a slight grow
+# from 94% as a window arrives and a slight shrink to 96% as it goes, in
+# 200 ms (UI.Style.motionNormal). KWin's own 80% reads as a zoom.
+[Effect-scale]
+Duration=200
+InScale=0.94
+OutScale=0.96
+
+# Start, the flyouts and the volume pill rise from the taskbar on KWin's
+# sliding pop-ups. They arrive in 200 ms and leave a little quicker, as
+# Windows flyouts do.
+[Effect-slidingpopups]
+SlideInTime=200
+SlideOutTime=150

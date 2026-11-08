@@ -1,0 +1,9 @@
+# Right-click menus on files. Activities, tags, "Forget", make targets and
+# "Run in Konsole" are KDE ideas a Windows switcher has never met; share,
+# compress, extract, set as wallpaper and the rest stay.
+[Show]
+kactivitymanagerd_fileitem_linking_plugin=false
+tagsfileitemaction=false
+forgetfileitemaction=false
+makefileactions=false
+konsolerun=false

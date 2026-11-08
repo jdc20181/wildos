@@ -1,0 +1,44 @@
+Source: wildos-terminal
+Section: x11
+Priority: optional
+Maintainer: Wild OS Developers <dev@wildos.io>
+Build-Depends:
+ debhelper-compat (= 13),
+ cmake,
+ qt6-base-dev,
+ qt6-declarative-dev,
+ libkf6config-dev,
+ libkf6windowsystem-dev,
+ libqtermwidget-dev,
+ libutf8proc-dev,
+Standards-Version: 4.7.0
+Rules-Requires-Root: no
+
+Package: wildos-terminal
+Architecture: any
+Depends:
+ ${shlibs:Depends},
+ ${misc:Depends},
+ qtermwidget-data,
+ wildos-ui,
+ qml6-module-qtcore,
+ qml6-module-qtquick,
+ qml6-module-qtquick-controls,
+ qml6-module-qtquick-effects,
+ qml6-module-qtquick-layouts,
+ qml6-module-qtquick-shapes,
+ qml6-module-qtquick-templates,
+ qml6-module-qtquick-window,
+ fonts-cascadia-code,
+Recommends:
+ fonts-jetbrains-mono,
+ wildos-branding,
+Provides:
+ x-terminal-emulator,
+Description: Wild OS Terminal
+ Terminal is the Wild OS command line app, laid out like Windows
+ Terminal: tabs in the title bar with a menu of profiles beside them,
+ split panes, and settings that look and work like the rest of Wild OS.
+ It opens with the Homebrew colour scheme (green on black) and Cascadia
+ Mono, and also ships Wild OS, Campbell, One Half and Solarized schemes.
+ The terminal itself is QTermWidget, the emulator LXQt's terminal uses.

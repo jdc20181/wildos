@@ -1,0 +1,276 @@
+Description: Ask about name clashes in the Wild OS clash dialog
+ When a copy or move meets an item with the same name, KIO's widget
+ delegate asks org.wildos.Dialogs (wildos-portal) instead of showing
+ KIO::RenameDialog: Replace, Skip or Keep both with the dates and sizes,
+ and "Do this for every clash in this copy". Keep both names the copy
+ "Name (2)" as Files and Windows do, also for every later clash when that
+ was chosen for all. The dialog opens above the app's window (x11 id or an
+ exported Wayland handle) and closes if the job ends first. Without the
+ service KIO's own dialog is shown, so nothing breaks if wildos-portal is
+ missing.
+Author: Wild OS Developers <dev@wildos.io>
+Forwarded: not-needed
+
+--- a/src/widgets/widgetsaskuseractionhandler.cpp
++++ b/src/widgets/widgetsaskuseractionhandler.cpp
+@@ -26,6 +26,26 @@
+ #include <QRegularExpression>
+ #include <QUrl>
+ 
++#ifdef WITH_QTDBUS
++#include <KFileUtils>
++#include <KIO/CopyJob>
++#include <KWaylandExtras>
++#include <KWindowSystem>
++#include <QDBusConnection>
++#include <QDBusMessage>
++#include <QDBusPendingCallWatcher>
++#include <QDBusPendingReply>
++#include <QDir>
++#include <QFileInfo>
++#include <QMimeDatabase>
++#include <QTimer>
++#include <QWindow>
++
++#include <functional>
++#include <limits>
++#include <memory>
++#endif
++
+ class KIO::WidgetsAskUserActionHandlerPrivate
+ {
+ public:
+@@ -149,6 +169,191 @@
+ {
+ }
+ 
++
++#ifdef WITH_QTDBUS
++// Wild OS: a name clash is asked in the Wild OS clash dialog (the
++// org.wildos.Dialogs service from wildos-portal), so it looks the same in
++// every app and in Files: Replace, Skip or Keep both with the dates and
++// sizes, and "Do this for every clash in this copy". KIO's own dialog is
++// shown when the service is not there.
++namespace WildOS
++{
++// Set on a job once "Keep both" was chosen for every clash, so the rest are
++// renamed the same way ("Name (2)") without asking.
++static const char everyClashKeepsBoth[] = "wildosEveryClashKeepsBoth";
++
++static QUrl keepBothUrl(const QUrl &dest)
++{
++    const QUrl folder = dest.adjusted(QUrl::RemoveFilename | QUrl::StripTrailingSlash);
++    const QString fileName = dest.fileName();
++    QString name;
++    if (folder.isLocalFile()) {
++        const QFileInfo info(dest.toLocalFile());
++        const QString suffix = info.isDir() ? QString() : QMimeDatabase().suffixForFileName(fileName);
++        const QString ext = suffix.isEmpty() ? QString() : QLatin1Char('.') + suffix;
++        const QString base = fileName.left(fileName.size() - ext.size());
++        const QDir dir(folder.toLocalFile());
++        for (int n = 2; name.isEmpty() || dir.exists(name); ++n) {
++            name = QStringLiteral("%1 (%2)%3").arg(base).arg(n).arg(ext);
++        }
++    } else {
++        name = KFileUtils::suggestName(folder, fileName);
++    }
++    QUrl url = folder;
++    url.setPath(folder.path() + QLatin1Char('/') + name);
++    return url;
++}
++
++// The app's window as the portal names windows, so the dialog opens above
++// it: "x11:<id>", or "wayland:<handle>" once the window is exported.
++static void parentHandle(QWidget *widget, QObject *context, const std::function<void(const QString &, QWindow *)> &done)
++{
++    QWindow *window = widget ? widget->window()->windowHandle() : nullptr;
++    if (!window) {
++        done(QString(), nullptr);
++    } else if (KWindowSystem::isPlatformX11()) {
++        done(QStringLiteral("x11:") + QString::number(window->winId(), 16), nullptr);
++    } else if (!KWindowSystem::isPlatformWayland()) {
++        done(QString(), nullptr);
++    } else {
++        auto settled = std::make_shared<bool>(false);
++        auto connection = std::make_shared<QMetaObject::Connection>();
++        QPointer<QWindow> guard(window);
++        *connection = QObject::connect(KWaylandExtras::self(), &KWaylandExtras::windowExported, context, [=](QWindow *exported, const QString &handle) {
++            if (exported != guard || *settled) {
++                return;
++            }
++            *settled = true;
++            QObject::disconnect(*connection);
++            done(QStringLiteral("wayland:") + handle, guard);
++        });
++        KWaylandExtras::exportWindow(window);
++        QTimer::singleShot(500, context, [=] {
++            if (!*settled) {
++                *settled = true;
++                QObject::disconnect(*connection);
++                done(QString(), nullptr);
++            }
++        });
++    }
++}
++
++static void askClash(KIO::WidgetsAskUserActionHandler *handler,
++                     QWidget *parent,
++                     KJob *job,
++                     const QUrl &src,
++                     const QUrl &dest,
++                     KIO::RenameDialog_Options options,
++                     KIO::filesize_t sizeSrc,
++                     KIO::filesize_t sizeDest,
++                     const QDateTime &mtimeSrc,
++                     const QDateTime &mtimeDest,
++                     const std::function<void()> &stock)
++{
++    QPointer<KJob> guard(job);
++    const bool canSkip = options & (KIO::RenameDialog_Skip | KIO::RenameDialog_MultipleItems);
++
++    if (job->property(everyClashKeepsBoth).toBool() && !(options & KIO::RenameDialog_NoRename)) {
++        Q_EMIT handler->askUserRenameResult(KIO::Result_Rename, keepBothUrl(dest), job);
++        return;
++    }
++
++    static int counter = 0;
++    const QString token = QStringLiteral("%1-%2").arg(QCoreApplication::applicationPid()).arg(++counter);
++    QVariantMap info;
++    info[QStringLiteral("token")] = token;
++    info[QStringLiteral("source")] = src.toString();
++    info[QStringLiteral("dest")] = dest.toString();
++    info[QStringLiteral("sourceSize")] = sizeSrc == KIO::filesize_t(-1) ? qlonglong(-1) : qlonglong(sizeSrc);
++    info[QStringLiteral("destSize")] = sizeDest == KIO::filesize_t(-1) ? qlonglong(-1) : qlonglong(sizeDest);
++    info[QStringLiteral("sourceModified")] = mtimeSrc.isValid() ? mtimeSrc.toMSecsSinceEpoch() : qlonglong(0);
++    info[QStringLiteral("destModified")] = mtimeDest.isValid() ? mtimeDest.toMSecsSinceEpoch() : qlonglong(0);
++    info[QStringLiteral("isDir")] = bool((options & KIO::RenameDialog_SourceIsDirectory) && (options & KIO::RenameDialog_DestIsDirectory));
++    info[QStringLiteral("sameFile")] = bool(options & KIO::RenameDialog_OverwriteItself);
++    info[QStringLiteral("canReplace")] = bool(options & KIO::RenameDialog_Overwrite);
++    info[QStringLiteral("canKeepBoth")] = !(options & KIO::RenameDialog_NoRename);
++    info[QStringLiteral("multiple")] = bool(options & KIO::RenameDialog_MultipleItems);
++    qlonglong items = qlonglong(job->totalAmount(KJob::Files) + job->totalAmount(KJob::Directories));
++    if (auto copy = qobject_cast<KIO::CopyJob *>(job)) {
++        info[QStringLiteral("move")] = copy->operationMode() == KIO::CopyJob::Move;
++        const QList<QUrl> sources = copy->srcUrls();
++        if (items <= 0) {
++            items = sources.size();
++        }
++        const QUrl target = copy->destUrl();
++        if (target.isLocalFile() && QFileInfo(target.toLocalFile()).isDir()) {
++            const QDir dir(target.toLocalFile());
++            qlonglong clashes = 0;
++            for (const QUrl &url : sources) {
++                if (dir.exists(url.fileName())) {
++                    ++clashes;
++                }
++            }
++            info[QStringLiteral("clashes")] = clashes;
++        }
++    }
++    info[QStringLiteral("items")] = items;
++
++    parentHandle(parent, handler, [=](const QString &handle, QWindow *exported) {
++        if (!guard) {
++            return;
++        }
++        QVariantMap call = info;
++        call[QStringLiteral("parentWindow")] = handle;
++        QDBusMessage message = QDBusMessage::createMethodCall(QStringLiteral("org.wildos.Dialogs"),
++                                                              QStringLiteral("/org/wildos/Dialogs"),
++                                                              QStringLiteral("org.wildos.Dialogs"),
++                                                              QStringLiteral("AskClash"));
++        message << call;
++        auto watcher = new QDBusPendingCallWatcher(QDBusConnection::sessionBus().asyncCall(message, std::numeric_limits<int>::max()), handler);
++        // The copy ending under the question (cancelled from the progress
++        // view, say) closes the dialog, as KIO's own dialog does.
++        const auto finishedConnection = QObject::connect(guard, &KJob::finished, watcher, [token] {
++            QDBusMessage cancel = QDBusMessage::createMethodCall(QStringLiteral("org.wildos.Dialogs"),
++                                                                 QStringLiteral("/org/wildos/Dialogs"),
++                                                                 QStringLiteral("org.wildos.Dialogs"),
++                                                                 QStringLiteral("CancelClash"));
++            cancel << token;
++            QDBusConnection::sessionBus().call(cancel, QDBus::NoBlock);
++        });
++        QPointer<QWindow> exportedGuard(exported);
++        QObject::connect(watcher, &QDBusPendingCallWatcher::finished, handler, [=](QDBusPendingCallWatcher *w) {
++            w->deleteLater();
++            QObject::disconnect(finishedConnection);
++            if (exportedGuard) {
++                KWaylandExtras::unexportWindow(exportedGuard);
++            }
++            if (!guard) {
++                return;
++            }
++            const QDBusPendingReply<QString, bool, QString> reply = *w;
++            if (reply.isError()) {
++                stock();
++                return;
++            }
++            const QString choice = reply.argumentAt<0>();
++            const bool all = reply.argumentAt<1>();
++            if (choice == QLatin1String("replace")) {
++                Q_EMIT handler->askUserRenameResult(all ? KIO::Result_OverwriteAll : KIO::Result_Overwrite, QUrl(), guard);
++            } else if (choice == QLatin1String("skip")) {
++                Q_EMIT handler->askUserRenameResult(!canSkip ? KIO::Result_Cancel : all ? KIO::Result_AutoSkip : KIO::Result_Skip, QUrl(), guard);
++            } else if (choice == QLatin1String("both")) {
++                if (all) {
++                    guard->setProperty(everyClashKeepsBoth, true);
++                }
++                const QString name = reply.argumentAt<2>();
++                QUrl renamed = dest.adjusted(QUrl::RemoveFilename);
++                renamed.setPath(renamed.path() + name);
++                Q_EMIT handler->askUserRenameResult(KIO::Result_Rename, name.isEmpty() ? keepBothUrl(dest) : renamed, guard);
++            } else {
++                Q_EMIT handler->askUserRenameResult(KIO::Result_Cancel, QUrl(), guard);
++            }
++        });
++    });
++}
++}
++#endif
++
+ void KIO::WidgetsAskUserActionHandler::askUserRename(KJob *job,
+                                                      const QString &title,
+                                                      const QUrl &src,
+@@ -161,21 +366,28 @@
+                                                      const QDateTime &mtimeSrc,
+                                                      const QDateTime &mtimeDest)
+ {
+-    QMetaObject::invokeMethod(qGuiApp, [=, this] {
+-        auto *dlg = new KIO::RenameDialog(d->getParentWidget(job), title, src, dest, options, sizeSrc, sizeDest, ctimeSrc, ctimeDest, mtimeSrc, mtimeDest);
+-
+-        dlg->setAttribute(Qt::WA_DeleteOnClose);
+-        dlg->setWindowModality(Qt::WindowModal);
++    auto stock = [=, this] {
++        QMetaObject::invokeMethod(qGuiApp, [=, this] {
++            auto *dlg = new KIO::RenameDialog(d->getParentWidget(job), title, src, dest, options, sizeSrc, sizeDest, ctimeSrc, ctimeDest, mtimeSrc, mtimeDest);
++
++            dlg->setAttribute(Qt::WA_DeleteOnClose);
++            dlg->setWindowModality(Qt::WindowModal);
++
++            connect(job, &KJob::finished, dlg, &QDialog::reject);
++            connect(dlg, &QDialog::finished, this, [this, job, dlg](const int exitCode) {
++                KIO::RenameDialog_Result result = static_cast<RenameDialog_Result>(exitCode);
++                const QUrl newUrl = result == Result_AutoRename ? dlg->autoDestUrl() : dlg->newDestUrl();
++                Q_EMIT askUserRenameResult(result, newUrl, job);
++            });
+ 
+-        connect(job, &KJob::finished, dlg, &QDialog::reject);
+-        connect(dlg, &QDialog::finished, this, [this, job, dlg](const int exitCode) {
+-            KIO::RenameDialog_Result result = static_cast<RenameDialog_Result>(exitCode);
+-            const QUrl newUrl = result == Result_AutoRename ? dlg->autoDestUrl() : dlg->newDestUrl();
+-            Q_EMIT askUserRenameResult(result, newUrl, job);
++            dlg->show();
+         });
+-
+-        dlg->show();
+-    });
++    };
++#ifdef WITH_QTDBUS
++    WildOS::askClash(this, d->getParentWidget(job), job, src, dest, options, sizeSrc, sizeDest, mtimeSrc, mtimeDest, stock);
++#else
++    stock();
++#endif
+ }
+ 
+ void KIO::WidgetsAskUserActionHandler::askUserSkip(KJob *job, KIO::SkipDialog_Options options, const QString &errorText)

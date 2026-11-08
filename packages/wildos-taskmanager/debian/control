@@ -1,0 +1,43 @@
+Source: wildos-taskmanager
+Section: admin
+Priority: optional
+Maintainer: Wild OS Developers <dev@wildos.io>
+Build-Depends:
+ debhelper-compat (= 13),
+ cmake,
+ qt6-base-dev,
+ qt6-declarative-dev,
+ libksysguard-dev,
+ libkf6config-dev,
+ libkf6coreaddons-dev,
+ libkf6service-dev,
+Standards-Version: 4.7.0
+Rules-Requires-Root: no
+
+Package: wildos-taskmanager
+Architecture: any
+Depends:
+ ${shlibs:Depends},
+ ${misc:Depends},
+ wildos-ui,
+ ksystemstats,
+ libksysguard-bin,
+ qml6-module-qtquick,
+ qml6-module-qtquick-templates,
+ qml6-module-qtquick-layouts,
+ qml6-module-qtquick-shapes,
+ qml6-module-qtquick-effects,
+ qml6-module-qtquick-window,
+ qml6-module-qtqml-workerscript,
+ systemd,
+Recommends:
+ kde-cli-tools,
+Description: Wild OS Task Manager
+ Task Manager shows what is running and how hard the computer is working,
+ laid out the way Windows 11 Task Manager is: apps and background
+ processes with End task, live performance graphs for the processor,
+ memory, disks, network, graphics and Windows mode, the apps that start
+ when you sign in, Windows apps and services.
+ .
+ Its numbers come from the system monitor service the desktop already
+ runs (ksystemstats) and its process library (libksysguard).

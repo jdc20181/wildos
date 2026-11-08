@@ -1,0 +1,7 @@
+# Everything runs inside Linux containers; CRLF line endings break shell scripts
+# and Debian packaging.
+* text=auto eol=lf
+*.ps1 text eol=crlf
+*.png binary
+*.jpg binary
+*.svg text eol=lf

@@ -1,0 +1,3 @@
+# The lock screen shows the Wild OS wallpaper behind the sign-in panel.
+[Greeter][Wallpaper][org.kde.image][General]
+Image=file:///usr/share/wallpapers/WildOS/contents/images/3840x2160.jpg

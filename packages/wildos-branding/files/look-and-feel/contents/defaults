@@ -1,0 +1,40 @@
+[kdeglobals][General]
+ColorScheme=WildOS
+AccentColor=143,180,255
+
+[kdeglobals][Icons]
+Theme=WildOS
+
+[kdeglobals][KDE]
+widgetStyle=kvantum
+
+[plasmarc][Theme]
+name=wildos
+
+[kwinrc][org.kde.kdecoration2]
+library=org.kde.kwin.aurorae
+theme=__aurorae__svg__WildOS
+BorderSize=Tiny
+BorderSizeAuto=false
+ButtonsOnLeft=
+ButtonsOnRight=IAX
+ShowToolTips=false
+
+[kwinrc][WindowSwitcher]
+LayoutName=org.wildos.switcher
+
+[kcminputrc][Mouse]
+cursorTheme=breeze_cursors
+
+[ksplashrc][KSplash]
+Engine=KSplashQML
+Theme=org.wildos.desktop
+
+[Wallpaper]
+Image=WildOS
+
+# The desktop itself is Wild OS's own containment (wildos-desktop-view):
+# Plasma creates each screen's desktop from this when an account first
+# logs in, before the layout script sets the wallpaper on it.
+[Desktop][org.kde.plasma.desktop]
+Containment=org.wildos.desktop

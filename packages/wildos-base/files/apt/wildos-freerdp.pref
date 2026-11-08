@@ -1,0 +1,8 @@
+# Windows mode shows Windows apps through FreeRDP's RemoteApp. trixie's
+# FreeRDP 3.15 drew the first frame of each app window and never updated it
+# (blank or frozen windows); Debian's backport of 3.32 draws them properly.
+# Only FreeRDP and the one library its backport needs come from
+# trixie-backports; everything else stays on trixie.
+Package: freerdp* libfreerdp* libwinpr* winpr3-* libuwac0* libsso-mib0*
+Pin: release n=trixie-backports
+Pin-Priority: 500

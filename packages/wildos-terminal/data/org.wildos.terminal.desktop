@@ -1,0 +1,18 @@
+[Desktop Entry]
+Type=Application
+Name=Terminal
+GenericName=Terminal
+Comment=Type commands for your computer to run
+Exec=wildos-terminal
+Icon=utilities-terminal
+Terminal=false
+StartupNotify=true
+StartupWMClass=wildos-terminal
+Categories=Qt;System;TerminalEmulator;
+Keywords=terminal;command prompt;cmd;powershell;console;shell;bash;command line;
+X-KDE-Shortcuts=Ctrl+Alt+T
+Actions=new-window;
+
+[Desktop Action new-window]
+Name=New window
+Exec=wildos-terminal

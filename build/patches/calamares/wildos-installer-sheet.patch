@@ -1,0 +1,696 @@
+Description: The Wild OS installer window: a glass sheet, steps without a page, progress for QML
+ Three changes to the Calamares shell that the Wild OS installer design
+ needs.
+ .
+ Sheet mode. With windowExpanding: fullscreen and a productWallpaper in
+ branding.desc, the window covers the screen with the wallpaper, dimmed and
+ scaled to cover, and the installer is a rounded sheet of windowSize in the
+ middle, with a blurred glass backdrop and a shadow drawn by the window
+ itself. Panels and QML pages get transparent backgrounds so the glass shows
+ through: QML pages on the sheet are QQuickWidgets instead of window
+ containers, which cannot be transparent. The stylesheet pads the page area
+ instead of per-step margins. The confirm and cancel questions become
+ frameless sheets with the title as their first line. A QML panel may set
+ its own width, as it already could its height, and the navigation panel
+ may be up to 96 pixels high.
+ .
+ Pass-through steps. A view module with passThrough: true in its
+ configuration has no page: next() and back() run its onActivate() and
+ onLeave() and move past it, so one page can show the answers of several
+ modules while each keeps its jobs. The list lives in global storage
+ (passThroughSteps), and ViewManager.setPassThrough() lets a page skip
+ itself when it has nothing to ask.
+ .
+ QML pages. The JobQueue is registered as a singleton in io.calamares.core,
+ so a slideshow can show the progress and the job name itself, and
+ GlobalStorage.insert() can be called from QML, so a page can store its
+ answers for the jobs. ExecutionViewStep stores each install module's share
+ of the overall progress (execModuleWeights), so the install page can show
+ which stage is running without showing job names.
+Author: Wild OS Developers <dev@wildos.io>
+Forwarded: no
+
+--- a/src/calamares/CalamaresApplication.cpp
++++ b/src/calamares/CalamaresApplication.cpp
+@@ -271,7 +271,13 @@ CalamaresApplication::initViewSteps()
+ {
+     cDebug() << "STARTUP: loadModules for all modules done";
+     m_moduleManager->checkRequirements();
+-    if ( Calamares::Branding::instance()->windowMaximize() )
++    if ( Calamares::Branding::instance()->windowIsSheet() )
++    {
++        // The sheet's wallpaper covers the whole screen, panels included.
++        m_mainwindow->setWindowFlag( Qt::FramelessWindowHint );
++        m_mainwindow->showFullScreen();
++    }
++    else if ( Calamares::Branding::instance()->windowMaximize() )
+     {
+         m_mainwindow->setWindowFlag( Qt::FramelessWindowHint );
+         m_mainwindow->showMaximized();
+--- a/src/calamares/CalamaresWindow.cpp
++++ b/src/calamares/CalamaresWindow.cpp
+@@ -32,7 +32,10 @@
+ #endif
+ #include <QFile>
+ #include <QFileInfo>
++#include <QGridLayout>
+ #include <QLabel>
++#include <QPainter>
++#include <QPainterPath>
+ #ifdef WITH_QML
+ #include <QQmlContext>
+ #include <QQmlEngine>
+@@ -41,6 +44,104 @@
+ #endif
+ #include <QTreeView>
+ 
++namespace
++{
++/** @brief The dimmed wallpaper with the installer's glass sheet drawn on it
++ *
++ * Used when Branding::windowIsSheet(). The sheet widget paints nothing
++ * itself: this widget draws its shadow, a blurred copy of the wallpaper
++ * behind it and the tint, so the panels on the sheet can be transparent.
++ */
++class SheetBackdrop : public QWidget
++{
++public:
++    SheetBackdrop( const QString& wallpaper, QWidget* parent )
++        : QWidget( parent )
++        , m_wallpaper( wallpaper )
++    {
++    }
++
++    void setSheet( QWidget* sheet ) { m_sheet = sheet; }
++
++protected:
++    void paintEvent( QPaintEvent* ) override
++    {
++        const QRect sheetRect = m_sheet ? m_sheet->geometry() : QRect();
++        if ( m_cache.size() != size() || m_cachedSheet != sheetRect )
++        {
++            rebuild( sheetRect );
++        }
++        QPainter p( this );
++        p.drawPixmap( 0, 0, m_cache );
++    }
++
++private:
++    // Scaling down and back up is a cheap, smooth enough blur for a backdrop.
++    static QImage blurred( const QImage& image, int factor )
++    {
++        const QSize small( qMax( 1, image.width() / factor ), qMax( 1, image.height() / factor ) );
++        return image.scaled( small, Qt::IgnoreAspectRatio, Qt::SmoothTransformation )
++            .scaled( image.size(), Qt::IgnoreAspectRatio, Qt::SmoothTransformation );
++    }
++
++    void rebuild( const QRect& sheetRect )
++    {
++        QImage canvas( size(), QImage::Format_ARGB32_Premultiplied );
++        canvas.fill( QColor( 0x1d, 0x2b, 0x52 ) );
++        QPainter p( &canvas );
++        p.setRenderHint( QPainter::Antialiasing );
++        p.setRenderHint( QPainter::SmoothPixmapTransform );
++
++        const QImage wallpaper( m_wallpaper );
++        if ( !wallpaper.isNull() )
++        {
++            const QImage cover
++                = wallpaper.scaled( size(), Qt::KeepAspectRatioByExpanding, Qt::SmoothTransformation );
++            const int x = ( cover.width() - width() ) / 2;
++            const int y = int( ( cover.height() - height() ) * 0.45 );
++            p.drawImage( 0, 0, cover, x, y, width(), height() );
++        }
++        p.fillRect( rect(), QColor( 6, 10, 26, 102 ) );
++
++        if ( sheetRect.isValid() )
++        {
++            const qreal radius = 20;
++            const int spread = 110;
++            QImage shadow( sheetRect.size() + QSize( 2 * spread, 2 * spread ), QImage::Format_ARGB32_Premultiplied );
++            shadow.fill( Qt::transparent );
++            {
++                QPainter sp( &shadow );
++                sp.setRenderHint( QPainter::Antialiasing );
++                sp.setPen( Qt::NoPen );
++                sp.setBrush( QColor( 4, 8, 24, 140 ) );
++                sp.drawRoundedRect(
++                    QRectF( spread, spread, sheetRect.width(), sheetRect.height() ), radius, radius );
++            }
++            p.drawImage( sheetRect.topLeft() + QPoint( -spread, 40 - spread ), blurred( shadow, 28 ) );
++
++            const QImage behind = blurred( canvas.copy( sheetRect ), 24 );
++            QPainterPath sheet;
++            sheet.addRoundedRect( QRectF( sheetRect ), radius, radius );
++            p.setClipPath( sheet );
++            p.drawImage( sheetRect.topLeft(), behind );
++            p.fillRect( sheetRect, QColor( 18, 22, 40, 219 ) );
++            p.setClipping( false );
++            p.setPen( QPen( QColor( 255, 255, 255, 31 ), 1 ) );
++            p.setBrush( Qt::NoBrush );
++            p.drawRoundedRect( QRectF( sheetRect ).adjusted( 0.5, 0.5, -0.5, -0.5 ), radius - 0.5, radius - 0.5 );
++        }
++        p.end();
++        m_cache = QPixmap::fromImage( canvas );
++        m_cachedSheet = sheetRect;
++    }
++
++    QString m_wallpaper;
++    QWidget* m_sheet = nullptr;
++    QPixmap m_cache;
++    QRect m_cachedSheet;
++};
++}  // namespace
++
+ static QSize
+ desktopSize( QWidget* w )
+ {
+@@ -260,7 +361,9 @@ setDimension( QQuickWidget* w, Qt::Orientation o, int desiredWidth )
+                       o == Qt::Orientation::Horizontal ? QSizePolicy::MinimumExpanding : QSizePolicy::Expanding );
+     if ( o == Qt::Orientation::Vertical )
+     {
+-        w->setFixedWidth( desiredWidth );
++        // As with the height below, a width the QML sets itself wins.
++        const qreal qmlWidth = w->rootObject() ? w->rootObject()->implicitWidth() : 0;
++        w->setFixedWidth( qmlWidth > 0 ? int( qmlWidth ) : desiredWidth );
+     }
+     else
+     {
+@@ -268,8 +371,8 @@ setDimension( QQuickWidget* w, Qt::Orientation o, int desiredWidth )
+         // which seems to match what the widget navigation would use for height
+         // (with *my* specific screen, style, etc. so YMMV).
+         //
+-        // Bound between (16, 64) with a default of 48.
+-        qreal minimumHeight = qBound( qreal( 16 ), w->rootObject() ? w->rootObject()->height() : 48, qreal( 64 ) );
++        // Bound between (16, 96) with a default of 48.
++        qreal minimumHeight = qBound( qreal( 16 ), w->rootObject() ? w->rootObject()->height() : 48, qreal( 96 ) );
+         w->setMinimumHeight( int( minimumHeight ) );
+         w->setFixedHeight( int( minimumHeight ) );
+     }
+@@ -285,6 +388,7 @@ getQmlSidebar( Calamares::DebugWindowManager* debug,
+ {
+     Calamares::registerQmlModels();
+     QQuickWidget* w = new QQuickWidget( parent );
++    Calamares::showSheetThrough( w );
+     if ( debug )
+     {
+         w->engine()->rootContext()->setContextProperty( "debug", debug );
+@@ -305,6 +409,7 @@ getQmlNavigation( Calamares::DebugWindowManager* debug,
+ {
+     Calamares::registerQmlModels();
+     QQuickWidget* w = new QQuickWidget( parent );
++    Calamares::showSheetThrough( w );
+     if ( debug )
+     {
+         w->engine()->rootContext()->setContextProperty( "debug", debug );
+@@ -434,7 +539,25 @@ CalamaresWindow::CalamaresWindow( QWidget* parent )
+     resize( w, h );
+ 
+     QWidget* baseWidget = this;
+-    if ( !( branding->imagePath( ImageEntry::ProductWallpaper ).isEmpty() ) )
++    if ( branding->windowIsSheet() )
++    {
++        auto* backdrop = new SheetBackdrop( branding->imagePath( ImageEntry::ProductWallpaper ), this );
++        backdrop->setObjectName( "backgroundWidget" );
++        QVBoxLayout* l = new QVBoxLayout;
++        Calamares::unmarginLayout( l );
++        l->addWidget( backdrop );
++        setLayout( l );
++
++        QWidget* sheet = new QWidget( backdrop );
++        sheet->setObjectName( "sheet" );
++        sheet->setFixedSize( w, h );
++        backdrop->setSheet( sheet );
++        QGridLayout* centred = new QGridLayout( backdrop );
++        centred->addWidget( sheet, 0, 0, Qt::AlignCenter );
++
++        baseWidget = sheet;
++    }
++    else if ( !( branding->imagePath( ImageEntry::ProductWallpaper ).isEmpty() ) )
+     {
+         QWidget* label = new QWidget( this );
+         QVBoxLayout* l = new QVBoxLayout;
+@@ -450,7 +573,7 @@ CalamaresWindow::CalamaresWindow( QWidget* parent )
+     }
+ 
+     m_viewManager = Calamares::ViewManager::instance( baseWidget );
+-    if ( branding->windowExpands() )
++    if ( branding->windowExpands() && !branding->windowIsSheet() )
+     {
+         connect( m_viewManager, &Calamares::ViewManager::ensureSize, this, &CalamaresWindow::ensureSize );
+     }
+--- a/src/libcalamares/GlobalStorage.h
++++ b/src/libcalamares/GlobalStorage.h
+@@ -62,7 +62,8 @@ public:
+      * already exists in the store, its existing value is overwritten.
+      * The changed() signal is emitted regardless.
+      */
+-    void insert( const QString& key, const QVariant& value );
++    /// Invokable so installer pages written in QML can store their answers.
++    Q_INVOKABLE void insert( const QString& key, const QVariant& value );
+     /** @brief Removes a key and its value
+      *
+      * The @p key is removed from the store. If the @p key does not
+--- a/src/libcalamaresui/Branding.h
++++ b/src/libcalamaresui/Branding.h
+@@ -221,6 +221,14 @@ public:
+     bool welcomeExpandingLogo() const { return m_welcomeExpandingLogo; }
+     bool windowMaximize() const { return m_windowExpansion == WindowExpansion::Fullscreen; }
+     bool windowExpands() const { return m_windowExpansion != WindowExpansion::Fixed; }
++    /** @brief Is the installer a sheet laid over its wallpaper?
++     *
++     * With *windowExpanding: fullscreen* and a *productWallpaper*, the window
++     * fills the screen with the wallpaper and the installer itself is a
++     * rounded sheet of *windowSize* in the middle of it. Panels and QML pages
++     * then have transparent backgrounds so the sheet shows through.
++     */
++    bool windowIsSheet() const { return windowMaximize() && !imagePath( ProductWallpaper ).isEmpty(); }
+     QPair< WindowDimension, WindowDimension > windowSize() const
+     {
+         return QPair< WindowDimension, WindowDimension >( m_windowWidth, m_windowHeight );
+--- a/src/libcalamaresui/ViewManager.cpp
++++ b/src/libcalamaresui/ViewManager.cpp
+@@ -14,6 +14,7 @@
+ #include "ViewManager.h"
+ 
+ #include "Branding.h"
++#include "GlobalStorage.h"
+ #include "JobQueue.h"
+ #include "Settings.h"
+ 
+@@ -33,6 +34,9 @@
+ #include <QDialogButtonBox>
+ #include <QFile>
+ #include <QMessageBox>
++#include <QPainter>
++#include <QPushButton>
++#include <QRegularExpression>
+ #include <QMetaObject>
+ 
+ #define UPDATE_BUTTON_PROPERTY( name, value ) \
+@@ -134,7 +138,9 @@ ViewManager::insertViewStep( int before, ViewStep* step )
+         QLayout* layout = step->widget()->layout();
+         if ( layout )
+         {
+-            const auto margins = step->widgetMargins( m_panelSides );
++            // On the sheet, the stylesheet pads the page area once for all pages.
++            const auto margins = Branding::instance()->windowIsSheet() ? QSize( 0, 0 )
++                                                                       : step->widgetMargins( m_panelSides );
+             layout->setContentsMargins( margins.width(), margins.height(), margins.width(), margins.height() );
+         }
+ 
+@@ -267,6 +273,28 @@ stepIsExecute( const ViewStepList& steps, int index )
+         && ( qobject_cast< ExecutionViewStep* >( steps.at( index ) ) != nullptr );
+ }
+ 
++/** @brief Is the step at @p index one that has no page of its own?
++ *
++ * A distribution can show the answers of several modules on one page. The
++ * other modules keep their place in the sequence and their jobs, but are
++ * listed in global storage under *passThroughSteps*: next() and back() run
++ * their onActivate() and onLeave() and move straight past them. A module joins
++ * the list with `passThrough: true` in its configuration, and a page can add
++ * or remove a step while Calamares runs, for instance to skip a step that
++ * has nothing to ask.
++ */
++static bool
++stepIsPassThrough( const ViewStepList& steps, int index )
++{
++    if ( index < 0 || index >= steps.count() || !JobQueue::instance() )
++    {
++        return false;
++    }
++    const auto list
++        = JobQueue::instance()->globalStorage()->value( QStringLiteral( "passThroughSteps" ) ).toStringList();
++    return list.contains( steps.at( index )->moduleInstanceKey().toString() );
++}
++
+ static inline bool
+ isAtVeryEnd( const ViewStepList& steps, int index )
+ {
+@@ -284,6 +312,74 @@ isAtVeryEnd( const ViewStepList& steps, int index )
+     return ( index >= steps.count() ) || ( index == steps.count() - 1 && steps.last()->isAtEnd() );
+ }
+ 
++namespace
++{
++/** @brief On a sheet, message boxes are sheets too
++ *
++ * They lose the window frame, so the title moves inside as the first line,
++ * and they draw their own rounded background in the stylesheet's colour
++ * (object name *sheetDialog*).
++ */
++class SheetMessageBox : public QMessageBox
++{
++public:
++    SheetMessageBox( const QString& title,
++                     const QString& text,
++                     QMessageBox::StandardButtons buttons,
++                     QWidget* parent )
++        : QMessageBox( QMessageBox::Question, title, text, buttons, parent )
++    {
++        if ( Branding::instance() && Branding::instance()->windowIsSheet() )
++        {
++            m_sheet = true;
++            setObjectName( QStringLiteral( "sheetDialog" ) );
++            setWindowFlag( Qt::FramelessWindowHint );
++            setAttribute( Qt::WA_TranslucentBackground );
++            setIcon( QMessageBox::NoIcon );
++            setText( title );
++            setInformativeText( text );
++            if ( layout() )
++            {
++                layout()->setContentsMargins( 28, 26, 28, 24 );
++            }
++        }
++    }
++
++protected:
++    void showEvent( QShowEvent* event ) override
++    {
++        // The underlined access keys of the stock labels look out of place
++        // on the sheet's buttons; Return and Escape still answer.
++        if ( m_sheet )
++        {
++            for ( auto* button : buttons() )
++            {
++                button->setText( button->text().remove( QRegularExpression( QStringLiteral( "&(?!&)" ) ) ) );
++                button->setIcon( QIcon() );
++            }
++        }
++        QMessageBox::showEvent( event );
++    }
++
++    void paintEvent( QPaintEvent* event ) override
++    {
++        if ( !m_sheet )
++        {
++            QMessageBox::paintEvent( event );
++            return;
++        }
++        QPainter p( this );
++        p.setRenderHint( QPainter::Antialiasing );
++        p.setPen( QColor( 255, 255, 255, 31 ) );
++        p.setBrush( palette().brush( QPalette::Window ) );
++        p.drawRoundedRect( QRectF( rect() ).adjusted( 0.5, 0.5, -0.5, -0.5 ), 16, 16 );
++    }
++
++private:
++    bool m_sheet = false;
++};
++}  // namespace
++
+ static int
+ questionBox( QWidget* parent,
+              const QString& title,
+@@ -302,9 +398,10 @@ questionBox( QWidget* parent,
+                                   0 /* default first button, i.e. confirm */,
+                                   1 /* escape is second button, i.e. cancel */ );
+ #else
+-    QMessageBox mb( QMessageBox::Question, title, question, QMessageBox::StandardButton::NoButton, parent );
+-    const auto* const okButton = mb.addButton( button0, QMessageBox::AcceptRole );
++    SheetMessageBox mb( title, question, QMessageBox::StandardButton::NoButton, parent );
++    auto* const okButton = mb.addButton( button0, QMessageBox::AcceptRole );
+     mb.addButton( button1, QMessageBox::RejectRole );
++    mb.setDefaultButton( okButton );
+     mb.exec();
+     if ( mb.clickedButton() == okButton )
+     {
+@@ -360,9 +457,15 @@ ViewManager::next()
+         }
+ 
+         m_currentStep++;
++        step->onLeave();
+ 
++        while ( stepIsPassThrough( m_steps, m_currentStep ) && m_currentStep + 1 < m_steps.count() )
++        {
++            m_steps.at( m_currentStep )->onActivate();
++            m_steps.at( m_currentStep )->onLeave();
++            m_currentStep++;
++        }
+         m_stack->setCurrentIndex( m_currentStep );  // Does nothing if out of range
+-        step->onLeave();
+ 
+         if ( m_currentStep < m_steps.count() )
+         {
+@@ -460,11 +563,21 @@ ViewManager::back()
+     }
+ 
+     ViewStep* step = m_steps.at( m_currentStep );
+-    if ( step->isAtBeginning() && m_currentStep > 0 )
++    int previousStep = m_currentStep - 1;
++    while ( previousStep > 0 && stepIsPassThrough( m_steps, previousStep ) )
++    {
++        previousStep--;
++    }
++    if ( step->isAtBeginning() && previousStep >= 0 )
+     {
+-        m_currentStep--;
+-        m_stack->setCurrentIndex( m_currentStep );
+         step->onLeave();
++        for ( int i = m_currentStep - 1; i > previousStep; --i )
++        {
++            m_steps.at( i )->onActivate();
++            m_steps.at( i )->onLeave();
++        }
++        m_currentStep = previousStep;
++        m_stack->setCurrentIndex( m_currentStep );
+         m_steps.at( m_currentStep )->onActivate();
+         emit currentStepChanged();
+     }
+@@ -486,6 +599,26 @@ ViewManager::back()
+     updateButtonLabels();
+ }
+ 
++void
++ViewManager::setPassThrough( const QString& instanceKey, bool passThrough )
++{
++    auto* gs = JobQueue::instance()->globalStorage();
++    auto list = gs->value( QStringLiteral( "passThroughSteps" ) ).toStringList();
++    if ( passThrough == list.contains( instanceKey ) )
++    {
++        return;
++    }
++    if ( passThrough )
++    {
++        list.append( instanceKey );
++    }
++    else
++    {
++        list.removeAll( instanceKey );
++    }
++    gs->insert( QStringLiteral( "passThroughSteps" ), list );
++}
++
+ void
+ ViewManager::quit()
+ {
+@@ -540,7 +673,7 @@ ViewManager::confirmCancelInstallation()
+                                                      "The setup program will quit and all changes will be lost." )
+                                                : tr( "Do you really want to cancel the current install process?\n"
+                                                      "The installer will quit and all changes will be lost." );
+-    QMessageBox mb( QMessageBox::Question, title, question, QMessageBox::Yes | QMessageBox::No, m_widget );
++    SheetMessageBox mb( title, question, QMessageBox::Yes | QMessageBox::No, m_widget );
+     mb.setDefaultButton( QMessageBox::No );
+     Calamares::fixButtonLabels( &mb );
+     int response = mb.exec();
+--- a/src/libcalamaresui/ViewManager.h
++++ b/src/libcalamaresui/ViewManager.h
+@@ -169,6 +169,13 @@ public Q_SLOTS:
+      * Asks for confirmation if necessary. Terminates the application.
+      */
+     void quit();
++
++    /** @brief Take the step @p instanceKey out of the pages, or put it back
++     *
++     * A page can use this to skip itself when it has nothing to ask. See
++     * stepIsPassThrough() in ViewManager.cpp.
++     */
++    void setPassThrough( const QString& instanceKey, bool passThrough );
+     bool quitEnabled() const
+     {
+         return m_quitEnabled;  ///< Is the quit-button to be enabled
+--- a/src/libcalamaresui/modulesystem/ViewModule.cpp
++++ b/src/libcalamaresui/modulesystem/ViewModule.cpp
+@@ -11,6 +11,9 @@
+ #include "ViewModule.h"
+ 
+ #include "ViewManager.h"
++
++#include "GlobalStorage.h"
++#include "JobQueue.h"
+ #include "utils/Logger.h"
+ #include "utils/PluginFactory.h"
+ #include "viewpages/ViewStep.h"
+@@ -62,6 +65,14 @@ ViewModule::loadSelf()
+         m_viewStep->setModuleInstanceKey( instanceKey() );
+         m_viewStep->setConfigurationMap( m_configurationMap );
+         ViewManager::instance()->addViewStep( m_viewStep );
++        // See stepIsPassThrough() in ViewManager.cpp.
++        if ( m_configurationMap.value( QStringLiteral( "passThrough" ) ).toBool() )
++        {
++            auto* gs = JobQueue::instance()->globalStorage();
++            auto list = gs->value( QStringLiteral( "passThroughSteps" ) ).toStringList();
++            list.append( instanceKey().toString() );
++            gs->insert( QStringLiteral( "passThroughSteps" ), list );
++        }
+         m_loaded = true;
+         cDebug() << "ViewModule" << instanceKey() << "loading complete.";
+     }
+--- a/src/libcalamaresui/utils/Qml.cpp
++++ b/src/libcalamaresui/utils/Qml.cpp
+@@ -21,6 +21,7 @@
+ #include <QByteArray>
+ #include <QObject>
+ #include <QQuickItem>
++#include <QQuickWidget>
+ #include <QString>
+ #include <QVariant>
+ 
+@@ -99,6 +100,16 @@ initQmlModulesDir()
+     return false;
+ }
+ 
++void
++showSheetThrough( QQuickWidget* widget )
++{
++    if ( widget && Branding::instance() && Branding::instance()->windowIsSheet() )
++    {
++        widget->setAttribute( Qt::WA_AlwaysStackOnTop );
++        widget->setClearColor( Qt::transparent );
++    }
++}
++
+ void
+ callQmlFunction( QQuickItem* qmlObject, const char* method )
+ {
+@@ -242,6 +253,14 @@ registerQmlModels()
+             0,
+             "Global",
+             []( QQmlEngine*, QJSEngine* ) -> QObject* { return Calamares::JobQueue::instance()->globalStorage(); } );
++        // The install page shows progress itself, from the same signal the
++        // progress bar under the slideshow follows.
++        qmlRegisterSingletonType< Calamares::JobQueue >( "io.calamares.core",
++                                                         1,
++                                                         0,
++                                                         "JobQueue",
++                                                         []( QQmlEngine*, QJSEngine* ) -> QObject*
++                                                         { return Calamares::JobQueue::instance(); } );
+         qmlRegisterSingletonType< Calamares::Network::Manager >( "io.calamares.core",
+                                                                  1,
+                                                                  0,
+--- a/src/libcalamaresui/utils/Qml.h
++++ b/src/libcalamaresui/utils/Qml.h
+@@ -18,6 +18,7 @@
+ #include <QDir>
+ 
+ class QQuickItem;
++class QQuickWidget;
+ 
+ namespace Calamares
+ {
+@@ -48,6 +49,13 @@ UIDLLEXPORT bool initQmlModulesDir();
+  */
+ UIDLLEXPORT void registerQmlModels();
+ 
++/** @brief Lets the installer sheet show through @p widget
++ *
++ * Does nothing unless Branding::windowIsSheet(). Otherwise the QML gets
++ * a transparent background, drawn over the widgets beneath it.
++ */
++UIDLLEXPORT void showSheetThrough( QQuickWidget* widget );
++
+ /** @brief Calls the QML method @p method on @p qmlObject
+  *
+  * Pass in only the name of the method (e.g. onActivate). This function
+--- a/src/libcalamaresui/viewpages/ExecutionViewStep.cpp
++++ b/src/libcalamaresui/viewpages/ExecutionViewStep.cpp
+@@ -16,6 +16,7 @@
+ #include "Branding.h"
+ #include "CalamaresConfig.h"
+ #include "Job.h"
++#include "GlobalStorage.h"
+ #include "JobQueue.h"
+ #include "Settings.h"
+ #include "ViewManager.h"
+@@ -165,6 +166,9 @@ ExecutionViewStep::onActivate()
+     const auto instanceDescriptors = Calamares::Settings::instance()->moduleInstances();
+ 
+     JobQueue* queue = JobQueue::instance();
++    // Which module's jobs fill which part of the overall progress, so an
++    // install page can show the stage it is at rather than job names.
++    QVariantList moduleWeights;
+     for ( const auto& instanceKey : m_jobInstanceKeys )
+     {
+         const auto& moduleDescriptor = Calamares::ModuleManager::instance()->moduleDescriptor( instanceKey );
+@@ -191,8 +195,14 @@ ExecutionViewStep::onActivate()
+                 }
+             }
+             queue->enqueue( weight, jl );
++            if ( !jl.isEmpty() )
++            {
++                moduleWeights.append( QVariantMap { { QStringLiteral( "module" ), instanceKey.toString() },
++                                                    { QStringLiteral( "weight" ), weight } } );
++            }
+         }
+     }
++    queue->globalStorage()->insert( QStringLiteral( "execModuleWeights" ), moduleWeights );
+ 
+     queue->start();
+ }
+--- a/src/libcalamaresui/viewpages/QmlViewStep.cpp
++++ b/src/libcalamaresui/viewpages/QmlViewStep.cpp
+@@ -24,9 +24,8 @@
+ #include <QQmlContext>
+ #include <QQmlEngine>
+ #include <QQuickItem>
+-#if QT_VERSION < QT_VERSION_CHECK( 6, 0, 0 )
+ #include <QQuickWidget>
+-#else
++#if QT_VERSION >= QT_VERSION_CHECK( 6, 0, 0 )
+ #include <QQuickWindow>
+ #endif
+ 
+@@ -199,12 +198,26 @@ QmlViewStep::loadComplete()
+             // item, and handling resizes.
+             m_qmlWidget->setContent( QUrl( m_qmlFileName ), m_qmlComponent, m_qmlObject );
+ #else
+-            auto* quick = new QQuickWindow;
+-            auto* root = quick->contentItem();
+-            m_qmlObject->setParentItem( root );
+-            m_qmlObject->bindableWidth().setBinding( [ = ]() { return root->width(); } );
+-            m_qmlObject->bindableHeight().setBinding( [ = ]() { return root->height(); } );
+-            m_qmlWidget = QWidget::createWindowContainer( quick, m_widget );
++            if ( Branding::instance()->windowIsSheet() )
++            {
++                // A window container is a native window and cannot be
++                // transparent, so a page on the sheet is a QQuickWidget.
++                auto* quick = new QQuickWidget( m_qmlEngine, m_widget );
++                quick->setResizeMode( QQuickWidget::SizeRootObjectToView );
++                quick->setSizePolicy( QSizePolicy::Expanding, QSizePolicy::Expanding );
++                Calamares::showSheetThrough( quick );
++                quick->setContent( QUrl( m_qmlFileName ), m_qmlComponent, m_qmlObject );
++                m_qmlWidget = quick;
++            }
++            else
++            {
++                auto* quick = new QQuickWindow;
++                auto* root = quick->contentItem();
++                m_qmlObject->setParentItem( root );
++                m_qmlObject->bindableWidth().setBinding( [ = ]() { return root->width(); } );
++                m_qmlObject->bindableHeight().setBinding( [ = ]() { return root->height(); } );
++                m_qmlWidget = QWidget::createWindowContainer( quick, m_widget );
++            }
+ #endif
+             showQml();
+         }
+--- a/src/libcalamaresui/viewpages/Slideshow.cpp
++++ b/src/libcalamaresui/viewpages/Slideshow.cpp
+@@ -46,6 +46,7 @@ SlideshowQML::SlideshowQML( QWidget* parent )
+     , m_qmlObject( nullptr )
+ {
+     m_qmlShow->setObjectName( "qml" );
++    Calamares::showSheetThrough( m_qmlShow );
+ 
+     Calamares::registerQmlModels();
+ 

@@ -1,0 +1,23 @@
+#!/bin/sh
+# Lets the blocked USB device on one port work until it is unplugged. Run as
+# root through pkexec (polkit action org.wildos.usb.allow-device), or directly
+# by a user USBGuard already trusts. Takes a port such as 2-1.4 and nothing
+# else, so the password prompt can only ever be used for this one thing.
+
+export LC_ALL=C
+PATH=/usr/sbin:/usr/bin:/sbin:/bin
+
+port=$1
+printf '%s' "$port" | grep -qE '^[0-9]+-[0-9]+(\.[0-9]+)*$' || exit 2
+
+# Only a device the kernel is actually holding back.
+[ "$(cat "/sys/bus/usb/devices/$port/authorized" 2>/dev/null)" = "0" ] || exit 3
+
+# USBGuard quotes and escapes every string in a rule, so a device name cannot
+# fake the closing via-port "PORT" this looks for.
+id=$(usbguard list-devices --blocked 2>/dev/null \
+    | awk -v want="via-port \"$port\"" 'index($0, want) { sub(/:$/, "", $1); print $1; exit }')
+case $id in ''|*[!0-9]*) exit 3 ;; esac
+
+# Without --permanent the decision lasts until the device is unplugged.
+exec usbguard allow-device "$id"

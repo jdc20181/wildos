@@ -1,0 +1,4 @@
+# App name as Start shows it; it also ends every window title.
+
+msgid "Okular"
+msgstr "Documents"

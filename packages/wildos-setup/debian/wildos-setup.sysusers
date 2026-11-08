@@ -1,0 +1,6 @@
+# The account the first boot setup session runs as. No password, no shell,
+# and a home in /run, so it starts clean on every boot. console because
+# Kicksecure's console lockdown lets nobody else sign in, SDDM autologin
+# included.
+u wildos-setup - "Wild OS setup" /run/wildos-setup /usr/sbin/nologin
+m wildos-setup console

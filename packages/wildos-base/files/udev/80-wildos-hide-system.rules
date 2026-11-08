@@ -1,0 +1,6 @@
+# Wild OS's own boot, system and EFI partitions, and the unlocked encrypted
+# system, are not drives anyone should open, eject or format from Files.
+# Partition names come from the installer's layout (wildos-installer
+# partition.conf).
+ENV{ID_PART_ENTRY_NAME}=="wildos-boot|wildos-root|EFI", ENV{UDISKS_IGNORE}="1"
+ENV{DM_NAME}=="luks-*", ENV{UDISKS_IGNORE}="1"

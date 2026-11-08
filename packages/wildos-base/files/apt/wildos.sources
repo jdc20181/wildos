@@ -1,0 +1,9 @@
+# Wild OS's own packages and the Debian packages it rebuilds with its
+# changes. Built and signed by CI from the wildos repository. Testers
+# switch Suites to beta.
+Types: deb
+URIs: https://deb.wildos.io
+Suites: stable
+Components: main
+Architectures: amd64
+Signed-By: /usr/share/keyrings/wildos-updates-keyring.asc

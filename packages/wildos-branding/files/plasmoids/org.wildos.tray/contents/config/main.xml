@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<kcfg xmlns="http://www.kde.org/standards/kcfg/1.0"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.kde.org/standards/kcfg/1.0
+    http://www.kde.org/standards/kcfg/1.0/kcfg.xsd">
+    <kcfgfile name=""/>
+    <group name="General">
+        <entry name="maxInline" type="Int">
+            <label>How many active app icons sit on the taskbar before the rest go behind the arrow.</label>
+            <default>3</default>
+        </entry>
+        <entry name="hiddenItems" type="StringList">
+            <label>Status icon ids or titles never shown: desktop plumbing that means nothing to people.</label>
+            <default>xwaylandvideobridge,org.kde.xwaylandvideobridge,Wayland to X11 Video bridge,kscreen,org.kde.kscreen,kded6,org.kde.kded6,plasmashell,org.kde.plasmashell,polkit-kde-authentication-agent-1</default>
+        </entry>
+    </group>
+</kcfg>

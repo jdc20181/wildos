@@ -1,0 +1,185 @@
+import QtQuick
+import QtQuick.Layouts
+import org.kde.notificationmanager as NotificationManager
+import WildOS.Settings
+import WildOS.UI as UI
+
+// Notifications, after Windows 11: do not disturb and how alerts behave.
+// These are the notification server's own settings, shared with the clock
+// and quick settings flyouts, so all of them agree.
+PageScroll {
+    id: page
+
+    property real now: Date.now()
+
+    NotificationManager.Settings {
+        id: settings
+        live: true
+    }
+
+    // A timed do not disturb ends on its own.
+    Timer {
+        interval: 60000
+        running: true
+        repeat: true
+        onTriggered: page.now = Date.now()
+    }
+
+    readonly property bool doNotDisturb: {
+        const until = settings.notificationsInhibitedUntil;
+        const timed = until !== undefined && until !== null && !isNaN(until.getTime()) && now < until.getTime();
+        return timed || settings.notificationsInhibitedByApplication;
+    }
+
+    function setDoNotDisturb(on) {
+        if (on) {
+            // As in Plasma, a year from now stands for "until switched off".
+            const until = new Date();
+            until.setFullYear(until.getFullYear() + 1);
+            settings.notificationsInhibitedUntil = until;
+        } else {
+            settings.notificationsInhibitedUntil = undefined;
+            settings.revokeApplicationInhibitions();
+        }
+        save();
+    }
+
+    function save() {
+        settings.save();
+        now = Date.now();
+    }
+
+    UI.Card {
+        Layout.fillWidth: true
+
+        Column {
+            width: parent.width
+
+            UI.SettingRow {
+                iconName: "bell"
+                title: "Do not disturb"
+                description: "Notifications are kept in the list instead of popping up"
+                status: (page.doNotDisturb) ? "On" : "Off"
+
+                UI.Toggle {
+                    anchors.verticalCenter: parent.verticalCenter
+                    checked: page.doNotDisturb
+                    Accessible.name: "Do not disturb"
+                    onToggled: page.setDoNotDisturb(checked)
+                }
+            }
+
+            UI.SettingRow {
+                title: "Turn on do not disturb automatically when sharing or mirroring the screen"
+                description: "So alerts never show during a presentation"
+                status: (settings.inhibitNotificationsWhenScreensMirrored) ? "On" : "Off"
+
+                UI.Toggle {
+                    anchors.verticalCenter: parent.verticalCenter
+                    checked: settings.inhibitNotificationsWhenScreensMirrored
+                    Accessible.name: "Turn on do not disturb automatically when sharing or mirroring the screen"
+                    onToggled: {
+                        settings.inhibitNotificationsWhenScreensMirrored = checked;
+                        settings.inhibitNotificationsWhenScreenSharing = checked;
+                        page.save();
+                    }
+                }
+            }
+
+            UI.SettingRow {
+                title: "Let urgent notifications through"
+                description: "Low battery and other critical alerts still pop up during do not disturb"
+                status: (settings.criticalPopupsInDoNotDisturbMode) ? "On" : "Off"
+
+                UI.Toggle {
+                    anchors.verticalCenter: parent.verticalCenter
+                    checked: settings.criticalPopupsInDoNotDisturbMode
+                    Accessible.name: "Let urgent notifications through"
+                    onToggled: {
+                        settings.criticalPopupsInDoNotDisturbMode = checked;
+                        page.save();
+                    }
+                }
+            }
+        }
+    }
+
+    UI.Card {
+        Layout.fillWidth: true
+
+        Column {
+            width: parent.width
+
+            UI.SettingRow {
+                title: "Play sounds"
+                description: "Apps can play a sound with their notifications"
+                status: (!settings.notificationSoundsInhibited) ? "On" : "Off"
+
+                UI.Toggle {
+                    anchors.verticalCenter: parent.verticalCenter
+                    checked: !settings.notificationSoundsInhibited
+                    Accessible.name: "Play sounds"
+                    onToggled: {
+                        settings.notificationSoundsInhibited = !checked;
+                        page.save();
+                    }
+                }
+            }
+
+            UI.SettingRow {
+                title: "Show badges on taskbar apps"
+                description: "A count of unread notifications on the app's icon"
+                status: (settings.badgesInTaskManager) ? "On" : "Off"
+
+                UI.Toggle {
+                    anchors.verticalCenter: parent.verticalCenter
+                    checked: settings.badgesInTaskManager
+                    Accessible.name: "Show badges on taskbar apps"
+                    onToggled: {
+                        settings.badgesInTaskManager = checked;
+                        page.save();
+                    }
+                }
+            }
+
+            UI.SettingRow {
+                title: "Keep notifications on screen for"
+
+                UI.ComboBox {
+                    anchors.verticalCenter: parent.verticalCenter
+                    Accessible.name: "Keep notifications on screen for"
+                    model: [
+                        { value: 5000, text: "5 seconds" },
+                        { value: 7000, text: "7 seconds" },
+                        { value: 15000, text: "15 seconds" },
+                        { value: 30000, text: "30 seconds" },
+                        { value: 60000, text: "1 minute" }
+                    ].concat([5000, 7000, 15000, 30000, 60000].includes(settings.popupTimeout) ? [] : [{ value: settings.popupTimeout, text: Math.round(settings.popupTimeout / 1000) + " seconds" }])
+                    readonly property var choice: settings.popupTimeout
+                    currentIndex: model ? model.findIndex(o => o.value === choice) : -1
+                    onActivated: index => {
+                        const value = model[index].value;
+                        settings.popupTimeout = value;
+                        page.save();
+                    }
+                }
+            }
+        }
+    }
+
+    UI.Card {
+        Layout.fillWidth: true
+
+        Column {
+            width: parent.width
+
+            UI.SettingRow {
+                visible: Pages.exists("appnotifications")
+                title: Pages.page("appnotifications").title
+                description: Pages.page("appnotifications").description
+                chevron: true
+                onClicked: Navigator.open("appnotifications")
+            }
+        }
+    }
+}

@@ -1,0 +1,119 @@
+#!/bin/sh
+# USB devices that USBGuard has blocked, for the security chip.
+#
+#   usb-devices list          One blocked device per line: PORT, KIND and NAME
+#                             separated by tabs. KIND is keyboard, mouse,
+#                             input, storage, network, wireless, camera, phone,
+#                             audio, printer, hub or other.
+#   usb-devices watch         Waits for a USB device to arrive, leave or change
+#                             (ten minutes at most), then prints the list.
+#   usb-devices allow PORT    Lets the blocked device on PORT work until it is
+#                             unplugged. Prints allowed, cancelled, denied or
+#                             failed.
+#
+# list and watch need no privileges. allow goes straight to USBGuard when this
+# user may talk to it (Debian lets the plugdev group), otherwise it asks for an
+# administrator's password through polkit.
+
+export LC_ALL=C
+helper=/usr/libexec/wildos/usb-allow
+
+valid_port() {
+    printf '%s' "$1" | grep -qE '^[0-9]+-[0-9]+(\.[0-9]+)*$'
+}
+
+# Names come from the device itself, so a hostile one could carry anything.
+# Keep what a real product name needs and nothing a shell or markup could use.
+clean() {
+    tr -cd 'A-Za-z0-9 ._,()+/-' | tr -s ' ' | sed 's/^ //; s/ $//' | cut -c1-40
+}
+
+# What the device claims to be, from the class codes in its descriptors. The
+# kernel reads these before USBGuard decides, so they exist while it is
+# blocked. A keyboard hidden inside a "memory stick" is the classic attack,
+# so keyboard outranks everything.
+kind_of() {
+    od -An -v -tu1 "$1/descriptors" 2>/dev/null | awk '
+        { for (i = 1; i <= NF; i++) b[n++] = $i }
+        function seen(c, p) {
+            if (c == 3) { if (p == 1) k = 1; else if (p == 2) m = 1; else h = 1 }
+            else if (c == 2 || c == 10) net = 1
+            else if (c == 8) st = 1
+            else if (c == 14) cam = 1
+            else if (c == 6) ph = 1
+            else if (c == 1) au = 1
+            else if (c == 7) pr = 1
+            else if (c == 224) wl = 1
+            else if (c == 9) hub = 1
+        }
+        END {
+            i = 0
+            while (i + 1 < n && b[i] >= 2) {
+                if (b[i + 1] == 1) seen(b[i + 4], -1)
+                if (b[i + 1] == 4) seen(b[i + 5], b[i + 7])
+                i += b[i]
+            }
+            print k ? "keyboard" : net ? "network" : h ? "input" : m ? "mouse" \
+                : st ? "storage" : cam ? "camera" : ph ? "phone" : au ? "audio" \
+                : pr ? "printer" : wl ? "wireless" : hub ? "hub" : "other"
+        }'
+}
+
+list() {
+    for dev in /sys/bus/usb/devices/*; do
+        port=${dev##*/}
+        case $port in *:*|usb*) continue ;; esac
+        [ "$(cat "$dev/authorized" 2>/dev/null)" = "0" ] || continue
+        maker=$(clean 2>/dev/null < "$dev/manufacturer")
+        product=$(clean 2>/dev/null < "$dev/product")
+        # "SanDisk SanDisk Ultra" reads badly, so the maker only goes in front
+        # when the product name does not already start with it.
+        case $product in
+            "$maker"*) name=$product ;;
+            *) name=$(printf '%s %s' "$maker" "$product" | clean) ;;
+        esac
+        printf '%s\t%s\t%s\n' "$port" "$(kind_of "$dev")" "$name"
+    done
+}
+
+case $1 in
+    list)
+        list
+        ;;
+    watch)
+        fifo=$(mktemp -u "${XDG_RUNTIME_DIR:-/tmp}/wildos-usb.XXXXXX")
+        mkfifo -m 600 "$fifo" || exit 1
+        udevadm monitor --udev --subsystem-match=usb/usb_device > "$fifo" 2>/dev/null &
+        monitor=$!
+        timeout 600 grep -q -m1 '^UDEV' < "$fifo"
+        kill "$monitor" 2>/dev/null
+        rm -f "$fifo"
+        # USBGuard rules on a new device a moment after udev announces it.
+        sleep 1
+        list
+        ;;
+    allow)
+        port=$2
+        if ! valid_port "$port"; then
+            echo failed
+            exit 1
+        fi
+        if usbguard list-devices >/dev/null 2>&1; then
+            "$helper" "$port"
+        elif command -v pkexec >/dev/null 2>&1; then
+            pkexec "$helper" "$port"
+        else
+            false
+        fi
+        case $? in
+            0) echo allowed ;;
+            126) echo cancelled ;;
+            127) echo denied ;;
+            *) echo failed ;;
+        esac
+        ;;
+    *)
+        echo "usage: usb-devices list | watch | allow PORT" >&2
+        exit 2
+        ;;
+esac

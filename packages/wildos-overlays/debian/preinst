@@ -1,0 +1,14 @@
+#!/bin/sh
+set -e
+
+# Plasma's shell package owns the on-screen display entry point; keep its
+# copy under another name so the Wild OS shim can take its place and Plasma
+# updates do not overwrite it.
+SHIM=/usr/share/plasma/shells/org.kde.plasma.desktop/contents/osd/Osd.qml
+
+if [ "$1" = "install" ] || [ "$1" = "upgrade" ]; then
+    dpkg-divert --package wildos-overlays --add --rename \
+        --divert "$SHIM.plasma" "$SHIM" >/dev/null
+fi
+
+#DEBHELPER#

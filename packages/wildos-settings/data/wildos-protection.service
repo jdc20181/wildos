@@ -1,0 +1,17 @@
+[Unit]
+Description=Wild OS protection level
+Documentation=file:///usr/libexec/wildos/settings-protection
+# The firewall goes up before any network does.
+DefaultDependencies=no
+Before=network-pre.target
+Wants=network-pre.target
+After=local-fs.target
+ConditionPathExists=/etc/wildos/protection-level
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/libexec/wildos/settings-protection boot
+
+[Install]
+WantedBy=multi-user.target

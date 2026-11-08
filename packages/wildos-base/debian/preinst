@@ -1,0 +1,37 @@
+#!/bin/sh
+set -e
+
+# The start-up menu is Wild OS's own (/etc/grub.d/10_wildos and
+# 31_wildos_firmware). Each script below would add entries nobody should see:
+#
+#   dist-base-files  10_00_linux_dist, 10_05_linux_main ("PERSISTENT Mode |
+#                    USER Session | daily activities"), 10_50_linux_dist_advanced,
+#                    10_55_linux_main_advanced ("Advanced options for ...")
+#   grub-live        10_20_linux_live, 10_60_linux_live_advanced ("LIVE Mode |
+#                    USER Session | disposable use"), 45_debugging (notes in
+#                    grub.cfg while it is made in a chroot, as the installer does)
+#   usability-misc   44_kb_layout ("SWITCH to layout ...", once
+#                    set-grub-keymap has been run)
+#   grub-common      30_uefi-firmware (replaced by 31_wildos_firmware)
+#
+# Each one is diverted into a directory grub-mkconfig never reads. When its
+# package updates, dpkg writes the new version there instead, so the menu
+# stays as it is, and the postinst takes the copy's executable bit away. The
+# packages themselves stay installed: grub-live also hardens the live system,
+# and the rest are part of Kicksecure's base.
+#
+# The diversions are made before anything is unpacked, so a package installed
+# later (as in the image build) never puts its script in /etc/grub.d at all.
+hidden=/usr/share/wildos-base/grub.d-hidden
+
+if [ "$1" = "install" ] || [ "$1" = "upgrade" ]; then
+    mkdir -p "$hidden"
+    for script in 10_00_linux_dist 10_05_linux_main 10_20_linux_live \
+        10_50_linux_dist_advanced 10_55_linux_main_advanced \
+        10_60_linux_live_advanced 30_uefi-firmware 44_kb_layout 45_debugging; do
+        dpkg-divert --package wildos-base --add --rename \
+            --divert "$hidden/$script" "/etc/grub.d/$script" >/dev/null
+    done
+fi
+
+#DEBHELPER#

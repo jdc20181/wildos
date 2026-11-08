@@ -1,0 +1,30 @@
+# Lock screen (kscreenlocker) authentication for Wild OS. Takes precedence over
+# /usr/lib/pam.d/kde.
+#
+# The stock file includes common-auth, where Kicksecure adds pam_faillock to
+# count failed logins. Recording a failure needs root, but the lock screen
+# runs as the user, so every attempt printed "Permission denied" from the
+# tally file instead of unlocking cleanly. Here the password is checked by
+# pam_unix alone. The lock screen is local and kscreenlocker already waits
+# after each failed attempt; sign-in through SDDM, the console and sudo keep
+# Kicksecure's full stack, including the lockout.
+auth    requisite       pam_nologin.so
+auth    required        pam_succeed_if.so user != root quiet_success
+# nullok: the live session user has no password; installed accounts always
+# do, because the installer refuses an empty one.
+auth    required        pam_unix.so nullok try_first_pass
+auth    optional        pam_kwallet5.so
+
+@include common-account
+
+session [success=ok ignore=ignore module_unknown=ignore default=bad] pam_selinux.so close
+session required        pam_loginuid.so
+session [success=ok ignore=ignore module_unknown=ignore default=bad] pam_selinux.so open
+session optional        pam_keyinit.so force revoke
+session required        pam_limits.so
+session required        pam_env.so readenv=1
+session required        pam_env.so readenv=1 envfile=/etc/default/locale
+@include common-session
+session optional        pam_kwallet5.so auto_start
+
+@include common-password

@@ -1,0 +1,36 @@
+#!/bin/sh
+set -e
+
+hidden=/usr/share/wildos-base/grub.d-hidden
+
+if [ "$1" = "remove" ] || [ "$1" = "purge" ] || [ "$1" = "abort-install" ]; then
+    # Every menu script the preinst diverted goes back to /etc/grub.d with the
+    # executable bit the postinst took away, so the menu works without Wild OS.
+    # A script dpkg never configured (see the postinst) is only there as
+    # NAME.dpkg-new, and goes back as the script itself.
+    dpkg-divert --list '/etc/grub.d/*' \
+        | sed -n "s|^diversion of \(/etc/grub.d/[^ ]*\) to $hidden/[^ ]* by wildos-base\$|\1|p" \
+        | while read -r script; do
+            dpkg-divert --package wildos-base --remove --rename \
+                --divert "$hidden/${script##*/}" "$script" >/dev/null
+            if [ ! -e "$script" ] && [ -f "$hidden/${script##*/}.dpkg-new" ]; then
+                mv "$hidden/${script##*/}.dpkg-new" "$script"
+            fi
+            rm -f "$hidden/${script##*/}.dpkg-new"
+            if [ -f "$script" ]; then chmod 0755 "$script"; fi
+        done
+fi
+
+if [ "$1" = "remove" ] || [ "$1" = "purge" ]; then
+    if [ -L /usr/lib/os-release ]; then
+        rm -f /usr/lib/os-release
+    fi
+    dpkg-divert --package wildos-base --remove --rename \
+        --divert /usr/lib/os-release.debian /usr/lib/os-release
+
+    if [ -e /boot/grub/grub.cfg ] && command -v update-grub >/dev/null; then
+        update-grub || echo "wildos-base: update-grub failed; run it again to restore the start-up menu" >&2
+    fi
+fi
+
+#DEBHELPER#

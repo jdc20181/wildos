@@ -1,0 +1,12 @@
+# Links rather than files in /etc/grub.d. A configuration file there would
+# stay behind when wildos-base is removed and keep adding Wild OS entries
+# beside the restored Kicksecure ones, and a fix to the menu has to reach
+# every system without a question about a changed configuration file.
+usr/lib/wildos/grub.d/10_wildos etc/grub.d/10_wildos
+usr/lib/wildos/grub.d/31_wildos_firmware etc/grub.d/31_wildos_firmware
+
+# rpcbind arrives with nfs-common (through dracut's network support) and
+# listens on port 111 to every network the computer joins. A desktop has no
+# use for it, and NFSv4 shares still mount without it, so it is masked.
+dev/null etc/systemd/system/rpcbind.service
+dev/null etc/systemd/system/rpcbind.socket

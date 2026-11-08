@@ -1,0 +1,41 @@
+Description: Draw partition labels in the view palette colour
+ Calamares draws the legend under the disk bars in hard-coded black, which
+ is unreadable on the dark Wild OS installer. Use the palette instead, which
+ the branding stylesheet sets.
+Author: Wild OS Developers <dev@wildos.io>
+Forwarded: no
+
+--- a/src/modules/partition/gui/PartitionLabelsView.cpp	2026-11-07 10:11:38.684750500 +0000
++++ b/src/modules/partition/gui/PartitionLabelsView.cpp	2026-11-07 10:11:38.730578300 +0000
+@@ -360,7 +360,12 @@
+                                 const QPoint& pos,
+                                 bool selected )
+ {
+-    painter->setPen( Qt::black );
++    // Follow the view's palette, which the branding stylesheet sets, so the
++    // labels stay readable on a dark installer.
++    const QColor textColor = palette().color( QPalette::WindowText );
++    QColor detailColor = textColor;
++    detailColor.setAlphaF( 0.72 );
++    painter->setPen( textColor );
+     int vertOffset = 0;
+     int width = 0;
+     for ( const QString& textLine : text )
+@@ -369,7 +374,7 @@
+         painter->drawText(
+             pos.x() + LABEL_PARTITION_SQUARE_MARGIN, pos.y() + vertOffset + textSize.height() / 2, textLine );
+         vertOffset += textSize.height();
+-        painter->setPen( Qt::gray );
++        painter->setPen( detailColor );
+         width = qMax( width, textSize.width() );
+     }
+ 
+@@ -382,7 +387,7 @@
+         drawSelectionSquare( painter, partitionSquareRect.adjusted( 2, 2, -2, -2 ), color );
+     }
+ 
+-    painter->setPen( Qt::black );
++    painter->setPen( textColor );
+ }
+ 
+ QModelIndex

@@ -1,0 +1,9 @@
+# 42 px title bars as in the design, and no outline around windows; the glass
+# edge comes from the shadow.
+[Common]
+OutlineIntensity=OutlineOff
+
+[Windeco]
+ButtonSize=ButtonLarge
+DrawBorderOnMaximizedWindows=false
+DrawBackgroundGradient=false

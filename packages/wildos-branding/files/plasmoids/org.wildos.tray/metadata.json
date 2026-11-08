@@ -1,0 +1,21 @@
+{
+    "KPackageStructure": "Plasma/Applet",
+    "KPlugin": {
+        "Authors": [
+            {
+                "Email": "dev@wildos.io",
+                "Name": "Wild OS"
+            }
+        ],
+        "Category": "System Information",
+        "Description": "Icons from running apps, with the rest tucked behind an arrow",
+        "EnabledByDefault": true,
+        "Icon": "preferences-desktop-notification",
+        "Id": "org.wildos.tray",
+        "License": "GPL-3.0-or-later",
+        "Name": "App icons",
+        "Version": "1.0.0",
+        "Website": "https://wildos.io"
+    },
+    "X-Plasma-API-Minimum-Version": "6.0"
+}

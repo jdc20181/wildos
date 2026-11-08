@@ -1,0 +1,56 @@
+#!/bin/sh
+# Runs once per boot before the sign-in screen (wildos-setup-boot.service).
+# A computer nobody has set up yet starts the setup session instead of a
+# sign-in screen with no one on it; any other computer is left exactly as it
+# was, minus whatever setup left behind.
+
+set -u
+export LC_ALL=C
+PATH=/usr/sbin:/usr/bin:/sbin:/bin
+
+MARKER=/var/lib/wildos/first-boot-setup
+SETUP_CONF=/etc/sddm.conf.d/99-wildos-setup.conf
+FIRST_SIGN_IN=/etc/sddm.conf.d/98-wildos-first-sign-in.conf
+
+# Setup signs in to the new account once. If the power went before that
+# happened, it must not turn into automatic sign-in for good.
+rm -f "$FIRST_SIGN_IN"
+
+live() {
+    grep -qE '(^| )(boot=live|rd\.live\.image)( |$)' /proc/cmdline || [ -d /run/live/medium ]
+}
+
+has_person() {
+    getent passwd | awk -F: '$3 >= 1000 && $3 < 60000 { found = 1 } END { exit !found }'
+}
+
+if live; then
+    rm -f "$SETUP_CONF"
+    exit 0
+fi
+
+if [ ! -e "$MARKER" ] && has_person; then
+    rm -f "$SETUP_CONF" /var/lib/wildos/first-boot-account
+    exit 0
+fi
+
+# Either the installer asked for setup, or there is no account to sign in
+# to at all. The marker makes the second case run setup to the end too.
+if [ ! -e "$MARKER" ]; then
+    echo "wildos-setup: no account for a person, starting setup"
+    install -d -m 0755 /var/lib/wildos
+    : > "$MARKER"
+fi
+
+install -d -m 0755 /etc/sddm.conf.d
+cat > "$SETUP_CONF.new" <<'EOF'
+# Written at every start while /var/lib/wildos/first-boot-setup exists, by
+# wildos-setup-boot. Starts the first boot setup session; Relogin brings it
+# back if it stops before setup is done.
+[Autologin]
+User=wildos-setup
+Session=wildos-setup.desktop
+Relogin=true
+EOF
+chmod 0644 "$SETUP_CONF.new"
+mv -f "$SETUP_CONF.new" "$SETUP_CONF"

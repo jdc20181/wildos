@@ -1,0 +1,10 @@
+#!/bin/sh
+set -e
+
+# Terminal answers for x-terminal-emulator, the name Debian programs use to
+# open "a terminal", ahead of Konsole (priority 40).
+if [ "$1" = "configure" ]; then
+    update-alternatives --install /usr/bin/x-terminal-emulator x-terminal-emulator /usr/bin/wildos-terminal 60
+fi
+
+#DEBHELPER#

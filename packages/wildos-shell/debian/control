@@ -1,0 +1,43 @@
+Source: wildos-shell
+Section: x11
+Priority: optional
+Maintainer: Wild OS Developers <dev@wildos.io>
+Build-Depends: debhelper-compat (= 13), cmake, qt6-base-dev, qt6-declarative-dev,
+ extra-cmake-modules, kwin-dev (>= 4:6.3), kwin-dev (<< 4:6.4), libkf6config-dev
+Standards-Version: 4.7.0
+Rules-Requires-Root: no
+
+Package: wildos-shell
+Architecture: any
+Depends:
+ ${shlibs:Depends},
+ ${misc:Depends},
+ plasma-workspace (>= 4:6.3),
+ plasma-workspace (<< 4:6.4),
+ kwin-data (>= 4:6.3),
+ kwin-data (<< 4:6.4),
+ libkwin6 (= ${kwin:Version}),
+ qml6-module-qt5compat-graphicaleffects,
+ qml6-module-qt-labs-folderlistmodel,
+ qml6-module-qtquick-templates,
+ wildos-ui,
+Description: Wild OS changes to Plasma and KWin
+ Patched copies of a few Plasma and KWin files, where the Wild OS design
+ cannot be reached by configuration:
+ .
+  * the panel view, so one panel draws the taskbar as the design's two
+    separate glass pills, around Start and the apps and around the status
+    area, with pop-ups 14 px above them as drawn;
+  * the Aurorae title bar, so window titles read "Documents - Files" with a
+    hyphen as on Windows;
+  * the right-click menu of the taskbar's empty space (Task Manager,
+    taskbar settings, show the desktop) in place of Plasma's widget menu;
+  * a KWin plugin that draws the window menu (title bar right click and
+    Alt+Space) with the Wild OS menu in place of KWin's own;
+  * a KWin effect that rounds the bottom corners of decorated windows to
+    the title bar's 14 px radius, with the edge and shadow carried round,
+    and squares the corners of maximised, full screen and snapped windows;
+  * a "Wild OS" sign-in session in place of Plasma's own entries.
+ .
+ The patched files are taken from the Plasma and KWin versions named in the
+ dependencies; an upgrade past them needs the patches rebased first.

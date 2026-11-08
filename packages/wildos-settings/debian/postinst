@@ -1,0 +1,17 @@
+#!/bin/sh
+set -e
+
+# Older versions moved Plasma's desktop main.qml aside and put a patched copy
+# in its place, so the desktop's "Personalise" opened Settings. The Wild OS
+# desktop (wildos-desktop-view) now draws its own menu, so on upgrade the
+# patched copy goes and Plasma's own file comes back.
+MENU=/usr/share/plasma/plasmoids/org.kde.desktopcontainment/contents/ui/main.qml
+
+if [ "$1" = "configure" ]; then
+    if dpkg-divert --listpackage "$MENU" | grep -qx wildos-settings; then
+        rm -f "$MENU"
+        dpkg-divert --package wildos-settings --remove --rename --divert "$MENU.plasma" "$MENU" >/dev/null
+    fi
+fi
+
+#DEBHELPER#

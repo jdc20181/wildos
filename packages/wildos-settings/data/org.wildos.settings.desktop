@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=Settings
+GenericName=Settings
+Comment=Change how Wild OS looks and works
+Exec=wildos-settings
+Icon=preferences-system
+Categories=Settings;System;
+Keywords=settings;control panel;preferences;options;personalise;personalize;wallpaper;display;network;wi-fi;bluetooth;updates;privacy;security;
+StartupNotify=true
+SingleMainWindow=true
+X-KDE-Shortcuts=Meta+I

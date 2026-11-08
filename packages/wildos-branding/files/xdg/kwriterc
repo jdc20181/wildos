@@ -1,0 +1,16 @@
+# Text editor opens on an empty page, as Notepad does, rather than KDE's
+# welcome page with its homepage and "Get involved" links.
+[General]
+Show welcome view for new window=false
+# Its menus live in the hamburger menu on the toolbar, for the slim header
+# every Wild OS app has (KWrite keeps this switch itself rather than in
+# KXmlGui's, see build/patches/kxmlgui).
+Show Menu Bar=false
+
+# The editing area follows light and dark mode with the Wild OS colours.
+# Automatic selection picks the theme whose background is the window's base
+# colour, and Wild OS Light and Wild OS (wildos-light.theme, wildos.theme in
+# /usr/share/org.kde.syntax-highlighting/themes) are drawn on exactly the
+# base colours of the two schemes. It also switches with open windows.
+[KTextEditor Renderer]
+Auto Color Theme Selection=true

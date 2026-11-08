@@ -1,0 +1,18 @@
+<!--
+  The isolated NAT network for Windows mode (brief 5.3). libvirt adds NAT
+  only; winmoded adds the nftables table (firewall.py) that keeps the guest away
+  from the host and the LAN. One fixed address, so the RDP client always
+  knows where Windows is.
+-->
+<network>
+  <name>@NAME@</name>
+  <forward mode='nat'/>
+  <bridge name='@BRIDGE@' stp='on' delay='0'/>
+  <dns enable='yes'/>
+  <ip address='@GW@' netmask='255.255.255.0'>
+    <dhcp>
+      <range start='@GUEST_IP@' end='@GUEST_IP@'/>
+      <host mac='@GUEST_MAC@' ip='@GUEST_IP@'/>
+    </dhcp>
+  </ip>
+</network>

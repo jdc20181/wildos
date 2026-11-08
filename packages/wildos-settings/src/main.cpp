@@ -1,0 +1,146 @@
+#include "kcmhost.h"
+
+#include <KColorScheme>
+#include <KConfigGroup>
+#include <KLocalizedString>
+#include <KSharedConfig>
+
+#include <QApplication>
+#include <QCommandLineParser>
+#include <QDBusConnection>
+#include <QDBusConnectionInterface>
+#include <QDBusMessage>
+#include <QIcon>
+#include <QQmlApplicationEngine>
+#include <QQuickStyle>
+#include <QQuickWindow>
+#include <QStandardPaths>
+
+namespace
+{
+const QString serviceName = QStringLiteral("org.wildos.Settings");
+const QString objectPath = QStringLiteral("/Settings");
+const QString interfaceName = QStringLiteral("org.wildos.Settings");
+}
+
+// A second "wildos-settings --page x" brings the open window forward on the
+// requested page instead of opening another Settings, as Windows does.
+class Remote : public QObject
+{
+    Q_OBJECT
+    Q_CLASSINFO("D-Bus Interface", "org.wildos.Settings")
+
+public:
+    explicit Remote(QQmlApplicationEngine *engine)
+        : QObject(engine)
+        , m_engine(engine)
+    {
+    }
+
+public Q_SLOTS:
+    Q_SCRIPTABLE void showPage(const QString &page)
+    {
+        const auto roots = m_engine->rootObjects();
+        if (roots.isEmpty()) {
+            return;
+        }
+        QObject *root = roots.constFirst();
+        if (!page.isEmpty()) {
+            QMetaObject::invokeMethod(root, "showPage", Q_ARG(QVariant, page));
+        }
+        if (auto window = qobject_cast<QQuickWindow *>(root)) {
+            window->show();
+            window->raise();
+            window->requestActivate();
+        }
+    }
+
+private:
+    QQmlApplicationEngine *m_engine;
+};
+
+int main(int argc, char *argv[])
+{
+    // Widgets are needed for the handful of KDE modules that are still
+    // QWidget based and open in their own window.
+    QApplication app(argc, argv);
+    app.setApplicationName(QStringLiteral("wildos-settings"));
+    app.setOrganizationDomain(QStringLiteral("wildos.io"));
+    app.setApplicationDisplayName(QStringLiteral("Settings"));
+    app.setApplicationVersion(QStringLiteral(WILDOS_SETTINGS_VERSION));
+    app.setDesktopFileName(QStringLiteral("org.wildos.settings"));
+    app.setWindowIcon(QIcon::fromTheme(QStringLiteral("org.wildos.settings"), QIcon::fromTheme(QStringLiteral("preferences-system"))));
+
+    // KDE modules translate strings while their QML plugins load, which
+    // happens on the QML loader thread. The first translation creates KI18n's
+    // language watcher as a child of the application, so it has to happen
+    // here on the main thread or Qt refuses to parent it there.
+    KLocalizedString::setApplicationDomain("wildos-settings");
+    (void)ki18n("Settings").toString();
+
+    QCommandLineParser parser;
+    parser.setApplicationDescription(QStringLiteral("Wild OS Settings"));
+    parser.addHelpOption();
+    parser.addVersionOption();
+    QCommandLineOption pageOption(QStringLiteral("page"), QStringLiteral("Open the page with this id, for example display or update."), QStringLiteral("id"));
+    parser.addOption(pageOption);
+    parser.process(app);
+    const QString page = parser.value(pageOption);
+
+    QDBusConnection bus = QDBusConnection::sessionBus();
+    if (bus.isConnected() && bus.interface()->isServiceRegistered(serviceName)) {
+        auto message = QDBusMessage::createMethodCall(serviceName, objectPath, interfaceName, QStringLiteral("showPage"));
+        message << page;
+        bus.call(message, QDBus::Block, 5000);
+        return 0;
+    }
+
+    // The KDE modules shown inside Settings draw with the colour scheme.
+    // Settings always uses a Wild OS one (light when the account picked
+    // WildOSLight, dark otherwise), whatever else the account has, so a
+    // module never shows a page of another look inside the window. This is
+    // what KColorSchemeManager does for an app that picks its own scheme.
+    const QString chosen = KSharedConfig::openConfig(QStringLiteral("kdeglobals"))->group(QStringLiteral("General")).readEntry("ColorScheme");
+    QString scheme;
+    if (chosen == QLatin1String("WildOSLight")) {
+        scheme = QStandardPaths::locate(QStandardPaths::GenericDataLocation, QStringLiteral("color-schemes/WildOSLight.colors"));
+    }
+    if (scheme.isEmpty()) {
+        scheme = QStandardPaths::locate(QStandardPaths::GenericDataLocation, QStringLiteral("color-schemes/WildOS.colors"));
+    }
+    if (!scheme.isEmpty()) {
+        app.setProperty("KDE_COLOR_SCHEME_PATH", scheme);
+        app.setPalette(KColorScheme::createApplicationPalette(KSharedConfig::openConfig(scheme, KConfig::SimpleConfig)));
+    }
+
+    // KDE's modules are written against the desktop style, which in turn
+    // follows the Wild OS Kvantum theme.
+    if (qEnvironmentVariableIsEmpty("QT_QUICK_CONTROLS_STYLE")) {
+        QQuickStyle::setStyle(QStringLiteral("org.kde.desktop"));
+    }
+
+    // The window draws its own title bar and rounded glass sheet, so it
+    // needs an alpha channel outside the corners.
+    QQuickWindow::setDefaultAlphaBuffer(true);
+
+    auto engine = std::make_shared<QQmlApplicationEngine>();
+    KcmHost::setEngine(engine);
+    engine->setInitialProperties({{QStringLiteral("startPage"), page.isEmpty() ? QStringLiteral("home") : page}});
+    QObject::connect(engine.get(), &QQmlApplicationEngine::objectCreationFailed, &app, [] {
+        QCoreApplication::exit(1);
+    }, Qt::QueuedConnection);
+    engine->loadFromModule("WildOS.Settings", "Main");
+
+    if (bus.isConnected()) {
+        auto remote = new Remote(engine.get());
+        bus.registerObject(objectPath, remote, QDBusConnection::ExportScriptableSlots);
+        bus.registerService(serviceName);
+    }
+
+    const int code = app.exec();
+    // Modules hold items from the engine; drop them before the engine goes.
+    engine.reset();
+    return code;
+}
+
+#include "main.moc"

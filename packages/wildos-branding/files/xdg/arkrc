@@ -1,0 +1,5 @@
+# Archives opens straight to its window rather than KDE's welcome page. Its
+# menus are in the hamburger menu on its toolbar, like every app's (see
+# build/patches/kxmlgui).
+[General]
+ShowWelcomeScreenOnStartup=false

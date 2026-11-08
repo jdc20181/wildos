@@ -1,0 +1,13 @@
+[General]
+ShowStatusBar=FullWidth
+ShowSelectionToggle=false
+RememberOpenedTabs=false
+ShowFullPathInTitlebar=false
+
+# Icons only on the navigation row; New, Sort, View and Details keep their
+# labels on the command bar, like File Explorer (see the Wild OS dolphinui.rc).
+[MainWindow][Toolbar mainToolBar]
+ToolButtonStyle=TextBesideIcon
+
+[MainWindow][Toolbar commandToolBar]
+ToolButtonStyle=TextBesideIcon

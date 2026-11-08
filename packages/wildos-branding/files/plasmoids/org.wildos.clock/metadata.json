@@ -1,0 +1,21 @@
+{
+    "KPackageStructure": "Plasma/Applet",
+    "KPlugin": {
+        "Authors": [
+            {
+                "Email": "dev@wildos.io",
+                "Name": "Wild OS"
+            }
+        ],
+        "Category": "Date and Time",
+        "Description": "The time and date, with your notifications and a calendar",
+        "EnabledByDefault": true,
+        "Icon": "preferences-system-time",
+        "Id": "org.wildos.clock",
+        "License": "GPL-3.0-or-later",
+        "Name": "Clock and notifications",
+        "Version": "1.0.0",
+        "Website": "https://wildos.io"
+    },
+    "X-Plasma-API-Minimum-Version": "6.0"
+}

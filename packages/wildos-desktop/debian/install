@@ -1,0 +1,13 @@
+files/10-wildos.conf etc/sddm.conf.d/
+files/pam-kde etc/pam.d/
+files/wildos-app-names usr/libexec/wildos/
+files/wildos-strings usr/libexec/wildos/
+files/strings/en_GB/* usr/share/wildos/strings/en_GB/
+files/places/user-places.xbel usr/share/wildos/places/
+files/kxmlgui5/dolphin/dolphinui.rc usr/share/wildos/kxmlgui5/dolphin/
+files/environment.d/99-wildos.conf usr/lib/environment.d/
+files/konsole/WildOS.profile usr/share/wildos/konsole/
+files/polkit/50-wildos-store.rules usr/share/polkit-1/rules.d/
+files/update-checks usr/libexec/wildos/
+files/polkit/org.wildos.update-checks.policy usr/share/polkit-1/actions/
+files/syntax-highlighting/* usr/share/org.kde.syntax-highlighting/themes/

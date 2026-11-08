@@ -1,0 +1,34 @@
+#!/bin/sh
+# The live session, started by SDDM for the live user (90-wildos-live.conf).
+#
+# The USB start-up menu passes wildos.mode=install or wildos.mode=try. In
+# install mode the installer comes up straight away, alone in KWin, with no
+# desktop behind it (it draws the wallpaper itself). When it closes, the
+# normal live desktop starts, with the "Install Wild OS" launcher on it. Try
+# mode, or no mode at all, is the live desktop as before.
+#
+# The installer opens this way once per start, so signing out and back in
+# lands on the desktop.
+
+desktop() {
+    exec /usr/lib/x86_64-linux-gnu/libexec/plasma-dbus-run-session-if-needed /usr/bin/startplasma-wayland
+}
+
+mode=$(tr ' ' '\n' < /proc/cmdline | sed -n 's/^wildos\.mode=//p' | tail -n 1)
+once="${XDG_RUNTIME_DIR:-/tmp}/wildos-installer-opened"
+
+if [ "$mode" = install ] && [ ! -e "$once" ]; then
+    : > "$once"
+    # Belt and braces with the sddm.service drop-in: never take the screen
+    # while the boot splash is still up (at most 15 seconds).
+    i=0
+    while plymouth --ping 2>/dev/null && [ $i -lt 75 ]; do
+        sleep 0.2
+        i=$((i + 1))
+    done
+    export XDG_SESSION_TYPE=wayland XDG_CURRENT_DESKTOP=KDE QT_QPA_PLATFORMTHEME=kde
+    /usr/lib/x86_64-linux-gnu/libexec/plasma-dbus-run-session-if-needed \
+        kwin_wayland --drm --xwayland --locale1 --no-lockscreen --no-global-shortcuts --no-kactivities \
+        --exit-with-session /usr/bin/install-wildos
+fi
+desktop

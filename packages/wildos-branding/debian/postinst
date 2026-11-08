@@ -1,0 +1,36 @@
+#!/bin/sh
+set -e
+
+if [ "$1" = "configure" ]; then
+    # Select the Wild OS boot screen with Plymouth's own tool: the initramfs
+    # helper only honours a theme set this way, and silently fell back to
+    # Debian's when the line was edited in by hand. The initramfs itself is
+    # rebuilt by the image build and by the installer, which pick up the
+    # plymouth dracut module from /etc/dracut.conf.d/40-wildos-plymouth.conf.
+    plymouth-set-default-theme wildos
+
+    # DeviceScale=1: the theme picks artwork drawn for the real screen size.
+    # If Plymouth scaled HiDPI screens itself as well, the theme would see half
+    # the resolution and draw soft, upscaled art.
+    conf=/etc/plymouth/plymouthd.conf
+    if grep -q '^DeviceScale=' "$conf"; then
+        sed -i 's/^DeviceScale=.*/DeviceScale=1/' "$conf"
+    else
+        sed -i '/^Theme=wildos/a DeviceScale=1' "$conf"
+    fi
+
+    # The boot screen lives in the initramfs, so an upgrade that changes it
+    # only shows once the initramfs is rebuilt. First installs are left to
+    # the image build and the installer, which rebuild it themselves.
+    if [ -n "$2" ] && command -v dracut >/dev/null && [ ! -d /run/initramfs/live ]; then
+        dracut --regenerate-all --force >/dev/null 2>&1 ||             echo "wildos-branding: could not rebuild the initramfs; the new boot screen shows after the next kernel update" >&2
+    fi
+
+    # grub.cfg names the theme, so a system that had none picks it up here.
+    # The image has no grub.cfg (the installer makes one).
+    if [ -e /boot/grub/grub.cfg ] && command -v update-grub >/dev/null; then
+        update-grub || echo "wildos-branding: update-grub failed; the start-up menu's look changes on its next successful run" >&2
+    fi
+fi
+
+#DEBHELPER#

@@ -1,0 +1,1 @@
+usr/libexec/wildos/wildos-dialogs usr/lib/${DEB_HOST_MULTIARCH}/libexec/kwin_killer_helper

@@ -1,0 +1,8 @@
+[Plymouth Theme]
+Name=Wild OS
+Description=Wild OS boot screen with disk unlock
+ModuleName=script
+
+[script]
+ImageDir=/usr/share/plymouth/themes/wildos
+ScriptFile=/usr/share/plymouth/themes/wildos/wildos.script

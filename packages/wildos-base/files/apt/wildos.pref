@@ -1,0 +1,9 @@
+# What the Wild OS repository publishes is what a Wild OS computer runs.
+# Above 1000, so apt installs it even when Debian has a newer version of
+# the same package (Calamares, Kvantum, KIO and plymouth carry Wild OS
+# changes, and Debian's next point release would otherwise replace them
+# until CI rebuilds them), and so publishing an older version rolls a bad
+# update back on every computer.
+Package: *
+Pin: origin deb.wildos.io
+Pin-Priority: 1001

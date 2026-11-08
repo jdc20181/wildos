@@ -1,0 +1,12 @@
+[Unit]
+Description=Wild OS first boot setup, when the computer has not been set up
+Before=display-manager.service sddm.service
+After=local-fs.target systemd-sysusers.service systemd-tmpfiles-setup.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/libexec/wildos/wildos-setup-boot
+
+[Install]
+WantedBy=graphical.target

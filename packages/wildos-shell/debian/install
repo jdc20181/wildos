@@ -1,0 +1,5 @@
+panel/Panel.qml usr/share/plasma/shells/org.kde.plasma.desktop/contents/views/
+decoration/aurorae.qml usr/share/kwin/aurorae/
+sessions/wildos.desktop usr/share/wayland-sessions/
+applet/CompactApplet.qml usr/share/plasma/shells/org.kde.plasma.desktop/contents/applet/
+updates/wildos-docked-taskbar.js usr/share/plasma/shells/org.kde.plasma.desktop/contents/updates/

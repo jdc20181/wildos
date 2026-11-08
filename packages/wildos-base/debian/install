@@ -1,0 +1,13 @@
+files/os-release usr/lib/wildos/
+files/40_wildos.cfg etc/default/grub.d/
+files/issue.wildos etc/
+files/getty/wildos.conf etc/systemd/system/getty@.service.d/
+files/udev/80-wildos-hide-system.rules usr/lib/udev/rules.d/
+files/apt/mullvad.sources etc/apt/sources.list.d/
+files/apt/mullvad-keyring.asc usr/share/keyrings/
+files/apt/wildos.sources etc/apt/sources.list.d/
+files/apt/wildos-updates-keyring.asc usr/share/keyrings/
+files/apt/wildos.pref etc/apt/preferences.d/
+files/apt/wildos-freerdp.pref etc/apt/preferences.d/
+files/grub/10_wildos usr/lib/wildos/grub.d/
+files/grub/31_wildos_firmware usr/lib/wildos/grub.d/

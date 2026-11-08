@@ -1,0 +1,7 @@
+# Mullvad Browser, from Mullvad's own repository.
+Types: deb
+URIs: https://repository.mullvad.net/deb/stable
+Suites: stable
+Components: main
+Architectures: amd64
+Signed-By: /usr/share/keyrings/mullvad-keyring.asc

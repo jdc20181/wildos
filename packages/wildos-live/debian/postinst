@@ -1,0 +1,36 @@
+#!/bin/sh
+set -e
+
+if [ "$1" = "configure" ]; then
+    chmod 0440 /etc/sudoers.d/90-wildos-live
+
+    # Kicksecure's console lockdown only lets members of group console log in
+    # locally, so the live user must be in it or SDDM autologin fails.
+    groups=""
+    for g in sudo console audio video plugdev netdev bluetooth lpadmin scanner; do
+        if getent group "$g" >/dev/null; then
+            groups="$groups,$g"
+        fi
+    done
+
+    if ! getent passwd live >/dev/null; then
+        useradd --create-home --shell /bin/bash --comment "Live User" \
+            --groups "${groups#,}" live
+    fi
+    passwd --delete live >/dev/null
+
+    # A live session should never lock itself: there is no password to get
+    # back in with. Kept in the live user's own config, not /etc/xdg, so it
+    # cannot leak into installed systems.
+    install -d -o live -g live /home/live/.config
+    printf '[Daemon]\nAutolock=false\nLockOnResume=false\n' > /home/live/.config/kscreenlockerrc
+    chown live:live /home/live/.config/kscreenlockerrc
+
+    # The installer launcher goes on the live desktop. Plasma only runs
+    # .desktop files from the desktop once they are marked executable.
+    install -d -o live -g live /home/live/Desktop
+    install -m 0755 -o live -g live \
+        /usr/share/applications/install-wildos.desktop /home/live/Desktop/
+fi
+
+#DEBHELPER#

@@ -1,0 +1,24 @@
+wildos-winmode (0.3.0) trixie; urgency=medium
+
+  * Setting up Windows mode: the wizard (boards 9.1 to 9.7) and the setup
+    engine in the system service, from the steps tools/winmode-proof
+    proved: download and check Windows, the answer file and payload, the
+    isolated network, the virtual PC, the install, activation, tuning and
+    Microsoft 365. Resumable, including after a restart.
+
+ -- Wild OS Developers <dev@wildos.io>  Sun, 08 Nov 2026 10:00:00 +0000
+
+wildos-winmode (0.2.0) trixie; urgency=medium
+
+  * Phase 2 of Windows mode: the system service and per-user agent, the
+    lifecycle and idle policy, one RemoteApp connection with apps started
+    inside it by wild-guest, Start entries and file types, theme sync, and
+    wild-run with the first compatibility list.
+
+ -- Wild OS Developers <dev@wildos.io>  Sat, 07 Nov 2026 22:00:00 +0000
+
+wildos-winmode (0.1.0) trixie; urgency=medium
+
+  * Initial release.
+
+ -- Wild OS Developers <dev@wildos.io>  Sat, 07 Nov 2026 12:00:00 +0000

@@ -1,0 +1,4 @@
+[D-BUS Service]
+Name=org.wildos.Dialogs
+Exec=/usr/libexec/wildos/wildos-portal
+SystemdService=wildos-portal.service

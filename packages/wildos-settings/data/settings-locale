@@ -1,0 +1,29 @@
+#!/bin/sh
+# Generates the locales Settings > Time and language needs for a display
+# language or regional format. Runs as root through pkexec (see
+# org.wildos.settings.policy). Takes locale names such as de_DE.UTF-8 and
+# only accepts ones glibc lists as supported, so nothing else reaches
+# /etc/locale.gen.
+
+set -eu
+
+GEN=/etc/locale.gen
+SUPPORTED=/usr/share/i18n/SUPPORTED
+
+[ "$#" -gt 0 ] || { echo "usage: settings-locale LOCALE..." >&2; exit 2; }
+[ -r "$SUPPORTED" ] || { echo "This computer can't add languages." >&2; exit 5; }
+
+for locale in "$@"; do
+    line=$(grep -m1 -x -F "$locale UTF-8" "$SUPPORTED") ||
+        { echo "Wild OS doesn't know the language $locale." >&2; exit 2; }
+    if grep -q -x -F "$line" "$GEN" 2>/dev/null; then
+        continue
+    fi
+    if grep -q -x -F "# $line" "$GEN" 2>/dev/null; then
+        sed -i "s|^# $line\$|$line|" "$GEN"
+    else
+        echo "$line" >> "$GEN"
+    fi
+done
+
+locale-gen >/dev/null || { echo "The language could not be set up." >&2; exit 1; }

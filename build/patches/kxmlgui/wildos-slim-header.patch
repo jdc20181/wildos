@@ -1,0 +1,225 @@
+Description: Wild OS slim headers: menus in a hamburger menu, no menu bar
+ A KDE app's window stacks a title bar, a menu bar and a toolbar, which
+ makes its header much taller than Wild OS's own apps. Here every window
+ with a menu bar and a toolbar has a hamburger menu first on its toolbar
+ (the app's own, moved there, or one KXmlGui adds) holding the
+ same menus, and starts without its menu bar. Windows without a toolbar
+ keep their menu bar, so no menu is ever out of reach. A menu bar shown
+ or hidden by hand is remembered.
+Author: Wild OS Developers <dev@wildos.io>
+Forwarded: not-needed
+
+diff -ru a/src/kmainwindow.cpp b/src/kmainwindow.cpp
+--- a/src/kmainwindow.cpp
++++ b/src/kmainwindow.cpp
+@@ -13,6 +13,11 @@
+ */
+ 
+ #include "kmainwindow.h"
++#include "kactioncollection.h"
++#include "khamburgermenu.h"
++#include "kxmlguiwindow.h"
++
++#include <QToolBar>
+ 
+ #include "kactionconflictdetector_p.h"
+ #include "kcheckaccelerators.h"
+@@ -584,6 +589,49 @@
+     d->autoSaveWindowSize = oldASWS;
+ }
+ 
++// Wild OS: whether the window has a hamburger menu, which holds the same
++// menus as the menu bar. Its actions live in the window's action
++// collection, which is not a child object of the window.
++// Whether a hamburger menu is on screen in a toolbar that shows.
++static bool wildosHamburgerShown(KMainWindow *window)
++{
++    QList<KHamburgerMenu *> menus = window->findChildren<KHamburgerMenu *>();
++    if (auto *gui = qobject_cast<KXmlGuiWindow *>(window)) {
++        const auto actions = gui->actionCollection()->actions();
++        for (QAction *action : actions) {
++            if (auto *menu = qobject_cast<KHamburgerMenu *>(action)) {
++                menus << menu;
++            }
++        }
++    }
++    for (KHamburgerMenu *menu : std::as_const(menus)) {
++        const auto objects = menu->associatedObjects();
++        for (QObject *object : objects) {
++            auto *bar = qobject_cast<QToolBar *>(object);
++            if (bar && !bar->isHidden()) {
++                return true;
++            }
++        }
++    }
++    return false;
++}
++
++static bool wildosHasHamburger(KMainWindow *window)
++{
++    if (window->findChild<KHamburgerMenu *>()) {
++        return true;
++    }
++    if (auto *gui = qobject_cast<KXmlGuiWindow *>(window)) {
++        const auto actions = gui->actionCollection()->actions();
++        for (QAction *action : actions) {
++            if (qobject_cast<KHamburgerMenu *>(action)) {
++                return true;
++            }
++        }
++    }
++    return false;
++}
++
+ void KMainWindow::saveMainWindowSettings(KConfigGroup &cg)
+ {
+     Q_D(KMainWindow);
+@@ -612,7 +660,10 @@
+     QMenuBar *mb = internalMenuBar(this);
+ 
+     if (mb && !mb->isNativeMenuBar()) {
+-        if (!cg.hasDefault("MenuBar") && !mb->isHidden()) {
++        // Wild OS: the default depends on the window (see below), so a
++        // menu bar shown or hidden against it is written down either way.
++        const bool hiddenByDefault = wildosHasHamburger(this);
++        if (!cg.hasDefault("MenuBar") && mb->isHidden() == hiddenByDefault) {
+             cg.revertToDefault("MenuBar");
+         } else {
+             cg.writeEntry("MenuBar", mb->isHidden() ? "Disabled" : "Enabled");
+@@ -725,7 +776,11 @@
+ 
+     QMenuBar *mb = internalMenuBar(this);
+     if (mb && !mb->isNativeMenuBar()) {
+-        QString entry = cg.readEntry("MenuBar", "Enabled");
++        // Wild OS: a window with a hamburger menu starts without its menu
++        // bar, so every app has one slim header; the hamburger holds the
++        // same menus and can bring the bar back. Windows without one keep
++        // their menu bar, or their menus would be out of reach.
++        QString entry = cg.readEntry("MenuBar", wildosHasHamburger(this) ? "Disabled" : "Enabled");
+         mb->setVisible(entry != QLatin1String("Disabled"));
+     }
+ 
+@@ -760,6 +815,13 @@
+ 
+     d->settingsDirty = false;
+     d->letDirtySettings = oldLetDirtySettings;
++
++    // Wild OS: the menus must always be reachable. With the menu bar hidden
++    // and no hamburger menu on a toolbar that shows (its toolbar was hidden,
++    // say), the menu bar comes back.
++    if (mb && !mb->isNativeMenuBar() && mb->isHidden() && !wildosHamburgerShown(this)) {
++        mb->show();
++    }
+ }
+ 
+ void KMainWindow::setSettingsDirty()
+diff -ru a/src/kxmlguiwindow.cpp b/src/kxmlguiwindow.cpp
+--- a/src/kxmlguiwindow.cpp
++++ b/src/kxmlguiwindow.cpp
+@@ -12,6 +12,7 @@
+ */
+ 
+ #include "kxmlguiwindow.h"
++#include "khamburgermenu.h"
+ #include "debug.h"
+ 
+ #include "kactioncollection.h"
+@@ -33,6 +34,7 @@
+ #include <QDomDocument>
+ #include <QEvent>
+ #include <QList>
++#include <QIcon>
+ #include <QMenuBar>
+ #include <QStatusBar>
+ #include <QWidget>
+@@ -499,8 +501,90 @@
+     }
+ }
+ 
++// Wild OS: every window with a menu bar and a toolbar gets a hamburger menu
++// first on its toolbar, holding the same menus, so the menu bar can stay
++// hidden and the header is one row (see KMainWindow::applyMainWindowSettings).
++// An app's own hamburger menu is used as it is. Called after every rebuild
++// of the window's menus and toolbars, which drops actions added by hand.
++static const QLatin1String wildosMenuName("wildos_hamburger_menu");
++
++static void wildosEnsureHamburger(KXmlGuiWindow *window)
++{
++    QMenuBar *menuBar = window->findChild<QMenuBar *>(QString(), Qt::FindDirectChildrenOnly);
++    if (!menuBar || menuBar->isNativeMenuBar()) {
++        return;
++    }
++    KToolBar *bar = nullptr;
++    const auto bars = window->toolBars();
++    for (KToolBar *candidate : bars) {
++        if (candidate->objectName() == QLatin1String("mainToolBar")) {
++            bar = candidate;
++            break;
++        }
++    }
++    if (!bar && !bars.isEmpty()) {
++        bar = bars.first();
++    }
++    KHamburgerMenu *own = nullptr;
++    KHamburgerMenu *ours = window->findChild<KHamburgerMenu *>(wildosMenuName, Qt::FindDirectChildrenOnly);
++    const auto actions = window->actionCollection()->actions();
++    for (QAction *action : actions) {
++        auto *menu = qobject_cast<KHamburgerMenu *>(action);
++        if (menu && menu != ours) {
++            own = menu;
++            break;
++        }
++    }
++    // A hidden toolbar can't hold the menus.
++    if (bar && (bar->isHidden() || bar->orientation() != Qt::Horizontal)) {
++        bar = nullptr;
++    }
++    // An app's own hamburger menu moves to the same place, first on the main
++    // toolbar, so it is in one place in every app; a toolbar it had to
++    // itself is hidden once empty.
++    if (own && bar && bar->actions().value(0) != own) {
++        for (KToolBar *b : bars) {
++            if (b != bar && b->actions().contains(own)) {
++                b->removeAction(own);
++                if (b->actions().isEmpty()) {
++                    b->hide();
++                }
++            }
++        }
++        bar->removeAction(own);
++        bar->insertAction(bar->actions().value(0), own);
++    }
++    if (own || !bar) {
++        if (ours) {
++            for (KToolBar *b : bars) {
++                b->removeAction(ours);
++            }
++            ours->deleteLater();
++        }
++        return;
++    }
++    if (!ours) {
++        ours = new KHamburgerMenu(window);
++        ours->setObjectName(wildosMenuName);
++        // What KStandardActions gives an app's own hamburger menu.
++        ours->setIcon(QIcon::fromTheme(QStringLiteral("application-menu")));
++        ours->setText(i18nc("@action:inmenu", "Menu"));
++        ours->setMenuBar(menuBar);
++        if (QAction *show = window->actionCollection()->action(KStandardActions::name(KStandardActions::ShowMenubar))) {
++            ours->setShowMenuBarAction(show);
++        }
++    }
++    // First on the toolbar, so a narrow window never pushes it into the
++    // toolbar's overflow menu.
++    if (bar->actions().value(0) != ours) {
++        bar->removeAction(ours);
++        bar->insertAction(bar->actions().value(0), ours);
++    }
++}
++
+ void KXmlGuiWindow::finalizeGUI(bool /*force*/)
+ {
++    wildosEnsureHamburger(this);
+     // FIXME: this really needs to be removed with a code more like the one we had on KDE3.
+     //        what we need to do here is to position correctly toolbars so they don't overlap.
+     //        Also, take in count plugins could provide their own toolbars and those also need to

@@ -1,0 +1,12 @@
+# Saved passwords open silently at sign-in: pam_kwallet creates the store on
+# first sign-in with the account password and unlocks it every time after.
+# Accounts without a password (the live session) are asked for one only when
+# an app actually saves something, never with KDE's multi-page setup wizard.
+# Wi-Fi passwords are not involved: NetworkManager keeps them with the
+# connection itself, readable only by the system, as Windows does.
+[Wallet]
+First Use=false
+Default Wallet=kdewallet
+Close When Idle=false
+Close on Screensaver=false
+Prompt on Open=false

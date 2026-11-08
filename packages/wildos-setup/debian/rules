@@ -1,0 +1,15 @@
+#!/usr/bin/make -f
+
+%:
+	dh $@ --buildsystem=cmake
+
+# Enabled so it runs on every start, but never restarted on upgrade: it only
+# makes sense before the sign-in screen starts.
+override_dh_installsystemd:
+	dh_installsystemd --no-restart-on-upgrade --no-start wildos-setup-boot.service
+	dh_installsystemd --no-enable --no-start --no-restart-on-upgrade wildos-setup-helper.service
+
+# Not in the compat 13 sequence yet. Creates the wildos-setup account from
+# debian/wildos-setup.sysusers, before tmpfiles gives that account its home.
+execute_before_dh_installtmpfiles:
+	dh_installsysusers

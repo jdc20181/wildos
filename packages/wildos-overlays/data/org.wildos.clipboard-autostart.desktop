@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Clipboard history
+Comment=Keeps what you copy since sign-in, for Win+V
+Icon=edit-paste
+Exec=/usr/bin/wildos-clipboard --daemon
+NoDisplay=true
+OnlyShowIn=KDE;
+X-KDE-autostart-phase=2

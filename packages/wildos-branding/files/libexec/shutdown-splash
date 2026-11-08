@@ -1,0 +1,58 @@
+#!/bin/sh
+# Puts the shutdown screen up as soon as the desktop has gone. systemd only
+# shows it once every program holding the shutdown back has let go, which can
+# take up to logind's InhibitDelayMaxSec (30 s here), and until then the
+# screen showed the console. Starting Debian's own unit early means the
+# shutdown that follows finds it already running.
+
+export LC_ALL=C
+PATH=/usr/sbin:/usr/bin:/sbin:/bin
+
+grep -qw splash /proc/cmdline || exit 0
+
+# The desktop or the sign-in screen owns the display while its compositor
+# runs; Plymouth waits for it to exit (it does once Plasma has signed out, or
+# is stopped by the shutdown itself). logind is no help here: it reports the
+# session active until the last of its processes has gone.
+display_busy() {
+    pgrep -x 'kwin_wayland|sddm-greeter.*|Xorg' >/dev/null
+}
+
+show() {
+    kind=$(busctl get-property org.freedesktop.login1 /org/freedesktop/login1 \
+        org.freedesktop.login1.Manager PreparingForShutdownWithMetadata 2>/dev/null |
+        sed -n 's/.*"type" s "\([^"]*\)".*/\1/p')
+    case "$kind" in
+        reboot) unit=plymouth-reboot.service ;;
+        power-off) unit=plymouth-poweroff.service ;;
+        halt) unit=plymouth-halt.service ;;
+        kexec) unit=plymouth-kexec.service ;;
+        *) return ;;
+    esac
+    # The desktop's console shows for the moment between the desktop going
+    # and Plymouth starting; blank it, cursor too, rather than show whatever
+    # was last written there.
+    vt=$(cat /sys/class/tty/tty0/active 2>/dev/null)
+    [ -n "$vt" ] && [ -c "/dev/$vt" ] && printf '\033[2J\033[H\033[?25l' >"/dev/$vt" 2>/dev/null
+    i=0
+    while display_busy; do
+        [ "$i" -ge 300 ] && return
+        sleep 0.1
+        i=$((i + 1))
+    done
+    plymouth --ping 2>/dev/null || systemctl start --no-block "$unit"
+}
+
+# logind writes "The system will reboot now!" across every console as the
+# shutdown starts, which is what showed before the shutdown screen. Wild OS
+# says it with the shutdown screen instead. logind forgets this when it
+# restarts, so it is set again each time this starts.
+busctl call org.freedesktop.login1 /org/freedesktop/login1 org.freedesktop.login1.Manager \
+    SetWallMessage sb "" false >/dev/null 2>&1
+
+gdbus monitor --system --dest org.freedesktop.login1 --object-path /org/freedesktop/login1 |
+    while read -r line; do
+        case "$line" in
+            *PrepareForShutdown\ \(true,\)*) show ;;
+        esac
+    done

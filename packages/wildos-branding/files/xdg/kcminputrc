@@ -1,0 +1,7 @@
+# Touchpads scroll the way Windows' precision touchpads do, with the content
+# following the fingers. KDE's default is the opposite, which feels inverted
+# to anyone coming from Windows. KWin applies these to any touchpad that
+# has no setting of its own, so a change made in Settings still wins. Mice
+# keep the usual direction, as on Windows.
+[Libinput][Defaults][Touchpad]
+NaturalScroll=true

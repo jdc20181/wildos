@@ -1,0 +1,92 @@
+Source: wildos-desktop
+Section: metapackages
+Priority: optional
+Maintainer: Wild OS Developers <dev@wildos.io>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.7.0
+Rules-Requires-Root: no
+
+Package: wildos-desktop
+Architecture: all
+Depends:
+ ${misc:Depends},
+ wildos-base,
+ wildos-branding,
+ wildos-shell,
+ wildos-ui,
+ wildos-desktop-view,
+ wildos-system-dialogs,
+ wildos-settings,
+ wildos-files,
+ wildos-store,
+ wildos-welcome,
+ wildos-appbridge,
+ wildos-winmode,
+ wildos-terminal,
+ wildos-launch,
+ wildos-setup,
+ wildos-portal,
+ wildos-taskmanager,
+ wildos-overlays,
+ kde-plasma-desktop,
+ plasma-workspace,
+ kwin-wayland,
+ sddm,
+ sddm-theme-breeze,
+ kde-config-sddm,
+ xdg-desktop-portal-kde,
+ plasma-nm,
+ plasma-pa,
+ bluedevil,
+ powerdevil,
+ kscreen,
+ systemsettings,
+ kinfocenter,
+ kde-config-gtk-style,
+ breeze-gtk-theme,
+ pipewire-audio,
+ pipewire-pulse,
+ wireplumber,
+ fonts-noto-core,
+ fonts-noto-color-emoji,
+ usbguard-notifier,
+ python3,
+ xdg-user-dirs,
+# KDE Connect opens network ports for phone pairing, which a security-focused
+# system should not do unasked; Konqueror would be a second browser; Kup is a
+# backup tray app that sits in the bar. desktop-base is Debian's artwork
+# (boot splash, user picture, login background) and would compete with Wild
+# OS's. xwaylandvideobridge puts a "Wayland to X11 Video Bridge" window and
+# tray icon on screen whenever an older app shares the screen. People can
+# install any of the apps from the Store.
+Conflicts:
+ kdeconnect,
+ konqueror,
+ kup-backup,
+ lxqt-notificationd,
+ desktop-base,
+ sddm-theme-debian-breeze,
+ xwaylandvideobridge,
+Recommends:
+ dolphin,
+ ark,
+ kwrite,
+ okular,
+ gwenview,
+ kde-spectacle,
+ kcalc,
+ plasma-systemmonitor,
+ partitionmanager,
+ ffmpegthumbs,
+ kwalletmanager,
+ kde-config-flatpak,
+ flatpak,
+ brave-browser,
+ keepassxc,
+ print-manager,
+ cups,
+ system-config-printer-udev,
+Description: Wild OS desktop
+ KDE Plasma 6 on Wayland with the Wild OS default application set: file
+ manager, terminal, document and image viewers, the Wild OS Store with Flathub,
+ the Brave browser, password manager and printing.

@@ -1,0 +1,6 @@
+winmode/__init__.py usr/lib/wildos/winmode/winmode
+winmode/compat.py usr/lib/wildos/winmode/winmode
+winmode/run.py usr/lib/wildos/winmode/winmode
+bin/wild-run usr/bin
+data/compat/00-wildos.json usr/share/wildos/compat
+data/org.wildos.run.desktop usr/share/applications

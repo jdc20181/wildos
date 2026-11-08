@@ -1,0 +1,11 @@
+# No bouncing icon next to the pointer while apps start: the design keeps the
+# pointer still and lets the taskbar show that something is opening.
+[BusyCursorSettings]
+Bouncing=false
+Blinking=false
+
+[FeedbackStyle]
+BusyCursor=false
+# Kept on: it is how starting apps reach the taskbar, which draws its own
+# starting line under the icon.
+TaskbarButton=true

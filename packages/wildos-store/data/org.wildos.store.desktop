@@ -1,0 +1,15 @@
+[Desktop Entry]
+Type=Application
+Name=Store
+GenericName=App store
+Comment=Find, install and update apps
+Exec=wildos-store %U
+Icon=org.wildos.store
+Terminal=false
+Categories=System;PackageManager;
+Keywords=apps;install;software;store;updates;programs;
+MimeType=x-scheme-handler/appstream;
+StartupNotify=true
+StartupWMClass=wildos-store
+SingleMainWindow=true
+X-KDE-StartupNotify=true

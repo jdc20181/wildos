@@ -1,0 +1,21 @@
+#!/usr/bin/make -f
+
+%:
+	dh $@
+
+# Installed as /etc/pam.d/kde; kept as pam-kde in the source so it is not
+# mistaken for a KDE file.
+execute_after_dh_install:
+	mv debian/wildos-desktop/etc/pam.d/pam-kde debian/wildos-desktop/etc/pam.d/kde
+	# Brave: what is switched off and the default search engine (policies;
+	# the search one is recommended, so people can change it), and the
+	# launcher.
+	install -Dm644 files/brave/managed.json debian/wildos-desktop/etc/brave/policies/managed/wildos.json
+	install -Dm644 files/brave/recommended.json debian/wildos-desktop/etc/brave/policies/recommended/wildos.json
+	install -Dm755 files/brave/brave-browser-stable debian/wildos-desktop/usr/bin/brave-browser-stable
+
+execute_after_dh_fixperms:
+	chmod 0755 debian/wildos-desktop/usr/libexec/wildos/wildos-app-names \
+		debian/wildos-desktop/usr/libexec/wildos/wildos-strings \
+		debian/wildos-desktop/usr/libexec/wildos/update-checks \
+		debian/wildos-desktop/usr/bin/brave-browser-stable

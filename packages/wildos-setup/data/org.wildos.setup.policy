@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE policyconfig PUBLIC "-//freedesktop//DTD PolicyKit Policy Configuration 1.0//EN"
+ "http://www.freedesktop.org/standards/PolicyKit/1/policyconfig.dtd">
+<!-- No one by default, not even an administrator with a password: only the
+     setup account may, through 10-wildos-setup.rules, while the computer
+     has not been set up. -->
+<policyconfig>
+  <vendor>Wild OS</vendor>
+  <vendor_url>https://wildos.io</vendor_url>
+  <icon_name>wildos</icon_name>
+
+  <action id="org.wildos.setup.create-account">
+    <description>Create the first account</description>
+    <message>Setup wants to create the first account on this computer.</message>
+    <defaults>
+      <allow_any>no</allow_any>
+      <allow_inactive>no</allow_inactive>
+      <allow_active>no</allow_active>
+    </defaults>
+  </action>
+
+  <action id="org.wildos.setup.finish">
+    <description>Finish setting up this computer</description>
+    <message>Setup wants to finish and sign in to the new account.</message>
+    <defaults>
+      <allow_any>no</allow_any>
+      <allow_inactive>no</allow_inactive>
+      <allow_active>no</allow_active>
+    </defaults>
+  </action>
+</policyconfig>

@@ -1,0 +1,325 @@
+#!/usr/bin/python3
+"""Rewords KDE's interface text the way Wild OS speaks.
+
+KDE apps and Plasma look up their text in gettext catalogues found through
+XDG_DATA_DIRS, and /usr/share/wildos comes first in a Wild OS session (see
+/etc/xdg/plasma-workspace/env/wildos.sh). This script copies the stock UK
+English catalogues into /usr/share/wildos/locale with Wild OS's wording, so
+nothing KDE ships is modified and app updates keep working: the dpkg trigger
+in wildos-desktop reruns it whenever a catalogue changes.
+
+Three passes, in order:
+  1. Menu-sized labels in the domains a switcher meets every day go from
+     KDE's Title Case to sentence case ("Sort By" becomes "Sort by"). The
+     UK English catalogue often lacks the newest strings, which would then
+     show in KDE's US Title Case, so the full list of strings is taken from
+     every installed language's catalogue for the domain (they all carry
+     the same source text) and the missing ones are added.
+  2. Words are swapped: KDE's "Wastebin" is the Windows "Recycle bin", and
+     app names become the plain names Start shows ("Dolphin" is "Files").
+  3. Hand-written entries in /usr/share/wildos/strings/en_GB/<domain>.po win
+     over everything.
+
+English text is only looked up when the language list holds en_GB (en_US is
+KDE's source language and never reads a catalogue), so the session sets
+LANGUAGE=en_GB for English locales.
+"""
+
+import ast
+import os
+import re
+import struct
+import sys
+
+LANG = "en_GB"
+LOCALE = "/usr/share/locale"
+SRC = f"{LOCALE}/{LANG}/LC_MESSAGES"
+OVERRIDES = f"/usr/share/wildos/strings/{LANG}"
+DST = f"/usr/share/wildos/locale/{LANG}/LC_MESSAGES"
+
+SENTENCE_CASE_DOMAINS = {
+    "dolphin",
+    "kio6",
+    "kconfigwidgets6",
+    "kxmlgui6",
+    "kwidgetsaddons6",
+    "kbookmarks6",
+    "konsole",
+    "libplasma6",
+    "plasmashell",
+    "plasma_applet_org.kde.desktopcontainment",
+    "plasma_applet_org.kde.plasma.taskmanager",
+    "plasma_containmentactions_contextmenu",
+    "kwin",
+    "plasma-discover",
+    "libdiscover",
+    "spectacle",
+    "okular",
+    "gwenview",
+    "ark",
+    "kate",
+    "ktexteditor6",
+    "kcalc",
+    "kdialog",
+    "kiconthemes6",
+    "kparts6",
+    "ktextwidgets6",
+    "kcmutils6",
+    "kcolorscheme6",
+    "kirigami-addons6",
+    "knotifyconfig6",
+    "systemsettings",
+    "kinfocenter",
+    "plasma-systemmonitor",
+    "partitionmanager",
+    "kwalletmanager",
+    "print-manager",
+    "polkit-kde-authentication-agent-1",
+    "xdg-desktop-portal-kde",
+    "plasmanetworkmanagement-kcm",
+    "plasmanetworkmanagement-libs",
+    "bluedevil",
+    # The settings pages Wild OS Settings shows inside its own window.
+    "kcm_access",
+    "kcm_autostart",
+    "kcm_bluetooth",
+    "kcm_componentchooser",
+    "kcm_filetypes",
+    "kcm_flatpak",
+    "kcm_fonts",
+    "kcm_keyboard",
+    "kcm_kscreen",
+    "kcm_kwin_virtualdesktops",
+    "kcm_nightlight",
+    "kcm_notifications",
+    "kcm_printer_manager",
+    "kcm_pulseaudio",
+    "kcm_regionandlang",
+    "kcm_screenlocker",
+    "kcm_touchpad",
+    "kcm_users",
+    "kcmkclock",
+    "kcmmouse",
+}
+
+# Names made of more than one capitalised word that keep their capitals.
+PROPER_PHRASES = [
+    "Caps Lock", "Num Lock", "Scroll Lock", "Print Screen", "Page Up",
+    "Page Down", "Wild OS", "Google Drive", "Microsoft Exchange",
+    "Network Manager", "Secure Boot",
+]
+
+# Whole words, so "KonsolePart" and "dolphin://" are left alone.
+WORD_SWAPS = {
+    "*": [("Wastebin", "Recycle bin"), ("wastebin", "recycle bin")],
+    "dolphin": [("Dolphin", "Files")],
+    "konsole": [("Konsole", "Terminal")],
+    "plasma-discover": [("Discover", "Store")],
+    "plasma-discover-notifier": [("Discover", "Store")],
+    "libdiscover": [("Discover", "Store")],
+    "kate": [("KWrite", "Text editor")],
+    "spectacle": [("Spectacle", "Screenshot")],
+}
+
+# Capitalised words that stay capitalised when a label is sentence cased.
+PROPER = {
+    "I", "OK", "Wild", "OS", "Bluetooth",
+    "Wi-Fi", "Internet", "Windows", "Linux", "Flatpak", "Flathub", "Firefox",
+    "KDE", "Plasma", "Qt", "Dolphin", "Konsole", "Okular", "Gwenview", "Ark",
+    "Kate", "KWrite", "Spectacle", "Discover", "Baloo", "Git", "Mercurial",
+    "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday",
+    "January", "February", "March", "April", "May", "June", "July", "August",
+    "September", "October", "November", "December", "English", "Unicode",
+    "UTF-8", "PDF", "URL", "URLs", "USB", "CD", "DVD", "ISO", "FTP", "SSH",
+    "SMB", "HTML", "JSON", "XML", "VPN", "MTP", "D-Bus", "DBus", "UI",
+}
+
+
+def read_mo(path):
+    """Returns {key: value} as raw bytes, key being ctxt\\x04msgid[\\x00plural]."""
+    data = open(path, "rb").read()
+    magic = struct.unpack("<I", data[:4])[0]
+    order = "<" if magic == 0x950412DE else ">"
+    _, count, orig, trans = struct.unpack(order + "4I", data[4:20])
+    entries = {}
+    for i in range(count):
+        klen, koff = struct.unpack(order + "2I", data[orig + 8 * i:orig + 8 * i + 8])
+        vlen, voff = struct.unpack(order + "2I", data[trans + 8 * i:trans + 8 * i + 8])
+        entries[data[koff:koff + klen]] = data[voff:voff + vlen]
+    return entries
+
+
+def write_mo(entries, path):
+    keys = sorted(entries)
+    ids = b""
+    strs = b""
+    offsets = []
+    for k in keys:
+        v = entries[k]
+        offsets.append((len(ids), len(k), len(strs), len(v)))
+        ids += k + b"\0"
+        strs += v + b"\0"
+    start = 7 * 4 + 16 * len(keys)
+    ids_start = start
+    strs_start = ids_start + len(ids)
+    table = b""
+    for o, l, _, _ in offsets:
+        table += struct.pack("<2I", l, ids_start + o)
+    for _, _, o, l in offsets:
+        table += struct.pack("<2I", l, strs_start + o)
+    header = struct.pack("<7I", 0x950412DE, 0, len(keys), 28, 28 + 8 * len(keys), 0, 0)
+    tmp = path + ".new"
+    with open(tmp, "wb") as f:
+        f.write(header + table + ids + strs)
+    os.chmod(tmp, 0o644)
+    os.replace(tmp, path)
+
+
+def parse_po(path):
+    """Minimal reader for the hand-written override files."""
+    entries = {}
+    cur = {}
+    field = None
+
+    def flush():
+        if "msgid" in cur:
+            key = cur["msgid"]
+            if "msgctxt" in cur:
+                key = cur["msgctxt"] + "\x04" + key
+            if "msgid_plural" in cur:
+                key += "\0" + cur["msgid_plural"]
+                forms = [cur[k] for k in sorted(cur) if k.startswith("msgstr[")]
+                value = "\0".join(forms)
+            else:
+                value = cur.get("msgstr", "")
+            # KDE prints an error in place of the text when a translation
+            # drops one of the %1, %2 placeholders, so such an entry is
+            # skipped rather than shipped.
+            wanted = set(re.findall(r"%\d", cur["msgid"]))
+            if value and all(wanted <= set(re.findall(r"%\d", f)) for f in value.split("\0")):
+                entries[key.encode()] = value.encode()
+            elif value:
+                print(f"{path}: {cur['msgid']!r} drops a placeholder, skipped", file=sys.stderr)
+        cur.clear()
+
+    for line in open(path, encoding="utf-8"):
+        line = line.strip()
+        if not line or line.startswith("#"):
+            if not line:
+                flush()
+            continue
+        if line.startswith('"'):
+            cur[field] += ast.literal_eval(line)
+            continue
+        field, _, rest = line.partition(" ")
+        if field == "msgctxt" and "msgid" in cur:
+            flush()
+        cur[field] = ast.literal_eval(rest)
+    flush()
+    return entries
+
+
+# A capitalised word, optionally hyphenated ("Read-Only"), with an accelerator
+# marker and trailing punctuation allowed.
+TITLE_WORD = re.compile(r"&?[A-Z][a-z]+(?:-&?[A-Z][a-z]+)*[…:.,)]*")
+
+
+def sentence_case(text):
+    # Only short labels: sentences and rich text are already written the way
+    # they should read.
+    if "<" in text or "\n" in text or len(text.split()) > 6 or (text.endswith(".") and not text.endswith("...")):
+        return text
+    kept = set()
+    for phrase in PROPER_PHRASES:
+        start = text.find(phrase)
+        if start >= 0:
+            kept.update(range(len(text[:start].split(" ")) - 1, len(text[:start + len(phrase)].split(" "))))
+    words = text.split(" ")
+    out = [words[0]]
+    for i, w in enumerate(words[1:], 1):
+        bare = w.replace("&", "").rstrip("…:.,)")
+        if TITLE_WORD.fullmatch(w) and bare not in PROPER and i not in kept and not out[-1].endswith(":"):
+            w = w.lower()
+        out.append(w)
+    return " ".join(out)
+
+
+def swap_words(text, swaps):
+    for old, new in swaps:
+        text = re.sub(r"(?<![\w/.-])" + re.escape(old) + r"(?![\w/:])", new, text)
+    return text
+
+
+def reword(domain, entries):
+    swaps = WORD_SWAPS["*"] + WORD_SWAPS.get(domain, [])
+    out = {}
+    for key, value in entries.items():
+        if not key:
+            out[key] = value
+            continue
+        forms = value.decode("utf-8", "replace").split("\0")
+        if domain in SENTENCE_CASE_DOMAINS:
+            forms = [sentence_case(f) for f in forms]
+        forms = [swap_words(f, swaps) for f in forms]
+        out[key] = "\0".join(forms).encode()
+    return out
+
+
+HEADER = (b"Content-Type: text/plain; charset=UTF-8\n"
+          b"Content-Transfer-Encoding: 8bit\n"
+          b"Language: en_GB\n"
+          b"Plural-Forms: nplurals=2; plural=(n != 1);\n")
+
+
+def source_text(key):
+    """The untranslated text a catalogue key stands for."""
+    # A plural entry's key holds both forms, which is also how the English
+    # value is stored.
+    return key.split(b"\x04", 1)[-1]
+
+
+def missing(domain, base, languages):
+    """Strings the UK catalogue lacks, reworded from their source text."""
+    template = set()
+    for lang in languages:
+        path = os.path.join(LOCALE, lang, "LC_MESSAGES", domain + ".mo")
+        if os.path.isfile(path):
+            try:
+                template.update(read_mo(path))
+            except (OSError, struct.error):
+                continue
+    template.discard(b"")
+    absent = {k: source_text(k) for k in template - set(base)}
+    reworded = reword(domain, absent)
+    return {k: v for k, v in reworded.items() if v != absent[k]}
+
+
+def main():
+    os.makedirs(DST, exist_ok=True)
+    wanted = set()
+    overrides = {}
+    if os.path.isdir(OVERRIDES):
+        for name in os.listdir(OVERRIDES):
+            if name.endswith(".po"):
+                overrides[name[:-3]] = parse_po(os.path.join(OVERRIDES, name))
+    stock = {n[:-3] for n in os.listdir(SRC) if n.endswith(".mo")} if os.path.isdir(SRC) else set()
+    languages = [d for d in os.listdir(LOCALE) if d != LANG] if os.path.isdir(LOCALE) else []
+
+    for domain in sorted(stock | set(overrides) | SENTENCE_CASE_DOMAINS):
+        base = read_mo(os.path.join(SRC, domain + ".mo")) if domain in stock else {b"": HEADER}
+        new = reword(domain, base)
+        if domain in SENTENCE_CASE_DOMAINS:
+            new.update(missing(domain, base, languages))
+        new.update(overrides.get(domain, {}))
+        if new == base:
+            continue
+        write_mo(new, os.path.join(DST, domain + ".mo"))
+        wanted.add(domain + ".mo")
+
+    for name in os.listdir(DST):
+        if name not in wanted:
+            os.remove(os.path.join(DST, name))
+
+
+if __name__ == "__main__":
+    sys.exit(main())

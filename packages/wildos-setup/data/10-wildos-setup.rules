@@ -1,0 +1,36 @@
+// The first boot setup account may do what setup needs, without a
+// password, from the session at the computer, and only while the computer
+// has not been set up. Everything else it asks for is refused outright, so
+// it cannot reach anything a password prompt would otherwise guard.
+// Numbered early so these refusals come before any broader rule.
+polkit.addRule(function (action, subject) {
+    if (subject.user !== "wildos-setup") {
+        return polkit.Result.NOT_HANDLED;
+    }
+    var allowed = [
+        "org.wildos.setup.create-account",
+        "org.wildos.setup.finish",
+        "org.freedesktop.NetworkManager.enable-disable-wifi",
+        "org.freedesktop.NetworkManager.network-control",
+        "org.freedesktop.NetworkManager.wifi.scan",
+        "org.freedesktop.NetworkManager.settings.modify.system",
+        "org.freedesktop.timedate1.set-timezone",
+        "org.freedesktop.udisks2.filesystem-mount",
+        "org.freedesktop.udisks2.filesystem-mount-system",
+        "org.wildos.update-checks",
+        "org.freedesktop.login1.power-off",
+        "org.freedesktop.login1.reboot",
+        // KWin activates its own session this way before it can take the
+        // screen; refused, setup is a black screen.
+        "org.freedesktop.login1.chvt"
+    ];
+    if (allowed.indexOf(action.id) < 0 || !subject.local || !subject.active) {
+        return polkit.Result.NO;
+    }
+    try {
+        polkit.spawn(["/usr/bin/test", "-e", "/var/lib/wildos/first-boot-setup"]);
+    } catch (notThere) {
+        return polkit.Result.NO;
+    }
+    return polkit.Result.YES;
+});

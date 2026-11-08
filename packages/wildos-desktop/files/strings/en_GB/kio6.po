@@ -1,0 +1,21 @@
+# The Files sidebar and every file dialog share these group names. Windows
+# calls the first group Quick access and lists drives under This PC; the Wild
+# OS design says "This computer".
+
+msgctxt "@item"
+msgid "Places"
+msgstr "Quick access"
+
+msgctxt "@item"
+msgid "Devices"
+msgstr "This computer"
+
+msgctxt "@item"
+msgid "Removable Devices"
+msgstr "Removable drives"
+
+msgid "Create New"
+msgstr "New"
+
+msgid "Move to Trash"
+msgstr "Delete"

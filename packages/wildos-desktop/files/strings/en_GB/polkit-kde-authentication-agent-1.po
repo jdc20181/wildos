@@ -1,0 +1,36 @@
+# The administrator password prompt. Windows asks a plain question at this
+# point; KDE's wording ("Authentication Required", "Authentication failure")
+# reads like an error before anything has gone wrong. The message under the
+# title comes from the action's policy, which Wild OS writes for its own
+# helpers.
+
+msgid "Authentication Required"
+msgstr "Enter an administrator password"
+
+msgid "Authentication failure, please try again."
+msgstr "That password didn't work. Try again."
+
+msgid "Another client is already authenticating, please try again later."
+msgstr "Another password request is already open. Finish that one first."
+
+msgctxt "Error response when polkit calls us with an empty list of identities"
+msgid "No user to authenticate as. Please check your system configuration."
+msgstr "This computer has no administrator account to ask for a password."
+
+msgid "Authenticating as %1"
+msgstr "Signed in as %1"
+
+msgid "Select User"
+msgstr "Choose an account"
+
+msgid "Switch…"
+msgstr "Use another account"
+
+msgid "Password…"
+msgstr "Password"
+
+msgid "Action:"
+msgstr "Change:"
+
+msgid "Vendor:"
+msgstr "From:"

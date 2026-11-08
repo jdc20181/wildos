@@ -1,0 +1,21 @@
+{
+    "KPackageStructure": "KWin/Effect",
+    "KPlugin": {
+        "Authors": [
+            {
+                "Email": "dev@wildos.io",
+                "Name": "Wild OS"
+            }
+        ],
+        "Category": "Window Management",
+        "Description": "Pick a layout and a zone to snap a window into: hover the maximise button, drag a window to the top of the screen or press Meta+Z",
+        "EnabledByDefault": true,
+        "Id": "org.wildos.snap",
+        "License": "GPL-3.0-or-later",
+        "Name": "Snap layouts",
+        "Version": "0.1.0",
+        "Website": "https://wildos.io"
+    },
+    "X-KDE-Ordering": 60,
+    "X-Plasma-API": "declarativescript"
+}

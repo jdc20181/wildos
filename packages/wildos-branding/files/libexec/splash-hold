@@ -1,0 +1,18 @@
+#!/bin/sh
+# Runs before Plasma tells ksplashqml the desktop is ready, which closes the
+# splash at once. Straight after boot the splash is still playing the end of
+# the start-up animation (Splash.qml), so the message waits until the splash
+# starts wildos-splash-done.target, for ten seconds at most. The desktop loads
+# underneath either way; only uncovering it waits.
+
+[ -e /run/wildos/boot-handoff-session.png ] || exit 0
+
+uid=$(id -u)
+i=0
+while [ "$i" -lt 100 ]; do
+    systemctl --user --quiet is-active wildos-splash-done.target && exit 0
+    pgrep -x -u "$uid" ksplashqml >/dev/null || exit 0
+    sleep 0.1
+    i=$((i + 1))
+done
+exit 0

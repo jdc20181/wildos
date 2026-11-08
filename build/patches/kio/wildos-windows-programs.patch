@@ -1,0 +1,29 @@
+Description: Open Windows programs in their app, even where executables may not run
+ KIO refused to open a .exe or .msi from a browser's downloads ("For
+ security reasons, launching executables is not allowed in this
+ context") before reaching its own rule that opens Windows programs in
+ their associated app. A Windows program cannot run on Linux by itself;
+ on Wild OS it opens in the App Bridge, which says what will happen and
+ asks before anything runs. The exception is moved ahead of the refusal;
+ native programs are refused exactly as before.
+Author: Wild OS Developers <dev@wildos.io>
+Forwarded: not-needed
+
+--- a/src/gui/openurljob.cpp
++++ b/src/gui/openurljob.cpp
+@@ -385,6 +385,15 @@
+     isNativeBinary = !mimeType.inherits(QStringLiteral("application/x-ms-dos-executable"));
+ #endif
+ 
++    // Wild OS: a Windows program cannot run on Linux by itself; it is a
++    // document its associated app opens (Wild OS's App Bridge, which says
++    // what will happen and asks first). So it opens there even where
++    // launching executables is not allowed, as from a browser's downloads.
++    if (!isNativeBinary) {
++        openInPreferredApp();
++        return;
++    }
++
+     if (m_showOpenOrExecuteDialog) {
+         auto dialogFinished = [this, localPath, isNativeBinary](bool shouldExecute) {
+             // shouldExecute is always true if we get here, because for binaries the

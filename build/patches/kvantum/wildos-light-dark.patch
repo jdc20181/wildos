@@ -1,0 +1,256 @@
+Description: Wild OS light and dark mode in Kvantum
+ The WildOS Kvantum theme has a dark variant (WildOS) and a light one
+ (WildOSLight). Either name in kvantum.kvconfig now means the variant that
+ matches the colour scheme applied, judged by its window colour as the Wild
+ OS apps judge it. The style watches kdeglobals and loads itself again when
+ light and dark mode switch or the accent changes, so apps that are open
+ follow at sunrise and sunset instead of keeping the theme they started
+ with. The Qt 5 style, a separate copy of the code, gets the same.
+Author: Wild OS Developers <dev@wildos.io>
+Forwarded: not-needed
+
+diff -ru a/Kvantum/style/Kvantum.cpp b/Kvantum/style/Kvantum.cpp
+--- a/Kvantum/style/Kvantum.cpp
++++ b/Kvantum/style/Kvantum.cpp
+@@ -148,6 +148,9 @@
+   return colName;
+ }
+ 
++static QColor wildosSystemAccent();
++static QString wildosSchemeVariant();
++
+ Style::Style(bool useDark) : QCommonStyle()
+ {
+   opacityTimer_ = opacityTimerOut_ = nullptr;
+@@ -229,6 +232,16 @@
+     }
+   }
+ 
++  /* Wild OS: WildOS is the dark theme and WildOSLight the light one.
++     Either name in kvantum.kvconfig means "the Wild OS theme", in whichever
++     variant matches the colour scheme applied now. */
++  if (theme == KL1("WildOS") || theme == KL1("WildOSLight"))
++  {
++    theme = wildosVariant_ = wildosSchemeVariant();
++    wildosAccent_ = wildosSystemAccent().name();
++    wildosFollowScheme();
++  }
++
+   setBuiltinDefaultTheme();
+   setTheme(theme, useDark);
+ 
+@@ -492,6 +505,73 @@
+   return QColor();
+ }
+ 
++/* Wild OS: which variant of the WildOS theme the colour scheme calls for.
++   It goes by the window colour of the scheme actually applied, the same rule
++   the Wild OS apps use, rather than by the scheme's name: the name is only
++   a label, and a scheme picked elsewhere (Breeze, say) is judged correctly
++   too. */
++static QString wildosSchemeVariant()
++{
++  QString home = QString::fromLocal8Bit(qgetenv("XDG_CONFIG_HOME"));
++  if (home.isEmpty())
++    home = QDir::homePath() + QLatin1String("/.config");
++  QStringList files;
++  files << home + QLatin1String("/kdeglobals");
++  QString dirs = QString::fromLocal8Bit(qgetenv("XDG_CONFIG_DIRS"));
++  if (dirs.isEmpty())
++    dirs = QLatin1String("/etc/xdg");
++  const QStringList dirList = dirs.split(QLatin1Char(':'), Qt::SkipEmptyParts);
++  for (const QString &dir : dirList)
++    files << dir + QLatin1String("/kdeglobals");
++  QString scheme;
++  for (const QString &file : static_cast<const QStringList&>(files))
++  {
++    if (!QFile::exists(file))
++      continue;
++    QSettings globals(file, QSettings::IniFormat);
++    const QColor window = wildosColour(globals.value(QLatin1String("Colors:Window/BackgroundNormal")));
++    if (window.isValid())
++      return window.lightnessF() >= 0.5 ? QStringLiteral("WildOSLight") : QStringLiteral("WildOS");
++    if (scheme.isEmpty())
++      scheme = globals.value(QLatin1String("ColorScheme")).toString();
++  }
++  return scheme.contains(QLatin1String("Light")) ? QStringLiteral("WildOSLight") : QStringLiteral("WildOS");
++}
++
++/* Wild OS: light and dark mode switch at sunrise and sunset with apps open,
++   and the accent can change any time. Kvantum reads its theme once, so the
++   style watches kdeglobals and, when the variant or the accent changes,
++   has the app load the style again, which repaints every window. */
++void Style::wildosFollowScheme()
++{
++  const QString path = xdg_config_home + QLatin1String("/kdeglobals");
++  wildosWatcher_ = new QFileSystemWatcher(this);
++  if (QFile::exists(path))
++    wildosWatcher_->addPath(path);
++  /* The file is often saved by replacing it, which ends the watch on it,
++     so the folder is watched too, for the new file appearing. */
++  wildosWatcher_->addPath(xdg_config_home);
++  auto *settle = new QTimer(this);
++  settle->setSingleShot(true);
++  settle->setInterval(300);
++  auto changed = [this, path, settle] (const QString &which) {
++    if (which == path || which == xdg_config_home)
++      settle->start();
++  };
++  connect(wildosWatcher_, &QFileSystemWatcher::fileChanged, this, changed);
++  connect(wildosWatcher_, &QFileSystemWatcher::directoryChanged, this, changed);
++  connect(settle, &QTimer::timeout, this, [this, path] {
++    if (QFile::exists(path) && !wildosWatcher_->files().contains(path))
++      wildosWatcher_->addPath(path);
++    if (wildosSchemeVariant() == wildosVariant_ && wildosSystemAccent().name() == wildosAccent_)
++      return;
++    /* Not from here: setting a new style deletes this one. */
++    QTimer::singleShot(0, qApp, [] {
++      QApplication::setStyle(QStringLiteral("kvantum"));
++    });
++  });
++}
++
+ static qreal wildosLuminance(const QColor &c)
+ {
+   auto f = [](qreal v) { return v <= 0.03928 ? v / 12.92 : qPow((v + 0.055) / 1.055, 2.4); };
+diff -ru a/Kvantum/style/Kvantum.h b/Kvantum/style/Kvantum.h
+--- a/Kvantum/style/Kvantum.h
++++ b/Kvantum/style/Kvantum.h
+@@ -19,6 +19,7 @@
+ #define KVANTUM_H
+ 
+ #include <QCommonStyle>
++#include <QFileSystemWatcher>
+ #include <QMap>
+ #include <QItemDelegate>
+ #include <QAbstractItemView>
+@@ -452,6 +453,13 @@
+ 
+     QString xdg_config_home;
+ 
++    /* Wild OS: the light or dark WildOS theme in use and the accent it was
++       drawn with, and the watch on kdeglobals that reloads the style when
++       either changes. */
++    void wildosFollowScheme();
++    QString wildosVariant_, wildosAccent_;
++    QFileSystemWatcher *wildosWatcher_ = nullptr;
++
+     QTimer *opacityTimer_, *opacityTimerOut_;
+     mutable int animationOpacity_, animationOpacityOut_; // A value >= 100 stops state change animation.
+     /* The start state for state change animation */
+diff -ru a/Kvantum/style/qt5/Kvantum5.cpp b/Kvantum/style/qt5/Kvantum5.cpp
+--- a/Kvantum/style/qt5/Kvantum5.cpp
++++ b/Kvantum/style/qt5/Kvantum5.cpp
+@@ -18,6 +18,7 @@
+ #include "Kvantum5.h"
+ 
+ #include <QDir>
++#include <QFile>
+ #include <QPainter>
+ #include <QPainterPath>
+ #include <QSettings>
+@@ -147,6 +148,67 @@
+   return colName;
+ }
+ 
++/* Wild OS: which variant of the WildOS theme the colour scheme calls for,
++   judged by the window colour of the scheme applied, as in the Qt 6 style
++   and the Wild OS apps. */
++static QString wildosSchemeVariant()
++{
++  QString home = QString::fromLocal8Bit(qgetenv("XDG_CONFIG_HOME"));
++  if (home.isEmpty())
++    home = QDir::homePath() + QLatin1String("/.config");
++  QStringList files;
++  files << home + QLatin1String("/kdeglobals");
++  QString dirs = QString::fromLocal8Bit(qgetenv("XDG_CONFIG_DIRS"));
++  if (dirs.isEmpty())
++    dirs = QLatin1String("/etc/xdg");
++  const QStringList dirList = dirs.split(QLatin1Char(':'), Qt::SkipEmptyParts);
++  for (const QString &dir : dirList)
++    files << dir + QLatin1String("/kdeglobals");
++  QString scheme;
++  for (const QString &file : static_cast<const QStringList&>(files))
++  {
++    if (!QFile::exists(file))
++      continue;
++    QSettings globals(file, QSettings::IniFormat);
++    const QStringList rgb = globals.value(QLatin1String("Colors:Window/BackgroundNormal")).toStringList();
++    if (rgb.size() >= 3)
++    {
++      const QColor window(rgb.at(0).trimmed().toInt(), rgb.at(1).trimmed().toInt(), rgb.at(2).trimmed().toInt());
++      return window.lightnessF() >= 0.5 ? QStringLiteral("WildOSLight") : QStringLiteral("WildOS");
++    }
++    if (scheme.isEmpty())
++      scheme = globals.value(QLatin1String("ColorScheme")).toString();
++  }
++  return scheme.contains(QLatin1String("Light")) ? QStringLiteral("WildOSLight") : QStringLiteral("WildOS");
++}
++
++void Style::wildosFollowScheme()
++{
++  const QString path = xdg_config_home + QLatin1String("/kdeglobals");
++  wildosWatcher_ = new QFileSystemWatcher(this);
++  if (QFile::exists(path))
++    wildosWatcher_->addPath(path);
++  wildosWatcher_->addPath(xdg_config_home);
++  auto *settle = new QTimer(this);
++  settle->setSingleShot(true);
++  settle->setInterval(300);
++  auto changed = [this, path, settle] (const QString &which) {
++    if (which == path || which == xdg_config_home)
++      settle->start();
++  };
++  connect(wildosWatcher_, &QFileSystemWatcher::fileChanged, this, changed);
++  connect(wildosWatcher_, &QFileSystemWatcher::directoryChanged, this, changed);
++  connect(settle, &QTimer::timeout, this, [this, path] {
++    if (QFile::exists(path) && !wildosWatcher_->files().contains(path))
++      wildosWatcher_->addPath(path);
++    if (wildosSchemeVariant() == wildosVariant_)
++      return;
++    QTimer::singleShot(0, qApp, [] {
++      QApplication::setStyle(QStringLiteral("kvantum"));
++    });
++  });
++}
++
+ Style::Style(bool useDark) : QCommonStyle()
+ {
+   opacityTimer_ = opacityTimerOut_ = nullptr;
+@@ -212,6 +274,12 @@
+     }
+   }
+ 
++  if (theme == QLatin1String("WildOS") || theme == QLatin1String("WildOSLight"))
++  {
++    theme = wildosVariant_ = wildosSchemeVariant();
++    wildosFollowScheme();
++  }
++
+   setBuiltinDefaultTheme();
+   setTheme(theme, useDark);
+ 
+diff -ru a/Kvantum/style/qt5/Kvantum5.h b/Kvantum/style/qt5/Kvantum5.h
+--- a/Kvantum/style/qt5/Kvantum5.h
++++ b/Kvantum/style/qt5/Kvantum5.h
+@@ -19,6 +19,7 @@
+ #define KVANTUM_H
+ 
+ #include <QCommonStyle>
++#include <QFileSystemWatcher>
+ #include <QMap>
+ #include <QItemDelegate>
+ #include <QAbstractItemView>
+@@ -452,6 +453,12 @@
+ 
+     QString xdg_config_home;
+ 
++    /* Wild OS: the light or dark WildOS theme in use, and the watch on
++       kdeglobals that reloads the style when light and dark mode switch. */
++    void wildosFollowScheme();
++    QString wildosVariant_;
++    QFileSystemWatcher *wildosWatcher_ = nullptr;
++
+     QTimer *opacityTimer_, *opacityTimerOut_;
+     mutable int animationOpacity_, animationOpacityOut_; // A value >= 100 stops state change animation.
+     /* The start state for state change animation */

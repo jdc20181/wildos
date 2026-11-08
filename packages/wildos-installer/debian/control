@@ -1,0 +1,39 @@
+Source: wildos-installer
+Section: admin
+Priority: optional
+Maintainer: Wild OS Developers <dev@wildos.io>
+Build-Depends:
+ debhelper-compat (= 13),
+ cmake,
+ qt6-base-dev,
+ qt6-declarative-dev,
+Standards-Version: 4.7.0
+Rules-Requires-Root: no
+
+Package: wildos-installer
+Architecture: any
+Depends:
+ ${misc:Depends},
+ ${shlibs:Depends},
+ calamares (>= 3.3.14-1+wildos1),
+ cryptsetup,
+ dosfstools,
+ efibootmgr,
+ ntfs-3g,
+ os-prober,
+ python3,
+ rsync,
+ util-linux,
+ qml6-module-qtquick,
+ qml6-module-qtquick-layouts,
+ qml6-module-qtquick-window,
+ fonts-inter,
+ wildos-branding,
+ wildos-ui,
+Description: Wild OS installer
+ Calamares configuration, branding and helper scripts that install Wild OS
+ from the live session to disk, with full disk encryption and a recovery
+ key on by default. It checks the computer first (free space, power,
+ Secure Boot, and the Windows settings BitLocker and Fast Startup), and
+ leaves the account, Wi-Fi and region to the first start (wildos-setup).
+ Includes the WildOS.Installer QML module its pages share.

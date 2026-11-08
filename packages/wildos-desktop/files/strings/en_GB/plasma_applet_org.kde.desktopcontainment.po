@@ -1,0 +1,18 @@
+# Desktop right-click menu. "Desktop and Wallpaper" opens the wallpaper and
+# desktop settings, which Windows calls Personalise; the "Icons" submenu holds
+# what Windows puts under View.
+
+msgid "Desktop and Wallpaper"
+msgstr "Personalise"
+
+msgid "Icons"
+msgstr "View"
+
+msgid "&Refresh Desktop"
+msgstr "&Refresh"
+
+msgid "&Refresh View"
+msgstr "&Refresh"
+
+msgid "Icon Size"
+msgstr "Icon size"

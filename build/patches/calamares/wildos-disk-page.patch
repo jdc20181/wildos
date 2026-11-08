@@ -1,0 +1,2943 @@
+Description: The "Where should Wild OS go?" page and the disk editor of the Wild OS design
+ The partition module's pages are widgets, so the design is built here
+ rather than in QML.
+ .
+ Choice page (Installer.dc):
+  * PrettyRadioButton can be drawn as a card by the stylesheet (a "checked"
+    property for the picked one, a click anywhere picks it), and carries an
+    options widget under its text, shown only while it is picked.
+  * The title, a line about what is on the disk and the choices as cards in
+    one column. The disk menu shows only with more than one disk. The before
+    and after bars stay alive out of sight; Alongside picks the partition to
+    shrink itself (the one with a system on it, else the largest that can
+    shrink) and shows the splitter inside its card, with "Windows is using
+    X GB of its space" and the disk's name and size under it. "Replace a
+    partition" is not offered. Alongside is the first choice when possible.
+    The wording names the system found ("Install alongside Windows",
+    "Replace Windows with Wild OS").
+  * alongsideBlocked in global storage (from the installer's own checks:
+    "bitlocker", "faststartup", "dirty" or "space") keeps Alongside visible
+    but unavailable, with the reason on its card; nothing is preselected
+    then, so erasing is always a choice someone makes.
+  * The plan for the summary page goes to global storage as wildosPlan.
+  * PartitionSplitterWidget gains a focused mode: only the partition being
+    split, as two named halves with their sizes and a white handle that can
+    be dragged or moved with the arrow keys.
+ .
+ Disk password on a later page:
+  * With luksPassphraseFrom (a global storage key) in partition.conf, the
+    encryption switch is not on this page: automatic layouts and the disk
+    editor make encrypted partitions with a placeholder passphrase, and
+    PartitionViewStep::jobs(), which runs after every page is done, puts the
+    password stored under that key in its place, or takes the encryption off
+    when wildosEncrypt is false. Without a password the install stops before
+    touching a disk.
+ .
+ BIOS computers: no boot loader menu on the cards (GRUB goes on the disk
+ being installed to). Installing alongside on an MBR disk whose primary
+ partitions would run out puts Wild OS in a new extended partition. The
+ disk editor adds a 1 MiB bios_grub partition with the system partition on
+ a GPT disk, and refuses a /boot it cannot fit on a full MBR disk.
+ .
+ Disk editor (InstallerManual.dc), DiskEditorPage, used instead of
+ PartitionPage for "Something else":
+  * A colour-coded map of the disk and a list of its partitions with plain
+    names ("Windows (C:)", "Your files (Home)", "Swap") tagged Keep as is or
+    New; a side panel with role buttons (Wild OS system, Your files, Swap,
+    Shared with Windows, Don't use), a size slider and field for new
+    partitions, Encrypt and Erase and format switches, and the device path
+    in small monospace; a live "Will erase / will create" summary; "Undo all
+    changes"; Add partition and Delete. The system role adds its 1 GB
+    unencrypted start-up partition (/boot) itself. Continue needs a Wild OS
+    system partition and a role for every new partition. Kept partitions
+    only get a mount point; anything erased is made again from scratch.
+Author: Wild OS Developers <dev@wildos.io>
+Forwarded: no
+
+--- a/src/libcalamaresui/widgets/PrettyRadioButton.cpp
++++ b/src/libcalamaresui/widgets/PrettyRadioButton.cpp
+@@ -17,6 +17,9 @@
+ #include <QGridLayout>
+ #include <QHBoxLayout>
+ #include <QLabel>
++#include <QMouseEvent>
++#include <QStyle>
++#include <QVBoxLayout>
+ 
+ namespace Calamares
+ {
+@@ -37,7 +40,11 @@ PrettyRadioButton::PrettyRadioButton( QWidget* parent )
+     m_label->setWordWrap( true );
+     m_label->setSizePolicy( QSizePolicy::Expanding, QSizePolicy::Preferred );
+ 
+-    m_mainLayout->addWidget( m_radio, 0, 0 );
++    // The whole button can be drawn as a card by the stylesheet, which can
++    // tell a picked one by its "checked" property.
++    setAttribute( Qt::WA_StyledBackground );
++    setProperty( "checked", false );
++    m_mainLayout->addWidget( m_radio, 0, 0, Qt::AlignTop );
+     m_mainLayout->addWidget( m_label, 0, 1 );
+     m_mainLayout->setContentsMargins( 0, 0, 0, 0 );
+ 
+@@ -118,6 +125,34 @@ PrettyRadioButton::addOptionsComboBox( QComboBox* box )
+     m_optionsLayout->insertWidget( m_optionsLayout->count() - 1, box );
+ }
+ 
++void
++PrettyRadioButton::addOptionsWidget( QWidget* widget )
++{
++    if ( !widget )
++    {
++        return;
++    }
++    if ( !m_optionsWidget )
++    {
++        m_optionsWidget = new QWidget;
++        auto* layout = new QVBoxLayout( m_optionsWidget );
++        layout->setContentsMargins( 0, 0, 0, 0 );
++        m_mainLayout->addWidget( m_optionsWidget, 2, 1 );
++        m_optionsWidget->setVisible( m_radio->isChecked() );
++    }
++    m_optionsWidget->layout()->addWidget( widget );
++}
++
++void
++PrettyRadioButton::mouseReleaseEvent( QMouseEvent* event )
++{
++    if ( event->button() == Qt::LeftButton && rect().contains( event->position().toPoint() ) && isEnabled() )
++    {
++        m_radio->click();
++    }
++    QWidget::mouseReleaseEvent( event );
++}
++
+ void
+ PrettyRadioButton::toggleOptions( bool toggle )
+ {
+@@ -125,6 +160,14 @@ PrettyRadioButton::toggleOptions( bool toggle )
+     {
+         m_optionsLayout->parentWidget()->setVisible( toggle );
+     }
++    if ( m_optionsWidget )
++    {
++        m_optionsWidget->setVisible( toggle );
++    }
++    setProperty( "checked", toggle );
++    style()->unpolish( this );
++    style()->polish( this );
++    update();
+ }
+ }  // namespace Widgets
+ }  // namespace Calamares
+--- a/src/libcalamaresui/widgets/PrettyRadioButton.h
++++ b/src/libcalamaresui/widgets/PrettyRadioButton.h
+@@ -64,15 +64,26 @@ public:
+     /// @brief Add an options drop-down to this button.
+     void addOptionsComboBox( QComboBox* );
+ 
++    /** @brief Add a widget under the text, shown while the button is on
++     *
++     * The widget sits in its own container, so it stays hidden while the
++     * button is off even if something calls show() on it.
++     */
++    void addOptionsWidget( QWidget* );
++
+ protected slots:
+     /// Options are hidden when the radio button is off
+     void toggleOptions( bool checked );
+ 
+ protected:
++    /// A click anywhere on the button that nothing else takes picks it.
++    void mouseReleaseEvent( QMouseEvent* event ) override;
++
+     ClickableLabel* m_label;
+     QRadioButton* m_radio;
+     QGridLayout* m_mainLayout;
+     QHBoxLayout* m_optionsLayout;
++    QWidget* m_optionsWidget = nullptr;
+ };
+ }  // namespace Widgets
+ }  // namespace Calamares
+--- a/src/modules/partition/CMakeLists.txt
++++ b/src/modules/partition/CMakeLists.txt
+@@ -70,6 +70,7 @@ if(KPMcore_FOUND)
+             core/PartUtils.cpp
+             gui/BootInfoWidget.cpp
+             gui/ChoicePage.cpp
++            gui/DiskEditorPage.cpp
+             gui/CreatePartitionDialog.cpp
+             gui/CreateVolumeGroupDialog.cpp
+             gui/DeviceInfoWidget.cpp
+--- a/src/modules/partition/PartitionViewStep.cpp
++++ b/src/modules/partition/PartitionViewStep.cpp
+@@ -16,12 +16,15 @@
+ #include "Config.h"
+ #include "core/BootLoaderModel.h"
+ #include "core/DeviceModel.h"
++#include "core/KPMHelpers.h"
+ #include "core/PartitionCoreModule.h"
+ #include "gui/ChoicePage.h"
++#include "gui/EncryptWidget.h"
+ #include "gui/PartitionBarsView.h"
+ #include "gui/PartitionLabelsView.h"
+-#include "gui/PartitionPage.h"
++#include "gui/DiskEditorPage.h"
+ #include "partition/FileSystem.h"
++#include "partition/PartitionIterator.h"
+ 
+ #include "Branding.h"
+ #include "GlobalStorage.h"
+@@ -30,12 +33,15 @@
+ #include "utils/Logger.h"
+ #include "utils/QtCompat.h"
+ #include "utils/Retranslator.h"
++#include "utils/String.h"
+ #include "utils/Variant.h"
+ #include "widgets/TranslationFix.h"
+ #include "widgets/WaitingWidget.h"
+ 
+ #include <kpmcore/core/device.h>
+ #include <kpmcore/core/partition.h>
++#include <kpmcore/fs/filesystemfactory.h>
++#include <kpmcore/fs/luks.h>
+ 
+ #include <QFormLayout>
+ #include <QMessageBox>
+@@ -375,11 +381,18 @@ PartitionViewStep::next()
+         {
+             if ( !m_manualPartitionPage )
+             {
+-                m_manualPartitionPage = new PartitionPage( m_core, *m_config );
++                // Wild OS: the plain-language editor instead of PartitionPage.
++                m_manualPartitionPage = new DiskEditorPage( m_core, *m_config );
++                connect( m_manualPartitionPage,
++                         &DiskEditorPage::nextStatusChanged,
++                         this,
++                         &PartitionViewStep::nextPossiblyChanged );
+                 m_widget->addWidget( m_manualPartitionPage );
+             }
+ 
+             m_widget->setCurrentWidget( m_manualPartitionPage );
++            // The footer's note follows which of the two pages shows.
++            Calamares::JobQueue::instance()->globalStorage()->insert( "wildosEditorOpen", true );
+             m_manualPartitionPage->selectDeviceByIndex( m_choicePage->lastSelectedDeviceIndex() );
+             if ( m_core->isDirty() )
+             {
+@@ -395,6 +408,7 @@ PartitionViewStep::back()
+ {
+     if ( m_widget->currentWidget() != m_choicePage )
+     {
++        Calamares::JobQueue::instance()->globalStorage()->insert( "wildosEditorOpen", false );
+         m_widget->setCurrentWidget( m_choicePage );
+         m_choicePage->setLastSelectedDeviceIndex( m_manualPartitionPage->selectedDeviceIndex() );
+ 
+@@ -416,7 +430,7 @@ PartitionViewStep::isNextEnabled() const
+ 
+     if ( m_manualPartitionPage && m_widget->currentWidget() == m_manualPartitionPage )
+     {
+-        return m_core->hasRootMountPoint();
++        return m_core->hasRootMountPoint() && m_manualPartitionPage->isComplete();
+     }
+ 
+     return false;
+@@ -464,6 +478,10 @@ void
+ PartitionViewStep::onActivate()
+ {
+     m_config->fillGSSecondaryConfiguration();
++    if ( m_choicePage )
++    {
++        m_choicePage->applyAlongsideBlock();
++    }
+ 
+     // if we're coming back to PVS from the next VS
+     if ( m_widget->currentWidget() == m_choicePage && m_config->installChoice() == Config::InstallChoice::Alongside )
+@@ -695,6 +713,7 @@ PartitionViewStep::onLeave()
+ 
+     if ( m_widget->currentWidget() == m_manualPartitionPage )
+     {
++        m_manualPartitionPage->onLeave();
+         if ( PartUtils::isEfiSystem() )
+         {
+             const QString espMountPoint
+@@ -910,6 +929,7 @@ PartitionViewStep::setConfigurationMap( const QVariantMap& configurationMap )
+                 Calamares::getBool( configurationMap, "alwaysShowPartitionLabels", true ) );
+     gs->insert( "enableLuksAutomatedPartitioning",
+                 Calamares::getBool( configurationMap, "enableLuksAutomatedPartitioning", true ) );
++    gs->insert( "luksPassphraseFrom", Calamares::getString( configurationMap, "luksPassphraseFrom" ) );
+ 
+     QString partitionTableName = Calamares::getString( configurationMap, "defaultPartitionTableType" );
+     if ( partitionTableName.isEmpty() )
+@@ -944,9 +964,117 @@ PartitionViewStep::setConfigurationMap( const QVariantMap& configurationMap )
+     m_core->dirFSRestrictLayout().init( configurationMap.value( "directoryFilesystemRestrictions" ).toList() );
+ }
+ 
++namespace
++{
++/// Stops the install before any disk is touched.
++class StopJob : public Calamares::Job
++{
++public:
++    explicit StopJob( const QString& message )
++        : m_message( message )
++    {
++    }
++    QString prettyName() const override { return m_message; }
++    Calamares::JobResult exec() override { return Calamares::JobResult::error( m_message ); }
++
++private:
++    QString m_message;
++};
++}  // namespace
++
+ Calamares::JobList
+ PartitionViewStep::jobs() const
+ {
++    // With luksPassphraseFrom set, every encrypted partition the pages made
++    // has a placeholder passphrase (see EncryptWidget). The page that asks
++    // for the disk password has stored it by now, because every page is done
++    // before the jobs are collected. Its key wildosEncrypt says whether to
++    // encrypt at all: if not, those partitions lose their LUKS layer and keep
++    // the file system that was inside.
++    //
++    // jobs() runs for the summary page and again for the install, and people
++    // can go back to the Encryption page in between, so the partitions are
++    // remembered the first time and brought in line with the answers every
++    // time: a new password, encryption turned off, or back on.
++    auto* gs = Calamares::JobQueue::instance()->globalStorage();
++    const QString passphraseKey = gs->value( "luksPassphraseFrom" ).toString();
++    if ( !passphraseKey.isEmpty() )
++    {
++        const QString placeholder = EncryptWidget::placeholderPassphrase();
++        const bool encrypt = !gs->contains( "wildosEncrypt" ) || gs->value( "wildosEncrypt" ).toBool();
++        const QString password = Calamares::String::obscure( gs->value( passphraseKey ).toString() );
++        int count = 0;
++        const auto* devices = m_core->deviceModel();
++        for ( int row = 0; row < devices->rowCount(); ++row )
++        {
++            Device* device = devices->deviceForIndex( devices->index( row ) );
++            for ( auto it = Calamares::Partition::PartitionIterator::begin( device );
++                  it != Calamares::Partition::PartitionIterator::end( device );
++                  ++it )
++            {
++                Partition* partition = *it;
++                auto* luks = dynamic_cast< FS::luks* >( &partition->fileSystem() );
++                if ( luks && luks->passphrase() == placeholder )
++                {
++                    m_passphraseLater.insert( partition );
++                }
++                if ( !m_passphraseLater.contains( partition ) )
++                {
++                    continue;
++                }
++                count++;
++                if ( encrypt && luks )
++                {
++                    luks->setPassphrase( password );
++                }
++                else if ( encrypt )
++                {
++                    // Turned off on an earlier pass, and on again.
++                    const FileSystem::Type inner = partition->fileSystem().type();
++                    const QString label = partition->fileSystem().label();
++                    auto* wrapped = dynamic_cast< FS::luks* >(
++                        FileSystemFactory::create( KPMHelpers::luksGenerationToFSName( m_config->luksFileSystemType() ),
++                                                   partition->firstSector(),
++                                                   partition->lastSector(),
++                                                   device->logicalSize() ) );
++                    if ( wrapped )
++                    {
++                        wrapped->createInnerFileSystem( inner );
++                        wrapped->setPassphrase( password );
++                        wrapped->setLabel( label );
++                        partition->deleteFileSystem();
++                        partition->setFileSystem( wrapped );
++                        partition->setRoles( PartitionRole( partition->roles().roles() | PartitionRole::Luks ) );
++                    }
++                }
++                else if ( luks )
++                {
++                    const FileSystem::Type inner = luks->innerFS() ? luks->innerFS()->type() : FileSystem::Ext4;
++                    const QString label = luks->label();
++                    partition->deleteFileSystem();
++                    FileSystem* plain = FileSystemFactory::create(
++                        inner, partition->firstSector(), partition->lastSector(), device->logicalSize() );
++                    plain->setLabel( label );
++                    partition->setFileSystem( plain );
++                    partition->setRoles( PartitionRole( partition->roles().roles() & ~PartitionRole::Luks ) );
++                }
++            }
++        }
++        if ( count > 0 && encrypt )
++        {
++            if ( password.isEmpty() )
++            {
++                return { Calamares::job_ptr(
++                    new StopJob( tr( "There is no disk password to lock the disk with.", "@info" ) ) ) };
++            }
++            gs->insert( "luksPassphrase", gs->value( passphraseKey ) );
++        }
++        else
++        {
++            gs->insert( "luksPassphrase", QString() );
++        }
++        cDebug() << "Disk passphrase for" << count << "partitions:" << ( encrypt ? "set" : "not encrypting" );
++    }
+     return m_core->jobs( m_config );
+ }
+ 
+--- a/src/modules/partition/PartitionViewStep.h
++++ b/src/modules/partition/PartitionViewStep.h
+@@ -22,7 +22,8 @@
+ 
+ class ChoicePage;
+ class Config;
+-class PartitionPage;
++class DiskEditorPage;
++class Partition;
+ class PartitionCoreModule;
+ class QStackedWidget;
+ class WaitingWidget;
+@@ -93,7 +94,10 @@ private:
+     PartitionCoreModule* m_core;
+     QStackedWidget* m_widget;
+     ChoicePage* m_choicePage;
+-    PartitionPage* m_manualPartitionPage;
++    DiskEditorPage* m_manualPartitionPage;
++    /// Partitions made with the placeholder passphrase (see jobs()). Only
++    /// compared against live partitions, never dereferenced.
++    mutable QSet< const Partition* > m_passphraseLater;
+ 
+     WaitingWidget* m_waitingWidget;
+     QFutureWatcher< void >* m_future;
+--- a/src/modules/partition/gui/ChoicePage.cpp
++++ b/src/modules/partition/gui/ChoicePage.cpp
+@@ -54,11 +54,27 @@
+ #include <QFutureWatcher>
+ #include <QLabel>
+ #include <QListView>
++#include <QTimer>
++
++#include <functional>
+ #include <QtConcurrent/QtConcurrent>
+ 
+ using Calamares::Partition::findPartitionByPath;
+ using Calamares::Partition::isPartitionFreeSpace;
+ using Calamares::Partition::PartitionIterator;
++
++/// The disk's model name, or "This disk" where the system only knows its
++/// device name (vda, nvme0n1), which means nothing to people.
++static QString
++friendlyDiskName( Device* device )
++{
++    const QString name = device ? device->name().trimmed() : QString();
++    if ( name.isEmpty() || !device || device->deviceNode().endsWith( QStringLiteral( "/" ) + name ) )
++    {
++        return QObject::tr( "This disk" );
++    }
++    return name;
++}
+ using Calamares::Widgets::PrettyRadioButton;
+ using InstallChoice = Config::InstallChoice;
+ using SwapChoice = Config::SwapChoice;
+@@ -91,6 +107,10 @@ ChoicePage::ChoicePage( Config* config, QWidget* parent )
+     auto gs = Calamares::JobQueue::instance()->globalStorage();
+ 
+     m_enableEncryptionWidget = gs->value( "enableLuksAutomatedPartitioning" ).toBool();
++    // With the passphrase on a later page, every automatic layout is made
++    // encrypted, before any layout exists (see EncryptWidget).
++    m_encryptWidget->setPassphraseLater( !gs->value( "luksPassphraseFrom" ).toString().isEmpty() );
++    m_preCheckActivated = m_encryptWidget->passphraseLater();
+ 
+     // Set up drives combo
+     m_mainLayout->setDirection( QBoxLayout::TopToBottom );
+@@ -112,9 +132,64 @@ ChoicePage::ChoicePage( Config* config, QWidget* parent )
+     m_drivesLayout->addStretch();
+ 
+     m_messageLabel->setWordWrap( true );
+-    m_messageLabel->hide();
++
++    // The page follows the Wild OS design: a title, a line about what is on
++    // the disk, the choices as cards and the encryption card. The before and
++    // after previews stay alive out of sight, because the "before" bars carry
++    // the selection that Alongside shrinks; the splitter moves into the
++    // Alongside card (see setupChoices()).
++    QWidget* outOfSight = new QWidget( this );
++    outOfSight->hide();
++    for ( QWidget* w : std::initializer_list< QWidget* > { m_previewBeforeLabel,
++                                                           m_previewBeforeFrame,
++                                                           m_previewAfterLabel,
++                                                           m_selectLabel,
++                                                           hLine,
++                                                           bootInfoWidget,
++                                                           m_deviceInfoWidget } )
++    {
++        w->setParent( outOfSight );
++    }
++    m_rightLayout->removeItem( beforeAfterGridLayout );
++
++    m_diskRow = new QWidget( this );
++    QHBoxLayout* diskLayout = new QHBoxLayout( m_diskRow );
++    diskLayout->setContentsMargins( 0, 0, 0, 0 );
++    diskLayout->setSpacing( 12 );
++    m_diskLabel = new QLabel( m_diskRow );
++    m_diskLabel->setObjectName( "m_diskLabel" );
++    m_diskLabel->setBuddy( m_drivesCombo );
++    m_drivesLayout->removeWidget( m_drivesCombo );
++    diskLayout->addWidget( m_diskLabel );
++    diskLayout->addWidget( m_drivesCombo );
++    diskLayout->addStretch();
++    m_rightLayout->insertWidget( 1, m_diskRow );
++    m_diskRow->hide();
++
++    // The cards and the encryption card share the scroll area, which only
++    // scrolls when a long disk list or the boot loader menu needs the room.
++    m_rightLayout->removeWidget( m_encryptWidget );
++    if ( m_encryptWidget->passphraseLater() )
++    {
++        m_encryptWidget->setParent( outOfSight );
++    }
++    else
++    {
++        m_itemsLayout->addSpacing( 12 );
++        m_itemsLayout->addWidget( m_encryptWidget );
++    }
++    m_rightLayout->setSpacing( 22 );
++    m_mainLayout->setSpacing( 6 );
++    m_mainLayout->setContentsMargins( 0, 0, 0, 0 );
++    // Only the title stays in the top row, without the old menu's spacing.
++    while ( QLayoutItem* item = m_drivesLayout->takeAt( 0 ) )
++    {
++        delete item;
++    }
++    m_drivesLayout->addWidget( m_drivesLabel );
+ 
+     Calamares::unmarginLayout( m_itemsLayout );
++    m_itemsLayout->setSpacing( 10 );
+ 
+     // Drive selector + preview
+     CALAMARES_RETRANSLATE_SLOT( &ChoicePage::retranslate );
+@@ -136,7 +211,8 @@ void
+ ChoicePage::retranslate()
+ {
+     retranslateUi( this );
+-    m_drivesLabel->setText( tr( "Select storage de&vice:", "@label" ) );
++    m_drivesLabel->setText( tr( "Where should %1 go?" ).arg( Calamares::Branding::instance()->shortProductName() ) );
++    m_diskLabel->setText( tr( "Select storage de&vice:", "@label" ) );
+     m_previewBeforeLabel->setText( tr( "Current:", "@label" ) );
+     m_previewAfterLabel->setText( tr( "After:", "@label" ) );
+ 
+@@ -186,9 +262,16 @@ ChoicePage::init( PartitionCoreModule* core )
+                  m_drivesCombo->setCurrentIndex( m_lastSelectedDeviceIndex );
+              } );
+     setModelToComboBox( m_drivesCombo, core->deviceModel() );
++    m_diskRow->setVisible( core->deviceModel()->rowCount() > 1 );
+ 
+     connect( m_drivesCombo, qOverload< int >( &QComboBox::currentIndexChanged ), this, &ChoicePage::applyDeviceChoice );
+-    connect( m_encryptWidget, &EncryptWidget::stateChanged, this, &ChoicePage::onEncryptWidgetStateChanged );
++    // Queued when the switch alone can make a layout, so a change never
++    // re-enters a preview update that holds m_previewsMutex.
++    connect( m_encryptWidget,
++             &EncryptWidget::stateChanged,
++             this,
++             &ChoicePage::onEncryptWidgetStateChanged,
++             m_encryptWidget->passphraseLater() ? Qt::QueuedConnection : Qt::AutoConnection );
+     connect(
+         m_reuseHomeCheckBox, Calamares::checkBoxStateChangedSignal, this, &ChoicePage::onHomeCheckBoxStateChanged );
+ 
+@@ -300,16 +383,29 @@ ChoicePage::setupChoices()
+         m_replaceButton->addOptionsComboBox( m_replaceFsTypesChoiceComboBox );
+     }
+ 
+-    m_itemsLayout->addWidget( m_alongsideButton );
+-    m_itemsLayout->addWidget( m_replaceButton );
+-    m_itemsLayout->addWidget( m_eraseButton );
++    // Before the encryption card, which the constructor put in this layout.
++    m_itemsLayout->insertWidget( 0, m_alongsideButton );
++    m_itemsLayout->insertWidget( 1, m_replaceButton );
++    m_itemsLayout->insertWidget( 2, m_eraseButton );
++    m_alongsideButton->addOptionsWidget( m_previewAfterFrame );
+ 
+     m_somethingElseButton = new PrettyRadioButton;
+     m_somethingElseButton->setIconSize( iconSize );
+     m_somethingElseButton->setIcon(
+         Calamares::defaultPixmap( Calamares::PartitionManual, Calamares::Original, iconSize ) );
+-    m_itemsLayout->addWidget( m_somethingElseButton );
++    m_itemsLayout->insertWidget( 3, m_somethingElseButton );
+     m_somethingElseButton->addToGroup( m_grp, InstallChoice::Manual );
++    for ( auto* card : { m_alongsideButton, m_replaceButton, m_eraseButton, m_somethingElseButton } )
++    {
++        card->setIconSize( QSize( 0, 0 ) );
++        card->setIcon( QIcon() );
++        card->layout()->setContentsMargins( 20, 18, 20, 18 );
++        if ( auto* grid = qobject_cast< QGridLayout* >( card->layout() ) )
++        {
++            grid->setHorizontalSpacing( 14 );
++            grid->setVerticalSpacing( 16 );
++        }
++    }
+ 
+     m_itemsLayout->addStretch();
+ 
+@@ -448,7 +544,11 @@ ChoicePage::continueApplyDeviceChoice()
+     if ( m_lastSelectedDeviceIndex != m_drivesCombo->currentIndex() )
+     {
+         m_lastSelectedDeviceIndex = m_drivesCombo->currentIndex();
+-        m_config->setInstallChoice( m_config->initialInstallChoice() );
++        // Keeping the other system is the safe first choice. When a Windows
++        // setting blocks it, nothing is picked: erasing must be a choice.
++        m_config->setInstallChoice( m_alongsideButton->isHidden() ? m_config->initialInstallChoice()
++                                        : m_alongsideButton->isEnabled() ? InstallChoice::Alongside
++                                                                         : InstallChoice::NoChoice );
+         checkInstallChoiceRadioButton( m_config->installChoice() );
+     }
+ 
+@@ -646,6 +746,33 @@ ChoicePage::doAlongsideSetupSplitter( const QModelIndex& current, const QModelIn
+                                                        part->capacity() - requiredStorageB,
+                                                        part->capacity() / 2 );
+ 
++    QString keptName;
++    for ( const OsproberEntry& entry : m_core->osproberEntries() )
++    {
++        if ( entry.path == part->partitionPath() )
++        {
++            keptName = entry.prettyName.contains( QStringLiteral( "Windows" ), Qt::CaseInsensitive )
++                ? QStringLiteral( "Windows" )
++                : entry.prettyName;
++        }
++    }
++    if ( keptName.isEmpty() )
++    {
++        keptName = part->label().isEmpty() ? part->fileSystem().name() : part->label();
++    }
++    const auto gb = []( qint64 bytes ) { return QStringLiteral( "%1 GB" ).arg( qRound64( bytes / 1e9 ) ); };
++    m_afterPartitionSplitterWidget->setFocusLabels( keptName,
++                                                    Calamares::Branding::instance()->shortProductName() );
++    if ( auto* used = m_previewAfterFrame->findChild< QLabel* >( "alongsideUsed" ) )
++    {
++        used->setText( tr( "%1 is using %2 of its space" ).arg( keptName, gb( part->used() ) ) );
++    }
++    if ( auto* disk = m_previewAfterFrame->findChild< QLabel* >( "alongsideDisk" ) )
++    {
++        Device* device = selectedDevice();
++        disk->setText( device ? tr( "%1, %2" ).arg( friendlyDiskName( device ), gb( device->capacity() ) ) : QString() );
++    }
++
+     if ( m_isEfi )
+     {
+         setupEfiSystemPartitionSelector();
+@@ -696,6 +823,8 @@ ChoicePage::onLeave()
+     const QString storedLuksPassphrase
+         = useLuksPassphrase ? Calamares::String::obscure( m_encryptWidget->passphrase() ) : QString();
+     gs->insert( "luksPassphrase", storedLuksPassphrase );
++    gs->insert( "otherSystemName", otherSystemName() );
++    storePlan();
+ 
+     if ( m_config->installChoice() == InstallChoice::Alongside )
+     {
+@@ -784,13 +913,47 @@ ChoicePage::doAlongsideApply()
+                 = firstSector + m_afterPartitionSplitterWidget->splitPartitionSize() / dev->logicalSize();
+ 
+             m_core->resizePartition( dev, candidate, firstSector, newLastSector );
++
++            // An MBR disk holds four primary partitions. BIOS Windows often
++            // uses three already, and Wild OS needs two (/boot and /), so
++            // there they go inside a new extended partition instead.
++            PartitionNode* parent = candidate->parent();
++            PartitionRole role = candidate->roles();
++            const qint64 align = qMax< qint64 >( 1, 1024 * 1024 / dev->logicalSize() );
++            qint64 first = ( ( newLastSector + align ) / align ) * align;
++            if ( dev->partitionTable() && dev->partitionTable()->type() == PartitionTable::msdos
++                 && candidate->roles().has( PartitionRole::Primary ) )
++            {
++                int primaries = 0;
++                for ( const Partition* p : dev->partitionTable()->children() )
++                {
++                    primaries += ( p->roles().has( PartitionRole::Primary )
++                                   || p->roles().has( PartitionRole::Extended ) )
++                        ? 1
++                        : 0;
++                }
++                if ( primaries + m_core->partitionLayout().count() > 4 )
++                {
++                    Partition* extended = KPMHelpers::createNewPartition( dev->partitionTable(),
++                                                                          *dev,
++                                                                          PartitionRole( PartitionRole::Extended ),
++                                                                          FileSystem::Extended,
++                                                                          QString(),
++                                                                          first,
++                                                                          oldLastSector,
++                                                                          KPM_PARTITION_FLAG( None ) );
++                    m_core->createPartition( dev, extended );
++                    parent = extended;
++                    role = PartitionRole( PartitionRole::Logical );
++                }
++            }
+             m_core->layoutApply( dev,
+-                                 newLastSector + 2,
++                                 first,
+                                  oldLastSector,
+                                  m_config->luksFileSystemType(),
+                                  m_encryptWidget->passphrase(),
+-                                 candidate->parent(),
+-                                 candidate->roles() );
++                                 parent,
++                                 role );
+             m_core->dumpQueue();
+ 
+             break;
+@@ -1069,30 +1232,20 @@ ChoicePage::updateActionChoicePreview( InstallChoice choice )
+         m_afterPartitionSplitterWidget->init( selectedDevice(), mode == PartitionBarsView::DrawNestedPartitions );
+         layout->addWidget( m_afterPartitionSplitterWidget );
+ 
+-        QLabel* sizeLabel = new QLabel( m_previewAfterFrame );
+-        layout->addWidget( sizeLabel );
+-        sizeLabel->setWordWrap( true );
++        layout->setSpacing( 8 );
++        QHBoxLayout* caption = new QHBoxLayout;
++        QLabel* usedLabel = new QLabel( m_previewAfterFrame );
++        usedLabel->setObjectName( "alongsideUsed" );
++        QLabel* diskLabel = new QLabel( m_previewAfterFrame );
++        diskLabel->setObjectName( "alongsideDisk" );
++        caption->addWidget( usedLabel );
++        caption->addStretch();
++        caption->addWidget( diskLabel );
++        layout->addLayout( caption );
+ 
+-        if ( !m_isEfi )
+-        {
+-            layout->addWidget( createBootloaderPanel() );
+-        }
++        // No boot loader menu: on BIOS computers GRUB goes on the disk Wild OS
++        // is installed to (see onLeave()).
+ 
+-        connect( m_afterPartitionSplitterWidget,
+-                 &PartitionSplitterWidget::partitionResized,
+-                 this,
+-                 [ this, sizeLabel ]( const QString& path, qint64 size, qint64 sizeNext )
+-                 {
+-                     Q_UNUSED( path )
+-                     sizeLabel->setText(
+-                         tr( "%1 will be shrunk to %2MiB and a new "
+-                             "%3MiB partition will be created for %4.",
+-                             "@info, %1 is partition name, %4 is product name" )
+-                             .arg( m_beforePartitionBarsView->selectionModel()->currentIndex().data().toString() )
+-                             .arg( Calamares::BytesToMiB( size ) )
+-                             .arg( Calamares::BytesToMiB( sizeNext ) )
+-                             .arg( Calamares::Branding::instance()->shortProductName() ) );
+-                 } );
+ 
+         m_previewAfterFrame->show();
+         m_previewAfterLabel->show();
+@@ -1105,6 +1258,9 @@ ChoicePage::updateActionChoicePreview( InstallChoice choice )
+         };
+         m_beforePartitionBarsView->setSelectionFilter( filter );
+         m_beforePartitionLabelsView->setSelectionFilter( filter );
++        // The bars that people would click are out of sight (see the
++        // constructor), so the page picks the partition to shrink.
++        QTimer::singleShot( 0, this, &ChoicePage::autoSelectPartitionToShrink );
+ 
+         break;
+     }
+@@ -1140,10 +1296,8 @@ ChoicePage::updateActionChoicePreview( InstallChoice choice )
+         layout->addWidget( m_afterPartitionBarsView );
+         layout->addWidget( m_afterPartitionLabelsView );
+ 
+-        if ( !m_isEfi )
+-        {
+-            layout->addWidget( createBootloaderPanel() );
+-        }
++        // No boot loader menu: on BIOS computers GRUB goes on the disk Wild OS
++        // is installed to (see onLeave()).
+ 
+         m_previewAfterFrame->show();
+         m_previewAfterLabel->show();
+@@ -1399,15 +1553,10 @@ ChoicePage::setupActions()
+ #endif
+ #endif
+ 
+-    if ( atLeastOneCanBeReplaced )
+-    {
+-        m_replaceButton->show();
+-    }
+-    else
+-    {
+-        cDebug() << "No partitions available for replace-action.";
+-        force_uncheck( m_grp, m_replaceButton );
+-    }
++    // Wild OS offers three choices; replacing one partition is done with
++    // "Something else".
++    Q_UNUSED( atLeastOneCanBeReplaced )
++    force_uncheck( m_grp, m_replaceButton );
+ 
+     if ( atLeastOneCanBeResized )
+     {
+@@ -1441,6 +1590,10 @@ ChoicePage::setupActions()
+         m_replaceButton->hide();
+     }
+ 
++    applyAlongsideBlock();
++    updateActionDescriptionsTr();
++    m_messageLabel->show();
++
+     if ( tableType != PartitionTable::unknownTableType && !matchTableType )
+     {
+         m_messageLabel->setText( tr( "This storage device already has an operating system on it, "
+@@ -1616,13 +1769,177 @@ ChoicePage::updateSwapChoicesTr()
+     }
+ }
+ 
++/// A choice card: a title over one line of explanation.
++static QString
++cardText( const QString& title, const QString& body )
++{
++    return QStringLiteral( "<div style=\"font-size:15px; font-weight:600;\">%1</div>"
++                           "<div style=\"margin-top:4px; font-size:13px; color:#c0c4d2;\">%2</div>" )
++        .arg( title.toHtmlEscaped(), body.toHtmlEscaped() );
++}
++
+ void
+ ChoicePage::updateChoiceButtonsTr()
+ {
+     if ( m_somethingElseButton )
+     {
+-        m_somethingElseButton->setText( tr( "<strong>Manual partitioning</strong><br/>"
+-                                            "You can create or resize partitions yourself." ) );
++        m_somethingElseButton->setText(
++            cardText( tr( "Something else" ), tr( "Choose disks and partitions yourself. For experienced users." ) ) );
++    }
++}
++
++/** @brief A short name for the other system on the disk, if there is one
++ *
++ * "Windows" for any Windows, the name os-prober gives otherwise, and an
++ * empty string for none or for several different systems.
++ */
++QString
++ChoicePage::otherSystemName() const
++{
++    Device* device = m_core ? const_cast< ChoicePage* >( this )->selectedDevice() : nullptr;
++    if ( !device )
++    {
++        return QString();
++    }
++    const auto entries = getOsproberEntriesForDevice( device );
++    bool allWindows = !entries.isEmpty();
++    for ( const auto& entry : entries )
++    {
++        allWindows = allWindows && entry.prettyName.contains( QStringLiteral( "Windows" ), Qt::CaseInsensitive );
++    }
++    if ( allWindows )
++    {
++        return QStringLiteral( "Windows" );
++    }
++    if ( entries.count() == 1 )
++    {
++        return entries.first().prettyName.isEmpty() ? tr( "another system" ) : entries.first().prettyName;
++    }
++    return QString();
++}
++
++QString
++ChoicePage::alongsideBlockedReason() const
++{
++    const QString reason = Calamares::JobQueue::instance()->globalStorage()->value( "alongsideBlocked" ).toString();
++    if ( reason == QStringLiteral( "bitlocker" ) )
++    {
++        return tr( "Not available while BitLocker is on in Windows. See Before we start." );
++    }
++    if ( reason == QStringLiteral( "faststartup" ) )
++    {
++        return tr( "Not available while Windows Fast Startup is on. See Before we start." );
++    }
++    if ( reason == QStringLiteral( "dirty" ) )
++    {
++        return tr( "Not available until Windows is shut down fully. See Before we start." );
++    }
++    if ( reason == QStringLiteral( "space" ) )
++    {
++        return tr( "Windows needs 40 GB free for this. See Before we start." );
++    }
++    return QString();
++}
++
++void
++ChoicePage::applyAlongsideBlock()
++{
++    if ( !m_alongsideButton )
++    {
++        return;
++    }
++    const bool blocked = !alongsideBlockedReason().isEmpty();
++    if ( blocked == !m_alongsideButton->isEnabled() )
++    {
++        return;
++    }
++    m_alongsideButton->setEnabled( !blocked );
++    if ( blocked && m_alongsideButton->isChecked() )
++    {
++        checkInstallChoiceRadioButton( InstallChoice::NoChoice );
++        m_config->setInstallChoice( InstallChoice::NoChoice );
++        Q_EMIT actionChosen();
++    }
++    updateActionDescriptionsTr();
++    updateNextEnabled();
++}
++
++/** @brief What the summary page shows, in global storage as wildosPlan */
++void
++ChoicePage::storePlan()
++{
++    Device* device = selectedDevice();
++    QVariantMap plan;
++    plan.insert( "other", otherSystemName() );
++    if ( device )
++    {
++        plan.insert( "disk", friendlyDiskName( device ) );
++        plan.insert( "diskNode", device->deviceNode() );
++        plan.insert( "diskSize", device->capacity() );
++    }
++    switch ( m_config->installChoice() )
++    {
++    case InstallChoice::Alongside:
++        plan.insert( "mode", "alongside" );
++        if ( m_afterPartitionSplitterWidget )
++        {
++            plan.insert( "otherSize", m_afterPartitionSplitterWidget->splitPartitionSize() );
++            plan.insert( "wildosSize", m_afterPartitionSplitterWidget->newPartitionSize() );
++        }
++        plan.insert( "erase", QStringList() );
++        break;
++    case InstallChoice::Erase:
++        plan.insert( "mode", "erase" );
++        plan.insert( "wildosSize", device ? device->capacity() : 0 );
++        plan.insert( "erase", QStringList { QStringLiteral( "everything" ) } );
++        break;
++    default:
++        plan.insert( "mode", "manual" );
++        break;
++    }
++    Calamares::JobQueue::instance()->globalStorage()->insert( "wildosPlan", plan );
++}
++
++void
++ChoicePage::autoSelectPartitionToShrink()
++{
++    if ( !m_beforePartitionBarsView || !m_beforePartitionBarsView->model()
++         || m_config->installChoice() != InstallChoice::Alongside )
++    {
++        return;
++    }
++    const auto* model = m_beforePartitionBarsView->model();
++    Logger::Once o;
++    QModelIndex best;
++    qint64 bestScore = -1;
++    std::function< void( const QModelIndex& ) > visit = [ & ]( const QModelIndex& parent )
++    {
++        for ( int row = 0; row < model->rowCount( parent ); ++row )
++        {
++            const QModelIndex index = model->index( row, 0, parent );
++            auto* part = static_cast< Partition* >( index.data( PartitionModel::PartitionPtrRole ).value< void* >() );
++            if ( part && PartUtils::canBeResized( part, o ) )
++            {
++                // A partition with a system on it beats a bigger one without.
++                bool hasSystem = false;
++                for ( const OsproberEntry& entry : m_core->osproberEntries() )
++                {
++                    hasSystem = hasSystem || entry.path == part->partitionPath();
++                }
++                const qint64 score = part->capacity() + ( hasSystem ? ( qint64( 1 ) << 60 ) : 0 );
++                if ( score > bestScore )
++                {
++                    bestScore = score;
++                    best = index;
++                }
++            }
++            visit( index );
++        }
++    };
++    visit( QModelIndex() );
++    if ( best.isValid() )
++    {
++        m_beforePartitionBarsView->selectionModel()->setCurrentIndex( best, QItemSelectionModel::ClearAndSelect );
+     }
+ }
+ 
+@@ -1729,93 +2046,60 @@ ChoicePage::shouldShowEncryptWidget( Config::InstallChoice choice ) const
+ void
+ ChoicePage::updateActionDescriptionsTr()
+ {
+-    if ( m_osproberEntriesCount == 0 )
+-    {
+-        cDebug() << "Setting texts for 0 osprober entries";
+-        m_messageLabel->setText( tr( "This storage device does not seem to have an operating system on it. "
+-                                     "What would you like to do?<br/>"
+-                                     "You will be able to review and confirm your choices "
+-                                     "before any change is made to the storage device." ) );
+-
+-        m_eraseButton->setText( tr( "<strong>Erase disk</strong><br/>"
+-                                    "This will <font color=\"red\">delete</font> all data "
+-                                    "currently present on the selected storage device." ) );
+-
+-        m_alongsideButton->setText( tr( "<strong>Install alongside</strong><br/>"
+-                                        "The installer will shrink a partition to make room for %1." )
+-                                        .arg( Calamares::Branding::instance()->shortVersionedName() ) );
+-
+-        m_replaceButton->setText( tr( "<strong>Replace a partition</strong><br/>"
+-                                      "Replaces a partition with %1." )
+-                                      .arg( Calamares::Branding::instance()->shortVersionedName() ) );
+-    }
+-    if ( m_osproberEntriesCount == 1 )
+-    {
+-        if ( !m_osproberOneEntryName.isEmpty() )
+-        {
+-            cDebug() << "Setting texts for 1 non-empty osprober entry";
+-            m_messageLabel->setText( tr( "This storage device has %1 on it. "
+-                                         "What would you like to do?<br/>"
+-                                         "You will be able to review and confirm your choices "
+-                                         "before any change is made to the storage device." )
+-                                         .arg( m_osproberOneEntryName ) );
+-
+-            m_alongsideButton->setText( tr( "<strong>Install alongside</strong><br/>"
+-                                            "The installer will shrink a partition to make room for %1." )
+-                                            .arg( Calamares::Branding::instance()->shortVersionedName() ) );
+-
+-            m_eraseButton->setText( tr( "<strong>Erase disk</strong><br/>"
+-                                        "This will <font color=\"red\">delete</font> all data "
+-                                        "currently present on the selected storage device." ) );
+-
+-            m_replaceButton->setText( tr( "<strong>Replace a partition</strong><br/>"
+-                                          "Replaces a partition with %1." )
+-                                          .arg( Calamares::Branding::instance()->shortVersionedName() ) );
+-        }
+-        else
++    if ( m_osproberEntriesCount < 0 || !m_eraseButton )
++    {
++        return;  // Nothing scanned yet
++    }
++    const QString product = Calamares::Branding::instance()->shortProductName();
++    const QString other = otherSystemName();
++    const bool keepPossible = m_alongsideButton && !m_alongsideButton->isHidden();
++
++    if ( m_osproberEntriesCount <= 0 )
++    {
++        m_messageLabel->setText( tr( "There is no other system on this disk, so %1 can use all of it." ).arg( product ) );
++        m_eraseButton->setText( cardText( tr( "Replace everything on this disk" ),
++                                          tr( "Erases the whole disk. Copy anything you want to keep somewhere "
++                                              "safe first." ) ) );
++    }
++    else if ( !other.isEmpty() )
++    {
++        m_messageLabel->setText(
++            keepPossible ? tr( "We found %1 on this computer. You can keep it and choose which one to use each "
++                               "time you start up." )
++                               .arg( other )
++                         : tr( "We found %1 on this computer, but %2 cannot make room beside it. It may be short "
++                               "of free space, or locked with BitLocker." )
++                               .arg( other, product ) );
++        m_eraseButton->setText(
++            cardText( tr( "Replace %1 with %2" ).arg( other, product ),
++                      tr( "Erases the whole disk, %1 and your files included. Copy anything you want to keep "
++                          "somewhere safe first." )
++                          .arg( other ) ) );
++        m_alongsideButton->setText(
++            cardText( tr( "Install alongside %1" ).arg( other ),
++                      alongsideBlockedReason().isEmpty()
++                          ? tr( "Keeps %1 and all your files. Drag the divider to share the space." ).arg( other )
++                          : alongsideBlockedReason() ) );
++        if ( keepPossible && !m_alongsideButton->isEnabled() )
+         {
+-            cDebug() << "Setting texts for 1 empty osprober entry";
+-            m_messageLabel->setText( tr( "This storage device already has an operating system on it. "
+-                                         "What would you like to do?<br/>"
+-                                         "You will be able to review and confirm your choices "
+-                                         "before any change is made to the storage device." ) );
+-
+-            m_alongsideButton->setText( tr( "<strong>Install alongside</strong><br/>"
+-                                            "The installer will shrink a partition to make room for %1." )
+-                                            .arg( Calamares::Branding::instance()->shortVersionedName() ) );
+-
+-            m_eraseButton->setText( tr( "<strong>Erase disk</strong><br/>"
+-                                        "This will <font color=\"red\">delete</font> all data "
+-                                        "currently present on the selected storage device." ) );
+-
+-            m_replaceButton->setText( tr( "<strong>Replace a partition</strong><br/>"
+-                                          "Replaces a partition with %1." )
+-                                          .arg( Calamares::Branding::instance()->shortVersionedName() ) );
++            m_messageLabel->setText( tr( "We found %1 on this computer. To keep it, first change the Windows "
++                                         "settings listed in Before we start." )
++                                         .arg( other ) );
+         }
+     }
+-    if ( m_osproberEntriesCount >= 2 )
+-    {
+-        cDebug() << "Setting texts for >= 2 osprober entries";
+-
+-        m_messageLabel->setText( tr( "This storage device has multiple operating systems on it. "
+-                                     "What would you like to do?<br/>"
+-                                     "You will be able to review and confirm your choices "
+-                                     "before any change is made to the storage device." ) );
+-
+-        m_alongsideButton->setText( tr( "<strong>Install alongside</strong><br/>"
+-                                        "The installer will shrink a partition to make room for %1." )
+-                                        .arg( Calamares::Branding::instance()->shortVersionedName() ) );
+-
+-        m_eraseButton->setText( tr( "<strong>Erase disk</strong><br/>"
+-                                    "This will <font color=\"red\">delete</font> all data "
+-                                    "currently present on the selected storage device." ) );
+-
+-        m_replaceButton->setText( tr( "<strong>Replace a partition</strong><br/>"
+-                                      "Replaces a partition with %1." )
+-                                      .arg( Calamares::Branding::instance()->shortVersionedName() ) );
+-    }
+-    if ( m_osproberEntriesCount < 0 )
++    else
+     {
+-        cWarning() << "Invalid osprober count, labels and buttons not updated.";
+-    }
++        m_messageLabel->setText(
++            keepPossible ? tr( "We found other systems on this computer. You can keep them and choose which one to "
++                               "use each time you start up." )
++                         : tr( "We found other systems on this computer, but %1 cannot make room beside them." )
++                               .arg( product ) );
++        m_eraseButton->setText( cardText( tr( "Replace everything on this disk" ),
++                                          tr( "Erases the whole disk, the other systems and your files "
++                                              "included. Copy anything you want to keep somewhere safe first." ) ) );
++        m_alongsideButton->setText(
++            cardText( tr( "Install alongside the other systems" ),
++                      tr( "Keeps them and all your files. Drag the divider to share the space." ) ) );
++    }
++    m_replaceButton->setText( cardText( tr( "Replace a partition" ), tr( "Replaces a partition with %1." ).arg( product ) ) );
+ }
+--- a/src/modules/partition/gui/ChoicePage.h
++++ b/src/modules/partition/gui/ChoicePage.h
+@@ -79,6 +79,14 @@ public:
+      */
+     void onLeave();
+ 
++    /** @brief Follow the Windows settings checked on the first page
++     *
++     * Global storage key alongsideBlocked names a Windows setting that makes
++     * resizing Windows unsafe ("bitlocker", "faststartup", "dirty" or
++     * "space"). Install alongside is then shown but cannot be picked.
++     */
++    void applyAlongsideBlock();
++
+     /**
+      * @brief applyActionChoice reacts to a choice of partitioning mode.
+      * @param choice the partitioning action choice.
+@@ -169,6 +177,13 @@ private:
+     QPointer< QComboBox > m_efiComboBox;
+ 
+     int m_lastSelectedDeviceIndex = -1;
++
++    QWidget* m_diskRow = nullptr;  ///< Disk picker, shown with more than one disk
++    QLabel* m_diskLabel = nullptr;
++    QString otherSystemName() const;
++    QString alongsideBlockedReason() const;
++    void storePlan();
++    void autoSelectPartitionToShrink();
+     int m_osproberEntriesCount = -1;
+     QString m_osproberOneEntryName;
+ 
+--- /dev/null
++++ b/src/modules/partition/gui/DiskEditorPage.cpp
+@@ -0,0 +1,1344 @@
++/* === This file is part of Calamares - <https://calamares.io> ===
++ *
++ *   SPDX-FileCopyrightText: 2026 Wild OS Developers <dev@wildos.io>
++ *   SPDX-License-Identifier: GPL-3.0-or-later
++ *
++ *   Calamares is Free Software: see the License-Identifier above.
++ *
++ */
++
++#include "DiskEditorPage.h"
++
++#include "Config.h"
++#include "core/DeviceModel.h"
++#include "core/KPMHelpers.h"
++#include "core/OsproberEntry.h"
++#include "core/PartUtils.h"
++#include "core/PartitionCoreModule.h"
++#include "core/PartitionInfo.h"
++#include "gui/EncryptWidget.h"
++
++#include "GlobalStorage.h"
++#include "JobQueue.h"
++#include "partition/PartitionIterator.h"
++#include "partition/PartitionQuery.h"
++#include "utils/Logger.h"
++
++#include <kpmcore/core/device.h>
++#include <kpmcore/core/partition.h>
++#include <kpmcore/core/partitiontable.h>
++#include <kpmcore/fs/filesystem.h>
++#include <kpmcore/fs/luks.h>
++
++#include <QBoxLayout>
++#include <QCheckBox>
++#include <QComboBox>
++#include <QGridLayout>
++#include <QIntValidator>
++#include <QLabel>
++#include <QLineEdit>
++#include <QMouseEvent>
++#include <QPainter>
++#include <QPainterPath>
++#include <QPushButton>
++#include <QScrollArea>
++#include <QSlider>
++
++#include <limits>
++
++using Calamares::Partition::isPartitionFreeSpace;
++using Calamares::Partition::isPartitionNew;
++using Calamares::Partition::PartitionIterator;
++
++/// The disk's model name, or "This disk" where the system only knows its
++/// device name (vda, nvme0n1), which means nothing to people.
++static QString
++friendlyDiskName( Device* device )
++{
++    const QString name = device ? device->name().trimmed() : QString();
++    if ( name.isEmpty() || !device || device->deviceNode().endsWith( QStringLiteral( "/" ) + name ) )
++    {
++        return QObject::tr( "This disk" );
++    }
++    return name;
++}
++
++static constexpr qint64 GB = 1000LL * 1000 * 1000;
++static constexpr qint64 BOOT_SIZE = 1024LL * 1024 * 1024;
++
++static QString
++gbText( qint64 bytes )
++{
++    if ( bytes < GB )
++    {
++        return QStringLiteral( "%1 MB" ).arg( qMax< qint64 >( 1, qRound64( bytes / 1e6 ) ) );
++    }
++    return QStringLiteral( "%1 GB" ).arg( qRound64( bytes / 1e9 ) );
++}
++
++/// The roles people pick, in the order of the buttons.
++static const QStringList pickableRoles { "system", "home", "swap", "shared", "unused" };
++
++static QColor
++roleColour( const QString& role )
++{
++    if ( role == "system" || role == "boot" )
++    {
++        return QColor( 0x8f, 0xb4, 0xff );
++    }
++    if ( role == "home" )
++    {
++        return QColor( 0xb9, 0xa6, 0xf5 );
++    }
++    if ( role == "swap" )
++    {
++        return QColor( 0xee, 0xb0, 0xa4 );
++    }
++    if ( role == "shared" )
++    {
++        return QColor( 0x8f, 0xd6, 0xc4 );
++    }
++    if ( role == "windows" )
++    {
++        return QColor( 0x6c, 0x7a, 0x99 );
++    }
++    if ( role.isEmpty() )
++    {
++        return QColor( 0xe8, 0xec, 0xf8, 0x60 );
++    }
++    return QColor( 0x9a, 0xa4, 0xbd );
++}
++
++/// The disk map: one block per partition, sized by its share of the disk.
++class DiskMapView : public QWidget
++{
++    Q_OBJECT
++public:
++    explicit DiskMapView( QWidget* parent )
++        : QWidget( parent )
++    {
++        setFixedHeight( 46 );
++        setCursor( Qt::PointingHandCursor );
++    }
++    void setEntries( const QVector< DiskEditorPage::Entry >& entries, qint64 selected )
++    {
++        m_entries = entries;
++        m_selected = selected;
++        update();
++    }
++
++Q_SIGNALS:
++    void picked( qint64 first );
++
++protected:
++    QVector< QRectF > blocks() const
++    {
++        QVector< QRectF > out;
++        qint64 total = 0;
++        for ( const auto& e : m_entries )
++        {
++            total += e.last - e.first + 1;
++        }
++        const qreal gap = 2;
++        const qreal usable = width() - gap * qMax( 0, int( m_entries.count() ) - 1 );
++        qreal x = 0;
++        for ( const auto& e : m_entries )
++        {
++            const qreal w = total > 0 ? qMax< qreal >( 6, usable * qreal( e.last - e.first + 1 ) / total ) : 0;
++            out.append( QRectF( x, 0, w, height() ) );
++            x += w + gap;
++        }
++        return out;
++    }
++
++    void paintEvent( QPaintEvent* ) override
++    {
++        QPainter p( this );
++        p.setRenderHint( QPainter::Antialiasing );
++        QPainterPath clip;
++        clip.addRoundedRect( QRectF( rect() ), 10, 10 );
++        p.setClipPath( clip );
++        const auto rects = blocks();
++        QFont f = font();
++        f.setPixelSize( 11 );
++        f.setWeight( QFont::DemiBold );
++        p.setFont( f );
++        for ( int i = 0; i < m_entries.count(); ++i )
++        {
++            const auto& e = m_entries[ i ];
++            const QRectF r = rects[ i ];
++            if ( !e.partition )
++            {
++                p.fillRect( r, QColor( 255, 255, 255, 15 ) );
++                p.setPen( QPen( QColor( 255, 255, 255, 60 ), 1, Qt::DashLine ) );
++                p.drawRect( r.adjusted( 0.5, 0.5, -0.5, -0.5 ) );
++            }
++            else
++            {
++                p.fillRect( r, e.colour );
++            }
++            if ( e.first == m_selected )
++            {
++                p.setPen( QPen( Qt::white, 2 ) );
++                p.drawRect( r.adjusted( 1, 1, -1, -1 ) );
++            }
++            const QString label = e.partition ? e.name : tr( "Free space" );
++            if ( r.width() > 70 )
++            {
++                p.setPen( e.partition ? QColor( 0x0f, 0x15, 0x30 ) : QColor( 232, 236, 248, 180 ) );
++                p.drawText( r.adjusted( 8, 0, -4, -6 ),
++                            Qt::AlignLeft | Qt::AlignBottom,
++                            p.fontMetrics().elidedText( label, Qt::ElideRight, int( r.width() ) - 12 ) );
++            }
++        }
++    }
++
++    void mousePressEvent( QMouseEvent* event ) override
++    {
++        const auto rects = blocks();
++        for ( int i = 0; i < rects.count(); ++i )
++        {
++            if ( rects[ i ].contains( event->position() ) && m_entries[ i ].partition )
++            {
++                Q_EMIT picked( m_entries[ i ].first );
++            }
++        }
++    }
++
++private:
++    QVector< DiskEditorPage::Entry > m_entries;
++    qint64 m_selected = -1;
++};
++
++/// The partition list: colour, plain name and detail, size, and Keep as is or New.
++class PartitionRowsView : public QWidget
++{
++    Q_OBJECT
++public:
++    explicit PartitionRowsView( QWidget* parent )
++        : QWidget( parent )
++    {
++        setCursor( Qt::PointingHandCursor );
++        setFocusPolicy( Qt::StrongFocus );
++    }
++    void setEntries( const QVector< DiskEditorPage::Entry >& entries, qint64 selected )
++    {
++        m_entries.clear();
++        for ( const auto& e : entries )
++        {
++            if ( e.partition )
++            {
++                m_entries.append( e );
++            }
++        }
++        m_selected = selected;
++        setMinimumHeight( int( m_entries.count() ) * rowHeight );
++        update();
++    }
++    QSize sizeHint() const override { return QSize( 300, int( m_entries.count() ) * rowHeight ); }
++
++Q_SIGNALS:
++    void picked( qint64 first );
++
++protected:
++    static constexpr int rowHeight = 48;
++
++    void paintEvent( QPaintEvent* ) override
++    {
++        QPainter p( this );
++        p.setRenderHint( QPainter::Antialiasing );
++        QFont name = font();
++        name.setPixelSize( 13 );
++        QFont small = font();
++        small.setPixelSize( 11 );
++        QFont size = font();
++        size.setPixelSize( 12 );
++        for ( int i = 0; i < m_entries.count(); ++i )
++        {
++            const auto& e = m_entries[ i ];
++            const QRectF row( 0, i * rowHeight, width(), rowHeight );
++            const bool selected = e.first == m_selected;
++            if ( selected )
++            {
++                p.fillRect( row, QColor( 143, 180, 255, 31 ) );
++            }
++            p.setPen( QColor( 255, 255, 255, 15 ) );
++            p.drawLine( row.bottomLeft() - QPointF( 0, 0.5 ), row.bottomRight() - QPointF( 0, 0.5 ) );
++
++            p.setPen( Qt::NoPen );
++            p.setBrush( e.colour );
++            p.drawRoundedRect( QRectF( 14, row.center().y() - 6, 12, 12 ), 3, 3 );
++
++            // Right to left: the tag, then the size.
++            const QString tag = e.isNew ? tr( "New" ) : tr( "Keep as is" );
++            p.setFont( small );
++            name.setWeight( e.isNew ? QFont::DemiBold : QFont::Normal );
++            QFont tagFont = small;
++            tagFont.setWeight( e.isNew ? QFont::DemiBold : QFont::Normal );
++            p.setFont( tagFont );
++            const qreal tagW = p.fontMetrics().horizontalAdvance( tag ) + 16;
++            const QRectF tagRect( width() - 14 - tagW, row.center().y() - 11, tagW, 22 );
++            p.setBrush( e.isNew ? QColor( 143, 180, 255, 46 ) : QColor( 255, 255, 255, 20 ) );
++            p.drawRoundedRect( tagRect, 11, 11 );
++            p.setPen( e.isNew ? QColor( 0xc9, 0xd8, 0xff ) : QColor( 232, 236, 248, 204 ) );
++            p.drawText( tagRect, Qt::AlignCenter, tag );
++
++            p.setFont( size );
++            const QString sizeText = gbText( ( e.last - e.first + 1 ) * m_sectorSize );
++            const qreal sizeW = p.fontMetrics().horizontalAdvance( sizeText );
++            const QRectF sizeRect( tagRect.left() - 12 - sizeW, row.top(), sizeW, rowHeight );
++            p.setPen( QColor( 232, 236, 248, 204 ) );
++            p.drawText( sizeRect, Qt::AlignVCenter | Qt::AlignRight, sizeText );
++
++            const qreal textLeft = 38;
++            const qreal textWidth = sizeRect.left() - 12 - textLeft;
++            name.setWeight( selected ? QFont::DemiBold : QFont::Normal );
++            p.setFont( name );
++            p.setPen( QColor( 0xee, 0xf1, 0xf8 ) );
++            p.drawText( QRectF( textLeft, row.top() + 7, textWidth, 18 ),
++                        Qt::AlignLeft | Qt::AlignVCenter,
++                        p.fontMetrics().elidedText( e.name, Qt::ElideRight, int( textWidth ) ) );
++            p.setFont( small );
++            p.setPen( QColor( 232, 236, 248, 184 ) );
++            p.drawText( QRectF( textLeft, row.top() + 25, textWidth, 15 ),
++                        Qt::AlignLeft | Qt::AlignVCenter,
++                        p.fontMetrics().elidedText( e.detail, Qt::ElideRight, int( textWidth ) ) );
++        }
++    }
++
++    void mousePressEvent( QMouseEvent* event ) override
++    {
++        const int i = int( event->position().y() ) / rowHeight;
++        if ( i >= 0 && i < m_entries.count() )
++        {
++            Q_EMIT picked( m_entries[ i ].first );
++        }
++    }
++
++    void keyPressEvent( QKeyEvent* event ) override
++    {
++        int i = -1;
++        for ( int j = 0; j < m_entries.count(); ++j )
++        {
++            if ( m_entries[ j ].first == m_selected )
++            {
++                i = j;
++            }
++        }
++        if ( event->key() == Qt::Key_Down && i + 1 < m_entries.count() )
++        {
++            Q_EMIT picked( m_entries[ i + 1 ].first );
++        }
++        else if ( event->key() == Qt::Key_Up && i > 0 )
++        {
++            Q_EMIT picked( m_entries[ i - 1 ].first );
++        }
++        else
++        {
++            QWidget::keyPressEvent( event );
++        }
++    }
++
++public:
++    qint64 m_sectorSize = 512;
++
++private:
++    QVector< DiskEditorPage::Entry > m_entries;
++    qint64 m_selected = -1;
++};
++
++static QLabel*
++makeLabel( const QString& objectName, QWidget* parent )
++{
++    auto* l = new QLabel( parent );
++    l->setObjectName( objectName );
++    return l;
++}
++
++DiskEditorPage::DiskEditorPage( PartitionCoreModule* core, const Config& config, QWidget* parent )
++    : QWidget( parent )
++    , m_core( core )
++    , m_config( config )
++{
++    setObjectName( "DiskEditorPage" );
++    auto* page = new QVBoxLayout( this );
++    page->setContentsMargins( 0, 0, 0, 0 );
++    page->setSpacing( 16 );
++
++    auto* header = new QHBoxLayout;
++    header->setSpacing( 16 );
++    auto* titles = new QVBoxLayout;
++    titles->setSpacing( 6 );
++    auto* title = makeLabel( "editorTitle", this );
++    title->setText( tr( "Set up disks yourself" ) );
++    m_subtitle = makeLabel( "editorSubtitle", this );
++    titles->addWidget( title );
++    titles->addWidget( m_subtitle );
++    header->addLayout( titles, 1 );
++    auto* undo = new QPushButton( tr( "Undo all changes" ), this );
++    header->addWidget( undo, 0, Qt::AlignBottom );
++    page->addLayout( header );
++
++    // With more than one disk, which one is shown.
++    m_disks = new QComboBox( this );
++    m_disks->setModel( m_core->deviceModel() );
++    m_disks->setVisible( m_core->deviceModel()->rowCount() > 1 );
++    page->addWidget( m_disks, 0, Qt::AlignLeft );
++
++    m_map = new DiskMapView( this );
++    page->addWidget( m_map );
++
++    auto* body = new QHBoxLayout;
++    body->setSpacing( 18 );
++
++    auto* listCard = new QWidget( this );
++    listCard->setObjectName( "editorCard" );
++    listCard->setAttribute( Qt::WA_StyledBackground );
++    auto* listLayout = new QVBoxLayout( listCard );
++    listLayout->setContentsMargins( 0, 0, 0, 0 );
++    listLayout->setSpacing( 0 );
++    auto* scroll = new QScrollArea( listCard );
++    scroll->setFrameShape( QFrame::NoFrame );
++    scroll->setWidgetResizable( true );
++    m_rows = new PartitionRowsView( scroll );
++    scroll->setWidget( m_rows );
++    listLayout->addWidget( scroll, 1 );
++    auto* listButtons = new QHBoxLayout;
++    listButtons->setContentsMargins( 14, 7, 14, 7 );
++    listButtons->setSpacing( 8 );
++    m_add = new QPushButton( tr( "Add partition" ), listCard );
++    m_add->setObjectName( "smallButton" );
++    m_delete = new QPushButton( tr( "Delete" ), listCard );
++    m_delete->setObjectName( "smallButton" );
++    listButtons->addWidget( m_add );
++    listButtons->addWidget( m_delete );
++    listButtons->addStretch();
++    listLayout->addLayout( listButtons );
++    body->addWidget( listCard, 125 );
++
++    auto* panel = new QWidget( this );
++    panel->setObjectName( "editorCard" );
++    panel->setAttribute( Qt::WA_StyledBackground );
++    auto* panelLayout = new QVBoxLayout( panel );
++    panelLayout->setContentsMargins( 18, 18, 18, 18 );
++    panelLayout->setSpacing( 12 );
++    m_panelTitle = makeLabel( "panelTitle", panel );
++    panelLayout->addWidget( m_panelTitle );
++    m_panelNote = makeLabel( "panelNote", panel );
++    m_panelNote->setWordWrap( true );
++    panelLayout->addWidget( m_panelNote );
++
++    m_roleBox = new QWidget( panel );
++    auto* roleLayout = new QVBoxLayout( m_roleBox );
++    roleLayout->setContentsMargins( 0, 0, 0, 0 );
++    roleLayout->setSpacing( 8 );
++    auto* useFor = makeLabel( "panelCaption", m_roleBox );
++    useFor->setText( tr( "Use for" ) );
++    roleLayout->addWidget( useFor );
++    auto* chips = new QGridLayout;
++    chips->setSpacing( 6 );
++    const QStringList roleNames { tr( "Wild OS system" ), tr( "Your files" ), tr( "Swap" ),
++                                  tr( "Shared with Windows" ), tr( "Don't use" ) };
++    for ( int i = 0; i < pickableRoles.count(); ++i )
++    {
++        auto* chip = new QPushButton( roleNames[ i ], m_roleBox );
++        chip->setObjectName( "roleChip" );
++        chip->setCheckable( true );
++        chips->addWidget( chip, i / 3, i % 3 );
++        m_roleButtons.append( chip );
++        const QString role = pickableRoles[ i ];
++        connect( chip,
++                 &QPushButton::clicked,
++                 this,
++                 [ this, role ]
++                 {
++                     const bool newRole = roleOf( nullptr ) != role;
++                     Q_UNUSED( newRole )
++                     apply( role, -1, m_encrypt->isChecked(), m_erase->isChecked() );
++                 } );
++    }
++    roleLayout->addLayout( chips );
++    panelLayout->addWidget( m_roleBox );
++
++    m_sizeBox = new QWidget( panel );
++    auto* sizeLayout = new QVBoxLayout( m_sizeBox );
++    sizeLayout->setContentsMargins( 0, 0, 0, 0 );
++    sizeLayout->setSpacing( 8 );
++    auto* sizeCaption = makeLabel( "panelCaption", m_sizeBox );
++    sizeCaption->setText( tr( "Size" ) );
++    sizeLayout->addWidget( sizeCaption );
++    auto* sizeRow = new QHBoxLayout;
++    sizeRow->setSpacing( 12 );
++    m_size = new QSlider( Qt::Horizontal, m_sizeBox );
++    m_sizeField = new QLineEdit( m_sizeBox );
++    m_sizeField->setObjectName( "sizeField" );
++    m_sizeField->setFixedWidth( 78 );
++    sizeRow->addWidget( m_size, 1 );
++    sizeRow->addWidget( m_sizeField );
++    sizeLayout->addLayout( sizeRow );
++    panelLayout->addWidget( m_sizeBox );
++
++    auto switchRow = [ panel ]( const QString& title, QLabel*& detail, QCheckBox*& box ) -> QWidget*
++    {
++        auto* row = new QWidget( panel );
++        auto* l = new QHBoxLayout( row );
++        l->setContentsMargins( 0, 0, 0, 0 );
++        l->setSpacing( 12 );
++        auto* texts = new QVBoxLayout;
++        texts->setSpacing( 2 );
++        auto* t = makeLabel( "switchTitle", row );
++        t->setText( title );
++        detail = makeLabel( "switchDetail", row );
++        texts->addWidget( t );
++        texts->addWidget( detail );
++        l->addLayout( texts, 1 );
++        box = new QCheckBox( row );
++        box->setAccessibleName( title );
++        l->addWidget( box );
++        return row;
++    };
++    QLabel* encryptDetail = nullptr;
++    m_encryptRow = switchRow( tr( "Encrypt" ), encryptDetail, m_encrypt );
++    encryptDetail->setText( tr( "Uses the same password as the system" ) );
++    panelLayout->addWidget( m_encryptRow );
++    m_eraseRow = switchRow( tr( "Erase and format" ), m_eraseDetail, m_erase );
++    panelLayout->addWidget( m_eraseRow );
++    m_path = makeLabel( "devicePath", panel );
++    panelLayout->addWidget( m_path );
++    panelLayout->addStretch();
++    body->addWidget( panel, 100 );
++    page->addLayout( body, 1 );
++
++    m_summary = makeLabel( "editorSummary", this );
++    m_summary->setWordWrap( true );
++    page->addWidget( m_summary );
++
++    connect( undo, &QPushButton::clicked, this, &DiskEditorPage::onRevertClicked );
++    connect( m_disks, qOverload< int >( &QComboBox::currentIndexChanged ), this, [ this ] {
++        m_selectedFirst = -1;
++        rebuild();
++    } );
++    connect( m_map, &DiskMapView::picked, this, &DiskEditorPage::select );
++    connect( m_rows, &PartitionRowsView::picked, this, &DiskEditorPage::select );
++    connect( m_add, &QPushButton::clicked, this, &DiskEditorPage::addPartition );
++    connect( m_delete, &QPushButton::clicked, this, &DiskEditorPage::deleteSelected );
++    connect( m_encrypt, &QCheckBox::toggled, this, [ this ]( bool on ) {
++        if ( !m_updating )
++        {
++            apply( roleOf( nullptr ), -1, on, m_erase->isChecked() );
++        }
++    } );
++    connect( m_erase, &QCheckBox::toggled, this, [ this ]( bool on ) {
++        if ( !m_updating )
++        {
++            apply( roleOf( nullptr ), -1, m_encrypt->isChecked(), on );
++        }
++    } );
++    connect( m_size, &QSlider::valueChanged, this, [ this ]( int gb ) {
++        if ( !m_updating )
++        {
++            m_sizeField->setText( QStringLiteral( "%1 GB" ).arg( gb ) );
++        }
++    } );
++    connect( m_size, &QSlider::sliderReleased, this, [ this ] {
++        apply( roleOf( nullptr ), qint64( m_size->value() ) * GB, m_encrypt->isChecked(), m_erase->isChecked() );
++    } );
++    connect( m_sizeField, &QLineEdit::editingFinished, this, [ this ] {
++        bool ok = false;
++        const qint64 gb = m_sizeField->text().remove( QStringLiteral( "GB" ) ).trimmed().toLongLong( &ok );
++        if ( ok && gb > 0 )
++        {
++            apply( roleOf( nullptr ), gb * GB, m_encrypt->isChecked(), m_erase->isChecked() );
++        }
++        else
++        {
++            showSelected();
++        }
++    } );
++    connect( m_core, &PartitionCoreModule::deviceReverted, this, [ this ] { rebuild(); } );
++
++    rebuild();
++}
++
++Device*
++DiskEditorPage::device() const
++{
++    auto* model = m_core->deviceModel();
++    return model->deviceForIndex( model->index( qMax( 0, m_disks->currentIndex() ) ) );
++}
++
++int
++DiskEditorPage::selectedDeviceIndex()
++{
++    return m_disks->currentIndex();
++}
++
++void
++DiskEditorPage::selectDeviceByIndex( int index )
++{
++    if ( index >= 0 && index < m_disks->count() )
++    {
++        m_disks->setCurrentIndex( index );
++    }
++    rebuild();
++}
++
++void
++DiskEditorPage::onRevertClicked()
++{
++    if ( Device* d = device() )
++    {
++        m_core->revertDevice( d );
++    }
++    m_selectedFirst = -1;
++    rebuild();
++}
++
++/// The role a partition has: set by this page, or worked out for one it never touched.
++QString
++DiskEditorPage::roleOf( Partition* p ) const
++{
++    if ( !p )
++    {
++        for ( const auto& e : m_entries )
++        {
++            if ( e.first == m_selectedFirst && e.partition )
++            {
++                return e.role;
++            }
++        }
++        return QString();
++    }
++    const QVariant set = p->property( "wildosRole" );
++    if ( set.isValid() )
++    {
++        return set.toString();
++    }
++    if ( p->activeFlags().testFlag( PartitionTable::Flag::BiosGrub ) )
++    {
++        return QStringLiteral( "biosboot" );
++    }
++    // The EFI system partition, whether this computer started in UEFI mode or not.
++    if ( !isPartitionNew( p )
++         && ( PartUtils::isEfiBootable( p ) || p->activeFlags().testFlag( PartitionTable::Flag::Boot )
++              || p->label() == QStringLiteral( "EFI" ) ) )
++    {
++        return QStringLiteral( "esp" );
++    }
++    if ( !isPartitionNew( p ) && p->partitionPath() == m_windowsPath )
++    {
++        return QStringLiteral( "windows" );
++    }
++    if ( isPartitionNew( p ) )
++    {
++        return QString();
++    }
++    return QStringLiteral( "unused" );
++}
++
++QString
++DiskEditorPage::nameOf( Partition* p, const QString& role ) const
++{
++    const QString fs = p->fileSystem().name();
++    const bool ntfs = p->fileSystem().type() == FileSystem::Ntfs;
++    const bool small = p->capacity() < 3 * GB;
++    if ( role == "system" )
++    {
++        return tr( "Wild OS system" );
++    }
++    if ( role == "boot" )
++    {
++        return tr( "Wild OS start-up files" );
++    }
++    if ( role == "biosboot" )
++    {
++        return tr( "BIOS start-up area" );
++    }
++    if ( role == "home" )
++    {
++        return tr( "Your files (Home)" );
++    }
++    if ( role == "swap" )
++    {
++        return tr( "Swap" );
++    }
++    if ( role == "shared" )
++    {
++        return tr( "Shared with Windows" );
++    }
++    if ( role == "esp" )
++    {
++        return tr( "Windows start-up files" );
++    }
++    if ( role == "windows" )
++    {
++        return tr( "Windows (C:)" );
++    }
++    if ( role.isEmpty() )
++    {
++        return tr( "New partition" );
++    }
++    if ( ntfs && ( small || p->label().contains( "Recovery", Qt::CaseInsensitive ) ) )
++    {
++        return tr( "Windows recovery" );
++    }
++    if ( ( p->fileSystem().type() == FileSystem::Unknown || p->activeFlags().testFlag( PartitionTable::Flag::MsftReserved ) )
++         && small )
++    {
++        return tr( "Windows reserved" );
++    }
++    if ( !p->label().isEmpty() )
++    {
++        return p->label();
++    }
++    if ( ntfs )
++    {
++        return tr( "Windows data" );
++    }
++    return tr( "Other partition (%1)" ).arg( fs );
++}
++
++void
++DiskEditorPage::rebuild()
++{
++    m_entries.clear();
++    Device* d = device();
++    if ( !d )
++    {
++        return;
++    }
++    m_rows->m_sectorSize = d->logicalSize();
++
++    // Windows (C:) is the partition os-prober found Windows on, or else the
++    // biggest NTFS partition of 20 GB or more (with UEFI, os-prober reports
++    // Windows on the start-up partition instead).
++    // Worked out on the disk as it was, so it still names Windows after it
++    // is deleted here.
++    m_windowsPath.clear();
++    qint64 biggest = 0;
++    Device* original = m_core->immutableDeviceCopy( d );
++    for ( auto it = PartitionIterator::begin( original ); it != PartitionIterator::end( original ); ++it )
++    {
++        Partition* p = *it;
++        for ( const auto& entry : m_core->osproberEntries() )
++        {
++            if ( entry.path == p->partitionPath() && entry.prettyName.contains( "Windows", Qt::CaseInsensitive ) )
++            {
++                biggest = std::numeric_limits< qint64 >::max();
++                m_windowsPath = p->partitionPath();
++            }
++        }
++        if ( p->fileSystem().type() == FileSystem::Ntfs && p->capacity() >= 20 * GB && p->capacity() > biggest
++             && !isPartitionNew( p ) )
++        {
++            biggest = p->capacity();
++            m_windowsPath = p->partitionPath();
++        }
++    }
++    m_subtitle->setText( tr( "%1, %2. Nothing changes until you press Install." )
++                             .arg( friendlyDiskName( d ), gbText( d->capacity() ) ) );
++
++    for ( auto it = PartitionIterator::begin( d ); it != PartitionIterator::end( d ); ++it )
++    {
++        Partition* p = *it;
++        if ( p->roles().has( PartitionRole::Extended ) )
++        {
++            continue;
++        }
++        Entry e;
++        e.first = p->firstSector();
++        e.last = p->lastSector();
++        if ( isPartitionFreeSpace( p ) )
++        {
++            if ( p->capacity() < 64LL * 1024 * 1024 )
++            {
++                continue;  // Alignment slivers
++            }
++            e.colour = QColor( 255, 255, 255, 15 );
++            m_entries.append( e );
++            continue;
++        }
++        e.partition = p;
++        e.role = roleOf( p );
++        e.isNew = isPartitionNew( p );
++        e.name = nameOf( p, e.role );
++        e.colour = roleColour( e.role );
++        const bool encrypted = p->roles().has( PartitionRole::Luks );
++        const FileSystem* fs = &p->fileSystem();
++        if ( encrypted )
++        {
++            if ( auto* luks = dynamic_cast< const FS::luks* >( fs ); luks && luks->innerFS() )
++            {
++                fs = luks->innerFS();
++            }
++        }
++        if ( e.role == "esp" )
++        {
++            e.detail = tr( "EFI system" );
++        }
++        else if ( e.role == "biosboot" )
++        {
++            e.detail = tr( "for starting from GPT on BIOS computers" );
++        }
++        else if ( e.role == "swap" )
++        {
++            e.detail = encrypted ? tr( "used when memory is full, encrypted" ) : tr( "used when memory is full" );
++        }
++        else if ( e.role.isEmpty() )
++        {
++            e.detail = tr( "Choose what it is for" );
++        }
++        else
++        {
++            QString fsName = fs->name();
++            if ( fs->type() == FileSystem::Ntfs || fs->type() == FileSystem::Fat32 || fs->type() == FileSystem::Exfat )
++            {
++                fsName = fsName.toUpper();
++            }
++            else if ( fs->type() == FileSystem::Unknown || fs->type() == FileSystem::Unformatted )
++            {
++                fsName = tr( "no file system Wild OS knows" );
++            }
++            e.detail = encrypted ? tr( "%1, encrypted" ).arg( fsName ) : fsName;
++        }
++        m_entries.append( e );
++    }
++
++    bool selectedExists = false;
++    for ( const auto& e : m_entries )
++    {
++        selectedExists = selectedExists || ( e.partition && e.first == m_selectedFirst );
++    }
++    if ( !selectedExists )
++    {
++        m_selectedFirst = -1;
++        for ( const auto& e : m_entries )
++        {
++            if ( e.partition && m_selectedFirst < 0 )
++            {
++                m_selectedFirst = e.first;
++            }
++        }
++    }
++
++    // The existing EFI system partition is where Wild OS starts from too.
++    if ( PartUtils::isEfiSystem() )
++    {
++        const QString espMount
++            = Calamares::JobQueue::instance()->globalStorage()->value( "efiSystemPartition" ).toString();
++        for ( const auto& e : m_entries )
++        {
++            if ( e.role == "esp" && PartitionInfo::mountPoint( e.partition ) != espMount )
++            {
++                PartitionInfo::setMountPoint( e.partition, espMount );
++            }
++        }
++    }
++
++    m_map->setEntries( m_entries, m_selectedFirst );
++    m_rows->setEntries( m_entries, m_selectedFirst );
++    m_summary->setText( summaryText() );
++
++    bool hasSystem = false;
++    bool allRoles = true;
++    bool hasFree = false;
++    for ( const auto& e : m_entries )
++    {
++        hasSystem = hasSystem || e.role == "system";
++        allRoles = allRoles && ( !e.partition || !e.role.isEmpty() );
++        hasFree = hasFree || !e.partition;
++    }
++    m_add->setEnabled( hasFree );
++    const bool complete = hasSystem && allRoles;
++    if ( complete != m_complete )
++    {
++        m_complete = complete;
++        Q_EMIT nextStatusChanged( complete );
++    }
++    showSelected();
++}
++
++void
++DiskEditorPage::select( qint64 firstSector )
++{
++    m_selectedFirst = firstSector;
++    m_map->setEntries( m_entries, m_selectedFirst );
++    m_rows->setEntries( m_entries, m_selectedFirst );
++    showSelected();
++}
++
++qint64
++DiskEditorPage::maxSizeFor( const Entry& e ) const
++{
++    // A new partition can grow into the free space right after it.
++    qint64 last = e.last;
++    for ( int i = 0; i + 1 < m_entries.count(); ++i )
++    {
++        if ( m_entries[ i ].first == e.first && !m_entries[ i + 1 ].partition )
++        {
++            last = m_entries[ i + 1 ].last;
++        }
++    }
++    return ( last - e.first + 1 ) * device()->logicalSize();
++}
++
++void
++DiskEditorPage::showSelected()
++{
++    m_updating = true;
++    const Entry* sel = nullptr;
++    for ( const auto& e : m_entries )
++    {
++        if ( e.partition && e.first == m_selectedFirst )
++        {
++            sel = &e;
++        }
++    }
++    const bool any = sel != nullptr;
++    m_delete->setEnabled( any && sel->role != "esp" && sel->role != "boot" && sel->role != "biosboot" );
++    m_panelTitle->setText( any ? sel->name : tr( "No partition picked" ) );
++    if ( !any )
++    {
++        m_panelNote->setText( tr( "Pick a partition in the list or on the map, or add one in free space." ) );
++        m_panelNote->show();
++        for ( auto* w : { m_roleBox, m_sizeBox, m_encryptRow, m_eraseRow } )
++        {
++            w->hide();
++        }
++        m_path->clear();
++        m_updating = false;
++        return;
++    }
++    Partition* p = sel->partition;
++    const bool fixed
++        = sel->role == "esp" || sel->role == "boot" || sel->role == "biosboot" || sel->role == "windows";
++    m_panelNote->setVisible( fixed || sel->role.isEmpty() );
++    if ( sel->role == "esp" )
++    {
++        m_panelNote->setText( tr( "Windows and Wild OS both start from here. Wild OS adds its own start-up "
++                                  "entry and changes nothing else." ) );
++    }
++    else if ( sel->role == "biosboot" )
++    {
++        m_panelNote->setText( tr( "Made with the Wild OS system partition on this BIOS computer. The start-up "
++                                  "program keeps a part of itself here." ) );
++    }
++    else if ( sel->role == "boot" )
++    {
++        m_panelNote->setText( tr( "Made with the Wild OS system partition. It holds what the computer needs "
++                                  "before the disk password is typed, so it is never encrypted." ) );
++    }
++    else if ( sel->role == "windows" )
++    {
++        m_panelNote->setText( tr( "Windows and its files. To make room beside it, go back and choose "
++                                  "Install alongside Windows, or delete it here to erase it." ) );
++    }
++    else if ( sel->role.isEmpty() )
++    {
++        m_panelNote->setText( tr( "Choose what this partition is for." ) );
++    }
++
++    m_roleBox->setVisible( !fixed );
++    bool hasSystemElsewhere = false;
++    for ( const auto& e : m_entries )
++    {
++        hasSystemElsewhere = hasSystemElsewhere || ( e.role == "system" && e.first != sel->first );
++    }
++    for ( int i = 0; i < m_roleButtons.count(); ++i )
++    {
++        m_roleButtons[ i ]->setChecked( pickableRoles[ i ] == sel->role );
++        m_roleButtons[ i ]->setEnabled( !( pickableRoles[ i ] == "system" && hasSystemElsewhere ) );
++    }
++
++    const bool isNew = sel->isNew;
++    const qint64 sizeBytes = ( sel->last - sel->first + 1 ) * device()->logicalSize();
++    m_sizeBox->setVisible( !fixed && isNew );
++    m_size->setEnabled( isNew );
++    m_sizeField->setEnabled( isNew );
++    const qint64 maxBytes = isNew ? maxSizeFor( *sel ) : sizeBytes;
++    m_size->setRange( 1, int( qMax< qint64 >( 1, maxBytes / GB ) ) );
++    m_size->setValue( int( qMax< qint64 >( 1, qRound64( sizeBytes / 1e9 ) ) ) );
++    m_sizeField->setText( gbText( sizeBytes ) );
++
++    const bool encryptable = sel->role == "system" || sel->role == "home" || sel->role == "swap";
++    m_encryptRow->setVisible( !fixed && encryptable );
++    m_encrypt->setChecked( p->roles().has( PartitionRole::Luks ) );
++    m_encrypt->setEnabled( isNew || PartitionInfo::format( p ) );
++
++    m_eraseRow->setVisible( !fixed && sel->role != "unused" );
++    m_erase->setChecked( isNew || PartitionInfo::format( p ) );
++    m_erase->setEnabled( !isNew );
++    m_eraseDetail->setText( isNew ? tr( "Needed for a new partition" )
++                                  : tr( "Wipes what is on it and starts afresh" ) );
++
++    const QString mount = PartitionInfo::mountPoint( p );
++    QString path = p->partitionPath().isEmpty() ? device()->deviceNode() : p->partitionPath();
++    path += QStringLiteral( " · " )
++        + ( sel->role.isEmpty() ? tr( "not formatted yet" ) : sel->detail.section( ',', 0, 0 ) );
++    if ( !mount.isEmpty() )
++    {
++        path += QStringLiteral( " · " ) + tr( "mounted at %1" ).arg( mount );
++    }
++    m_path->setText( path );
++    m_updating = false;
++}
++
++/** @brief Give the selected partition a role, size and encryption
++ *
++ * Kept partitions only change their mount point. Anything that is erased
++ * or new is made again from scratch over the same space, the way the stock
++ * dialogs do it: delete, then create.
++ */
++void
++DiskEditorPage::apply( const QString& role, qint64 sizeBytes, bool encrypt, bool erase )
++{
++    Device* d = device();
++    Partition* p = nullptr;
++    QString oldRole;
++    for ( const auto& e : m_entries )
++    {
++        if ( e.partition && e.first == m_selectedFirst )
++        {
++            p = e.partition;
++            oldRole = e.role;
++        }
++    }
++    if ( !d || !p || role == "esp" || role == "boot" || role == "biosboot" || role == "windows" )
++    {
++        return;
++    }
++    const bool mbr = d->partitionTable() && d->partitionTable()->type() == PartitionTable::msdos;
++    const bool gptOnBios = !PartUtils::isEfiSystem() && d->partitionTable()
++        && d->partitionTable()->type() == PartitionTable::gpt;
++    const bool isNew = isPartitionNew( p );
++    const FileSystem::Type fsNow = p->fileSystem().type();
++    const bool linuxFs = fsNow == FileSystem::Ext4 || fsNow == FileSystem::Btrfs || fsNow == FileSystem::Xfs
++        || fsNow == FileSystem::Ext3;
++    const bool windowsFs = fsNow == FileSystem::Ntfs || fsNow == FileSystem::Exfat || fsNow == FileSystem::Fat32;
++
++    // A new role for a kept partition starts out with the safe default:
++    // keep its files where the role allows it, erase where it must.
++    if ( !isNew && role != oldRole )
++    {
++        erase = !( ( role == "home" && linuxFs ) || ( role == "shared" && windowsFs ) || role == "unused" );
++    }
++    if ( role == "system" || role == "swap" )
++    {
++        erase = true;
++    }
++    if ( role != oldRole && ( role == "system" || role == "home" || role == "swap" ) && oldRole != "system"
++         && oldRole != "home" && oldRole != "swap" )
++    {
++        encrypt = true;  // Encrypted unless someone turns it off
++    }
++
++    static const QMap< QString, QString > mountFor { { "system", "/" },
++                                                     { "home", "/home" },
++                                                     { "shared", "/media/shared" } };
++
++    if ( !isNew && !erase )
++    {
++        m_core->clearJobs( d, p );
++        PartitionInfo::reset( p );
++        PartitionInfo::setMountPoint( p, mountFor.value( role ) );
++        PartitionInfo::setFormat( p, false );
++        p->setProperty( "wildosRole", role );
++        rebuild();
++        return;
++    }
++
++    // Leaving the system role behind takes its start-up partition with it.
++    if ( oldRole == "system" && role != "system" )
++    {
++        for ( const auto& e : m_entries )
++        {
++            if ( e.role == "boot" )
++            {
++                m_core->deletePartition( d, e.partition );
++            }
++        }
++    }
++
++    qint64 first = p->firstSector();
++    qint64 last = p->lastSector();
++    if ( isNew && sizeBytes > 0 )
++    {
++        const Entry* sel = nullptr;
++        for ( const auto& e : m_entries )
++        {
++            if ( e.partition == p )
++            {
++                sel = &e;
++            }
++        }
++        const qint64 maxBytes = sel ? maxSizeFor( *sel ) : p->capacity();
++        const qint64 bytes = qBound< qint64 >( GB, sizeBytes, maxBytes );
++        last = first + bytes / d->logicalSize() - 1;
++    }
++    PartitionNode* parent = p->parent();
++    const PartitionRole partRole( p->roles().has( PartitionRole::Logical ) ? PartitionRole::Logical
++                                                                           : PartitionRole::Primary );
++    m_core->deletePartition( d, p );
++
++    bool needBoot = role == "system";
++    for ( const auto& e : m_entries )
++    {
++        needBoot = needBoot && e.role != "boot";
++    }
++    // On an MBR disk a primary partition here and one for /boot must fit in
++    // its four. A logical one (inside an extended partition) has no limit.
++    if ( needBoot && mbr && !partRole.has( PartitionRole::Logical ) && primaryCount( d ) + 1 > 4 )
++    {
++        rebuild();
++        m_summary->setText( tr( "<b>No room for a start-up partition.</b> This disk already has four main "
++                                "partitions. Delete one, or use a partition inside its extended partition." ) );
++        return;
++    }
++    const qint64 align = qMax< qint64 >( 1, 1024 * 1024 / d->logicalSize() );
++    bool needBiosBoot = needBoot && gptOnBios;
++    for ( auto it = PartitionIterator::begin( d ); it != PartitionIterator::end( d ); ++it )
++    {
++        needBiosBoot = needBiosBoot && !( *it )->activeFlags().testFlag( PartitionTable::Flag::BiosGrub );
++    }
++    if ( needBiosBoot )
++    {
++        const qint64 biosLast = first + align - 1;
++        Partition* bios = KPMHelpers::createNewPartition( parent,
++                                                          *d,
++                                                          partRole,
++                                                          FileSystem::Unformatted,
++                                                          QStringLiteral( "BIOS boot" ),
++                                                          first,
++                                                          biosLast,
++                                                          PartitionTable::Flags() );
++        PartitionInfo::setFormat( bios, false );
++        bios->setProperty( "wildosRole", QStringLiteral( "biosboot" ) );
++        m_core->createPartition( d, bios, PartitionTable::Flag::BiosGrub );
++        first = biosLast + 1;
++    }
++    if ( needBoot && ( last - first + 1 ) * d->logicalSize() > BOOT_SIZE + 20 * GB )
++    {
++        const qint64 bootLast = first + BOOT_SIZE / d->logicalSize() - 1;
++        Partition* boot = KPMHelpers::createNewPartition(
++            parent, *d, partRole, FileSystem::Ext4, QString(), first, bootLast, PartitionTable::Flags() );
++        PartitionInfo::setMountPoint( boot, QStringLiteral( "/boot" ) );
++        PartitionInfo::setFormat( boot, true );
++        boot->setProperty( "wildosRole", QStringLiteral( "boot" ) );
++        m_core->createPartition( d, boot );
++        // A logical partition after it needs room for its boot record.
++        first = bootLast + 1 + ( partRole.has( PartitionRole::Logical ) ? align : 0 );
++    }
++
++    FileSystem::Type fsType = FileSystem::Unformatted;
++    if ( role == "system" || role == "home" )
++    {
++        fsType = FileSystem::Ext4;
++    }
++    else if ( role == "swap" )
++    {
++        fsType = FileSystem::LinuxSwap;
++    }
++    else if ( role == "shared" )
++    {
++        fsType = FileSystem::Ntfs;
++    }
++    const bool encrypted = encrypt && ( role == "system" || role == "home" || role == "swap" );
++    Partition* made = encrypted
++        ? KPMHelpers::createNewEncryptedPartition( parent,
++                                                   *d,
++                                                   partRole,
++                                                   fsType,
++                                                   QString(),
++                                                   first,
++                                                   last,
++                                                   m_config.luksFileSystemType(),
++                                                   EncryptWidget::placeholderPassphrase(),
++                                                   PartitionTable::Flags() )
++        : KPMHelpers::createNewPartition(
++              parent, *d, partRole, fsType, QString(), first, last, PartitionTable::Flags() );
++    PartitionInfo::setMountPoint( made, mountFor.value( role ) );
++    PartitionInfo::setFormat( made, fsType != FileSystem::Unformatted );
++    made->setProperty( "wildosRole", role );
++    m_core->createPartition( d, made );
++    m_selectedFirst = made->firstSector();
++    rebuild();
++}
++
++int
++DiskEditorPage::primaryCount( Device* d ) const
++{
++    int count = 0;
++    if ( d && d->partitionTable() )
++    {
++        for ( const Partition* p : d->partitionTable()->children() )
++        {
++            count += ( p->roles().has( PartitionRole::Primary ) || p->roles().has( PartitionRole::Extended ) ) ? 1 : 0;
++        }
++    }
++    return count;
++}
++
++void
++DiskEditorPage::addPartition()
++{
++    Device* d = device();
++    Partition* free = nullptr;
++    for ( auto it = PartitionIterator::begin( d ); it != PartitionIterator::end( d ); ++it )
++    {
++        if ( isPartitionFreeSpace( *it ) && ( !free || ( *it )->capacity() > free->capacity() ) )
++        {
++            free = *it;
++        }
++    }
++    if ( !free )
++    {
++        return;
++    }
++    // Start and end on whole mebibytes, as partitioning tools do.
++    const qint64 align = qMax< qint64 >( 1, 1024 * 1024 / d->logicalSize() );
++    const qint64 first = ( ( free->firstSector() + align - 1 ) / align ) * align;
++    const qint64 last = ( ( free->lastSector() + 1 ) / align ) * align - 1;
++    if ( last <= first )
++    {
++        return;
++    }
++    Partition* made = KPMHelpers::createNewPartition( free->parent(),
++                                                      *d,
++                                                      PartitionRole( PartitionRole::Primary ),
++                                                      FileSystem::Unformatted,
++                                                      QString(),
++                                                      first,
++                                                      last,
++                                                      PartitionTable::Flags() );
++    PartitionInfo::setFormat( made, false );
++    made->setProperty( "wildosRole", QString() );
++    m_core->createPartition( d, made );
++    m_selectedFirst = made->firstSector();
++    rebuild();
++}
++
++void
++DiskEditorPage::deleteSelected()
++{
++    Device* d = device();
++    for ( const auto& e : m_entries )
++    {
++        if ( e.partition && e.first == m_selectedFirst )
++        {
++            const bool system = e.role == "system";
++            m_core->deletePartition( d, e.partition );
++            if ( system )
++            {
++                for ( const auto& b : m_entries )
++                {
++                    if ( b.role == "boot" )
++                    {
++                        m_core->deletePartition( d, b.partition );
++                    }
++                }
++            }
++            break;
++        }
++    }
++    m_selectedFirst = -1;
++    rebuild();
++}
++
++QString
++DiskEditorPage::summaryText( QStringList* erasedOut ) const
++{
++    Device* d = device();
++    Device* before = d ? m_core->immutableDeviceCopy( d ) : nullptr;
++    QStringList erased;
++    bool windowsKept = false;
++    if ( before )
++    {
++        for ( auto it = PartitionIterator::begin( before ); it != PartitionIterator::end( before ); ++it )
++        {
++            Partition* old = *it;
++            if ( isPartitionFreeSpace( old ) || old->roles().has( PartitionRole::Extended ) )
++            {
++                continue;
++            }
++            bool kept = false;
++            for ( const auto& e : m_entries )
++            {
++                kept = kept
++                    || ( e.partition && !e.isNew && e.first == old->firstSector()
++                         && !PartitionInfo::format( e.partition ) );
++            }
++            const QString role = roleOf( old );
++            if ( !kept )
++            {
++                erased << nameOf( old, role );
++            }
++            else if ( role == QStringLiteral( "windows" ) )
++            {
++                windowsKept = true;
++            }
++        }
++    }
++    if ( erasedOut )
++    {
++        *erasedOut = erased;
++    }
++    int created = 0;
++    for ( const auto& e : m_entries )
++    {
++        created += ( e.partition && e.isNew ) ? 1 : 0;
++    }
++    QString text = erased.isEmpty()
++        ? tr( "<b>Will erase: nothing.</b>" )
++        : tr( "<b>Will erase: %1.</b>" ).arg( erased.join( QStringLiteral( ", " ) ).toHtmlEscaped() );
++    if ( created > 0 )
++    {
++        text += QStringLiteral( " " )
++            + ( created == 1 ? tr( "Will create 1 new partition." )
++                             : tr( "Will create %1 new partitions." ).arg( created ) );
++    }
++    if ( windowsKept )
++    {
++        text += QStringLiteral( " " ) + tr( "Windows and its files stay as they are." );
++    }
++    return text;
++}
++
++bool
++DiskEditorPage::isComplete() const
++{
++    return m_complete;
++}
++
++void
++DiskEditorPage::onLeave()
++{
++    Device* d = device();
++    if ( !d )
++    {
++        return;
++    }
++    if ( !PartUtils::isEfiSystem() )
++    {
++        m_core->setBootLoaderInstallPath( d->deviceNode() );
++    }
++    QVariantMap plan;
++    plan.insert( "mode", "manual" );
++    plan.insert( "disk", friendlyDiskName( d ) );
++    plan.insert( "diskNode", d->deviceNode() );
++    plan.insert( "diskSize", d->capacity() );
++    qint64 wildos = 0;
++    QStringList erased;
++    for ( const auto& e : m_entries )
++    {
++        if ( e.role == "system" || e.role == "home" || e.role == "swap" || e.role == "boot" )
++        {
++            wildos += ( e.last - e.first + 1 ) * d->logicalSize();
++        }
++    }
++    plan.insert( "wildosSize", wildos );
++    plan.insert( "summary", summaryText( &erased ) );
++    plan.insert( "erase", erased );
++    Calamares::JobQueue::instance()->globalStorage()->insert( "wildosPlan", plan );
++}
++
++#include "DiskEditorPage.moc"
+--- /dev/null
++++ b/src/modules/partition/gui/DiskEditorPage.h
+@@ -0,0 +1,116 @@
++/* === This file is part of Calamares - <https://calamares.io> ===
++ *
++ *   SPDX-FileCopyrightText: 2026 Wild OS Developers <dev@wildos.io>
++ *   SPDX-License-Identifier: GPL-3.0-or-later
++ *
++ *   Calamares is Free Software: see the License-Identifier above.
++ *
++ */
++
++#ifndef PARTITION_DISKEDITORPAGE_H
++#define PARTITION_DISKEDITORPAGE_H
++
++#include <QPointer>
++#include <QWidget>
++
++class Config;
++class Device;
++class Partition;
++class PartitionCoreModule;
++class QComboBox;
++class QCheckBox;
++class QLabel;
++class QLineEdit;
++class QPushButton;
++class QSlider;
++class DiskMapView;
++class PartitionRowsView;
++
++/** @brief The "Something else" page in plain language
++ *
++ * A colour-coded map of the disk and a list of its partitions, each with
++ * a role people understand (Wild OS system, Your files, Swap, Shared with
++ * Windows, Don't use) instead of mount points and file systems. The panel
++ * at the side changes the selected partition: its role, its size (new
++ * partitions), encryption and whether it is erased. Encrypted partitions get
++ * the disk password from the Encryption page (see EncryptWidget). A summary
++ * says what will be erased and created. Continue needs a Wild OS system
++ * partition and a role for every new partition.
++ *
++ * It replaces PartitionPage for the manual choice, with the same calls.
++ */
++class DiskEditorPage : public QWidget
++{
++    Q_OBJECT
++public:
++    DiskEditorPage( PartitionCoreModule* core, const Config& config, QWidget* parent = nullptr );
++
++    void onRevertClicked();
++    int selectedDeviceIndex();
++    void selectDeviceByIndex( int index );
++
++    /// Every partition has a role and there is a Wild OS system partition
++    bool isComplete() const;
++    /// Sets the boot loader target and stores the plan for the summary page
++    void onLeave();
++
++    struct Entry
++    {
++        Partition* partition = nullptr;  ///< nullptr for free space
++        qint64 first = 0;
++        qint64 last = 0;
++        QString name;
++        QString detail;
++        QString role;
++        QColor colour;
++        bool isNew = false;
++    };
++
++Q_SIGNALS:
++    void nextStatusChanged( bool );
++
++private:
++    Device* device() const;
++    void rebuild();
++    void select( qint64 firstSector );
++    void showSelected();
++    void apply( const QString& role, qint64 sizeBytes, bool encrypt, bool erase );
++    void addPartition();
++    void deleteSelected();
++    QString roleOf( Partition* p ) const;
++    int primaryCount( Device* d ) const;
++    QString nameOf( Partition* p, const QString& role ) const;
++    qint64 maxSizeFor( const Entry& e ) const;
++    QString summaryText( QStringList* erased = nullptr ) const;
++
++    PartitionCoreModule* m_core;
++    const Config& m_config;
++    QVector< Entry > m_entries;
++    qint64 m_selectedFirst = -1;
++    QString m_windowsPath;
++    bool m_complete = false;
++
++    QComboBox* m_disks;
++    QLabel* m_subtitle;
++    DiskMapView* m_map;
++    PartitionRowsView* m_rows;
++    QPushButton* m_add;
++    QPushButton* m_delete;
++    QLabel* m_panelTitle;
++    QLabel* m_panelNote;
++    QWidget* m_roleBox;
++    QList< QPushButton* > m_roleButtons;
++    QWidget* m_sizeBox;
++    QSlider* m_size;
++    QLineEdit* m_sizeField;
++    QWidget* m_encryptRow;
++    QCheckBox* m_encrypt;
++    QWidget* m_eraseRow;
++    QCheckBox* m_erase;
++    QLabel* m_eraseDetail;
++    QLabel* m_path;
++    QLabel* m_summary;
++    bool m_updating = false;
++};
++
++#endif
+--- a/src/modules/partition/gui/EncryptWidget.cpp
++++ b/src/modules/partition/gui/EncryptWidget.cpp
+@@ -17,6 +17,8 @@
+ #include "utils/Gui.h"
+ #include "utils/Retranslator.h"
+ 
++#include <QUuid>
++
+ constexpr int ZFS_MIN_LENGTH = 8;
+ 
+ /** @brief Does this system support whole-disk encryption?
+@@ -96,9 +98,33 @@ EncryptWidget::reset( bool checkVisible )
+     m_ui->m_confirmLineEdit->setVisible( !checkVisible );
+ }
+ 
++QString
++EncryptWidget::placeholderPassphrase()
++{
++    static const QString placeholder = QUuid::createUuid().toString( QUuid::WithoutBraces );
++    return placeholder;
++}
++
++void
++EncryptWidget::setPassphraseLater( bool later )
++{
++    m_later = later;
++    if ( later )
++    {
++        m_ui->m_encryptCheckBox->setChecked( true );
++        hide();
++        updateState();
++    }
++}
++
+ EncryptWidget::Encryption
+ EncryptWidget::state() const
+ {
++    if ( m_later )
++    {
++        return Encryption::Confirmed;
++    }
++
+     Encryption newState = Encryption::Unconfirmed;
+ 
+     if ( m_ui->m_encryptCheckBox->isChecked() || !m_ui->m_encryptCheckBox->isVisible() )
+@@ -132,7 +158,7 @@ EncryptWidget::passphrase() const
+ {
+     if ( m_state == Encryption::Confirmed )
+     {
+-        return m_ui->m_passphraseLineEdit->text();
++        return m_later ? placeholderPassphrase() : m_ui->m_passphraseLineEdit->text();
+     }
+     return QString();
+ }
+--- a/src/modules/partition/gui/EncryptWidget.h
++++ b/src/modules/partition/gui/EncryptWidget.h
+@@ -53,6 +53,17 @@ public:
+ 
+     QString passphrase() const;
+ 
++    /** @brief The passphrase is asked for later, on a page of its own
++     *
++     * The widget is then never shown and counts as switched on:
++     * passphrase() returns placeholderPassphrase(), which
++     * PartitionViewStep::jobs() swaps for the real one (or undoes the
++     * encryption, if the person chose not to encrypt) once every page is done.
++     */
++    void setPassphraseLater( bool later );
++    bool passphraseLater() const { return m_later; }
++    static QString placeholderPassphrase();
++
+     void retranslate();
+ 
+ signals:
+@@ -67,6 +78,7 @@ private:
+     Encryption m_state;
+ 
+     FileSystem::Type m_filesystem;
++    bool m_later = false;
+ };
+ 
+ #endif  // ENCRYPTWIDGET_H
+--- a/src/modules/partition/gui/PartitionSplitterWidget.cpp
++++ b/src/modules/partition/gui/PartitionSplitterWidget.cpp
+@@ -22,6 +22,7 @@
+ #include <kpmcore/core/partition.h>
+ 
+ #include <QApplication>
++#include <QKeyEvent>
+ #include <QMouseEvent>
+ #include <QPainter>
+ #include <QPainterPath>
+@@ -302,10 +303,134 @@ PartitionSplitterWidget::newPartitionSize() const
+     return m_itemToResizeNext.size;
+ }
+ 
++void
++PartitionSplitterWidget::setFocusLabels( const QString& left, const QString& right )
++{
++    m_focusLeft = left;
++    m_focusRight = right;
++    setFocusPolicy( left.isEmpty() ? Qt::NoFocus : Qt::StrongFocus );
++    updateGeometry();
++    update();
++}
++
++static constexpr int FOCUSED_HEIGHT = 44;
++static constexpr int FOCUSED_GAP = 6;
++
++static QString
++decimalGB( qint64 bytes )
++{
++    return QStringLiteral( "%1 GB" ).arg( qRound64( bytes / 1e9 ) );
++}
++
++QRectF
++PartitionSplitterWidget::focusedHandle() const
++{
++    const qint64 total = m_itemToResize.size + m_itemToResizeNext.size;
++    const qreal x = total > 0 ? width() * qreal( m_itemToResize.size ) / total : 0;
++    return QRectF( x - 7, 8, 20, FOCUSED_HEIGHT - 16 );
++}
++
++void
++PartitionSplitterWidget::setFocusedSplit( qint64 leftSize )
++{
++    const qint64 total = m_itemToResize.size + m_itemToResizeNext.size;
++    leftSize = qBound( m_itemMinSize, leftSize, qMin( m_itemMaxSize, total ) );
++    if ( leftSize == m_itemToResize.size )
++    {
++        return;
++    }
++    m_itemToResize.size = leftSize;
++    m_itemToResizeNext.size = total - leftSize;
++    countTransform( m_items,
++                    [ this ]( PartitionSplitterItem& item ) -> bool
++                    {
++                        if ( item.status == PartitionSplitterItem::Resizing )
++                        {
++                            item.size = m_itemToResize.size;
++                            return true;
++                        }
++                        if ( item.status == PartitionSplitterItem::ResizingNext )
++                        {
++                            item.size = m_itemToResizeNext.size;
++                            return true;
++                        }
++                        return false;
++                    } );
++    update();
++    Q_EMIT partitionResized( m_itemToResize.itemPath, m_itemToResize.size, m_itemToResizeNext.size );
++}
++
++void
++PartitionSplitterWidget::paintFocused( QPainter* painter )
++{
++    const QRectF bar( 0, 0, width(), FOCUSED_HEIGHT );
++    const QRectF handle = focusedHandle();
++    const qreal split = handle.left() + 7;
++
++    QPainterPath outline;
++    outline.addRoundedRect( bar, 10, 10 );
++    painter->setClipPath( outline );
++    painter->fillRect( QRectF( 0, 0, split, FOCUSED_HEIGHT ), QColor( 255, 255, 255, 36 ) );
++    painter->fillRect( QRectF( split, 0, FOCUSED_GAP, FOCUSED_HEIGHT ), QColor( 0x0f, 0x15, 0x30 ) );
++    painter->fillRect( QRectF( split + FOCUSED_GAP, 0, width() - split - FOCUSED_GAP, FOCUSED_HEIGHT ),
++                       QColor( 0x8f, 0xb4, 0xff ) );
++
++    QFont nameFont = font();
++    nameFont.setPixelSize( 12 );
++    nameFont.setWeight( QFont::DemiBold );
++    QFont sizeFont = nameFont;
++    const auto drawHalf
++        = [ & ]( const QRectF& r, const QString& name, qint64 bytes, const QColor& colour, QFont::Weight weight )
++    {
++        const QRectF text = r.adjusted( 14, 0, -14, 0 );
++        if ( text.width() < 60 )
++        {
++            return;
++        }
++        sizeFont.setWeight( weight );
++        const QString size = decimalGB( bytes );
++        const qreal needed = QFontMetricsF( nameFont ).horizontalAdvance( name )
++            + QFontMetricsF( sizeFont ).horizontalAdvance( size ) + 12;
++        painter->setPen( colour );
++        // A narrow half keeps its size, which is what people are setting.
++        if ( needed <= text.width() )
++        {
++            painter->setFont( nameFont );
++            painter->drawText( text, Qt::AlignLeft | Qt::AlignVCenter, name );
++        }
++        painter->setFont( sizeFont );
++        painter->drawText(
++            text, ( needed <= text.width() ? Qt::AlignRight : Qt::AlignHCenter ) | Qt::AlignVCenter, size );
++    };
++    drawHalf( QRectF( 0, 0, split, FOCUSED_HEIGHT ),
++              m_focusLeft,
++              m_itemToResize.size,
++              QColor( 0xee, 0xf1, 0xf8 ),
++              QFont::Normal );
++    drawHalf( QRectF( split + FOCUSED_GAP, 0, width() - split - FOCUSED_GAP, FOCUSED_HEIGHT ),
++              m_focusRight,
++              m_itemToResizeNext.size,
++              QColor( 0x0f, 0x15, 0x30 ),
++              QFont::Medium );
++    painter->setClipping( false );
++
++    painter->setPen( Qt::NoPen );
++    painter->setBrush( QColor( 0, 0, 0, 90 ) );
++    painter->drawRoundedRect( handle.translated( 0, 2 ).adjusted( -1, -1, 1, 1 ), 7, 7 );
++    painter->setBrush( Qt::white );
++    painter->drawRoundedRect( handle, 6, 6 );
++    if ( hasFocus() )
++    {
++        painter->setPen( QPen( QColor( 0x8f, 0xb4, 0xff ), 2 ) );
++        painter->setBrush( Qt::NoBrush );
++        painter->drawRoundedRect( handle.adjusted( -3, -3, 3, 3 ), 8, 8 );
++    }
++}
++
+ QSize
+ PartitionSplitterWidget::sizeHint() const
+ {
+-    return QSize( -1, VIEW_HEIGHT );
++    return QSize( -1, m_focusLeft.isEmpty() ? VIEW_HEIGHT : FOCUSED_HEIGHT );
+ }
+ 
+ QSize
+@@ -320,8 +445,13 @@ PartitionSplitterWidget::paintEvent( QPaintEvent* event )
+     Q_UNUSED( event )
+ 
+     QPainter painter( this );
+-    painter.fillRect( rect(), palette().window() );
+     painter.setRenderHint( QPainter::Antialiasing );
++    if ( isFocused() )
++    {
++        paintFocused( &painter );
++        return;
++    }
++    painter.fillRect( rect(), palette().window() );
+ 
+     drawPartitions( &painter, rect(), m_items );
+ }
+@@ -329,6 +459,14 @@ PartitionSplitterWidget::paintEvent( QPaintEvent* event )
+ void
+ PartitionSplitterWidget::mousePressEvent( QMouseEvent* event )
+ {
++    if ( isFocused() && event->button() == Qt::LeftButton )
++    {
++        // Anywhere on the bar moves the divider there and starts a drag.
++        m_resizing = true;
++        const qint64 total = m_itemToResize.size + m_itemToResizeNext.size;
++        setFocusedSplit( qRound64( total * ( event->position().x() / qMax( 1, width() ) ) ) );
++        return;
++    }
+     if ( m_itemToResize && m_itemToResizeNext && event->button() == Qt::LeftButton )
+     {
+ #if QT_VERSION < QT_VERSION_CHECK( 6, 0, 0 )
+@@ -345,6 +483,16 @@ PartitionSplitterWidget::mousePressEvent( QMouseEvent* event )
+ void
+ PartitionSplitterWidget::mouseMoveEvent( QMouseEvent* event )
+ {
++    if ( isFocused() )
++    {
++        if ( m_resizing )
++        {
++            const qint64 total = m_itemToResize.size + m_itemToResizeNext.size;
++            setFocusedSplit( qRound64( total * ( event->position().x() / qMax( 1, width() ) ) ) );
++        }
++        setCursor( Qt::SplitHCursor );
++        return;
++    }
+     if ( m_resizing )
+     {
+         qint64 start = 0;
+@@ -450,6 +598,18 @@ PartitionSplitterWidget::mouseReleaseEvent( QMouseEvent* event )
+     m_resizing = false;
+ }
+ 
++void
++PartitionSplitterWidget::keyPressEvent( QKeyEvent* event )
++{
++    if ( isFocused() && ( event->key() == Qt::Key_Left || event->key() == Qt::Key_Right ) )
++    {
++        const qint64 step = qint64( 1e9 ) * ( ( event->modifiers() & Qt::ShiftModifier ) ? 10 : 1 );
++        setFocusedSplit( m_itemToResize.size + ( event->key() == Qt::Key_Left ? -step : step ) );
++        return;
++    }
++    QWidget::keyPressEvent( event );
++}
++
+ void
+ PartitionSplitterWidget::drawSection( QPainter* painter,
+                                       const QRect& rect_,
+--- a/src/modules/partition/gui/PartitionSplitterWidget.h
++++ b/src/modules/partition/gui/PartitionSplitterWidget.h
+@@ -53,6 +53,14 @@ public:
+     qint64 splitPartitionSize() const;
+     qint64 newPartitionSize() const;
+ 
++    /** @brief Draw only the partition being split, as two named halves
++     *
++     * With labels set, the bar shows the partition to shrink as @p left and
++     * the new partition as @p right, each with its size, and a handle on
++     * the divider that can be dragged or moved with the arrow keys.
++     */
++    void setFocusLabels( const QString& left, const QString& right );
++
+     QSize sizeHint() const override;
+     QSize minimumSizeHint() const override;
+ 
+@@ -64,8 +72,14 @@ protected:
+     void mousePressEvent( QMouseEvent* event ) override;
+     void mouseMoveEvent( QMouseEvent* event ) override;
+     void mouseReleaseEvent( QMouseEvent* event ) override;
++    void keyPressEvent( QKeyEvent* event ) override;
+ 
+ private:
++    bool isFocused() const { return !m_focusLeft.isEmpty() && m_itemToResize && m_itemToResizeNext; }
++    void paintFocused( QPainter* painter );
++    QRectF focusedHandle() const;
++    void setFocusedSplit( qint64 leftSize );
++
+     void setupItems( const QVector< PartitionSplitterItem >& items );
+ 
+     void drawPartitions( QPainter* painter, const QRect& rect, const QVector< PartitionSplitterItem >& itemList );
+@@ -89,6 +103,9 @@ private:
+     const int HANDLE_SNAP;
+ 
+     bool m_drawNestedPartitions;
++
++    QString m_focusLeft;
++    QString m_focusRight;
+ };
+ 
+ #endif  // PARTITIONSPLITTERWIDGET_H

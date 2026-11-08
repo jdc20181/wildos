@@ -1,0 +1,26 @@
+#!/bin/sh
+set -e
+
+DISABLED=/usr/share/wildos/autostart-disabled
+AUTOSTART="
+legacy-dist-deprecation-notice.desktop
+msgdispatcher.desktop
+systemcheck.desktop
+updatecheck.desktop
+sdwdate-gui.desktop
+wlr-resize-watcher.desktop
+"
+
+if [ "$1" = "remove" ] || [ "$1" = "purge" ]; then
+    for f in $AUTOSTART; do
+        dpkg-divert --package wildos-desktop --remove --rename \
+            --divert "$DISABLED/$f" "/etc/xdg/autostart/$f" >/dev/null || true
+    done
+    rmdir "$DISABLED" 2>/dev/null || true
+    dpkg-divert --package wildos-desktop --remove --rename \
+        --divert /usr/bin/brave-browser-stable.brave /usr/bin/brave-browser-stable >/dev/null || true
+    # Written by wildos-strings, so dpkg does not know about them.
+    rm -rf /usr/share/wildos/locale
+fi
+
+#DEBHELPER#

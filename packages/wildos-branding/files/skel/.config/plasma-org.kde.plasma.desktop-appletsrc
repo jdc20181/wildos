@@ -1,0 +1,38 @@
+# Right-click menus of the desktop (0) and the taskbar (1), read by Plasma
+# when it lays out a new account's desktop (the bar and wallpaper come from
+# the Wild OS look-and-feel layout script, which runs because this file holds
+# no desktop yet). Plasma only reads these from the account's own file.
+#
+# Desktop: only a fallback now. The Wild OS desktop (org.wildos.desktop)
+# draws its own right-click menu and never lets a click through to Plasma's.
+# Taskbar: nothing of Plasma's own; app buttons bring their own menus.
+[ActionPlugins][0]
+RightButton;NoModifier=org.kde.contextmenu
+
+[ActionPlugins][0][RightButton;NoModifier]
+_add panel=false
+_context=true
+_display_settings=true
+_lock_screen=false
+_logout=false
+_open_terminal=false
+_run_command=false
+_sep1=true
+_sep2=false
+_sep3=false
+_wallpaper=false
+add widgets=false
+configure=true
+configure shortcuts=false
+desktop edit mode=false
+manage activities=false
+remove=false
+
+[ActionPlugins][1]
+RightButton;NoModifier=org.kde.contextmenu
+
+[ActionPlugins][1][RightButton;NoModifier]
+_context=true
+add widgets=false
+configure=false
+remove=false

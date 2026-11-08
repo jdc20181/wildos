@@ -1,0 +1,12 @@
+PRETTY_NAME="Wild OS 0.1 (Alpha)"
+NAME="Wild OS"
+VERSION_ID="0.1"
+VERSION="0.1 (Alpha)"
+VERSION_CODENAME=trixie
+DEBIAN_CODENAME=trixie
+ID=wildos
+ID_LIKE=debian
+HOME_URL="https://wildos.io"
+SUPPORT_URL="https://github.com/wildos-io/wildos/discussions"
+BUG_REPORT_URL="https://github.com/wildos-io/wildos/issues"
+LOGO=wildos

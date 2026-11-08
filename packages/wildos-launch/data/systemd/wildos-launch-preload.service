@@ -1,0 +1,18 @@
+[Unit]
+Description=Read the most used apps into memory after login
+After=graphical-session.target
+PartOf=graphical-session.target
+ConditionPathExists=%h/.local/state/wildos/launch/usage.json
+
+[Service]
+# exec, not oneshot: the session target waits for a oneshot to finish, and
+# this must never hold up the desktop. The program waits a little after
+# login by itself.
+Type=exec
+ExecStart=/usr/libexec/wildos/wildos-launchd --preload
+Nice=19
+CPUSchedulingPolicy=idle
+IOSchedulingClass=idle
+
+[Install]
+WantedBy=graphical-session.target

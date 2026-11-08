@@ -1,0 +1,41 @@
+Source: wildos-portal
+Section: x11
+Priority: optional
+Maintainer: Wild OS Developers <dev@wildos.io>
+Build-Depends:
+ debhelper-compat (= 13),
+ cmake,
+ qt6-base-dev,
+ qt6-declarative-dev,
+ libkf6kio-dev,
+ libkf6config-dev,
+ libkf6coreaddons-dev,
+ libkf6service-dev,
+ libkf6windowsystem-dev,
+Standards-Version: 4.7.0
+Rules-Requires-Root: no
+
+Package: wildos-portal
+Architecture: any
+Depends:
+ ${shlibs:Depends},
+ ${misc:Depends},
+ xdg-desktop-portal,
+ xdg-desktop-portal-kde,
+ kio6,
+ qml6-module-qtcore,
+ qml6-module-qtquick,
+ qml6-module-qtquick-controls,
+ qml6-module-qtquick-layouts,
+ qml6-module-qtquick-templates,
+ qml6-module-qtquick-window,
+ wildos-ui,
+Description: Wild OS Open and Save dialog and file clash dialog
+ One Open and Save dialog for every app, laid out like the one on Windows:
+ places on the left, a path bar, the file list with dates, types and sizes,
+ then the name and type at the bottom. It is a desktop portal backend, so
+ Flatpak apps, GTK apps, browsers and Qt and KDE apps all get it.
+ .
+ It also asks what to do when a copy or move meets a file with the same
+ name (replace, skip or keep both), for Files and, through Wild OS's KIO
+ patch, for every other app that copies with KIO.

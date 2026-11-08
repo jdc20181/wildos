@@ -1,0 +1,5 @@
+# The low battery warning is the Wild OS battery prompt (wildos-dialogs),
+# which offers battery saver; the power service's own pop-up would say the
+# same thing twice. Its critical battery warning stays as it is.
+[Event/lowbattery]
+Action=

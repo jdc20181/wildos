@@ -1,0 +1,36 @@
+Source: wildos-ui
+Section: libs
+Priority: optional
+Maintainer: Wild OS Developers <dev@wildos.io>
+Build-Depends:
+ debhelper-compat (= 13),
+ cmake,
+ qt6-base-dev,
+ qt6-declarative-dev,
+ libkf6config-dev,
+ libkf6windowsystem-dev,
+Standards-Version: 4.7.0
+Rules-Requires-Root: no
+
+Package: wildos-ui
+Architecture: any
+Depends:
+ ${shlibs:Depends},
+ ${misc:Depends},
+ qml6-module-qtquick,
+ qml6-module-qtquick-templates,
+ qml6-module-qtquick-layouts,
+ qml6-module-qtquick-shapes,
+ qml6-module-qtquick-effects,
+ qml6-module-qtquick-window,
+ fonts-inter,
+Description: Wild OS controls, the shared QML module WildOS.UI
+ The buttons, switches, check boxes, fields, drop-downs, menus, tabs,
+ title bars, rows, cards, dialogs and icons every Wild OS app, panel
+ widget and system screen draws, in one place so they look and behave
+ the same everywhere. Colours follow the accent and the dark or light
+ scheme chosen in Settings, and text follows the system text size.
+ .
+ It also carries the window frame helper for apps that draw their own
+ title bar (shadow, blur, moving and resizing) and a gallery that shows
+ every control in every state.

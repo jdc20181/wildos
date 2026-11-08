@@ -1,0 +1,8 @@
+# Windows calls the move to the recycle bin plain Delete, and apps call their
+# own options Settings rather than "Configure <app>".
+
+msgid "&Move to Trash"
+msgstr "&Delete"
+
+msgid "&Configure %1…"
+msgstr "%1 &settings"

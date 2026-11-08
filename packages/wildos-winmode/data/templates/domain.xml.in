@@ -1,0 +1,132 @@
+<!--
+  The Windows mode VM (brief 5.3), filled in by winmode-proof.sh. The device
+  set follows the old builder's generator (packages/wildos-winmode/src/
+  domain.cpp), moved to the brief's network, disk and firmware-key choices.
+-->
+<domain type='kvm' xmlns:qemu='http://libvirt.org/schemas/domain/qemu/1.0'>
+  <name>@NAME@</name>
+  <title>Windows mode</title>
+  <memory unit='MiB'>@MEMORY_MB@</memory>
+  <currentMemory unit='MiB'>@MEMORY_MB@</currentMemory>
+  <vcpu placement='static'>@CPUS@</vcpu>
+  <sysinfo type='smbios'>
+    <system>
+      <entry name='manufacturer'>@SMBIOS_MANUFACTURER@</entry>
+      <entry name='product'>@SMBIOS_PRODUCT@</entry>
+    </system>
+  </sysinfo>
+  <!--
+    UEFI with Secure Boot and Microsoft's keys enrolled, and a TPM below:
+    what Windows 11 asks for, so nothing in its setup is bypassed. libvirt
+    picks the matching OVMF build from the firmware descriptors.
+  -->
+  <os firmware='efi'>
+    <type arch='x86_64' machine='q35'>hvm</type>
+    <firmware>
+      <feature enabled='yes' name='secure-boot'/>
+      <feature enabled='yes' name='enrolled-keys'/>
+    </firmware>
+    <smbios mode='sysinfo'/>
+  </os>
+  <features>
+    <acpi/>
+    <apic/>
+    <hyperv mode='custom'>
+      <relaxed state='on'/>
+      <vapic state='on'/>
+      <spinlocks state='on' retries='8191'/>
+      <vpindex state='on'/>
+      <runtime state='on'/>
+      <synic state='on'/>
+      <stimer state='on'/>
+      <frequencies state='on'/>
+      <tlbflush state='on'/>
+      <ipi state='on'/>
+    </hyperv>
+    <smm state='on'/>
+  </features>
+  <!--
+    host-passthrough, without the processor's own virtualisation feature:
+    given it, Windows 11 turns on virtualisation-based security, which runs
+    Windows under a second hypervisor inside this one and costs a lot of
+    speed for nothing Windows mode needs.
+  -->
+  <cpu mode='host-passthrough' check='none' migratable='on'>
+    <topology sockets='1' dies='1' cores='@CPUS@' threads='1'/>
+    <feature policy='disable' name='@CPU_OFF@'/>
+  </cpu>
+  <clock offset='localtime'>
+    <timer name='rtc' tickpolicy='catchup'/>
+    <timer name='pit' tickpolicy='delay'/>
+    <timer name='hpet' present='no'/>
+    <timer name='hypervclock' present='yes'/>
+  </clock>
+  <on_poweroff>destroy</on_poweroff>
+  <on_reboot>restart</on_reboot>
+  <on_crash>destroy</on_crash>
+  <pm>
+    <suspend-to-mem enabled='no'/>
+    <suspend-to-disk enabled='no'/>
+  </pm>
+  <devices>
+    <disk type='file' device='disk'>
+      <!-- One queue per processor, so disk work from several of Windows'
+           threads runs in parallel (brief 5.5a). -->
+      <driver name='qemu' type='qcow2' cache='none' io='native' discard='unmap' queues='@CPUS@'/>
+      <source file='@DISK@'/>
+      <target dev='vda' bus='virtio'/>
+      <boot order='2'/>
+    </disk>
+    <disk type='file' device='cdrom'>
+      <driver name='qemu' type='raw'/>
+      <source file='@WINDOWS_ISO@'/>
+      <target dev='sda' bus='sata'/>
+      <readonly/>
+      <boot order='1'/>
+    </disk>
+    <disk type='file' device='cdrom'>
+      <driver name='qemu' type='raw'/>
+      <source file='@VIRTIO_ISO@'/>
+      <target dev='sdb' bus='sata'/>
+      <readonly/>
+    </disk>
+    <disk type='file' device='cdrom'>
+      <driver name='qemu' type='raw'/>
+      <source file='@PAYLOAD_ISO@'/>
+      <target dev='sdc' bus='sata'/>
+      <readonly/>
+    </disk>
+    <interface type='network'>
+      <source network='@NET@'/>
+      <mac address='@GUEST_MAC@'/>
+      <model type='virtio'/>
+      <driver name='vhost'/>
+    </interface>
+    <channel type='unix'>
+      <target type='virtio' name='org.qemu.guest_agent.0'/>
+    </channel>
+    <!-- For the wild-guest helper in phase 2. -->
+    <channel type='unix'>
+      <target type='virtio' name='org.wildos.guest.0'/>
+    </channel>
+    <tpm model='tpm-crb'>
+      <backend type='emulator' version='2.0'/>
+    </tpm>
+    <controller type='usb' model='qemu-xhci'/>
+    <input type='tablet' bus='usb'/>
+    <!-- Setup and troubleshooting only, on a socket only root can open. -->
+    <graphics type='vnc'>
+      <listen type='socket'/>
+    </graphics>
+    <video>
+      <model type='virtio' heads='1'/>
+    </video>
+    <memballoon model='virtio' autodeflate='on' freePageReporting='on'>
+      <stats period='10'/>
+    </memballoon>
+    <rng model='virtio'>
+      <backend model='random'>/dev/urandom</backend>
+    </rng>
+  </devices>
+  @QEMU_COMMANDLINE@
+</domain>

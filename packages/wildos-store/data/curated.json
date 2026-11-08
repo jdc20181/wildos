@@ -1,0 +1,551 @@
+{
+    "homeSwaps": [
+        "libreoffice",
+        "krita",
+        "vlc"
+    ],
+    "homeInstalled": [
+        "org.kde.elisa",
+        "org.kde.kwrite",
+        "org.kde.kcalc",
+        "org.kde.okular",
+        "org.kde.gwenview",
+        "org.kde.ark",
+        "org.kde.spectacle"
+    ],
+    "essentials": [
+        "libreoffice",
+        "brave",
+        "thunderbird",
+        "vlc",
+        "krita",
+        "steam"
+    ],
+    "featured": {
+        "popular": [
+            "brave",
+            "libreoffice",
+            "vlc",
+            "thunderbird",
+            "gimp",
+            "krita",
+            "obs",
+            "steam"
+        ],
+        "games": [
+            "steam",
+            "org.supertuxkart.SuperTuxKart",
+            "net.minetest.Minetest",
+            "com.play0ad.zeroad",
+            "org.openttd.OpenTTD",
+            "io.github.endless_sky.endless_sky",
+            "net.wz2100.wz2100",
+            "org.frozen_bubble.frozen-bubble"
+        ],
+        "create": [
+            "krita",
+            "gimp",
+            "inkscape",
+            "kdenlive",
+            "obs",
+            "audacity",
+            "org.blender.Blender",
+            "darktable"
+        ]
+    },
+    "hidden": [
+        "org.kde.discover",
+        "org.kde.discover.flatpak",
+        "org.kde.discover.packagekit",
+        "org.wildos.store"
+    ],
+    "apps": [
+        {
+            "key": "libreoffice",
+            "ids": [
+                "org.libreoffice.LibreOffice",
+                "libreoffice-startcenter.desktop",
+                "libreoffice-writer.desktop"
+            ],
+            "packages": [
+                "libreoffice-writer",
+                "libreoffice-calc",
+                "libreoffice-impress",
+                "libreoffice-kf6"
+            ],
+            "flatpak": "org.libreoffice.LibreOffice",
+            "desktop": "libreoffice-startcenter",
+            "name": "LibreOffice",
+            "summary": "Documents, spreadsheets and presentations that work with Office files",
+            "tagline": "Documents, spreadsheets, slides",
+            "insteadOf": "Microsoft Office",
+            "aliases": [
+                "office",
+                "word",
+                "excel",
+                "powerpoint",
+                "microsoft 365",
+                "office 365",
+                "docx",
+                "xlsx",
+                "pptx",
+                "spreadsheet"
+            ],
+            "cardNote": "Free, opens Office files",
+            "chip": "Opens Office files",
+            "swapTitle": "A good swap for Microsoft Office",
+            "swapText": "Opens your Word, Excel and PowerPoint files, and saves back to them.",
+            "description": "A full office suite: Writer for documents, Calc for spreadsheets and Impress for presentations. It opens and saves Word, Excel and PowerPoint files, so you can keep working with people who use Office.",
+            "icon": "libreoffice-startcenter",
+            "category": "office"
+        },
+        {
+            "key": "krita",
+            "name": "Krita",
+            "ids": [
+                "org.kde.krita"
+            ],
+            "packages": [
+                "krita"
+            ],
+            "flatpak": "org.kde.krita",
+            "tagline": "Painting and photo editing",
+            "insteadOf": "Photoshop",
+            "aliases": [
+                "photoshop",
+                "adobe photoshop",
+                "psd",
+                "paint tool sai",
+                "clip studio",
+                "procreate",
+                "corel painter"
+            ],
+            "cardNote": "Free, opens PSD files",
+            "chip": "Opens PSD files",
+            "swapTitle": "A good swap for Photoshop",
+            "swapText": "Opens your PSD files and keeps their layers.",
+            "category": "graphics"
+        },
+        {
+            "key": "vlc",
+            "name": "VLC",
+            "ids": [
+                "org.videolan.vlc",
+                "org.videolan.VLC"
+            ],
+            "packages": [
+                "vlc"
+            ],
+            "flatpak": "org.videolan.VLC",
+            "tagline": "Plays almost any video or audio",
+            "insteadOf": "Windows Media Player",
+            "aliases": [
+                "media player",
+                "windows media player",
+                "movies and tv",
+                "films and tv",
+                "groove",
+                "mp4",
+                "mkv",
+                "dvd",
+                "codec"
+            ],
+            "cardNote": "Free, no codecs to hunt for",
+            "chip": "Plays almost anything",
+            "swapTitle": "A good swap for Windows Media Player",
+            "swapText": "Plays the files Media Player could, and plenty it couldn't, with nothing extra to install.",
+            "category": "media"
+        },
+        {
+            "key": "brave",
+            "ids": [
+                "com.brave.Browser",
+                "brave-browser.desktop"
+            ],
+            "packages": [
+                "brave-browser"
+            ],
+            "prefer": "apt",
+            "desktop": "brave-browser",
+            "name": "Brave",
+            "summary": "A fast web browser that blocks ads and trackers",
+            "tagline": "A private web browser",
+            "insteadOf": "Microsoft Edge",
+            "aliases": [
+                "edge",
+                "microsoft edge",
+                "chrome",
+                "google chrome",
+                "internet explorer",
+                "browser",
+                "web browser"
+            ],
+            "cardNote": "Free, blocks ads and trackers",
+            "chip": "Blocks ads",
+            "swapTitle": "A good swap for Edge and Chrome",
+            "swapText": "Built on the same engine as Chrome, so your sites and extensions work, without the tracking.",
+            "description": "Brave is a fast web browser built on the same engine as Chrome, so websites and Chrome extensions work as you expect. It blocks ads and trackers out of the box and can import your bookmarks and passwords from Edge or Chrome.",
+            "icon": "brave-browser",
+            "category": "internet"
+        },
+        {
+            "key": "mullvad-browser",
+            "ids": [
+                "net.mullvad.MullvadBrowser",
+                "mullvad-browser.desktop"
+            ],
+            "packages": [
+                "mullvad-browser"
+            ],
+            "prefer": "apt",
+            "desktop": "mullvad-browser",
+            "name": "Mullvad Browser",
+            "summary": "A private browser that makes you look like every other user",
+            "tagline": "Private browsing, nothing kept",
+            "insteadOf": "InPrivate browsing",
+            "aliases": [
+                "inprivate",
+                "incognito",
+                "private browsing",
+                "tor"
+            ],
+            "cardNote": "Free, forgets everything when closed",
+            "chip": "Forgets everything",
+            "swapTitle": "A good swap for InPrivate windows",
+            "swapText": "Every window is private, and sites see the same browser as everyone else's.",
+            "description": "Mullvad Browser is made with the Tor Project to stop websites telling you apart from other people. It keeps no history, blocks trackers and clears everything when you close it.",
+            "icon": "mullvad-browser",
+            "category": "internet"
+        },
+        {
+            "key": "firefox",
+            "name": "Firefox",
+            "ids": [
+                "org.mozilla.firefox",
+                "firefox.desktop",
+                "firefox-esr.desktop"
+            ],
+            "packages": [
+                "firefox-esr"
+            ],
+            "flatpak": "org.mozilla.firefox",
+            "tagline": "Mozilla's web browser",
+            "aliases": [
+                "mozilla",
+                "firefox esr"
+            ],
+            "description": "Firefox is the web browser made by Mozilla, a non-profit. It runs on its own engine rather than Chrome's, and can import your bookmarks and passwords from Edge or Chrome.",
+            "category": "internet"
+        },
+        {
+            "key": "thunderbird",
+            "name": "Thunderbird",
+            "ids": [
+                "org.mozilla.Thunderbird",
+                "net.thunderbird.Thunderbird",
+                "thunderbird.desktop"
+            ],
+            "packages": [
+                "thunderbird"
+            ],
+            "flatpak": "org.mozilla.Thunderbird",
+            "tagline": "Email, calendar and contacts",
+            "insteadOf": "Outlook",
+            "aliases": [
+                "outlook",
+                "mail",
+                "email",
+                "windows mail",
+                "calendar",
+                "hotmail"
+            ],
+            "cardNote": "Free, works with Outlook.com and Gmail",
+            "chip": "Works with Outlook.com",
+            "swapTitle": "A good swap for Outlook",
+            "swapText": "Signs in to Outlook.com, Microsoft 365 and Gmail accounts, with your calendar alongside.",
+            "category": "internet"
+        },
+        {
+            "key": "steam",
+            "ids": [
+                "com.valvesoftware.Steam",
+                "com.valvesoftware.Steam.desktop",
+                "steam.desktop"
+            ],
+            "packages": [
+                "steam-installer"
+            ],
+            "flatpak": "com.valvesoftware.Steam",
+            "prefer": "flatpak",
+            "name": "Steam",
+            "tagline": "For your Windows games",
+            "insteadOf": "Steam for Windows",
+            "aliases": [
+                "steam",
+                "games",
+                "gaming",
+                "epic",
+                "xbox app",
+                "proton"
+            ],
+            "cardNote": "Free, plays most Windows games",
+            "chip": "Plays Windows games",
+            "swapTitle": "Your Steam library comes with you",
+            "swapText": "Sign in and most of your Windows games install and play as they did before.",
+            "description": "Steam on Wild OS runs most Windows games through Proton, which is built in. Sign in and your library is there, with saves synced through Steam Cloud.",
+            "icon": "steam"
+        },
+        {
+            "key": "gimp",
+            "ids": [
+                "org.gimp.GIMP"
+            ],
+            "packages": [
+                "gimp"
+            ],
+            "flatpak": "org.gimp.GIMP",
+            "name": "GIMP",
+            "tagline": "Photo retouching and editing",
+            "insteadOf": "Photoshop Elements",
+            "aliases": [
+                "photoshop elements",
+                "paint.net",
+                "paintshop",
+                "photo editor",
+                "lightroom"
+            ],
+            "cardNote": "Free, opens PSD files",
+            "chip": "Opens PSD files",
+            "swapTitle": "A good swap for Photoshop Elements",
+            "swapText": "Retouch, crop and fix photos with layers, masks and filters.",
+            "category": "graphics"
+        },
+        {
+            "key": "inkscape",
+            "name": "Inkscape",
+            "ids": [
+                "org.inkscape.Inkscape"
+            ],
+            "packages": [
+                "inkscape"
+            ],
+            "flatpak": "org.inkscape.Inkscape",
+            "tagline": "Vector drawing and logos",
+            "insteadOf": "Illustrator",
+            "aliases": [
+                "illustrator",
+                "adobe illustrator",
+                "coreldraw",
+                "svg",
+                "vector",
+                "affinity designer"
+            ],
+            "cardNote": "Free, opens SVG and PDF files",
+            "chip": "Opens SVG and PDF",
+            "swapTitle": "A good swap for Illustrator",
+            "swapText": "Draws logos, diagrams and print work, and opens SVG, PDF and many AI files.",
+            "category": "graphics"
+        },
+        {
+            "key": "kdenlive",
+            "name": "Kdenlive",
+            "ids": [
+                "org.kde.kdenlive"
+            ],
+            "packages": [
+                "kdenlive"
+            ],
+            "flatpak": "org.kde.kdenlive",
+            "tagline": "Video editing",
+            "insteadOf": "Clipchamp",
+            "aliases": [
+                "clipchamp",
+                "premiere",
+                "movie maker",
+                "video editor",
+                "davinci",
+                "vegas"
+            ],
+            "cardNote": "Free, edits in 4K",
+            "chip": "Edits in 4K",
+            "swapTitle": "A good swap for Clipchamp",
+            "swapText": "Cut, trim and add titles and music on a proper timeline, then export for YouTube or your phone.",
+            "category": "media"
+        },
+        {
+            "key": "obs",
+            "name": "OBS Studio",
+            "ids": [
+                "com.obsproject.Studio"
+            ],
+            "packages": [
+                "obs-studio"
+            ],
+            "flatpak": "com.obsproject.Studio",
+            "tagline": "Screen recording and streaming",
+            "insteadOf": "Xbox Game Bar recording",
+            "aliases": [
+                "game bar",
+                "xbox game bar",
+                "screen recorder",
+                "streaming",
+                "twitch",
+                "record screen"
+            ],
+            "cardNote": "Free, records and streams",
+            "chip": "Records and streams",
+            "swapTitle": "A good swap for Game Bar recording",
+            "swapText": "Records your screen or a game, or streams it live to Twitch and YouTube.",
+            "category": "media"
+        },
+        {
+            "key": "audacity",
+            "name": "Audacity",
+            "ids": [
+                "org.audacityteam.Audacity"
+            ],
+            "packages": [
+                "audacity"
+            ],
+            "flatpak": "org.audacityteam.Audacity",
+            "tagline": "Record and edit audio",
+            "insteadOf": "Sound Recorder",
+            "aliases": [
+                "sound recorder",
+                "voice recorder",
+                "audio editor",
+                "podcast"
+            ],
+            "cardNote": "Free, records and edits sound",
+            "chip": "Edits audio",
+            "swapTitle": "A good swap for Sound Recorder",
+            "swapText": "Records from your microphone and lets you cut, clean up and export the result.",
+            "category": "media"
+        },
+        {
+            "key": "okular",
+            "name": "Documents",
+            "ids": [
+                "org.kde.okular"
+            ],
+            "packages": [
+                "okular"
+            ],
+            "flatpak": "org.kde.okular",
+            "prefer": "apt",
+            "tagline": "Reads PDFs and fills in forms",
+            "insteadOf": "Adobe Acrobat Reader",
+            "aliases": [
+                "acrobat",
+                "adobe reader",
+                "pdf",
+                "pdf reader"
+            ],
+            "cardNote": "Free, signs and fills in PDFs",
+            "chip": "Fills in PDF forms",
+            "swapTitle": "A good swap for Acrobat Reader",
+            "swapText": "Reads, annotates and fills in PDF forms, and can add your signature.",
+            "category": "office"
+        },
+        {
+            "key": "kwrite",
+            "name": "Text editor",
+            "ids": [
+                "org.kde.kwrite"
+            ],
+            "packages": [
+                "kwrite"
+            ],
+            "prefer": "apt",
+            "tagline": "Plain text notes and files",
+            "insteadOf": "Notepad",
+            "aliases": [
+                "notepad",
+                "text editor",
+                "txt",
+                "notepad++"
+            ],
+            "cardNote": "Free, opens any text file",
+            "chip": "Plain text",
+            "swapTitle": "A good swap for Notepad",
+            "swapText": "Opens any text file instantly, with tabs and colour for code.",
+            "category": "utilities"
+        },
+        {
+            "key": "kolourpaint",
+            "name": "KolourPaint",
+            "ids": [
+                "org.kde.kolourpaint"
+            ],
+            "packages": [
+                "kolourpaint"
+            ],
+            "flatpak": "org.kde.kolourpaint",
+            "tagline": "Simple drawing",
+            "insteadOf": "Paint",
+            "aliases": [
+                "paint",
+                "mspaint",
+                "ms paint",
+                "drawing"
+            ],
+            "cardNote": "Free, quick and simple",
+            "chip": "Quick sketches",
+            "swapTitle": "A good swap for Paint",
+            "swapText": "Quick drawings, crops and annotations without learning anything new.",
+            "category": "graphics"
+        },
+        {
+            "key": "ark",
+            "name": "Archives",
+            "ids": [
+                "org.kde.ark"
+            ],
+            "packages": [
+                "ark"
+            ],
+            "prefer": "apt",
+            "tagline": "Zip, 7z and RAR files",
+            "insteadOf": "WinRAR and 7-Zip",
+            "aliases": [
+                "winrar",
+                "7-zip",
+                "7zip",
+                "winzip",
+                "zip",
+                "rar",
+                "unzip"
+            ],
+            "cardNote": "Free, opens RAR and 7z",
+            "chip": "Opens RAR and 7z",
+            "swapTitle": "A good swap for WinRAR and 7-Zip",
+            "swapText": "Opens and makes zip, 7z and RAR archives straight from Files.",
+            "category": "utilities"
+        },
+        {
+            "key": "spectacle",
+            "name": "Screenshot",
+            "ids": [
+                "org.kde.spectacle"
+            ],
+            "packages": [
+                "kde-spectacle"
+            ],
+            "prefer": "apt",
+            "tagline": "Screenshots and screen clips",
+            "insteadOf": "Snipping Tool",
+            "aliases": [
+                "snipping tool",
+                "snip",
+                "screenshot",
+                "print screen",
+                "snagit"
+            ],
+            "cardNote": "Free, grabs any part of the screen",
+            "chip": "Press Print Screen",
+            "swapTitle": "A good swap for Snipping Tool",
+            "swapText": "Press Print Screen to grab the screen, a window or an area, then mark it up.",
+            "category": "utilities"
+        }
+    ]
+}

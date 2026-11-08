@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Windows app installer
+Comment=Install Windows programs
+Exec=wildos-appbridge %f
+Icon=wildos-windows-app
+NoDisplay=true
+Terminal=false
+StartupNotify=false

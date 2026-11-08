@@ -1,0 +1,23 @@
+# The file types Windows apps open by default when "Open Windows files in
+# Windows apps" is on (brief 5.7). wildos-winmode copies the lines for apps
+# that are installed into the person's own mimeapps.list.
+[Default Applications]
+application/vnd.openxmlformats-officedocument.wordprocessingml.document=wildos-winmode-word.desktop
+application/msword=wildos-winmode-word.desktop
+application/vnd.ms-word.document.macroEnabled.12=wildos-winmode-word.desktop
+application/vnd.openxmlformats-officedocument.wordprocessingml.template=wildos-winmode-word.desktop
+application/vnd.openxmlformats-officedocument.spreadsheetml.sheet=wildos-winmode-excel.desktop
+application/vnd.ms-excel=wildos-winmode-excel.desktop
+application/vnd.ms-excel.sheet.macroEnabled.12=wildos-winmode-excel.desktop
+application/vnd.openxmlformats-officedocument.spreadsheetml.template=wildos-winmode-excel.desktop
+application/vnd.openxmlformats-officedocument.presentationml.presentation=wildos-winmode-powerpoint.desktop
+application/vnd.ms-powerpoint=wildos-winmode-powerpoint.desktop
+application/vnd.openxmlformats-officedocument.presentationml.slideshow=wildos-winmode-powerpoint.desktop
+application/vnd.ms-powerpoint.presentation.macroEnabled.12=wildos-winmode-powerpoint.desktop
+application/vnd.ms-outlook=wildos-winmode-outlook.desktop
+application/onenote=wildos-winmode-onenote.desktop
+application/vnd.ms-access=wildos-winmode-access.desktop
+application/x-msaccess=wildos-winmode-access.desktop
+application/x-mspublisher=wildos-winmode-publisher.desktop
+application/vnd.visio=wildos-winmode-visio.desktop
+application/vnd.ms-visio.drawing=wildos-winmode-visio.desktop

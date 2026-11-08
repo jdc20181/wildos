@@ -1,0 +1,29 @@
+Source: wildos-launch
+Section: x11
+Priority: optional
+Maintainer: Wild OS Developers <dev@wildos.io>
+Build-Depends:
+ debhelper-compat (= 13),
+ cmake,
+ qt6-base-dev,
+ qt6-wayland-dev,
+ qt6-wayland-dev-tools,
+ plasma-wayland-protocols,
+ libwayland-dev,
+ libkf6config-dev,
+ libkf6windowsystem-dev,
+Standards-Version: 4.7.0
+Rules-Requires-Root: no
+
+Package: wildos-launch
+Architecture: any
+Depends:
+ ${shlibs:Depends},
+ ${misc:Depends},
+ kwin-wayland,
+ qt6-wayland,
+Description: Wild OS app start tracking
+ Follows each app from the moment it is started until its window opens,
+ so the taskbar's starting line lasts exactly as long as the start, even
+ when another window is clicked meanwhile. After sign-in the most used
+ apps are read into memory at idle priority so they start quickly.

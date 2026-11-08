@@ -1,0 +1,61 @@
+# System-wide defaults for every account. People's own choices in System
+# Settings are written to ~/.config and win over these.
+
+[General]
+ColorScheme=WildOS
+AccentColor=143,180,255
+# Fonts use the older ten-field form because Qt 5 apps cannot parse the Qt 6
+# form and fall back to a stock font; Qt 6 reads both.
+font=Inter,10,-1,5,50,0,0,0,0,0
+menuFont=Inter,10,-1,5,50,0,0,0,0,0
+toolBarFont=Inter,10,-1,5,50,0,0,0,0,0
+smallestReadableFont=Inter,9,-1,5,50,0,0,0,0,0
+fixed=Hack,10,-1,5,50,0,0,0,0,0
+# Qt 5 apps have no Plasma integration on Debian trixie; Qt's own KDE theme
+# looks for the widget style here rather than under [KDE].
+widgetStyle=kvantum
+# "Open terminal here" in Files and other apps opens Wild OS Terminal.
+TerminalApplication=wildos-terminal
+TerminalService=org.wildos.terminal.desktop
+
+[WM]
+activeFont=Inter,10,-1,5,63,0,0,0,0,0
+
+[Icons]
+Theme=WildOS
+
+[KDE]
+LookAndFeelPackage=org.wildos.desktop
+# Kvantum draws every Qt 5 and Qt 6 control from the WildOS theme; see
+# /etc/xdg/Kvantum/kvantum.kvconfig.
+widgetStyle=kvantum
+
+# Help menus keep "<App> handbook" out (it opens KDE's documentation viewer)
+# along with KDE's own About, bug report, donation and language entries, the
+# "Find action" search, and the keyboard shortcut, toolbar and notification
+# editors that no Windows app has. Widgets locked on the taskbar cannot be
+# configured either, and the "Get new…" buttons that download add-ons from
+# store.kde.org are gone, as are Okular's "About backend" and the "Welcome
+# page" entry of Text editor and Archives, whose pages advertise KDE. "About
+# <app>" stays: it is the one entry left in Help, and an empty Help menu
+# would open nothing.
+[KDE Action Restrictions]
+action/help_about_backend=false
+action/help_welcome_page=false
+action/help_contents=false
+action/help_whats_this=false
+action/open_kcommand_bar=false
+action/help_report_bug=false
+action/help_donate=false
+action/help_about_kde=false
+action/switch_application_language=false
+action/options_configure_keybinding=false
+action/options_configure_toolbars=false
+action/options_configure_notifications=false
+plasma/allow_configure_when_locked=false
+ghns=false
+
+# The usage statistics page asks people to send data to KDE; Wild OS sends
+# nothing and has no such setting.
+[KDE Control Module Restrictions]
+kcm_feedback=false

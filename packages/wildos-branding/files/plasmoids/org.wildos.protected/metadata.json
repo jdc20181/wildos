@@ -1,0 +1,15 @@
+{
+    "KPlugin": {
+        "Authors": [{ "Email": "dev@wildos.io", "Name": "Wild OS" }],
+        "Category": "System Information",
+        "Description": "Shows whether your computer is protected, and what to do when it is not",
+        "Icon": "security-high",
+        "Id": "org.wildos.protected",
+        "License": "GPL-3.0-or-later",
+        "Name": "Security",
+        "Version": "0.2.0",
+        "Website": "https://wildos.io"
+    },
+    "KPackageStructure": "Plasma/Applet",
+    "X-Plasma-API-Minimum-Version": "6.0"
+}

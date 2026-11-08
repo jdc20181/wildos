@@ -1,0 +1,7 @@
+files/90-wildos-live.conf etc/sddm.conf.d/
+files/90-wildos-live etc/sudoers.d/
+files/dracut/90wildos-check usr/lib/dracut/modules.d/
+files/session/wildos-live.desktop usr/share/wayland-sessions/
+files/session/live-session usr/libexec/wildos-live/
+files/dev/wildos-dev-only.conf usr/lib/systemd/system/qemu-guest-agent.service.d/
+files/systemd/wildos-live.conf etc/systemd/system/sddm.service.d/

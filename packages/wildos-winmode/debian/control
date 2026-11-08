@@ -1,0 +1,91 @@
+Source: wildos-winmode
+Section: misc
+Priority: optional
+Maintainer: Wild OS Developers <dev@wildos.io>
+Build-Depends:
+ debhelper-compat (= 13),
+ cmake,
+ qt6-base-dev,
+ qt6-declarative-dev,
+ qt6-svg-dev,
+ python3,
+ python3-gi,
+ gir1.2-glib-2.0,
+ mono-mcs,
+ libmono-system-serviceprocess4.0-cil,
+ mono-utils,
+Standards-Version: 4.7.0
+Rules-Requires-Root: no
+
+Package: wildos-winmode
+Architecture: amd64
+Depends:
+ ${shlibs:Depends},
+ ${misc:Depends},
+ wildos-ui,
+ qml6-module-qtquick,
+ qml6-module-qtquick-layouts,
+ qml6-module-qtquick-templates,
+ qml6-module-qtquick-effects,
+ qml6-module-qtquick-window,
+ qml6-module-qtquick-dialogs,
+ qt6-svg-plugins,
+ wildos-run (= ${binary:Version}),
+ python3,
+ python3-gi,
+ gir1.2-glib-2.0,
+ python3-xlib,
+ python3-pil,
+ dbus,
+ polkitd,
+ nftables,
+Recommends:
+ libhivex-bin,
+ libsecret-tools,
+ kdialog,
+ libnotify-bin,
+ wildos-winmode-runtime,
+Description: Wild OS Windows mode
+ Runs a real copy of Windows in the background, and shows each Windows
+ app as an ordinary window on the Wild OS desktop and in Start. Windows
+ only runs while one of its apps is open; otherwise it is paused or saved
+ to disk.
+ .
+ This package holds the system service that looks after Windows, the
+ per-user agent that opens Windows apps, groups their windows and keeps
+ their Start entries and file types, and wild-guest, the helper that runs
+ inside Windows.
+
+Package: wildos-winmode-runtime
+Architecture: all
+Depends:
+ ${misc:Depends},
+ libvirt-daemon-system,
+ libvirt-clients,
+ qemu-system-x86,
+ qemu-utils,
+ ovmf,
+ swtpm,
+ swtpm-tools,
+ virtiofsd,
+ freerdp3-x11,
+ xorriso,
+Description: Wild OS Windows mode, the virtual PC it runs on
+ QEMU, libvirt and FreeRDP, which Windows mode needs only once it is set
+ up. Setting up Windows mode installs this package, so the Wild OS image
+ and PCs that never use Windows mode do without it.
+
+Package: wildos-run
+Architecture: all
+Depends:
+ ${misc:Depends},
+ python3,
+ python3-gi,
+ gir1.2-glib-2.0,
+Recommends:
+ osslsigncode,
+ ca-certificates,
+Description: Wild OS handler for Windows programs
+ Decides where a Windows program or installer runs: as its Wild OS
+ version, in Windows mode, or not at all with the reason why, using Wild
+ OS's list of known Windows programs.

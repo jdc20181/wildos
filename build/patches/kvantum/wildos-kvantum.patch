@@ -1,0 +1,392 @@
+Description: Wild OS controls in Kvantum
+ Four changes so the WildOS Kvantum theme can draw the design's controls.
+ .
+ Default buttons: a theme can draw the default (primary) button per state
+ ("button-default-normal", "-focused", "-pressed", "-toggled") as a solid
+ accent button; its label then uses the highlighted-text colour. Without
+ those elements Kvantum keeps its stock overlay.
+ .
+ Menus: a new [General] menu_padding sets the space between a menu's edge
+ and its items, so a menu can have a 14 px rounded corner and 6 px of
+ padding. The blur radius cap for menus and tooltips rises from 10 to 16 to
+ match such corners.
+ .
+ Focus rectangles may use up to 6 px of the theme's focus frame, so the
+ ring keeps rounded corners.
+ .
+ Accent: a theme can list the colours it draws its accent with
+ ([General] accent_colors); they are swapped for the accent picked in the
+ system settings (kdeglobals [General] AccentColor) when the SVG loads.
+Author: Wild OS Developers <dev@wildos.io>
+Forwarded: not-needed
+
+diff -ru a/Kvantum/style/Kvantum.cpp b/Kvantum/style/Kvantum.cpp
+--- a/Kvantum/style/Kvantum.cpp	2026-11-07 11:07:50.869915200 +0000
++++ b/Kvantum/style/Kvantum.cpp	2026-11-07 11:10:14.291399000 +0000
+@@ -18,6 +18,7 @@
+ #include "Kvantum.h"
+ 
+ #include <QDir>
++#include <QFile>
+ #include <QPainter>
+ #include <QPainterPath>
+ #include <QSettings>
+@@ -450,6 +451,102 @@
+   defaultRndr_->load(KSL(":/Kvantum/default.svg"));
+ }
+ 
++/* Wild OS: a theme can follow the accent colour picked in the system
++   settings (kdeglobals, [General] AccentColor). Its kvconfig names the
++   colours it draws the accent with in [General] accent_colors: the accent,
++   its hover shade and its pressed shade. Those exact colours are swapped in
++   the SVG before it is loaded. The theme is drawn for the default accent
++   (Glacier, #8fb4ff), so with that accent nothing changes. In a light theme
++   the accent is deepened until white text on it reads, the same rule the
++   Wild OS apps use. */
++static QColor wildosColour(const QVariant &value)
++{
++  const QStringList parts = value.toStringList();
++  if (parts.size() >= 3)
++    return QColor(parts.at(0).trimmed().toInt(), parts.at(1).trimmed().toInt(), parts.at(2).trimmed().toInt());
++  return QColor(value.toString().trimmed());
++}
++
++static QColor wildosSystemAccent()
++{
++  QString home = QString::fromLocal8Bit(qgetenv("XDG_CONFIG_HOME"));
++  if (home.isEmpty())
++    home = QDir::homePath() + QLatin1String("/.config");
++  QStringList files;
++  files << home + QLatin1String("/kdeglobals");
++  QString dirs = QString::fromLocal8Bit(qgetenv("XDG_CONFIG_DIRS"));
++  if (dirs.isEmpty())
++    dirs = QLatin1String("/etc/xdg");
++  const QStringList dirList = dirs.split(QLatin1Char(':'), Qt::SkipEmptyParts);
++  for (const QString &dir : dirList)
++    files << dir + QLatin1String("/kdeglobals");
++  for (const QString &file : static_cast<const QStringList&>(files))
++  {
++    if (!QFile::exists(file))
++      continue;
++    QSettings globals(file, QSettings::IniFormat);
++    const QVariant value = globals.value(QLatin1String("AccentColor"));
++    if (value.isValid())
++      return wildosColour(value);
++  }
++  return QColor();
++}
++
++static qreal wildosLuminance(const QColor &c)
++{
++  auto f = [](qreal v) { return v <= 0.03928 ? v / 12.92 : qPow((v + 0.055) / 1.055, 2.4); };
++  return 0.2126 * f(c.redF()) + 0.7152 * f(c.greenF()) + 0.0722 * f(c.blueF());
++}
++
++static QColor wildosDeepen(const QColor &c, qreal saturation, qreal lightness, qreal contrast)
++{
++  if (c.hslSaturationF() <= 0)
++    return QColor::fromHslF(0, 0, lightness);
++  const qreal hue = qMax(c.hslHueF(), static_cast<qreal>(0));
++  qreal l = lightness;
++  QColor out = QColor::fromHslF(hue, c.hslSaturationF() * saturation, l);
++  while (l > 0.2 && 1.05 / (wildosLuminance(out) + 0.05) < contrast)
++  {
++    l -= 0.01;
++    out = QColor::fromHslF(hue, c.hslSaturationF() * saturation, l);
++  }
++  return out;
++}
++
++static void wildosLoadSvg(QSvgRenderer *renderer, const QString &svgPath)
++{
++  QString config = svgPath;
++  config.replace(config.length() - 4, 4, QLatin1String(".kvconfig"));
++  QFile svgFile(svgPath);
++  if (!QFile::exists(config) || !svgFile.open(QIODevice::ReadOnly))
++  {
++    renderer->load(svgPath);
++    return;
++  }
++  QSettings theme(config, QSettings::IniFormat);
++  const QStringList drawn = theme.value(QLatin1String("General/accent_colors")).toStringList();
++  const QColor accent = wildosSystemAccent();
++  if (drawn.size() != 3 || !accent.isValid() || accent == QColor(0x8f, 0xb4, 0xff))
++  {
++    renderer->load(svgPath);
++    return;
++  }
++  const QColor window(theme.value(QLatin1String("GeneralColors/window.color")).toString());
++  const bool dark = !window.isValid() || window.lightnessF() < 0.5;
++  const QColor base = dark ? accent : wildosDeepen(accent, 0.676, 0.527, 4.5);
++  const QList<QColor> wanted = {base,
++                                dark ? base.lighter(108) : base.darker(108),
++                                dark ? base.darker(108) : base.darker(118)};
++  QString svg = QString::fromUtf8(svgFile.readAll());
++  /* two passes, so a new colour that happens to equal an old one is not
++     swapped twice */
++  for (int i = 0; i < 3; ++i)
++    svg.replace(drawn.at(i).trimmed(), QString(QLatin1String("@wildos-accent-%1@")).arg(i), Qt::CaseInsensitive);
++  for (int i = 0; i < 3; ++i)
++    svg.replace(QString(QLatin1String("@wildos-accent-%1@")).arg(i), wanted.at(i).name(QColor::HexRgb));
++  renderer->load(svg.toUtf8());
++}
++
+ static inline bool isThemeDir(const QString &path, const QString &themeName)
+ {
+   if (themeName.isEmpty()) return false;
+@@ -602,7 +699,7 @@
+         if (!userSvg.isEmpty())
+         {
+           themeRndr_ = new QSvgRenderer();
+-          themeRndr_->load(userSvg);
++          wildosLoadSvg(themeRndr_, userSvg);
+         }
+         if (themeSettings_ || themeRndr_)
+         {
+@@ -668,7 +765,7 @@
+       if (!userSvg.isEmpty())
+       { // user theme
+         themeRndr_ = new QSvgRenderer();
+-        themeRndr_->load(userSvg);
++        wildosLoadSvg(themeRndr_, userSvg);
+       }
+       else
+       {
+@@ -681,7 +778,7 @@
+             if (QFile::exists(temp))
+             {
+               themeRndr_ = new QSvgRenderer();
+-              themeRndr_->load(temp);
++              wildosLoadSvg(themeRndr_, temp);
+             }
+             else if (!isThemeDir(QString(DATADIR) + "/Kvantum", themeName) // config shouldn't be found
+                      && isThemeDir(QString(DATADIR) + "/Kvantum", lightName))
+@@ -691,7 +788,7 @@
+               if (QFile::exists(temp))
+               {
+                 themeRndr_ = new QSvgRenderer();
+-                themeRndr_->load(temp);
++                wildosLoadSvg(themeRndr_, temp);
+               }
+             }
+ 
+@@ -706,7 +803,7 @@
+                 if (QFile::exists(temp))
+                 {
+                   themeRndr_ = new QSvgRenderer();
+-                  themeRndr_->load(temp);
++                  wildosLoadSvg(themeRndr_, temp);
+                 }
+               }
+ 
+@@ -723,7 +820,7 @@
+                   if (QFile::exists(temp))
+                   {
+                     themeRndr_ = new QSvgRenderer();
+-                    themeRndr_->load(temp);
++                    wildosLoadSvg(themeRndr_, temp);
+                   }
+                 }
+               }
+@@ -740,7 +837,7 @@
+             if (QFile::exists(temp))
+             {
+               themeRndr_ = new QSvgRenderer();
+-              themeRndr_->load(temp);
++              wildosLoadSvg(themeRndr_, temp);
+             }
+             else if (isThemeDir(QString(DATADIR) + "/Kvantum", lightName))
+             {
+@@ -749,7 +846,7 @@
+               if (QFile::exists(temp))
+               {
+                 themeRndr_ = new QSvgRenderer();
+-                themeRndr_->load(temp);
++                wildosLoadSvg(themeRndr_, temp);
+               }
+             }
+ 
+@@ -764,7 +861,7 @@
+                 if (QFile::exists(temp))
+                 {
+                   themeRndr_ = new QSvgRenderer();
+-                  themeRndr_->load(temp);
++                  wildosLoadSvg(themeRndr_, temp);
+                 }
+               }
+ 
+@@ -781,7 +878,7 @@
+                   if (QFile::exists(temp))
+                   {
+                     themeRndr_ = new QSvgRenderer();
+-                    themeRndr_->load(temp);
++                    wildosLoadSvg(themeRndr_, temp);
+                   }
+                 }
+               }
+@@ -898,6 +995,8 @@
+   {
+     const frame_spec fspec = getFrameSpec(KSL("Menu"));
+     margin = horiz ? qMax(fspec.left,fspec.right) : qMax(fspec.top,fspec.bottom);
++    if (tspec_.menu_padding >= 0)
++      margin = qMin(margin, tspec_.menu_padding);
+   }
+   if (!tspec_.shadowless_popup && !noComposite_) // used without compositing at PM_SubMenuOverlap
+     margin += tspec_now.menu_shadow_depth;
+@@ -3055,10 +3154,11 @@
+       { // no interior
+         frame_spec fspec = getFrameSpec(KSL("Focus"));
+         fspec.expansion = 0;
+-        fspec.left = qMin(fspec.left,2);
+-        fspec.right = qMin(fspec.right,2);
+-        fspec.top = qMin(fspec.top,2);
+-        fspec.bottom = qMin(fspec.bottom,2);
++        /* Wild OS: up to 6 px so the ring can keep its rounded corners */
++        fspec.left = qMin(fspec.left,6);
++        fspec.right = qMin(fspec.right,6);
++        fspec.top = qMin(fspec.top,6);
++        fspec.bottom = qMin(fspec.bottom,6);
+         renderFrame(painter,option->rect,fspec,fspec.element);
+       }
+ 
+@@ -3215,6 +3315,15 @@
+       }
+       fspec.top = fspec.bottom = pixelMetric(PM_MenuVMargin,option,widget);
+ 
++      if (tspec_.menu_padding >= 0)
++      { // Wild OS: the frame keeps its own size; the items overlap it
++        const frame_spec real = getFrameSpec(group);
++        fspec.left += qMax(real.left - tspec_.menu_padding, 0);
++        fspec.right += qMax(real.right - tspec_.menu_padding, 0);
++        fspec.top += qMax(real.top - tspec_.menu_padding, 0);
++        fspec.bottom += qMax(real.bottom - tspec_.menu_padding, 0);
++      }
++
+       if (!tspec_.shadowless_popup
+           && isTranslucent && tspec_now.menu_shadow_depth > 0
+           && fspec.left >= tspec_now.menu_shadow_depth // otherwise shadow will have no meaning
+@@ -3391,6 +3500,15 @@
+             fspec.left = fspec.right = pixelMetric(PM_MenuHMargin,option,widget);
+           }
+ 
++          if (tspec_.menu_padding >= 0)
++          { // Wild OS: the frame keeps its own size; the items overlap it
++            const frame_spec real = getFrameSpec(group);
++            fspec.left += qMax(real.left - tspec_.menu_padding, 0);
++            fspec.right += qMax(real.right - tspec_.menu_padding, 0);
++            fspec.top += qMax(real.top - tspec_.menu_padding, 0);
++            fspec.bottom += qMax(real.bottom - tspec_.menu_padding, 0);
++          }
++
+           if (!tspec_.shadowless_popup
+               && isTranslucent && tspec_now.menu_shadow_depth > 0
+               && fspec.left >= tspec_now.menu_shadow_depth // otherwise shadow will have no meaning
+@@ -9701,6 +9819,18 @@
+           painter->setFont(f);
+         }
+ 
++        /* Wild OS: a solid default button (drawn per state as
++           "<button>-default-normal" and so on) has its label in the
++           highlighted-text colour, like selected text on the accent. */
++        QPalette::ColorRole labelRole = QPalette::ButtonText;
++        if (isDefaultBtn && elementExists(fspec.element+"-default-normal"))
++        {
++          labelRole = QPalette::HighlightedText;
++          lspec.normalColor = lspec.focusColor = lspec.pressColor = lspec.toggleColor = QString();
++          lspec.normalInactiveColor = lspec.focusInactiveColor
++            = lspec.pressInactiveColor = lspec.toggleInactiveColor = QString();
++        }
++
+         /* take into account the possibility of the presence of an indicator */
+         int ind = opt->features & QStyleOptionButton::HasMenu
+                     ? dspec.size+BUTTON_ARROW_MARGIN : 0;
+@@ -9820,7 +9950,7 @@
+         renderLabel(&o,painter,
+                     R,
+                     fspec,lspec,
+-                    talign,txt,QPalette::ButtonText,
++                    talign,txt,labelRole,
+                     state,
+                     isInactive,
+                     (hspec_.iconless_pushbutton && !txt.isEmpty()) ? QPixmap()
+@@ -10233,8 +10363,17 @@
+           QString di = "button-default-indicator";
+           if (!((opt->features & QStyleOptionButton::Flat) && status.startsWith(KL1("normal"))))
+           {
+-            renderFrame(painter,option->rect,fspec,fspec.element+"-default");
+-            renderInterior(painter,option->rect,fspec,ispec,ispec.element+"-default");
++            /* Wild OS: use the per-state default button when the theme has one */
++            QString defFrame = fspec.element+"-default";
++            QString defInterior = ispec.element+"-default";
++            const QString st = status.section(QLatin1Char('-'), 0, 0);
++            if (elementExists(defInterior+"-"+st))
++            {
++              defFrame += "-"+st;
++              defInterior += "-"+st;
++            }
++            renderFrame(painter,option->rect,fspec,defFrame);
++            renderInterior(painter,option->rect,fspec,ispec,defInterior);
+           }
+           else if (elementExists(KSL("flat-button-default-indicator")))
+             di = "flat-button-default-indicator";
+@@ -13241,11 +13380,17 @@
+       const frame_spec fspec = getFrameSpec(KSL("Menu"));
+       int v = qMax(fspec.top,fspec.bottom);
+       int h = 0;
++      /* Wild OS: see getMenuMargin() */
++      const int padding = tspec_.menu_padding;
++      if (padding >= 0)
++        v = qMin(v, padding);
+       theme_spec tspec_now = settings_->getCompositeSpec();
+       bool shadowDecided(tspec_.shadowless_popup || noComposite_ || !tspec_now.composite);
+       if (!(tspec_.spread_menuitems && shadowDecided))
+       { // this condition was used in getMenuMargin()
+         h = qMax(fspec.left,fspec.right);
++        if (padding >= 0)
++          h = qMin(h, padding);
+         if (!shadowDecided
+             && widget
+             && translucentWidgets_.contains(widget) // combo menus are included
+diff -ru a/Kvantum/style/themeconfig/ThemeConfig.cpp b/Kvantum/style/themeconfig/ThemeConfig.cpp
+--- a/Kvantum/style/themeconfig/ThemeConfig.cpp	2026-11-07 11:07:50.211515400 +0000
++++ b/Kvantum/style/themeconfig/ThemeConfig.cpp	2026-11-07 11:10:14.093475300 +0000
+@@ -1022,11 +1022,15 @@
+ 
+   v = getValue(KSL("General"),KSL("menu_blur_radius"));
+   if (v.isValid())
+-    r.menu_blur_radius = qMin(v.toInt(),10);
++    r.menu_blur_radius = qMin(v.toInt(),16);
++
++  v = getValue(KSL("General"),KSL("menu_padding"));
++  if (v.isValid())
++    r.menu_padding = qMax(v.toInt(),0);
+ 
+   v = getValue(KSL("General"),KSL("tooltip_blur_radius"));
+   if (v.isValid())
+-    r.tooltip_blur_radius = qMin(v.toInt(),10);
++    r.tooltip_blur_radius = qMin(v.toInt(),16);
+ 
+   return r;
+ }
+diff -ru a/Kvantum/style/themeconfig/specs.h b/Kvantum/style/themeconfig/specs.h
+--- a/Kvantum/style/themeconfig/specs.h	2026-11-07 11:07:50.273183400 +0000
++++ b/Kvantum/style/themeconfig/specs.h	2026-11-07 11:10:14.085472200 +0000
+@@ -137,6 +137,10 @@
+   int menu_separator_height;
+   /* the corner radius for blurring menus */
+   int menu_blur_radius;
++  /* Wild OS: space between a menu's edge and its items when it is smaller
++     than the menu frame, so a wide rounded corner does not push the items
++     inwards (-1 means the frame size) */
++  int menu_padding;
+   /* should menuitems spread across the whole menu horizontally? */
+   bool spread_menuitems;
+   /* overlap between a submenu and its parent */
+@@ -511,6 +515,7 @@
+   tspec.menu_shadow_depth = 0;
+   tspec.menu_separator_height = 10;
+   tspec.menu_blur_radius = 0;
++  tspec.menu_padding = -1;
+   tspec.spread_menuitems = false;
+   tspec.submenu_overlap = 0;
+   tspec.submenu_delay = 250;

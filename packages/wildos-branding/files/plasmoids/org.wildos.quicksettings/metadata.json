@@ -1,0 +1,21 @@
+{
+    "KPackageStructure": "Plasma/Applet",
+    "KPlugin": {
+        "Authors": [
+            {
+                "Email": "dev@wildos.io",
+                "Name": "Wild OS"
+            }
+        ],
+        "Category": "System Information",
+        "Description": "Wi-Fi, Bluetooth, sound, brightness and battery in one place",
+        "EnabledByDefault": true,
+        "Icon": "preferences-system",
+        "Id": "org.wildos.quicksettings",
+        "License": "GPL-3.0-or-later",
+        "Name": "Quick settings",
+        "Version": "1.0.0",
+        "Website": "https://wildos.io"
+    },
+    "X-Plasma-API-Minimum-Version": "6.0"
+}

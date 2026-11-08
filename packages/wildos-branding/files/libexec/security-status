@@ -1,0 +1,212 @@
+#!/bin/sh
+# Reports how well this computer is protected, one key=value per line, for
+# the "Protected" chip on the taskbar and the Privacy and security page.
+# Needs no privileges, never touches the network and changes nothing on the
+# system. The only thing it writes is its own cache and one timestamp under
+# the user's home, so repeated calls stay fast.
+#
+# Keys, in the order printed:
+#
+#   live=yes|no              Running from the install media rather than an
+#                            installed system.
+#   encryption=on|off|na     The disk holding the system is encrypted. "na" in
+#                            the live session, where nothing is installed yet.
+#   updates=current|waiting|unknown|na
+#                            "waiting" when security updates are ready to
+#                            install, "unknown" when the list of updates has
+#                            not been refreshed for a week (so "current" would
+#                            be a guess), "na" in the live session.
+#   updates_security=N       Security updates ready to install.
+#   updates_other=N          Other updates ready to install.
+#   updates_since=EPOCH      When this user first had the current security
+#                            updates waiting; 0 when there are none.
+#   updates_checked=EPOCH    Latest sign that the list of updates was
+#                            refreshed; 0 when there is none.
+#   updates_auto=on|off      Security updates install by themselves.
+#   apps=on|off              Apps are confined by AppArmor.
+#   devices=on|off           USBGuard holds back new USB devices until allowed.
+#   devices_blocked=N        USB devices plugged in and currently blocked.
+#   secureboot=on|off|unsupported
+#                            "unsupported" on BIOS machines and UEFI firmware
+#                            without Secure Boot, where it cannot be turned on.
+#   network=on|off           Nothing accepts connections from other computers:
+#                            no service listens beyond this machine.
+#   network_services=N       Sockets that do accept them.
+#   time=on|off              The clock is set over Tor (sdwdate). Not shown to
+#                            people; for diagnostics and Settings.
+#   kernel=on|off            Kicksecure's kernel hardening is in force. Not
+#                            shown to people; for diagnostics and Settings.
+
+export LC_ALL=C
+
+# A service that is still starting counts as on: at login some are a few
+# seconds behind, and that is not a reason to warn anyone.
+service() {
+    case $(systemctl is-active "$1" 2>/dev/null) in
+        active|activating|reloading) echo on ;;
+        *) echo off ;;
+    esac
+}
+
+mtime() {
+    stat -c %Y "$1" 2>/dev/null || echo 0
+}
+
+# The installer boots with dracut's live module; nothing else uses this.
+if grep -q "rd.live.image" /proc/cmdline 2>/dev/null; then
+    live=yes
+else
+    live=no
+fi
+echo "live=$live"
+
+# lsblk can follow the root device down through LVM to dm-crypt without
+# privileges. Btrfs reports the subvolume after the device, as /dev/x[/@].
+# The installer's marker covers the rare layouts lsblk cannot resolve.
+if [ "$live" = yes ]; then
+    echo "encryption=na"
+else
+    root_dev=$(findmnt -no SOURCE / 2>/dev/null | sed 's/\[.*//')
+    types=$(lsblk -nso TYPE "$root_dev" 2>/dev/null)
+    if printf '%s\n' "$types" | grep -qx crypt; then
+        echo "encryption=on"
+    elif [ -z "$types" ] && [ -e /etc/wildos/encrypted ]; then
+        echo "encryption=on"
+    else
+        echo "encryption=off"
+    fi
+fi
+
+# Updates are counted from apt's local lists with a simulated upgrade, which
+# is exactly what Discover would offer, without a network or root. It takes
+# about a second, so the counts are cached until dpkg or the lists change.
+lists=/var/lib/apt/lists
+checked=0
+for f in "$lists"/*Release /var/lib/apt/periodic/update-success-stamp; do
+    t=$(mtime "$f")
+    [ "$t" -gt "$checked" ] && checked=$t
+done
+# apt keeps each index's server timestamp, and Debian re-signs its security
+# index at least weekly, so an index older than a week means no refresh.
+now=$(date +%s)
+stale=$((now - checked > 7 * 86400))
+
+sec=0
+other=0
+if [ "$live" = yes ]; then
+    updates=na
+elif ! command -v apt-get >/dev/null 2>&1; then
+    updates=unknown
+else
+    cache_dir=${XDG_RUNTIME_DIR:-/tmp}
+    cache="$cache_dir/wildos-security-updates.$(id -u)"
+    key="$(mtime /var/lib/dpkg/status) $(mtime "$lists") $checked"
+    if [ -r "$cache" ] && [ "$(sed -n 1p "$cache")" = "$key" ]; then
+        counts=$(sed -n 2p "$cache")
+    else
+        # Each line reads "Inst name [old] (new Origin:Release [arch])".
+        counts=$(apt-get -s -q -o Debug::NoLocking=true \
+                -o APT::Get::Show-User-Simulation-Note=false dist-upgrade 2>/dev/null \
+            | awk '/^Inst / { if ($0 ~ /\(.*(Debian-Security:|-security )/) s++; else o++ }
+                   END { print s + 0, o + 0 }')
+        tmp="$cache.$$"
+        printf '%s\n%s\n' "$key" "$counts" > "$tmp" 2>/dev/null && mv -f "$tmp" "$cache"
+    fi
+    sec=${counts%% *}
+    other=${counts##* }
+    case $sec in ''|*[!0-9]*) sec=0 ;; esac
+    case $other in ''|*[!0-9]*) other=0 ;; esac
+    if [ "$sec" -gt 0 ]; then
+        updates=waiting
+    elif [ "$stale" -eq 1 ]; then
+        updates=unknown
+    else
+        updates=current
+    fi
+fi
+
+# Remembered across logins so "waiting for more than a day" means a day of
+# the machine being used, not a day since this session started.
+state_dir=${XDG_STATE_HOME:-$HOME/.local/state}/wildos
+since_file=$state_dir/security-updates-since
+if [ "$sec" -gt 0 ]; then
+    if [ ! -s "$since_file" ]; then
+        mkdir -p "$state_dir" 2>/dev/null && echo "$now" > "$since_file" 2>/dev/null
+    fi
+    since=$(cat "$since_file" 2>/dev/null)
+    case $since in ''|*[!0-9]*) since=$now ;; esac
+else
+    rm -f "$since_file" 2>/dev/null
+    since=0
+fi
+
+echo "updates=$updates"
+echo "updates_security=$sec"
+echo "updates_other=$other"
+echo "updates_since=$since"
+echo "updates_checked=$checked"
+
+if command -v unattended-upgrade >/dev/null 2>&1 \
+    && apt-config dump 2>/dev/null | grep -q '^APT::Periodic::Unattended-Upgrade "1"'; then
+    echo "updates_auto=on"
+else
+    echo "updates_auto=off"
+fi
+
+if [ "$(cat /sys/module/apparmor/parameters/enabled 2>/dev/null)" = "Y" ]; then
+    echo "apps=on"
+else
+    echo "apps=off"
+fi
+
+# USBGuard blocks a device by leaving the kernel's authorized flag at 0,
+# which anyone can read. Interfaces (with a colon) and root hubs are skipped.
+echo "devices=$(service usbguard.service)"
+blocked=0
+for dev in /sys/bus/usb/devices/*; do
+    case ${dev##*/} in *:*|usb*) continue ;; esac
+    [ "$(cat "$dev/authorized" 2>/dev/null)" = "0" ] && blocked=$((blocked + 1))
+done
+echo "devices_blocked=$blocked"
+
+# The variable's first four bytes are attributes; the fifth is the state.
+# Firmware without Secure Boot has no such variable at all.
+sb_var=/sys/firmware/efi/efivars/SecureBoot-8be4df61-93ca-11d2-aa0d-00e098032b8c
+if [ ! -r "$sb_var" ]; then
+    echo "secureboot=unsupported"
+elif [ "$(od -An -tu1 -j4 -N1 "$sb_var" 2>/dev/null | tr -d ' ')" = "1" ]; then
+    echo "secureboot=on"
+else
+    echo "secureboot=off"
+fi
+
+# Kicksecure ships no firewall on the desktop, so the honest test is whether
+# anything is listening beyond this machine. DHCP clients bind ports 68 and
+# 546 only to hear replies to their own requests, so they do not count. Nor
+# does network discovery: mDNS on 5353 (finding printers, as Windows' network
+# discovery does) and the unconnected UDP sockets on temporary ports that
+# discovery and name lookups send their own questions from.
+exposed=$( { ss -Hltn 2>/dev/null; ss -Hlun 2>/dev/null; } | awk '
+    {
+        addr = $4
+        port = addr; sub(/.*:/, "", port)
+        if (addr ~ /^127\./ || addr ~ /^\[::1\]/ || addr ~ /%lo:/) next
+        if ($1 == "UNCONN" && (port == "68" || port == "546" || port == "5353" || port + 0 >= 32768)) next
+        n++
+    }
+    END { print n + 0 }')
+if [ "$exposed" -eq 0 ]; then
+    echo "network=on"
+else
+    echo "network=off"
+fi
+echo "network_services=$exposed"
+
+echo "time=$(service sdwdate.service)"
+
+# kptr_restrict=2 is the most distinctive of Kicksecure's kernel settings.
+if [ "$(cat /proc/sys/kernel/kptr_restrict 2>/dev/null)" = "2" ]; then
+    echo "kernel=on"
+else
+    echo "kernel=off"
+fi

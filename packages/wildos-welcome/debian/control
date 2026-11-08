@@ -1,0 +1,51 @@
+Source: wildos-welcome
+Section: misc
+Priority: optional
+Maintainer: Wild OS Developers <dev@wildos.io>
+Build-Depends:
+ debhelper-compat (= 13),
+ cmake,
+ qt6-base-dev,
+ qt6-declarative-dev,
+ qt6-svg-dev,
+ libkf6config-dev,
+ libkf6coreaddons-dev,
+ libkf6jobwidgets-dev,
+ libpackagekitqt6-dev,
+ libhivex-dev,
+ pkgconf,
+Standards-Version: 4.7.0
+Rules-Requires-Root: no
+
+Package: wildos-welcome
+Architecture: any
+Depends:
+ ${shlibs:Depends},
+ ${misc:Depends},
+ qml6-module-qtquick,
+ qml6-module-qtquick-layouts,
+ qml6-module-qtquick-shapes,
+ qml6-module-qtquick-effects,
+ qml6-module-qtquick-window,
+ qt6-svg-plugins,
+ wildos-ui,
+ packagekit,
+ udisks2,
+ util-linux,
+ pkexec,
+ fonts-inter,
+ libqt6sql6-sqlite,
+Recommends:
+ wildos-appbridge,
+ ntfs-3g,
+ flatpak,
+ brave-browser,
+Description: Wild OS first run
+ The seven first run steps. In the first boot setup session (wildos-setup)
+ it sets the region and language, joins Wi-Fi and makes the account, then
+ plans the rest for that account: taskbar layout and accent colour, copying
+ documents, photos, music and bookmarks from a Windows drive on the same
+ computer, the privacy choices, and the Windows programs found there, with
+ their Store replacements or fresh installers and Windows mode's licence
+ check. An account made later sees the last four steps at its first
+ sign-in.

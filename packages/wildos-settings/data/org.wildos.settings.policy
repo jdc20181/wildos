@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE policyconfig PUBLIC
+ "-//freedesktop//DTD PolicyKit Policy Configuration 1.0//EN"
+ "http://www.freedesktop.org/standards/PolicyKit/1/policyconfig.dtd">
+<!-- The password prompts behind Settings. Each action runs one helper in
+     /usr/libexec/wildos, which takes only its own fixed requests:
+     settings-update-policy (Updates), settings-users (Accounts),
+     settings-locale (Time and language) and settings-protection (Privacy
+     and security). -->
+<policyconfig>
+  <vendor>Wild OS</vendor>
+  <vendor_url>https://wildos.io</vendor_url>
+
+  <action id="org.wildos.settings.update-policy">
+    <description>Change how updates are installed</description>
+    <message>Change how Wild OS installs updates?</message>
+    <icon_name>preferences-system</icon_name>
+    <defaults>
+      <allow_any>no</allow_any>
+      <allow_inactive>no</allow_inactive>
+      <allow_active>auth_admin_keep</allow_active>
+    </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/libexec/wildos/settings-update-policy</annotate>
+  </action>
+
+  <action id="org.wildos.settings.protection">
+    <description>Change the protection level</description>
+    <message>Change how strongly Wild OS protects this computer?</message>
+    <icon_name>security-high</icon_name>
+    <defaults>
+      <allow_any>no</allow_any>
+      <allow_inactive>no</allow_inactive>
+      <allow_active>auth_admin_keep</allow_active>
+    </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/libexec/wildos/settings-protection</annotate>
+  </action>
+
+  <action id="org.wildos.settings.users">
+    <description>Change the accounts on this computer</description>
+    <message>Change who can use this computer?</message>
+    <icon_name>system-users</icon_name>
+    <defaults>
+      <allow_any>no</allow_any>
+      <allow_inactive>no</allow_inactive>
+      <allow_active>auth_admin_keep</allow_active>
+    </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/libexec/wildos/settings-users</annotate>
+  </action>
+
+  <action id="org.wildos.settings.locale">
+    <description>Add a language to this computer</description>
+    <message>Set up a new language on this computer?</message>
+    <icon_name>preferences-desktop-locale</icon_name>
+    <defaults>
+      <allow_any>no</allow_any>
+      <allow_inactive>no</allow_inactive>
+      <allow_active>auth_admin_keep</allow_active>
+    </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/libexec/wildos/settings-locale</annotate>
+  </action>
+</policyconfig>

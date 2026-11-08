@@ -1,0 +1,9 @@
+# Clipboard history for Win+V, as on Windows: text, pictures and file paths,
+# the last 25 items, nothing kept on disk once the computer restarts
+# (pinned items are kept by Wild OS separately).
+[General]
+KeepClipboardContents=false
+IgnoreImages=false
+IgnoreSelection=true
+MaxClipItems=25
+URLGrabberEnabled=false

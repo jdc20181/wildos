@@ -1,0 +1,22 @@
+Source: wildos-base
+Section: metapackages
+Priority: optional
+Maintainer: Wild OS Developers <dev@wildos.io>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.7.0
+Rules-Requires-Root: no
+
+Package: wildos-base
+Architecture: all
+Depends:
+ ${misc:Depends},
+ kicksecure-baremetal-cli,
+ security-misc-desktop,
+ network-manager,
+ sudo,
+ polkitd,
+ locales,
+Description: Wild OS base system
+ Identity and security layer of Wild OS. Pulls in the Kicksecure hardening
+ packages (kernel and sysctl hardening, AppArmor profiles, secure time sync,
+ USB device control, RAM wipe on shutdown) and marks the system as Wild OS.

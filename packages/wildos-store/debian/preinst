@@ -1,0 +1,16 @@
+#!/bin/sh
+set -e
+
+# Kicksecure's anon-apt-sources-list adds Flathub limited to the free
+# software subset, which hides Steam, Slack, VS Code and every other app the
+# Store offers that isn't free software. The Store adds the whole of Flathub
+# itself, so Kicksecure's definition is moved aside where flatpak never reads
+# it.
+if [ "$1" = "install" ] || [ "$1" = "upgrade" ]; then
+    mkdir -p /usr/share/wildos/flatpak-remotes-disabled
+    dpkg-divert --package wildos-store --add --rename \
+        --divert /usr/share/wildos/flatpak-remotes-disabled/flathub.flatpakrepo \
+        /etc/flatpak/remotes.d/flathub.flatpakrepo >/dev/null
+fi
+
+#DEBHELPER#

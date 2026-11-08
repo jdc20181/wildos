@@ -1,0 +1,3 @@
+[D-BUS Service]
+Name=org.wildos.Files
+Exec=/usr/bin/wildos-files --service

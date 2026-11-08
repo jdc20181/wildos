@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Security options
+Comment=Lock, switch user, sign out, change your password or open Task Manager
+Exec=/usr/libexec/wildos/wildos-dialogs security
+Icon=security-high
+NoDisplay=true
+StartupNotify=false
+X-KDE-StartupNotify=false

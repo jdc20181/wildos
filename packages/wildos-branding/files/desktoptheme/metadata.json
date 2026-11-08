@@ -1,0 +1,17 @@
+{
+    "KPlugin": {
+        "Authors": [
+            {
+                "Email": "dev@wildos.io",
+                "Name": "Wild OS"
+            }
+        ],
+        "Description": "Dark glass panels and popups",
+        "Id": "wildos",
+        "License": "GPL-3.0-or-later",
+        "Name": "Wild OS",
+        "Version": "0.1.0",
+        "Website": "https://wildos.io"
+    },
+    "X-Plasma-API-Minimum-Version": "6.0"
+}

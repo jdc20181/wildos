@@ -1,0 +1,145 @@
+#!/bin/sh
+# Gives the shipped apps the plain names the Wild OS design uses ("Files", not
+# "Dolphin") everywhere launchers are read: Start, the taskbar, search and the
+# app list. Each launcher is copied into /usr/share/wildos/applications, which
+# sits ahead of /usr/share in XDG_DATA_DIRS (see environment.d), with only its
+# name changed, so app updates keep working. The dpkg trigger in this package
+# reruns it whenever /usr/share/applications changes.
+#
+# Apps the user sees twice under different names (Kate next to the text editor,
+# KWallet next to the password manager) are hidden from menus instead.
+
+set -eu
+
+SRC=/usr/share/applications
+DST=/usr/share/wildos/applications
+
+rename() {
+    id=$1
+    name=$2
+    generic=$3
+    [ -f "$SRC/$id.desktop" ] || return 0
+    # Translated names are dropped so every language sees the same plain name
+    # until Wild OS ships its own translations.
+    # Only the [Desktop Entry] section: the actions further down (a
+    # browser's "New window") keep their own names.
+    sed -e '/^\[Desktop Entry\]$/,/^\[/ {' \
+        -e '/^Name\[/d' -e '/^GenericName\[/d' \
+        -e "s|^Name=.*|Name=$name|" \
+        -e "s|^GenericName=.*|GenericName=$generic|" \
+        -e '}' \
+        "$SRC/$id.desktop" > "$DST/$id.desktop.new"
+    mv "$DST/$id.desktop.new" "$DST/$id.desktop"
+}
+
+hide() {
+    id=$1
+    [ -f "$SRC/$id.desktop" ] || return 0
+    sed -e '/^NoDisplay=/d' -e 's|^\[Desktop Entry\]$|[Desktop Entry]\nNoDisplay=true|' \
+        "$SRC/$id.desktop" > "$DST/$id.desktop.new"
+    mv "$DST/$id.desktop.new" "$DST/$id.desktop"
+}
+
+# A launcher that opens a Wild OS replacement instead, kept out of menus.
+redirect() {
+    id=$1
+    exec=$2
+    [ -f "$SRC/$id.desktop" ] || return 0
+    sed -e '/^\[Desktop Entry\]$/,/^\[/ {' \
+        -e "s|^Exec=.*|Exec=$exec|" -e '/^TryExec=/d' -e '/^NoDisplay=/d' \
+        -e '}' \
+        -e 's|^\[Desktop Entry\]$|[Desktop Entry]\nNoDisplay=true|' \
+        "$SRC/$id.desktop" > "$DST/$id.desktop.new"
+    mv "$DST/$id.desktop.new" "$DST/$id.desktop"
+}
+
+mkdir -p "$DST"
+rm -f "$DST"/*.desktop
+
+# Wild OS Files and the Wild OS Store replace Dolphin and Discover. Both stay
+# installed (Dolphin for its file dialogs and services, Discover only until
+# nothing depends on it) but out of menus, so only one of each shows.
+if [ -f "$SRC/org.wildos.files.desktop" ]; then
+    hide org.kde.dolphin
+else
+    rename org.kde.dolphin "Files" "File manager"
+fi
+if [ -f "$SRC/org.wildos.store.desktop" ]; then
+    hide org.kde.discover
+else
+    rename org.kde.discover "Store" "Software store"
+fi
+# With Wild OS Settings installed, KDE's System Settings stays for the modules
+# Settings shows inside it, but only one "Settings" appears anywhere, and
+# "Display settings" on the desktop menu opens the Wild OS page.
+if [ -f "$SRC/org.wildos.settings.desktop" ]; then
+    hide systemsettings
+    redirect kcm_kscreen "wildos-settings --page display"
+else
+    rename systemsettings "Settings" "System settings"
+fi
+# Wild OS Terminal replaces Konsole, which KDE's recommends can still pull in.
+if [ -f "$SRC/org.wildos.terminal.desktop" ]; then
+    hide org.kde.konsole
+else
+    rename org.kde.konsole "Terminal" "Terminal"
+fi
+rename org.kde.kcalc "Calculator" "Calculator"
+rename org.kde.kwrite "Text editor" "Text editor"
+rename org.kde.okular "Documents" "Document viewer"
+# Okular registers one hidden launcher per document type, and "Open with"
+# lists them by their own name, "Okular".
+for f in "$SRC"/okularApplication_*.desktop; do
+    [ -f "$f" ] || continue
+    id=$(basename "$f" .desktop)
+    rename "$id" "Documents" "Document viewer"
+done
+rename org.kde.gwenview "Pictures" "Picture viewer"
+rename org.keepassxc.KeePassXC "Password manager" "Password manager"
+rename org.kde.ark "Archives" "Archive manager"
+rename org.kde.spectacle "Screenshot" "Screenshot tool"
+# Wild OS Task Manager replaces KDE's System Monitor, which may still be
+# installed. Its launcher also asks for Ctrl+Shift+Esc, so that goes too.
+if [ -f "$SRC/org.wildos.taskmanager.desktop" ]; then
+    hide org.kde.plasma-systemmonitor
+    if [ -f "$DST/org.kde.plasma-systemmonitor.desktop" ]; then
+        sed -i '/^X-KDE-Shortcuts=/d' "$DST/org.kde.plasma-systemmonitor.desktop"
+    fi
+else
+    rename org.kde.plasma-systemmonitor "System monitor" "System monitor"
+fi
+rename org.kde.partitionmanager "Disks" "Disk manager"
+rename org.kde.kinfocenter "About this computer" "System information"
+rename brave-browser "Brave" "Web browser"
+rename mullvad-browser "Mullvad Browser" "Private web browser"
+rename firefox-esr "Firefox" "Web browser"
+rename dist-virtual-keyboard "On-screen keyboard" "On-screen keyboard"
+
+# Kate stays installed for its editor component but must not turn up as a
+# second text editor in "Open with" either, so its file types go too.
+hide org.kde.kate
+if [ -f "$DST/org.kde.kate.desktop" ]; then
+    sed -i '/^MimeType=/d' "$DST/org.kde.kate.desktop"
+fi
+hide org.kde.kwalletmanager5
+hide org.kde.kwalletmanager
+hide org.kde.drkonqi.coredump.gui
+hide org.kde.plasma.emojier
+hide org.kde.kmenuedit
+hide xdg-desktop-portal-kde
+
+# Tools that duplicate something Wild OS already shows in plain form (search
+# in Files and Start, the installer icon, the security chip, Settings), or
+# that only make sense in a terminal.
+hide org.kde.kfind
+hide org.kde.khelpcenter
+hide calamares
+hide systemcheck
+hide dist-stop-virtual-keyboard
+hide set-labwc-keymap
+hide kvantummanager
+hide htop
+hide vim
+hide zutty
+
+update-desktop-database -q "$DST" 2>/dev/null || true

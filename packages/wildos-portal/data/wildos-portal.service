@@ -1,0 +1,10 @@
+[Unit]
+Description=Wild OS system dialogs (Open, Save and file clashes)
+PartOf=graphical-session.target
+After=graphical-session.target
+
+[Service]
+Type=dbus
+BusName=org.freedesktop.impl.portal.desktop.wildos
+ExecStart=/usr/libexec/wildos/wildos-portal
+Slice=session.slice

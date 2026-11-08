@@ -1,0 +1,12 @@
+#!/usr/bin/make -f
+
+%:
+	dh $@
+
+override_dh_auto_configure:
+	dh_auto_configure -- -Wno-dev
+
+# KWin only loads an effect built against its exact version, so pin the one
+# the corners effect was compiled with.
+override_dh_gencontrol:
+	dh_gencontrol -- -Vkwin:Version=$(shell dpkg-query -W -f='$${Version}' libkwin6)

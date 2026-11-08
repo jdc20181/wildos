@@ -1,0 +1,17 @@
+# Taskbar app menus use the Windows wording.
+
+msgid "&Pin to Task Manager"
+msgstr "&Pin to taskbar"
+
+msgid "Unpin from Task Manager"
+msgstr "Unpin from taskbar"
+
+msgid "&Close"
+msgstr "&Close window"
+
+msgctxt "@item:inmenu"
+msgid "&Close All"
+msgstr "&Close all windows"
+
+msgid "Open New Window"
+msgstr "New window"

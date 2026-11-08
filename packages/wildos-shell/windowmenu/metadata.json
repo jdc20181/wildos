@@ -1,0 +1,8 @@
+{
+    "KPlugin": {
+        "Description": "The Wild OS window menu on title bars and Alt+Space",
+        "EnabledByDefault": true,
+        "License": "GPL",
+        "Name": "Wild OS window menu"
+    }
+}

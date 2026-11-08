@@ -1,0 +1,64 @@
+Source: wildos-overlays
+Section: x11
+Priority: optional
+Maintainer: Wild OS Developers <dev@wildos.io>
+Build-Depends:
+ debhelper-compat (= 13),
+ cmake,
+ extra-cmake-modules,
+ python3,
+ qt6-base-dev,
+ qt6-declarative-dev,
+ qt6-wayland-dev,
+ qt6-wayland-dev-tools,
+ libwayland-dev,
+ plasma-wayland-protocols,
+ liblayershellqtinterface-dev,
+ libkf6windowsystem-dev,
+ libkf6guiaddons-dev,
+ libkf6notifications-dev,
+ libkf6dbusaddons-dev,
+ libkf6config-dev,
+ libkf6purpose-dev,
+ libkpipewire-dev,
+ unicode-data,
+ unicode-cldr-core,
+Standards-Version: 4.7.0
+Rules-Requires-Root: no
+
+Package: wildos-overlays
+Architecture: any
+Depends:
+ ${shlibs:Depends},
+ ${misc:Depends},
+ wildos-ui,
+ kwin-wayland,
+ layer-shell-qt,
+ plasma-workspace (>= 4:6.3),
+ plasma-workspace (<< 4:6.4),
+ libqt6sql6-sqlite,
+ qml6-module-qtquick,
+ qml6-module-qtquick-effects,
+ qml6-module-qtquick-layouts,
+ qml6-module-qtquick-shapes,
+ qml6-module-qtquick-templates,
+ qml6-module-qtquick-window,
+ qml6-module-qtqml-workerscript,
+ fonts-noto-color-emoji,
+ libkf6purpose-bin,
+Description: Wild OS pop-ups: screenshots, clipboard history and emoji
+ The overlays Windows people reach for by shortcut:
+ .
+  * Win+Shift+S and Print Screen: the Wild OS screenshot toolbar, with
+    rectangle, window, full screen and freehand captures, screen
+    recording and a delay. Captures go to the clipboard and to
+    Pictures/Screenshots, with a toast to mark them up or share them.
+  * Win+V and Win+full stop: one panel for clipboard history (Klipper's,
+    with pins that survive a restart), emoji and symbols, pasted straight
+    into the app you were using.
+  * The QML pieces the shell uses for its toasts and on-screen displays:
+    placing a window on a screen edge above everything, and Caps Lock and
+    Num Lock state.
+ .
+ The clipboard history uses the private QML module of Plasma's clipboard
+ widget, so it is tied to the Plasma version named in the dependencies.

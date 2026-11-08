@@ -1,0 +1,10 @@
+// The Store refreshes its list of apps and updates every time it opens.
+// Refreshing only downloads catalogue data and changes nothing installed, so
+// it should not ask for an administrator password the way PackageKit's
+// default does; installing, updating and removing software still ask.
+polkit.addRule(function (action, subject) {
+    if (action.id == "org.freedesktop.packagekit.system-sources-refresh" &&
+            subject.local && subject.active) {
+        return polkit.Result.YES;
+    }
+});

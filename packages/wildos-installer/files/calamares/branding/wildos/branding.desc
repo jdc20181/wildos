@@ -1,0 +1,50 @@
+---
+# Wild OS installer branding. The look follows the Wild OS Design System:
+# a dark glass window, Inter, one accent (Glacier). Colours live in the QML
+# files and stylesheet.qss, because the QML sidebar and navigation draw
+# everything themselves.
+componentName: wildos
+
+welcomeStyleCalamares: false
+welcomeExpandingLogo: false
+# The installer is a 1040 by 720 glass sheet over the dimmed wallpaper,
+# covering the whole screen. Fullscreen plus a productWallpaper turns on
+# that sheet mode in Wild OS's Calamares (wildos-installer-sheet.patch);
+# windowSize is then the size of the sheet.
+windowExpanding: fullscreen
+windowSize: 1040px,720px
+windowPlacement: center
+
+sidebar: qml
+navigation: qml
+
+strings:
+  productName: Wild OS
+  shortProductName: Wild OS
+  version: 0.1
+  shortVersion: 0.1
+  versionedName: Wild OS 0.1
+  shortVersionedName: Wild OS 0.1
+  bootloaderEntryName: wildos
+  productUrl: https://wildos.io
+  supportUrl: https://github.com/wildos-io/wildos/discussions
+  knownIssuesUrl: https://github.com/wildos-io/wildos/issues
+  releaseNotesUrl: https://github.com/wildos-io/wildos/releases
+  donateUrl: https://wildos.io
+
+images:
+  productLogo: "mark-large.png"
+  productIcon: "logo.png"
+  productWelcome: "welcome.png"
+  productWallpaper: "/usr/share/wallpapers/WildOS/contents/images/2560x1600.jpg"
+
+slideshow: "show.qml"
+slideshowAPI: 2
+
+# Calamares refuses to start without this block. The QML panels do not read
+# it; the values match them so any fallback widget stays on palette.
+style:
+  SidebarBackground: "#0f1222"
+  SidebarText: "#eef1f8"
+  SidebarTextCurrent: "#eef1f8"
+  SidebarBackgroundCurrent: "#262a3d"

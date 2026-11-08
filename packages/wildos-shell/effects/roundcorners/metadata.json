@@ -1,0 +1,10 @@
+{
+    "KPlugin": {
+        "Category": "Appearance",
+        "Description": "Rounds the bottom corners of windows to match the title bar",
+        "EnabledByDefault": true,
+        "License": "GPL",
+        "Name": "Rounded window corners"
+    },
+    "X-KWin-Internal": true
+}

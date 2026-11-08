@@ -1,0 +1,142 @@
+#!/bin/sh
+# Adds, removes and promotes accounts and sets automatic sign-in for
+# Settings > Accounts. Runs as root through pkexec (see
+# org.wildos.settings.policy). PKEXEC_UID is the person asking. Every failure
+# ends with one plain sentence on stderr, which Settings shows as it is.
+#
+#   add NAME admin|standard "FULL NAME"   password on stdin
+#   remove NAME
+#   admin NAME on|off
+#   autologin NAME|off                    only for the person asking
+
+set -eu
+
+AUTOLOGIN=/etc/sddm.conf.d/95-wildos-autologin.conf
+# The groups the installer gives the first account (usersq.conf). console
+# above all: Kicksecure's console lockdown refuses to let anyone outside it
+# sign in, SDDM included.
+BASE_GROUPS="console audio video plugdev netdev bluetooth scanner privleap"
+ADMIN_GROUPS="sudo lpadmin"
+
+fail() {
+    echo "$1" >&2
+    exit "${2:-1}"
+}
+
+caller() {
+    [ -n "${PKEXEC_UID:-}" ] || fail "Settings must ask for this." 2
+    getent passwd "$PKEXEC_UID" | cut -d: -f1
+}
+
+# Only accounts for people: ids from 1000 and a real sign-in shell.
+person() {
+    entry=$(getent passwd "$1") || fail "There is no account called $1." 3
+    uid=$(echo "$entry" | cut -d: -f3)
+    [ "$uid" -ge 1000 ] && [ "$uid" -lt 60000 ] || fail "That account belongs to Wild OS itself and can't be changed here." 4
+}
+
+existing() {
+    out=""
+    for g in $1; do
+        if getent group "$g" >/dev/null; then
+            out="$out,$g"
+        fi
+    done
+    echo "${out#,}"
+}
+
+admins() {
+    getent group sudo | cut -d: -f4 | tr ',' '\n' | grep -c . || true
+}
+
+case "${1:-}" in
+    add)
+        name=${2:-}
+        kind=${3:-}
+        full=${4:-}
+        caller >/dev/null
+        echo "$name" | grep -Eqx '[a-z_][a-z0-9_-]{0,31}' || fail "Use small letters, numbers, - and _ only, starting with a letter." 2
+        case "$full" in
+            *:*|*,*) fail "A name can't contain a colon or comma." 2 ;;
+        esac
+        [ -n "$full" ] || full=$name
+        if getent passwd "$name" >/dev/null || getent group "$name" >/dev/null; then
+            fail "That user name is taken." 3
+        fi
+        IFS= read -r password || true
+        [ "${#password}" -ge 8 ] || fail "The password must be at least 8 characters." 2
+        groups=$(existing "$BASE_GROUPS")
+        if [ "$kind" = admin ]; then
+            groups="$groups,$(existing "$ADMIN_GROUPS")"
+        fi
+        getent group console >/dev/null || fail "Wild OS is missing the console group, so a new account could not sign in." 5
+        useradd --create-home --shell /bin/bash --comment "$full" --groups "${groups%,}" "$name" ||
+            fail "The account could not be created."
+        if ! printf '%s:%s\n' "$name" "$password" | chpasswd; then
+            userdel --remove "$name" 2>/dev/null || true
+            fail "The password was turned down, so the account was not created."
+        fi
+        ;;
+    remove)
+        name=${2:-}
+        me=$(caller)
+        person "$name"
+        [ "$name" != "$me" ] || fail "You can't remove the account you are signed in with." 4
+        if pgrep -u "$name" >/dev/null 2>&1; then
+            fail "$name is signed in. Ask them to sign out first." 4
+        fi
+        if id -nG "$name" | tr ' ' '\n' | grep -qx sudo && [ "$(admins)" -le 1 ]; then
+            fail "This is the only administrator, so it can't be removed." 4
+        fi
+        # Automatic sign-in to an account that is gone would leave the sign-in
+        # screen trying it at every start.
+        if [ -e "$AUTOLOGIN" ] && grep -qx "User=$name" "$AUTOLOGIN"; then
+            rm -f "$AUTOLOGIN"
+        fi
+        userdel --remove "$name" 2>/dev/null || [ $? -eq 12 ] || fail "The account could not be removed."
+        rm -f "/var/lib/AccountsService/icons/$name" "/var/lib/AccountsService/users/$name"
+        ;;
+    admin)
+        name=${2:-}
+        caller >/dev/null
+        person "$name"
+        case "${3:-}" in
+            on)
+                for g in $(existing "$ADMIN_GROUPS" | tr ',' ' '); do
+                    gpasswd --add "$name" "$g" >/dev/null
+                done
+                ;;
+            off)
+                if id -nG "$name" | tr ' ' '\n' | grep -qx sudo && [ "$(admins)" -le 1 ]; then
+                    fail "Wild OS needs at least one administrator, so this account stays one." 4
+                fi
+                for g in $(existing "$ADMIN_GROUPS" | tr ',' ' '); do
+                    gpasswd --delete "$name" "$g" >/dev/null 2>&1 || true
+                done
+                ;;
+            *) fail "usage: settings-users admin NAME on|off" 2 ;;
+        esac
+        ;;
+    autologin)
+        target=${2:-}
+        me=$(caller)
+        if [ "$target" = off ]; then
+            rm -f "$AUTOLOGIN"
+            # The installer or an older tool may have put it in the main file,
+            # which SDDM reads last.
+            if [ -e /etc/sddm.conf ]; then
+                sed -i '/^\[Autologin\]/,/^\[/{/^User=/d}' /etc/sddm.conf
+            fi
+        else
+            [ "$target" = "$me" ] || fail "You can only turn on automatic sign-in for yourself." 4
+            person "$target"
+            install -d -m 755 /etc/sddm.conf.d
+            printf '# Written by Wild OS Settings > Accounts > Sign-in options.\n[Autologin]\nUser=%s\nSession=wildos\nRelogin=false\n' "$target" > "$AUTOLOGIN.new"
+            chmod 644 "$AUTOLOGIN.new"
+            mv -f "$AUTOLOGIN.new" "$AUTOLOGIN"
+        fi
+        ;;
+    *)
+        fail "usage: settings-users add|remove|admin|autologin ..." 2
+        ;;
+esac

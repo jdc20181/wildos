@@ -1,0 +1,23 @@
+# Brave is the default browser. PDFs stay in Okular even though Brave also
+# claims them.
+[Default Applications]
+x-scheme-handler/http=brave-browser.desktop
+x-scheme-handler/https=brave-browser.desktop
+text/html=brave-browser.desktop
+application/xhtml+xml=brave-browser.desktop
+x-scheme-handler/about=brave-browser.desktop
+x-scheme-handler/unknown=brave-browser.desktop
+application/pdf=org.kde.okular.desktop
+
+# Folders open in Wild OS Files, links to apps in the Wild OS Store.
+inode/directory=org.wildos.files.desktop
+x-scheme-handler/appstream=org.wildos.store.desktop
+
+# Windows programs open in the App Bridge, which explains what will happen
+# and runs them in a sandbox.
+application/x-ms-dos-executable=org.wildos.run.desktop
+application/x-msi=org.wildos.run.desktop
+application/x-msdownload=org.wildos.run.desktop
+application/vnd.microsoft.portable-executable=org.wildos.run.desktop
+# Shortcuts Windows apps put on the shared Desktop open in Windows mode.
+application/x-ms-shortcut=org.wildos.winmode.shortcut.desktop

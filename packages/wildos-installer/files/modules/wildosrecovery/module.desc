@@ -1,0 +1,7 @@
+---
+# Adds the recovery key to every encrypted partition as a second LUKS key
+# slot. See main.py.
+type: "job"
+name: "wildosrecovery"
+interface: "python"
+script: "main.py"

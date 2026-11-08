@@ -1,0 +1,52 @@
+Source: wildos-system-dialogs
+Section: x11
+Priority: optional
+Maintainer: Wild OS Developers <dev@wildos.io>
+Build-Depends:
+ debhelper-compat (= 13),
+ cmake,
+ qt6-base-dev,
+ qt6-declarative-dev,
+ libkf6config-dev,
+ libkf6service-dev,
+ libkf6windowsystem-dev,
+ liblayershellqtinterface-dev,
+ libpolkit-qt6-1-dev,
+Standards-Version: 4.7.0
+Rules-Requires-Root: no
+
+Package: wildos-system-dialogs
+Architecture: any
+Depends:
+ ${shlibs:Depends},
+ ${misc:Depends},
+ wildos-ui,
+ polkitd,
+ kwin-common,
+ dpkg,
+ apt,
+ qml6-module-qtquick,
+ qml6-module-qtquick-templates,
+ qml6-module-qtquick-layouts,
+ qml6-module-qtquick-shapes,
+ qml6-module-qtquick-effects,
+ qml6-module-qtquick-window,
+ qml6-module-qtqml,
+ qml6-module-qtqml-models,
+Recommends:
+ kde-cli-tools,
+ powerdevil,
+ power-profiles-daemon,
+ upower,
+Description: Wild OS system dialogs
+ The prompts the system itself puts up, drawn to the Wild OS design:
+ .
+  * the permission prompt, a polkit agent in place of KDE's, which dims
+    every screen, says plainly what the app wants and whether Wild OS
+    vouches for it, and asks for the password;
+  * the Ctrl+Alt+Del screen (lock, switch user, sign out, change password,
+    Task Manager), which works even when an app or the desktop has frozen;
+  * "not responding", in place of KWin's own;
+  * low battery with battery saver, restart to finish updating with a
+    time of the person's choosing, and the App Bridge's Windows mode
+    prompt.

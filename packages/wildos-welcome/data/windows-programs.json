@@ -1,0 +1,11 @@
+{
+  "about": "What the welcome's last step (Your Windows programs) adds to the App Bridge's list, /usr/share/wildos-appbridge/alternatives.json, which it reads first for names, Store replacements and how each program ran under Windows app support. Entries here match the same way, on lower-case words in the program's name or publisher, and win over that list. mode is windows for programs that need Windows mode, the background Windows tier that runs a real copy of Windows; installer says where a fresh copy of a program's Windows installer comes from, never from the Windows drive: github is a repository whose latest release has an asset matching asset, fetched over HTTPS and checked against the SHA-256 digest GitHub publishes for it.",
+  "programs": [
+    { "match": ["microsoft office", "microsoft 365", "office 16 click-to-run", "o365"], "name": "Microsoft Office", "mode": "windows", "detail": "Word, Excel, PowerPoint · sign in with your Microsoft account" },
+    { "match": ["adobe photoshop"], "name": "Adobe Photoshop", "mode": "windows" },
+    { "match": ["adobe illustrator", "adobe indesign", "adobe premiere", "adobe after effects", "adobe lightroom", "adobe acrobat dc", "adobe acrobat pro"], "mode": "windows" },
+    { "match": ["autocad", "autodesk revit", "autodesk inventor", "autodesk fusion"], "mode": "windows" },
+    { "match": ["quickbooks", "sage 50", "sage accounts"], "mode": "windows" },
+    { "match": ["npp.", "notepad++", "notepadplusplus"], "name": "Notepad++", "installer": { "github": "notepad-plus-plus/notepad-plus-plus", "asset": "^npp\\.[0-9.]+\\.Installer\\.x64\\.exe$" } }
+  ]
+}

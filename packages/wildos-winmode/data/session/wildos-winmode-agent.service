@@ -1,0 +1,11 @@
+[Unit]
+Description=Windows mode for this account
+PartOf=graphical-session.target
+After=graphical-session.target
+
+[Service]
+# Started on demand over D-Bus by the first Windows app, Settings or
+# wild-run. It needs the session's display for the app windows.
+Type=dbus
+BusName=org.wildos.WindowsMode1
+ExecStart=/usr/bin/wildos-winmode agent

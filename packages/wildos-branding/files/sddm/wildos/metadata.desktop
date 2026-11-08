@@ -1,0 +1,16 @@
+[SddmGreeterTheme]
+Name=Wild OS
+Description=Wild OS sign-in screen
+Author=Wild OS
+Copyright=Wild OS
+License=GPL-3.0-or-later
+Type=sddm-theme
+Version=0.1.0
+Website=https://wildos.io
+Screenshot=preview.png
+MainScript=Main.qml
+ConfigFile=theme.conf
+TranslationsDirectory=translations
+Theme-Id=wildos
+Theme-API=2.0
+QtVersion=6

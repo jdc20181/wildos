@@ -1,0 +1,6 @@
+files/calamares/* etc/calamares/
+files/install-wildos usr/bin/
+files/install-wildos.desktop usr/share/applications/
+files/libexec/* usr/libexec/wildos-installer/
+files/calamares/lang/*.qm usr/share/calamares/lang/
+files/modules/* usr/share/wildos-installer/modules/

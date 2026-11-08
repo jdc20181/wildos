@@ -1,0 +1,57 @@
+#!/bin/sh
+# Writes the automatic update choices from Settings > Updates into apt's
+# configuration for unattended-upgrades. Runs as root through pkexec (see
+# org.wildos.settings.policy), so it takes exactly one of six requests and
+# only ever writes the three files below.
+#
+#   auto on|off            Install security updates automatically.
+#   restart ask|idle       "ask" leaves restarting to the person; "idle" lets
+#                          a night-time restart happen, but only when nobody
+#                          is signed in, so work in progress is never lost.
+#   channel stable|beta    Which Wild OS update channel this computer follows.
+
+set -eu
+
+AUTO=/etc/apt/apt.conf.d/20auto-upgrades
+RESTART=/etc/apt/apt.conf.d/52wildos-restart
+CHANNEL=/etc/apt/sources.list.d/wildos.sources
+
+write() {
+    printf '%s' "$2" > "$1.wildos-new"
+    chmod 644 "$1.wildos-new"
+    mv -f "$1.wildos-new" "$1"
+}
+
+case "${1:-} ${2:-}" in
+    "auto on")
+        write "$AUTO" 'APT::Periodic::Update-Package-Lists "1";
+APT::Periodic::Unattended-Upgrade "1";
+'
+        ;;
+    "auto off")
+        write "$AUTO" 'APT::Periodic::Update-Package-Lists "1";
+APT::Periodic::Unattended-Upgrade "0";
+'
+        ;;
+    "restart ask")
+        rm -f "$RESTART"
+        ;;
+    "restart idle")
+        write "$RESTART" '// Written by Wild OS Settings: restart after updates that need it, at
+// night and only while nobody is signed in.
+Unattended-Upgrade::Automatic-Reboot "true";
+Unattended-Upgrade::Automatic-Reboot-WithUsers "false";
+Unattended-Upgrade::Automatic-Reboot-Time "03:00";
+'
+        ;;
+    # Only the Suites line of the Wild OS source changes, so the choice
+    # survives updates of wildos-base, which ships the file.
+    "channel stable" | "channel beta")
+        sed -i "s/^Suites: .*/Suites: $2/" "$CHANNEL"
+        apt-get update -q >/dev/null 2>&1 || true
+        ;;
+    *)
+        echo "usage: settings-update-policy auto on|off | restart ask|idle | channel stable|beta" >&2
+        exit 2
+        ;;
+esac

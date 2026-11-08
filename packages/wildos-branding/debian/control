@@ -1,0 +1,69 @@
+Source: wildos-branding
+Section: x11
+Priority: optional
+Maintainer: Wild OS Developers <dev@wildos.io>
+Build-Depends: debhelper-compat (= 13), imagemagick, librsvg2-bin, python3, fonts-inter
+Standards-Version: 4.7.0
+Rules-Requires-Root: no
+
+Package: wildos-branding
+Architecture: all
+Depends:
+ ${misc:Depends},
+ fonts-inter,
+ wildos-ui,
+ wildos-overlays,
+ wildos-desktop-view,
+ breeze,
+ plasma-workspace,
+ kded6,
+ libnotify-bin,
+ pkexec,
+ usbguard,
+ iproute2,
+ util-linux,
+ plymouth,
+ libglib2.0-bin,
+ sddm,
+ qt-style-kvantum,
+ kwin-wayland,
+ qt6-svg-plugins,
+ qml6-module-qtquick-controls,
+ qml6-module-qtquick-templates,
+ qml6-module-qtquick-effects,
+ qml6-module-qtquick-window,
+ qml6-module-qtquick-shapes,
+ qml6-module-qtqml,
+ qml6-module-qtqml-workerscript,
+ qml6-module-qt-labs-folderlistmodel,
+ qml6-module-org-kde-kirigami,
+ qml6-module-org-kde-ksvg,
+ qml6-module-org-kde-coreaddons,
+ qml6-module-org-kde-kcmutils,
+ plasma-desktop,
+ kactivitymanagerd,
+ baloo6,
+ systemsettings,
+ plasma-nm,
+ plasma-pa,
+ powerdevil,
+ upower,
+ bluedevil,
+ qml6-module-org-kde-bluezqt,
+ qml6-module-org-kde-kitemmodels,
+ qml6-module-org-kde-plasma-plasma5support,
+ libkf6config-bin,
+ dbus-bin,
+ kde-cli-tools,
+Recommends:
+ qml6-module-qtquick-virtualkeyboard,
+ qt6-virtualkeyboard-plugin,
+Conflicts: plasma-welcome
+Description: Wild OS look and feel
+ The Wild OS desktop as drawn in the Wild OS Design System: dark glass
+ colour scheme, Inter typeface, Glacier accent, floating taskbar with the
+ tray at its right end, boot and sign-in screens, icons, default wallpaper
+ and logo.
+ .
+ It conflicts with plasma-welcome because Wild OS ships its own first-run
+ experience.

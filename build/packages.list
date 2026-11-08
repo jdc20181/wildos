@@ -1,0 +1,94 @@
+# Packages installed into the image. Wild OS meta-packages carry most of the
+# dependency tree so that adding a dependency later reaches existing installs
+# through apt. Only things that are image-specific belong here directly.
+
+wildos-base
+wildos-desktop
+
+# Kernel and firmware. dracut is listed explicitly so apt never falls back to
+# initramfs-tools, which Kicksecure's boot setup does not support.
+linux-image-amd64
+dracut
+amd64-microcode
+intel-microcode
+firmware-linux-free
+firmware-misc-nonfree
+firmware-amd-graphics
+firmware-iwlwifi
+firmware-realtek
+firmware-atheros
+firmware-brcm80211
+firmware-sof-signed
+
+# Live session: live user, installer and live-boot support. The installer
+# removes this from the installed system.
+wildos-live
+
+# The image is built without Recommends (most of them are documentation,
+# translations, X11 leftovers and tools nobody here asked for). The Recommends
+# of Wild OS's own packages are added by build.sh; these are the ones from
+# Debian and Kicksecure that the hardware or the desktop needs.
+
+# Firmware the full set pulls in through Recommends. All of it stays.
+firmware-nvidia-graphics
+firmware-mediatek
+firmware-intel-graphics
+firmware-intel-misc
+wireless-regdb
+fwupd
+fwupd-amd64-signed
+
+# Graphics: Vulkan, and video decoding on the GPU.
+mesa-vulkan-drivers
+mesa-va-drivers
+mesa-vdpau-drivers
+intel-media-va-driver
+i965-va-driver
+switcheroo-control
+
+# Sound on modern laptops (UCM profiles for SOF), realtime audio.
+alsa-ucm-conf
+alsa-topology-conf
+rtkit
+
+# Power, docks, phones and mobile broadband.
+power-profiles-daemon
+bolt
+plasma-thunderbolt
+usbmuxd
+modemmanager
+usb-modeswitch
+rfkill
+
+# Desktop plumbing: files over MTP, SMB and SFTP, thumbnails, image formats,
+# the wallet unlocking at sign-in, Qt 5 apps (KeePassXC) on Wayland, GTK
+# apps' settings, accessibility, printers and scanners found on the network.
+kio
+kio-extras
+kdegraphics-thumbnailers
+kimageformat6-plugins
+qt6-image-formats-plugins
+libpam-kwallet5
+plasma5-integration
+qtwayland5
+kwayland-integration
+xsettingsd
+xdg-utils
+desktop-file-utils
+librsvg2-common
+at-spi2-core
+kde-config-screenlocker
+plasma-disks
+plasma-browser-integration
+avahi-daemon
+libnss-mdns
+libnss-systemd
+ipp-usb
+sane-airscan
+openssh-client
+exfatprogs
+
+# Fonts for documents and web pages people send: metric-compatible with
+# Arial and Times, and Chinese, Japanese and Korean.
+fonts-liberation
+fonts-noto-cjk

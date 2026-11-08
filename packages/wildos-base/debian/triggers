@@ -1,0 +1,5 @@
+# Kicksecure and GRUB updates write their menu scripts into grub.d-hidden (see
+# preinst), or, when unpacked before the diversions existed, leave them in
+# /etc/grub.d as *.dpkg-new. Either way the postinst tidies them up again.
+interest-noawait /usr/share/wildos-base/grub.d-hidden
+interest-noawait /etc/grub.d

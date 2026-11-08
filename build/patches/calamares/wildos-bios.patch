@@ -1,0 +1,91 @@
+Description: Install on legacy BIOS computers
+ Three fixes for BIOS installs in the partition module's core.
+ .
+ The crash on the BIOS disk page: BootLoaderModel rebuilt itself with
+ clear(), a model reset nested inside the one init() and update() had
+ already started with signals blocked. Qt 6 then ends the outer reset
+ early, and the boot loader combo box, shown only on BIOS computers, is
+ left pointing at deleted items. It now removes its rows instead.
+ .
+ GPT on BIOS: a new GPT table on a BIOS computer gets the 1 MiB bios_grub
+ partition GRUB needs for its core, before the layout.
+ .
+ Logical partitions: the partition layout starts each logical partition
+ 1 MiB on, leaving room for its extended boot record, and counts its
+ entries (PartitionLayout::count()) for the MBR check on the choice page.
+Author: Wild OS Developers <dev@wildos.io>
+Forwarded: no
+
+--- a/src/modules/partition/core/BootLoaderModel.cpp
++++ b/src/modules/partition/core/BootLoaderModel.cpp
+@@ -77,7 +77,12 @@ void
+ BootLoaderModel::updateInternal()
+ {
+     QMutexLocker lock( &m_lock );
+-    clear();
++    // Not clear(): that is a model reset of its own, nested inside the one
++    // init() and update() already started. With signals blocked the views
++    // never hear of the inner one, and Qt 6 ends the outer reset early, so a
++    // combo box showing this model is left pointing at deleted items. On a
++    // BIOS computer, where the disk page shows that combo box, it crashed.
++    removeRows( 0, rowCount() );
+     createMbrItems();
+ 
+     // An empty model is possible if you don't have permissions: don't crash though.
+--- a/src/modules/partition/core/PartitionActions.cpp
++++ b/src/modules/partition/core/PartitionActions.cpp
+@@ -118,6 +118,24 @@ doAutopartition( PartitionCoreModule* core, Device* dev, Choices::AutoPartitionO
+ 
+     core->createPartitionTable( dev, partType );
+ 
++    // GRUB for BIOS keeps its core on a GPT disk in a small partition of its
++    // own, flagged bios_grub, which nothing mounts or formats.
++    if ( !isEfi && partType == PartitionTable::gpt )
++    {
++        const qint64 lastSector = firstFreeSector + Calamares::bytesToSectors( 1_MiB, dev->logicalSize() ) - 1;
++        Partition* biosBoot = KPMHelpers::createNewPartition( dev->partitionTable(),
++                                                              *dev,
++                                                              PartitionRole( PartitionRole::Primary ),
++                                                              FileSystem::Unformatted,
++                                                              QStringLiteral( "BIOS boot" ),
++                                                              firstFreeSector,
++                                                              lastSector,
++                                                              KPM_PARTITION_FLAG( None ) );
++        PartitionInfo::setFormat( biosBoot, false );
++        core->createPartition( dev, biosBoot, KPM_PARTITION_FLAG( BiosGrub ) );
++        firstFreeSector = lastSector + 1;
++    }
++
+     if ( isEfi )
+     {
+         qint64 uefisys_part_sizeB = PartUtils::efiFilesystemRecommendedSize();
+--- a/src/modules/partition/core/PartitionLayout.cpp
++++ b/src/modules/partition/core/PartitionLayout.cpp
+@@ -288,6 +288,15 @@ PartitionLayout::createPartitions( Device* dev,
+     availableSectors = totalSectors;
+     for ( const auto& entry : std::as_const( m_partLayout ) )
+     {
++        // Each logical partition is preceded by its extended boot record, so
++        // it starts 1 MiB on, as partitioning tools do.
++        if ( role.has( PartitionRole::Logical ) )
++        {
++            const qint64 gap = qMax< qint64 >( 1, 1024 * 1024 / dev->logicalSize() );
++            currentSector += gap;
++            availableSectors -= gap;
++        }
++
+         // Adjust partition size based on available space.
+         qint64 sectors = partSectorsMap.value( &entry );
+         sectors = std::min( sectors, availableSectors );
+--- a/src/modules/partition/core/PartitionLayout.h
++++ b/src/modules/partition/core/PartitionLayout.h
+@@ -111,6 +111,9 @@ public:
+      */
+     void setDefaultFsType( FileSystem::Type defaultFsType );
+ 
++    /// How many partitions the layout makes
++    int count() const { return int( m_partLayout.count() ); }
++
+     /**
+      * @brief Apply the current partition layout to the selected drive space.
+      * @return  A list of Partition objects.

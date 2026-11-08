@@ -1,0 +1,24 @@
+{
+    "KPackageStructure": "Plasma/Applet",
+    "KPlugin": {
+        "Authors": [
+            {
+                "Email": "dev@wildos.io",
+                "Name": "Wild OS"
+            }
+        ],
+        "Category": "Application Launchers",
+        "Description": "Open apps, find files and settings, and turn off the computer",
+        "EnabledByDefault": true,
+        "Icon": "wildos-start",
+        "Id": "org.wildos.start",
+        "License": "GPL-3.0-or-later",
+        "Name": "Start",
+        "Version": "1.0.0",
+        "Website": "https://wildos.io"
+    },
+    "X-Plasma-API-Minimum-Version": "6.0",
+    "X-Plasma-Provides": [
+        "org.kde.plasma.launchermenu"
+    ]
+}

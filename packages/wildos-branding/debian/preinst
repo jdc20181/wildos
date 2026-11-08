@@ -1,0 +1,17 @@
+#!/bin/sh
+set -e
+
+# Plasma's shell package owns the lock screen entry point; keep its copy under
+# another name so the Wild OS shim can take its place and Plasma updates do
+# not overwrite it.
+SHIM=/usr/share/plasma/shells/org.kde.plasma.desktop/contents/lockscreen/LockScreen.qml
+
+if [ "$1" = "install" ] || [ "$1" = "upgrade" ]; then
+    dpkg-divert --package wildos-branding --add --rename \
+        --divert "$SHIM.plasma" "$SHIM" >/dev/null
+    # Ark ships its own defaults file; ours replaces it.
+    dpkg-divert --package wildos-branding --add --rename \
+        --divert /etc/xdg/arkrc.ark /etc/xdg/arkrc >/dev/null
+fi
+
+#DEBHELPER#

@@ -1,0 +1,15 @@
+{
+    "KPlugin": {
+        "Authors": [{ "Email": "dev@wildos.io", "Name": "Wild OS" }],
+        "Category": "Windows and Tasks",
+        "Description": "A thin line separating the apps from the tray",
+        "Icon": "wildos",
+        "Id": "org.wildos.divider",
+        "License": "GPL-3.0-or-later",
+        "Name": "Divider",
+        "Version": "0.1.0",
+        "Website": "https://wildos.io"
+    },
+    "KPackageStructure": "Plasma/Applet",
+    "X-Plasma-API-Minimum-Version": "6.0"
+}

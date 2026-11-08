@@ -1,0 +1,19 @@
+{
+    "KPackageStructure": "KWin/WindowSwitcher",
+    "KPlugin": {
+        "Authors": [
+            {
+                "Email": "dev@wildos.io",
+                "Name": "Wild OS"
+            }
+        ],
+        "Description": "Live window previews on dark glass, as drawn in the Wild OS Design System",
+        "Icon": "preferences-system-windows-switcher-thumbnail-grid",
+        "Id": "org.wildos.switcher",
+        "License": "GPL-3.0-or-later",
+        "Name": "Wild OS",
+        "Version": "0.1.0",
+        "Website": "https://wildos.io"
+    },
+    "X-Plasma-API": "declarativeappletscript"
+}

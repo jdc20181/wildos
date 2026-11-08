@@ -1,0 +1,8 @@
+#!/usr/bin/python3
+import os
+import sys
+
+sys.path.insert(0, os.environ.get("WILDOS_WINMODE_LIB", "/usr/lib/wildos/winmode"))
+from winmode import cli  # noqa: E402
+
+sys.exit(cli.main(sys.argv[1:]))

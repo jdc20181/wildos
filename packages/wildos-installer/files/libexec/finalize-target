@@ -1,0 +1,112 @@
+#!/bin/bash
+# Last installer step, run from the live system against the mounted target.
+
+set -euo pipefail
+
+root=$1
+# A clean environment: the live session's TMPDIR (/tmp/user/0, from Kicksecure's
+# libpam-tmpdir) does not exist in the target and breaks anything using mktemp.
+in_target() {
+    chroot "$root" /usr/bin/env -i \
+        PATH=/usr/sbin:/usr/bin:/sbin:/bin DEBIAN_FRONTEND=noninteractive LANG=C.UTF-8 \
+        "$@"
+}
+
+# Removing live-only packages runs apt autoremove, which can cascade. A system
+# without these boots to a login screen nobody can use, so stop here instead.
+for pkg in wildos-base wildos-desktop wildos-setup kicksecure-baremetal-cli plasma-workspace sddm; do
+    if ! in_target dpkg-query -W -f='${Status}' "$pkg" 2>/dev/null | grep -q "ok installed"; then
+        echo "$pkg is missing from the installed system; refusing to finish a broken install" >&2
+        exit 1
+    fi
+done
+
+if [ -d /sys/firmware/efi ]; then
+    # Also install shim and GRUB to EFI/BOOT/BOOTX64.EFI. Firmware that loses
+    # its NVRAM boot entries (common on laptops after a BIOS update) falls back
+    # to that path, and it has to be shim there or Secure Boot refuses it.
+    # Setting the debconf flag keeps the fallback copy current on GRUB updates.
+    echo "grub-efi-amd64 grub2/force_efi_extra_removable boolean true" \
+        | in_target debconf-set-selections
+    in_target grub-install --target=x86_64-efi --efi-directory=/boot/efi \
+        --bootloader-id=wildos --force-extra-removable --no-nvram
+
+    # grub-install copies only the binaries to the fallback folder. Shim
+    # started from there looks beside itself for fbx64.efi, which recreates
+    # the lost boot entry from BOOTX64.CSV and reboots into it; failing that,
+    # GRUB looks beside itself for grub.cfg. Without both, the machine stops
+    # at a GRUB prompt (seen with Secure Boot on and fresh firmware settings).
+    esp="$root/boot/efi/EFI"
+    fallback=$(find "$esp" -maxdepth 1 -iname boot -type d | head -1)
+    cp "$esp/wildos/fbx64.efi" "$fallback/"
+    cp "$esp/wildos/grub.cfg" "$fallback/"
+fi
+
+# The sign-in and lock screens show "Encrypted and locked" only when this
+# marker exists, so it is written only when the root really is on dm-crypt.
+root_dev=$(findmnt -no SOURCE "$root")
+if lsblk -nso TYPE "$root_dev" 2>/dev/null | grep -qx crypt; then
+    install -d "$root/etc/wildos"
+    : > "$root/etc/wildos/encrypted"
+fi
+
+# Windows on the same computer gets its own entry in the start-up menu. The
+# installed system has no os-prober, and Debian's GRUB leaves it off anyway,
+# so the entry is written once here, from what the live system can see.
+windows_entry() {
+    local esp_uuid part
+    if [ -d /sys/firmware/efi ]; then
+        [ -n "$(find "$root/boot/efi/EFI" -maxdepth 3 -ipath '*/Microsoft/Boot/bootmgfw.efi' 2>/dev/null)" ] || return 0
+        esp_uuid=$(findmnt -no UUID "$root/boot/efi")
+        cat <<EOF
+menuentry 'Windows' --class windows --class os {
+    insmod part_gpt
+    insmod fat
+    search --no-floppy --fs-uuid --set=root $esp_uuid
+    chainloader /EFI/Microsoft/Boot/bootmgfw.efi
+}
+EOF
+    else
+        for part in $(lsblk -nrpo NAME,FSTYPE | awk '$2 == "ntfs" {print $1}'); do
+            if ntfsls "$part" 2>/dev/null | grep -qix bootmgr; then
+                cat <<EOF
+menuentry 'Windows' --class windows --class os {
+    insmod part_msdos
+    insmod ntfs
+    insmod ntldr
+    search --no-floppy --fs-uuid --set=root $(blkid -s UUID -o value "$part")
+    ntldr /bootmgr
+}
+EOF
+                return 0
+            fi
+        done
+    fi
+}
+entry=$(windows_entry)
+if [ -n "$entry" ]; then
+    {
+        echo '#!/bin/sh'
+        echo '# Written by the Wild OS installer: Windows on this computer.'
+        echo "cat <<'END'"
+        echo "$entry"
+        echo 'END'
+    } > "$root/etc/grub.d/30_windows"
+    chmod 0755 "$root/etc/grub.d/30_windows"
+fi
+
+# SDDM reads /etc/sddm.conf after sddm.conf.d, so anything there would
+# override first-boot setup's session (99-wildos-setup.conf). Wild OS sets
+# SDDM up through sddm.conf.d only.
+rm -f "$root/etc/sddm.conf"
+
+# No account exists yet: the first start opens the Wild OS setup session,
+# which makes one. This marker turns it on.
+install -d "$root/var/lib/wildos"
+: > "$root/var/lib/wildos/first-boot-setup"
+
+# The initramfs copied from the image was generated in the build container and
+# knows nothing about this machine's disks or encryption. Regenerate it now
+# that crypttab exists and the live packages are gone.
+in_target dracut --force --regenerate-all
+in_target update-grub

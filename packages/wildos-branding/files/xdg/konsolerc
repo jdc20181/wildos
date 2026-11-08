@@ -1,0 +1,3 @@
+# Terminal starts with the Wild OS profile from /usr/share/wildos/konsole.
+[Desktop Entry]
+DefaultProfile=WildOS.profile

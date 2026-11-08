@@ -1,0 +1,52 @@
+#!/bin/sh
+# The security chip's notifications, sent through the desktop's notification
+# service with buttons. Waits for a choice and prints the name of the button
+# pressed, or nothing if the notification is closed or forgotten.
+#
+#   security-notify usb PORT        "Wild OS blocked a USB device".
+#                                   Prints allow or keep.
+#   security-notify updates COUNT   Security updates waiting over a day.
+#                                   Prints install or later.
+
+export LC_ALL=C
+icon=/usr/share/plasma/plasmoids/org.wildos.protected/contents/images/shield.svg
+
+# A notification left unanswered for six hours has been seen and ignored;
+# the device simply stays blocked and the flyout still offers the choice.
+send() {
+    exec timeout 6h notify-send --app-name="Wild OS" --icon="$icon" --urgency=normal "$@"
+}
+
+case $1 in
+    usb)
+        port=$2
+        printf '%s' "$port" | grep -qE '^[0-9]+-[0-9]+(\.[0-9]+)*$' || exit 2
+        line=$(/usr/libexec/wildos/usb-devices list | awk -F '\t' -v p="$port" '$1 == p')
+        [ -n "$line" ] || exit 0
+        kind=$(printf '%s' "$line" | cut -f2)
+        name=$(printf '%s' "$line" | cut -f3)
+        [ -n "$name" ] || name="A USB device"
+        case $kind in
+            keyboard) body="$name says it's a keyboard. Allow it only if you plugged in a keyboard." ;;
+            network) body="$name says it's a network adapter. Allow it only if you recognise it." ;;
+            *) body="$name was plugged in. Allow it only if you recognise it." ;;
+        esac
+        send --action=allow="Allow once" --action=keep="Keep blocked" \
+            "Wild OS blocked a USB device" "$body"
+        ;;
+    updates)
+        count=$2
+        case $count in ''|*[!0-9]*) exit 2 ;; esac
+        if [ "$count" -eq 1 ]; then
+            body="A security update has been ready for over a day. Installing it keeps your computer protected."
+        else
+            body="$count security updates have been ready for over a day. Installing them keeps your computer protected."
+        fi
+        send --action=later="Later" --action=install="Install now" \
+            "Security updates are waiting" "$body"
+        ;;
+    *)
+        echo "usage: security-notify usb PORT | updates COUNT" >&2
+        exit 2
+        ;;
+esac

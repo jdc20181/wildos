@@ -1,0 +1,20 @@
+#pragma once
+
+#include <QDateTime>
+#include <QMimeType>
+#include <QString>
+
+// The house style for names, types, dates and sizes: extensions hidden for
+// known types, plain type words, day-first dates, sizes the way Windows
+// writes them. A copy of wildos-files/src/format.cpp, so the desktop names
+// and describes things exactly as Files does; change the two together.
+namespace Format
+{
+QString visibleName(const QString &fileName, bool isDir, bool showExtensions);
+QString typeName(const QMimeType &mime, bool isDir);
+QString date(const QDateTime &when);
+QString longDate(const QDateTime &when);
+QString size(qint64 bytes);
+QString exactSize(qint64 bytes);
+QString count(qint64 n, const QString &one, const QString &many);
+}
