@@ -21,12 +21,12 @@ QtObject {
         Connections {
             target: ScreenshotApp
             function onMarkupRequested(file) {
-                const window = markupWindow.createObject(null, { file: file });
+                const window = markupWindow.createObject(root, { file: file });
                 window.show();
                 window.requestActivate();
             }
             function onShareRequested(file) {
-                const window = shareWindow.createObject(null, { file: file });
+                const window = shareWindow.createObject(root, { file: file });
                 window.show();
                 window.requestActivate();
             }

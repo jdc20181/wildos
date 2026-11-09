@@ -1,6 +1,7 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
+import QtQuick.Templates as T
 import QtQuick.Window
 import WildOS.UI as UI
 
@@ -666,9 +667,14 @@ FocusScope {
         }
     }
 
+    // A window of its own, like the taskbar's menus. Drawn inside the
+    // desktop's window it sat in the desktop layer, under every open
+    // window it overlapped. Outside that window the wallpaper can no longer
+    // be blurred through it, so it takes the taskbar menus' glass too.
     UI.Menu {
         id: menu
-        backdrop: view.backdrop
+        popupType: T.Popup.Window
+        panelColor: UI.Style.glassMenu
         // Menus stay clear of the taskbar, which is a window of its own
         // above this one.
         topMargin: view.area.y + 6

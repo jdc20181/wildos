@@ -782,7 +782,7 @@ Forwarded: no
      if ( tableType != PartitionTable::unknownTableType && !matchTableType )
      {
          m_messageLabel->setText( tr( "This storage device already has an operating system on it, "
-@@ -1616,13 +1769,177 @@ ChoicePage::updateSwapChoicesTr()
+@@ -1616,13 +1769,189 @@ ChoicePage::updateSwapChoicesTr()
      }
  }
  
@@ -958,7 +958,19 @@ Forwarded: no
 +    visit( QModelIndex() );
 +    if ( best.isValid() )
 +    {
-+        m_beforePartitionBarsView->selectionModel()->setCurrentIndex( best, QItemSelectionModel::ClearAndSelect );
++        // Going back to Alongside after another choice builds the page
++        // twice, the second time once that plan is undone, each with a new
++        // splitter. The second finds this partition already current, and
++        // Qt only signals a change, so that splitter is set up here.
++        auto* selection = m_beforePartitionBarsView->selectionModel();
++        if ( selection->currentIndex() == best )
++        {
++            doAlongsideSetupSplitter( best, QModelIndex() );
++        }
++        else
++        {
++            selection->setCurrentIndex( best, QItemSelectionModel::ClearAndSelect );
++        }
      }
  }
  

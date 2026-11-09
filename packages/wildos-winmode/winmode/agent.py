@@ -500,7 +500,7 @@ class Agent:
         self.dialogs("HideWindowsStarting", None)
 
     def dialogs(self, method, args):
-        self.session.call("org.wildos.Dialogs", "/Dialogs", "org.wildos.Dialogs", method, args, None,
+        self.session.call("org.wildos.SystemDialogs", "/Dialogs", "org.wildos.SystemDialogs", method, args, None,
                           Gio.DBusCallFlags.NO_AUTO_START, 2000, None, None, None)
 
     def launch_in_session(self, path, args, name, app_id, started, done, wake):

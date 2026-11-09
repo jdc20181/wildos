@@ -95,7 +95,9 @@ member [mscorlib]System.IO.File.ReadAllText :: string(string)
 member [mscorlib]System.IO.File.WriteAllText :: void(string, string)
 member [mscorlib]System.IO.FileInfo..ctor :: instance void(string)
 member [mscorlib]System.IO.FileInfo.get_Length :: instance int64()
+member [mscorlib]System.IO.FileSystemInfo.get_Attributes :: instance valuetype [mscorlib]System.IO.FileAttributes()
 member [mscorlib]System.IO.FileSystemInfo.get_Exists :: instance bool()
+member [mscorlib]System.IO.FileSystemInfo.set_Attributes :: instance void(valuetype [mscorlib]System.IO.FileAttributes)
 member [mscorlib]System.IO.IOException..ctor :: instance void(string)
 member [mscorlib]System.IO.MemoryStream..ctor :: instance void()
 member [mscorlib]System.IO.MemoryStream.ToArray :: instance unsigned int8[]()
@@ -391,6 +393,7 @@ type [mscorlib]System.IO.BinaryWriter
 type [mscorlib]System.IO.Directory
 type [mscorlib]System.IO.DirectoryInfo
 type [mscorlib]System.IO.File
+type [mscorlib]System.IO.FileAttributes
 type [mscorlib]System.IO.FileInfo
 type [mscorlib]System.IO.FileSystemInfo
 type [mscorlib]System.IO.IOException

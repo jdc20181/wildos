@@ -149,7 +149,12 @@ QList<Drive> Drives::scan() const
         auto access = device.as<Solid::StorageAccess>();
         auto volume = device.as<Solid::StorageVolume>();
         auto block = device.as<Solid::Block>();
-        if (!access || access->isIgnored()) {
+        // Solid's StorageAccess::isIgnored() also says yes to every volume
+        // that isn't mounted (its path is empty, so not under /media), which
+        // hid a USB stick allowed through USBGuard until something mounted
+        // it. Hidden volumes are caught by StorageVolume::isIgnored() below,
+        // and mounts outside the user's paths by userMountPath().
+        if (!access || (access->isAccessible() && access->isIgnored())) {
             continue;
         }
         if (volume && (volume->isIgnored() || volume->usage() != Solid::StorageVolume::FileSystem)) {

@@ -63,8 +63,13 @@ WINFSP_URL = "https://github.com/winfsp/winfsp/releases/download/v2.1/winfsp-2.1
 WINFSP_SHA256 = "073a70e00f77423e34bed98b86e600def93393ba5822204fac57a29324db9f7a"
 VIRTIO_BASE = "https://fedorapeople.org/groups/virt/virtio-win/direct-downloads"
 # Microsoft's published generic installation key for Pro: installs Pro but
-# never activates, for "carry on without activating" (brief 5.4).
+# never activates. Every setup installs with it, so Windows is always Pro,
+# the edition with the Remote Desktop host Windows mode needs. The person's
+# own key, from the firmware or typed in, goes in at the activate stage,
+# where Windows turns down one for Home, instead of an hour of setup ending
+# on an edition that can't work.
 GENERIC_PRO_KEY = "VK7JG-NPHTM-C97JM-9MPGT-3V66T"
+ACTIVATION_KEY = "activation-key"
 KEY_ALPHABET = "BCDFGHJKMNPQRTVWXY2346789"
 GUEST_MAC = "52:54:00:57:4f:01"
 OFFICE_PRODUCTS = {"personal": "O365HomePremRetail", "family": "O365HomePremRetail",
@@ -423,9 +428,9 @@ class Setup:
         os.makedirs(SECRETS, mode=0o700, exist_ok=True)
         os.chmod(SECRETS, 0o700)
         if source == "key":
-            with open(os.path.join(SECRETS, "key"), "w") as f:
+            with open(os.path.join(SECRETS, ACTIVATION_KEY), "w") as f:
                 f.write(key + "\n")
-            os.chmod(os.path.join(SECRETS, "key"), 0o600)
+            os.chmod(os.path.join(SECRETS, ACTIVATION_KEY), 0o600)
         self.svc.state["setup"] = {}
         self.save(running=True, started=int(time.time()), owner=owner_uid, options=options,
                   licence={"source": source, "edition": lic.get("edition") or ""},
@@ -467,7 +472,8 @@ class Setup:
         if virsh.state(domain) != "":
             virsh.run("destroy", domain, check=False)
             virsh.run("undefine", domain, "--nvram", "--managed-save", check=False)
-        for path in (DISK, os.path.join(CACHE, "payload.iso"), os.path.join(SECRETS, "key"), MARKER):
+        for path in (DISK, os.path.join(CACHE, "payload.iso"), os.path.join(SECRETS, "key"),
+                     os.path.join(SECRETS, ACTIVATION_KEY), MARKER):
             try:
                 os.remove(path)
             except OSError:
@@ -638,12 +644,12 @@ class Setup:
             os.chmod(msdm_copy, 0o640)
             _apparmor_allow(msdm_copy)
         elif lic.get("source") == "key":
-            with open(os.path.join(SECRETS, "key")) as f:
+            with open(os.path.join(SECRETS, ACTIVATION_KEY)) as f:
                 key = f.read().strip()
         else:
             key = GENERIC_PRO_KEY
         with open(os.path.join(SECRETS, "key"), "w") as f:
-            f.write(key + "\n")
+            f.write(GENERIC_PRO_KEY + "\n")
         os.chmod(os.path.join(SECRETS, "key"), 0o600)
         lic["last5"] = key[-5:]
         self.save(licence=lic)
@@ -950,6 +956,36 @@ class Setup:
             return
         self.set_stage("activate", "active", 10)
         domain = self.cfg["domain"]
+        key = self.activation_key(lic)
+        if not key:
+            raise Problem("failed", "This PC's licence couldn't be read. Go back and add a product key instead.")
+        taken = None
+        for _ in range(3):
+            self.check()
+            try:
+                _, out, _ = qga.powershell(domain, (
+                    f"try {{ Get-CimInstance SoftwareLicensingService | Invoke-CimMethod -MethodName InstallProductKey "
+                    f"-Arguments @{{ProductKey='{key}'}} -ErrorAction Stop | Out-Null; 'taken' }} catch {{ 'refused' }}"), 120)
+                last = out.strip().splitlines()[-1] if out.strip() else ""
+                taken = True if last == "taken" else False if last == "refused" else None
+            except (virsh.VirshError, KeyError, TimeoutError, IndexError) as e:
+                log("product key:", e)
+            if taken is not None:
+                break
+            time.sleep(10)
+        if taken is False:
+            # Not a Windows 11 Pro key, most often one for Home. Windows
+            # stays Pro, unactivated, and works the same.
+            lic.update(activated=False, refused=True)
+            self.save(licence=lic)
+            self.forget_activation_key()
+            self.set_stage("activate", "done", 100,
+                           ("This PC's licence is for another edition of Windows, usually Home, which Windows mode can't use. "
+                            if lic.get("source") == "firmware" else
+                            "Windows didn't accept that key. It may be for Home, which Windows mode can't use. ")
+                           + "Windows works without activating; add a Windows 11 Pro key any time in Settings.")
+            self.mark("activate")
+            return
         code = None
         # The network may come up a moment after the agent does.
         for _ in range(6):
@@ -967,11 +1003,32 @@ class Setup:
             time.sleep(30)
         lic["activated"] = code == 1
         self.save(licence=lic)
+        if taken:
+            self.forget_activation_key()
         # Not activating is not a failure: Windows works, and a key can be
         # added in Settings (board 9.8).
         self.set_stage("activate", "done", 100,
                        None if code == 1 else "Not activated yet. Windows works; add a key any time in Settings.")
         self.mark("activate")
+
+    def activation_key(self, lic):
+        if lic.get("source") == "firmware":
+            try:
+                with open(os.path.join(SECRETS, "msdm.bin"), "rb") as f:
+                    return parse_msdm(f.read())
+            except OSError:
+                return None
+        try:
+            with open(os.path.join(SECRETS, ACTIVATION_KEY)) as f:
+                return f.read().strip() or None
+        except OSError:
+            return None
+
+    def forget_activation_key(self):
+        try:
+            os.remove(os.path.join(SECRETS, ACTIVATION_KEY))
+        except OSError:
+            pass
 
     def set_key(self, key):
         """For Settings, any time after setup. The key goes into Windows over
@@ -994,11 +1051,14 @@ class Setup:
             return "That doesn't look like a Windows product key. Check it and try again."
         try:
             _, out, _ = qga.powershell(domain, (
-                f"$s = Get-CimInstance SoftwareLicensingService; $s | Invoke-CimMethod -MethodName InstallProductKey "
-                f"-Arguments @{{ProductKey='{key}'}} | Out-Null; $s | Invoke-CimMethod -MethodName RefreshLicenseStatus | Out-Null; "
+                f"$s = Get-CimInstance SoftwareLicensingService; try {{ $s | Invoke-CimMethod -MethodName InstallProductKey "
+                f"-Arguments @{{ProductKey='{key}'}} -ErrorAction Stop | Out-Null }} catch {{ 'refused'; exit }}; "
+                "$s | Invoke-CimMethod -MethodName RefreshLicenseStatus | Out-Null; "
                 r"cscript //nologo $env:SystemRoot\System32\slmgr.vbs /ato | Out-Null; "
                 "(Get-CimInstance SoftwareLicensingProduct -Filter \"ApplicationID='55c92734-d682-4d71-983e-d6ec3f16059f'"
                 " and PartialProductKey is not null\" | Select-Object -First 1).LicenseStatus"), 240)
+            if out.strip().endswith("refused"):
+                return "Windows didn't accept that key. Check it, and that it's for Windows 11 Pro: Windows mode can't use a Home key."
             code = int(out.strip().splitlines()[-1]) if out.strip() else None
         except (virsh.VirshError, ValueError, KeyError, TimeoutError, IndexError) as e:
             log("product key:", e)

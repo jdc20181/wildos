@@ -26,6 +26,19 @@ if [ "$1" = "configure" ]; then
         dracut --regenerate-all --force >/dev/null 2>&1 ||             echo "wildos-branding: could not rebuild the initramfs; the new boot screen shows after the next kernel update" >&2
     fi
 
+    # USBGuard blocks new devices by switching each USB controller's
+    # authorized_default to 0, and by default leaves it there when it stops.
+    # Turning USB protection off in Settings stops the service, so without
+    # this every device plugged in afterwards stayed blocked until a restart.
+    conf=/etc/usbguard/usbguard-daemon.conf
+    if [ -f "$conf" ]; then
+        if grep -q '^RestoreControllerDeviceState=' "$conf"; then
+            sed -i 's/^RestoreControllerDeviceState=.*/RestoreControllerDeviceState=true/' "$conf"
+        else
+            echo 'RestoreControllerDeviceState=true' >> "$conf"
+        fi
+    fi
+
     # grub.cfg names the theme, so a system that had none picks it up here.
     # The image has no grub.cfg (the installer makes one).
     if [ -e /boot/grub/grub.cfg ] && command -v update-grub >/dev/null; then

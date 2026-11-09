@@ -5,7 +5,7 @@ After=plasma-core.target
 
 [Service]
 ExecStart=/usr/libexec/wildos/wildos-dialogs --session
-BusName=org.wildos.Dialogs
+BusName=org.wildos.SystemDialogs
 Slice=session.slice
 TimeoutStopSec=5sec
 Restart=on-failure

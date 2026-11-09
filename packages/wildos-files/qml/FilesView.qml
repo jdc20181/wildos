@@ -203,8 +203,9 @@ Item {
             return;
         }
         // Each Properties is a window of its own, as on Windows, kept above
-        // the Files window it came from.
-        const window = propertiesComponent.createObject(null, { view: root, urls: list, transientParent: root.Window.window });
+        // the Files window it came from. It needs an owner: with none, the
+        // JavaScript garbage collector deleted it moments after it opened.
+        const window = propertiesComponent.createObject(root,{ view: root, urls: list, transientParent: root.Window.window });
         window.show();
     }
 

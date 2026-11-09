@@ -155,11 +155,29 @@ namespace WildOS.Guest
                 if (result == 0)
                 {
                     Log.Write("mapped " + drive + " to " + share);
+                    MakeAutoRecover(drive);
                     return;
                 }
                 Thread.Sleep(1000);
             }
             Log.Write("couldn't map " + drive + " to " + share + ": error " + result);
+        }
+
+        // Setup points Office's AutoRecover at this hidden folder but can't
+        // make it, since the drive doesn't exist until a connection does.
+        static void MakeAutoRecover(string drive)
+        {
+            try
+            {
+                string documents = drive + @"\Documents";
+                if (!Directory.Exists(documents)) return;
+                var dir = Directory.CreateDirectory(documents + @"\.autorecover");
+                dir.Attributes |= FileAttributes.Hidden;
+            }
+            catch (Exception e)
+            {
+                Log.Write("autorecover folder: " + e.Message);
+            }
         }
 
         static long ConnectTime()

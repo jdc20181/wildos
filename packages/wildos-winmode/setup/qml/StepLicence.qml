@@ -3,15 +3,16 @@ import QtQuick.Layouts
 import WildOS.UI as UI
 import WildOS.WinMode.Backend
 
-// 9.2 (WinModeHome.dc) when the licence is for Windows 11 Home, and 9.3
-// (WinModeNoLicence.dc) when there is none to use.
+// 9.3 (WinModeNoLicence.dc) when there is no licence Windows mode can use:
+// none built in, one still in use by Windows on this PC, or one for Windows
+// 11 Home. Windows mode always installs Pro; a Home key can't activate it.
 Page {
     id: page
 
     // home, none or inuse
     property string kind: "none"
 
-    // licence: firmware, key or none; homeChoice: upgrade or home
+    // licence: key or none; homeChoice is always empty now
     signal chosen(string licence, string key, string homeChoice)
     signal skipped()
     signal back()
@@ -19,15 +20,13 @@ Page {
     readonly property bool home: kind === "home"
 
     title: "Set up Windows mode"
-    text: home ? "Windows apps can run on this PC. How smoothly depends on the edition of Windows it came with."
-               : "Windows programs can still work on this PC. Choose how you'd like to handle the Windows licence."
-    note: home ? "You can switch from Home to Pro later without setting anything up again."
-               : "Your choice only affects Windows mode. The rest of Wild OS is free."
+    text: "Windows programs can still work on this PC. Choose how you'd like to handle the Windows licence."
+    note: "Windows mode needs Windows 11 Pro. A Home key won't activate it."
 
     Banner {
-        tone: page.home ? "accent" : "warning"
-        title: page.home ? "Windows 11 Home found" : page.kind === "inuse" ? "Windows is still installed on this PC" : "No Windows licence built into this PC"
-        text: page.home ? "Your licence works with Windows mode. Pro has a feature built in that shows each app as a normal window; Home doesn't, so on Home we use our own method instead."
+        tone: "warning"
+        title: page.home ? "This PC came with Windows 11 Home" : page.kind === "inuse" ? "Windows is still installed on this PC" : "No Windows licence built into this PC"
+        text: page.home ? "Windows mode needs Windows 11 Pro, so this licence can't activate it. Set it up without activating, or with a Pro key."
             : page.kind === "inuse" ? "Its licence covers one copy of Windows at a time, and that copy is still on this PC. A key from another licence works for Windows mode."
             : "Common on self-built PCs and older machines. A key from a previous PC often still works."
     }
@@ -35,44 +34,6 @@ Page {
     ColumnLayout {
         Layout.fillWidth: true
         spacing: 10
-        visible: page.home
-        Accessible.role: Accessible.Grouping
-        Accessible.name: "Windows edition"
-
-        RadioCard {
-            id: upgrade
-            checked: true
-            title: "Upgrade to Windows 11 Pro"
-            chip: "Recommended"
-            description: "Fully supported. Apps open quickly and look and behave like the rest of your desktop. Microsoft sells the upgrade, and it uses the licence you already have."
-
-            UI.LinkButton {
-                text: "See the price on Microsoft's site"
-                onClicked: Setup.openUrl("https://www.microsoft.com/en-gb/d/windows-11-pro/dg7gmgf0d7fv")
-            }
-        }
-
-        RadioCard {
-            id: useHome
-            enabled: false
-            title: "Use Windows 11 Home"
-            chip: "Experimental"
-            chipTone: "warning"
-            description: "Free with your licence and works for most apps, but it's still being developed and isn't supported yet. Apps can be slower to draw, and some, including parts of Office, may look or behave oddly."
-            reason: "Not ready yet. Upgrade to Pro, or skip for now."
-        }
-
-        RadioCard {
-            id: skipHome
-            title: "Skip Windows mode for now"
-            description: "Many Windows programs still run on the desktop without it, and Office works in the browser."
-        }
-    }
-
-    ColumnLayout {
-        Layout.fillWidth: true
-        spacing: 10
-        visible: !page.home
         Accessible.role: Accessible.Grouping
         Accessible.name: "Windows licence"
 
@@ -80,7 +41,7 @@ Page {
             id: withKey
             checked: true
             title: "Enter a product key"
-            description: "From a sticker, an email or a licence you bought for another PC."
+            description: "A Windows 11 Pro key, from a sticker, an email or a licence you bought for another PC."
 
             RowLayout {
                 spacing: 8
@@ -100,7 +61,7 @@ Page {
 
                 UI.LinkButton {
                     text: "Where to buy a licence"
-                    onClicked: Setup.openUrl("https://www.microsoft.com/en-gb/d/windows-11-home/dg7gmgf0krt0")
+                    onClicked: Setup.openUrl("https://www.microsoft.com/en-gb/d/windows-11-pro/dg7gmgf0d7fv")
                 }
             }
 
@@ -133,15 +94,9 @@ Page {
         UI.Button {
             kind: "primary"
             text: "Continue"
-            enabled: page.home || !withKey.checked || Setup.keyShapeValid(keyField.text)
+            enabled: !withKey.checked || Setup.keyShapeValid(keyField.text)
             onClicked: {
-                if (page.home) {
-                    if (skipHome.checked) {
-                        page.skipped();
-                    } else {
-                        page.chosen("firmware", "", upgrade.checked ? "upgrade" : "home");
-                    }
-                } else if (skipNone.checked) {
+                if (skipNone.checked) {
                     page.skipped();
                 } else if (noKey.checked) {
                     page.chosen("none", "", "");

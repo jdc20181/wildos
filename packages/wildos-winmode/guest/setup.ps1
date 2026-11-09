@@ -253,6 +253,8 @@ Step 'updates' $false {
 
 # 6. Known folders point at the shared folders, so Save in any Windows app
 # lands on Wild OS. These are the values Explorer's own Location tab writes.
+# The drive only exists while a RemoteApp connection is open (wild-guest maps
+# it on connect), and none is open during setup, so nothing here may touch it.
 Step 'known-folders' $true {
     $usf = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders'
     $map = [ordered]@{
@@ -263,20 +265,16 @@ Step 'known-folders' $true {
     }
     foreach ($folder in $settings.folders) {
         $target = "$($drive):\$folder"
-        if (-not (Test-Path $target)) { New-Item -ItemType Directory -Force $target | Out-Null }
         foreach ($value in $map[$folder]) { Set-Value $usf $value $target 'ExpandString' }
     }
 }
 
 # 7. Office, once installed, saves to this PC rather than OneDrive and keeps
 # its AutoRecover files beside the documents (brief 5.4 and 5.7). Policy
-# values can be set before Office exists.
+# values can be set before Office exists. wild-guest makes the AutoRecover
+# folder once the drive is mapped.
 Step 'office-policies' $false {
     $autorecover = "$($drive):\Documents\.autorecover"
-    if (-not (Test-Path $autorecover)) {
-        $d = New-Item -ItemType Directory -Force $autorecover
-        $d.Attributes = $d.Attributes -bor [IO.FileAttributes]::Hidden
-    }
     $op = 'HKCU:\Software\Policies\Microsoft\Office\16.0'
     Set-Value "$op\Common\General" 'PreferCloudSaveLocations' 0
     Set-Value "$op\Word\Options" 'DOC-PATH' "$($drive):\Documents" 'ExpandString'
@@ -363,7 +361,7 @@ $settings = Get-Content "$state\settings.json" -Raw | ConvertFrom-Json
 $deadline = (Get-Date).AddSeconds(180)
 while ((Get-Date) -lt $deadline) {
     $rdp = Get-NetTCPConnection -LocalPort 3389 -State Listen -ErrorAction SilentlyContinue
-    if ($rdp -and (Test-Path "$($settings.drive):\Documents")) { break }
+    if ($rdp) { break }
     Start-Sleep -Seconds 2
 }
 $cv = Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion'
@@ -375,7 +373,6 @@ $cv = Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion'
     rdp_listening = [bool](Get-NetTCPConnection -LocalPort 3389 -State Listen -ErrorAction SilentlyContinue)
     shared_folder = [bool](Test-Path "$($settings.drive):\Documents")
     guest_agent = (Get-Service QEMU-GA).Status.ToString()
-    virtiofs = (Get-Service VirtioFsSvc).Status.ToString()
     boot = (Get-CimInstance Win32_OperatingSystem).LastBootUpTime.ToString('s')
 } | ConvertTo-Json | Set-Content -Encoding UTF8 "$state\ready.json"
 '@

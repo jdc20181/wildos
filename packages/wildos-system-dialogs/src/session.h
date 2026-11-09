@@ -15,7 +15,7 @@ QString id();
 QDBusObjectPath path();
 }
 
-// org.wildos.Dialogs on the session bus, served by the long-running
+// org.wildos.SystemDialogs on the session bus, served by the long-running
 // "wildos-dialogs --session". Ctrl+Alt+Del and Settings start a short-lived
 // "wildos-dialogs security" or "restart", which asks this to show the
 // screen that is already loaded, so it appears at once.
@@ -27,12 +27,12 @@ QDBusObjectPath path();
 class DialogsService : public QObject, protected QDBusContext
 {
     Q_OBJECT
-    Q_CLASSINFO("D-Bus Interface", "org.wildos.Dialogs")
+    Q_CLASSINFO("D-Bus Interface", "org.wildos.SystemDialogs")
 
 public:
     using QObject::QObject;
 
-    static constexpr const char *serviceName = "org.wildos.Dialogs";
+    static constexpr const char *serviceName = "org.wildos.SystemDialogs";
     static constexpr const char *objectPath = "/Dialogs";
 
     // Asks the running service; false when there is none or it did not
