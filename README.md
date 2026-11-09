@@ -169,6 +169,7 @@ The ISO is written to `out/`. The first build downloads about 3 GB of packages; 
 
 Wild OS is built in the open and help is welcome, from code to testing Windows apps to fixing a typo.
 
+- Ask questions, suggest ideas and show off your setup in [Discussions](https://github.com/wildorigins/wildos/discussions).
 - Report bugs and compatibility results through [Issues](https://github.com/wildorigins/wildos/issues).
 - Found a security problem? Please don't open a public issue. [Report it privately](https://github.com/wildorigins/wildos/security/advisories/new) instead.
 
