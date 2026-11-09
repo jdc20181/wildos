@@ -11,3 +11,4 @@ files/apt/wildos.pref etc/apt/preferences.d/
 files/apt/wildos-freerdp.pref etc/apt/preferences.d/
 files/grub/10_wildos usr/lib/wildos/grub.d/
 files/grub/31_wildos_firmware usr/lib/wildos/grub.d/
+files/systemd/* usr/lib/systemd/system/

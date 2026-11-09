@@ -103,7 +103,7 @@ StepPage {
                     minHeight: 50
                     title: modelData.name
                     status: modelData.detail ? modelData.detail
-                        : modelData.sized ? WindowsImport.formatBytes(modelData.size)
+                        : modelData.sized ? WindowsImport.formatBytes(modelData.size) + (modelData.also ? ", also from " + modelData.also : "")
                         : "Measuring"
                     interactive: true
                     enabled: modelData.enabled && !WindowsImport.started

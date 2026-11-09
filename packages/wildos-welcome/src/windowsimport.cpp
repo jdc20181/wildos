@@ -86,6 +86,9 @@ QString pathIgnoringCase(const QString &root, const QStringList &parts)
 
 qint64 folderSize(const QStringList &paths)
 {
+    // The files Windows leaves in every folder, which the copy skips too, so
+    // a folder holding only those counts as empty.
+    static const QStringList clutter = {QStringLiteral("desktop.ini"), QStringLiteral("thumbs.db"), QStringLiteral("ehthumbs.db")};
     qint64 total = 0;
     for (const QString &path : paths) {
         // Junctions such as "My Music" inside Documents show up as links;
@@ -93,7 +96,9 @@ qint64 folderSize(const QStringList &paths)
         QDirIterator it(path, QDir::Files | QDir::Hidden | QDir::System | QDir::NoSymLinks, QDirIterator::Subdirectories);
         while (it.hasNext()) {
             it.next();
-            total += it.fileInfo().size();
+            if (!clutter.contains(it.fileName().toLower())) {
+                total += it.fileInfo().size();
+            }
         }
     }
     return total;
@@ -337,24 +342,48 @@ void WindowsImport::buildFolders()
     m_folders.clear();
     m_pendingSizes = 0;
 
+    // Every other account on the same drive comes along too, each into a
+    // folder of its own ("Documents/From Sam"), so two people's files never
+    // mix and nobody's are left behind. The chosen account fills the
+    // folders themselves.
+    QList<Source> accounts{source};
+    for (int i = 0; i < m_sources.size(); ++i) {
+        if (i != m_current && m_sources.at(i).drive == source.drive) {
+            accounts.append(m_sources.at(i));
+        }
+    }
+
     for (const FolderSpec &spec : folderSpecs) {
         const QString name = QString::fromLatin1(spec.name);
+        const QString home = QStandardPaths::writableLocation(spec.location);
         QStringList from;
-        const QString local = childIgnoringCase(source.home, name);
-        if (!local.isEmpty()) {
-            from << local;
-        }
-        // OneDrive's folder backup moves Desktop, Documents and Pictures
-        // into the OneDrive folder; whatever was synced down is there.
-        const QString onedrive = pathIgnoringCase(source.home, {QStringLiteral("OneDrive"), name});
-        if (!onedrive.isEmpty()) {
-            from << onedrive;
+        QVariantList parts;
+        for (int a = 0; a < accounts.size(); ++a) {
+            QStringList partFrom;
+            const QString local = childIgnoringCase(accounts.at(a).home, name);
+            if (!local.isEmpty()) {
+                partFrom << local;
+            }
+            // OneDrive's folder backup moves Desktop, Documents and Pictures
+            // into the OneDrive folder; whatever was synced down is there.
+            const QString onedrive = pathIgnoringCase(accounts.at(a).home, {QStringLiteral("OneDrive"), name});
+            if (!onedrive.isEmpty()) {
+                partFrom << onedrive;
+            }
+            from << partFrom;
+            parts.append(QVariantMap{
+                {QStringLiteral("user"), accounts.at(a).user},
+                {QStringLiteral("from"), partFrom},
+                {QStringLiteral("to"), a == 0 ? home : home + QStringLiteral("/From ") + accounts.at(a).user},
+                {QStringLiteral("size"), qint64(0)},
+            });
         }
         m_folders.append(QVariantMap{
             {QStringLiteral("key"), QString::fromLatin1(spec.key)},
             {QStringLiteral("name"), name},
             {QStringLiteral("from"), from},
-            {QStringLiteral("to"), QStandardPaths::writableLocation(spec.location)},
+            {QStringLiteral("parts"), parts},
+            {QStringLiteral("to"), home},
             {QStringLiteral("size"), qint64(0)},
             {QStringLiteral("sized"), from.isEmpty()},
             {QStringLiteral("enabled"), !from.isEmpty()},
@@ -366,16 +395,31 @@ void WindowsImport::buildFolders()
         }
         ++m_pendingSizes;
         const int row = m_folders.size() - 1;
-        auto watcher = new QFutureWatcher<qint64>(this);
-        connect(watcher, &QFutureWatcher<qint64>::finished, this, [this, watcher, row, generation] {
+        auto watcher = new QFutureWatcher<QList<qint64>>(this);
+        connect(watcher, &QFutureWatcher<QList<qint64>>::finished, this, [this, watcher, row, generation] {
             watcher->deleteLater();
             if (generation != m_generation) {
                 return;
             }
             QVariantMap folder = m_folders.at(row).toMap();
-            const qint64 size = watcher->result();
+            const QList<qint64> sizes = watcher->result();
+            QVariantList parts = folder.value(QStringLiteral("parts")).toList();
+            qint64 size = 0;
+            QStringList others;
+            for (int i = 0; i < parts.size() && i < sizes.size(); ++i) {
+                QVariantMap part = parts.at(i).toMap();
+                part.insert(QStringLiteral("size"), sizes.at(i));
+                parts[i] = part;
+                size += sizes.at(i);
+                if (i > 0 && sizes.at(i) > 0) {
+                    others << part.value(QStringLiteral("user")).toString();
+                }
+            }
+            folder.insert(QStringLiteral("parts"), parts);
             folder.insert(QStringLiteral("size"), size);
             folder.insert(QStringLiteral("sized"), true);
+            // Shown after the size: "2.1 GB, also from Sam".
+            folder.insert(QStringLiteral("also"), others.join(QStringLiteral(" and ")));
             if (size == 0) {
                 folder.insert(QStringLiteral("enabled"), false);
                 folder.insert(QStringLiteral("checked"), false);
@@ -408,7 +452,17 @@ void WindowsImport::buildFolders()
             }
             Q_EMIT foldersChanged();
         });
-        watcher->setFuture(QtConcurrent::run(folderSize, from));
+        QList<QStringList> partPaths;
+        for (const QVariant &part : std::as_const(parts)) {
+            partPaths << part.toMap().value(QStringLiteral("from")).toStringList();
+        }
+        watcher->setFuture(QtConcurrent::run([partPaths] {
+            QList<qint64> sizes;
+            for (const QStringList &paths : partPaths) {
+                sizes << folderSize(paths);
+            }
+            return sizes;
+        }));
     }
 
     const QList<BrowserProfile> browsers = Bookmarks::findWindowsProfiles(source.home);
@@ -509,12 +563,20 @@ QJsonObject WindowsImport::job() const
             bookmarks = QJsonArray::fromVariantList(folder.value(QStringLiteral("files")).toList());
             continue;
         }
-        folders.append(QJsonObject{
-            {QStringLiteral("name"), folder.value(QStringLiteral("name")).toString()},
-            {QStringLiteral("from"), QJsonArray::fromStringList(folder.value(QStringLiteral("from")).toStringList())},
-            {QStringLiteral("to"), folder.value(QStringLiteral("to")).toString()},
-            {QStringLiteral("bytes"), folder.value(QStringLiteral("size")).toLongLong()},
-        });
+        // One entry per account with something to copy, so an account
+        // whose folder is empty doesn't leave an empty "From" folder.
+        for (const QVariant &value : folder.value(QStringLiteral("parts")).toList()) {
+            const QVariantMap part = value.toMap();
+            if (part.value(QStringLiteral("size")).toLongLong() <= 0) {
+                continue;
+            }
+            folders.append(QJsonObject{
+                {QStringLiteral("name"), folder.value(QStringLiteral("name")).toString()},
+                {QStringLiteral("from"), QJsonArray::fromStringList(part.value(QStringLiteral("from")).toStringList())},
+                {QStringLiteral("to"), part.value(QStringLiteral("to")).toString()},
+                {QStringLiteral("bytes"), part.value(QStringLiteral("size")).toLongLong()},
+            });
+        }
     }
     if (folders.isEmpty() && bookmarks.isEmpty()) {
         return {};
