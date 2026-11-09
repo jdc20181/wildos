@@ -87,8 +87,7 @@ Step 'guest-tools' $true {
 
 # 2. The shared folders on Wild OS become drive Z:, through the RemoteApp
 # connection itself (settings.json transport "rdp"). Testing on real
-# hardware ruled virtiofs out; the other transports stay
-# for setups made before.
+# hardware ruled virtiofs out. Samba stays as the fallback transport.
 Step 'shared-folder' $true {
     # The RemoteApp connection carries the folders (FreeRDP's drive
     # redirection) and wild-guest maps them to Z: whenever it connects, so
@@ -101,12 +100,6 @@ Step 'shared-folder' $true {
         cmdkey /add:$($settings.host) /user:$($settings.samba.user) /pass:$($settings.samba.password) | Out-Null
         net use "$($drive):" /delete /y 2>$null | Out-Null
         net use "$($drive):" $share /persistent:yes | Out-Null
-    } else {
-        $p = Start-Process -Wait -PassThru msiexec.exe -ArgumentList '/i', "`"$here\winfsp.msi`"", '/qn', '/norestart'
-        if ($p.ExitCode -ne 0 -and $p.ExitCode -ne 3010) { throw "WinFsp install exit $($p.ExitCode)" }
-        Set-Value 'HKLM:\SOFTWARE\VirtIO-FS' 'MountPoint' "$($drive):" 'String'
-        Set-Service VirtioFsSvc -StartupType Automatic
-        Start-Service VirtioFsSvc
     }
     $deadline = (Get-Date).AddSeconds(90)
     while (-not (Test-Path "$($drive):\Documents") -and (Get-Date) -lt $deadline) { Start-Sleep -Seconds 2 }

@@ -237,14 +237,8 @@ PageScroll {
                     title: "Text size"
                     description: "Makes text larger across every app"
 
-                    UI.ComboBox {
+                    TextSizeBox {
                         anchors.verticalCenter: parent.verticalCenter
-                        Accessible.name: "Text size"
-                        model: [100, 110, 125, 150].concat([100, 110, 125, 150].includes(System.textScale) ? [] : [System.textScale])
-                            .map(p => ({ value: p, text: p + "%" }))
-                        readonly property var choice: System.textScale
-                        currentIndex: model ? model.findIndex(o => o.value === choice) : -1
-                        onActivated: index => System.setTextScale(model[index].value)
                     }
                 }
             }
@@ -258,7 +252,7 @@ PageScroll {
             width: parent.width
 
             Repeater {
-                model: ["background", "lockscreen", "taskbar"]
+                model: ["background", "lockscreen", "taskbar", "fonts"]
 
                 UI.SettingRow {
                     required property string modelData

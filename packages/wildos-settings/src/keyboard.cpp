@@ -23,6 +23,11 @@ const QString interface = QStringLiteral("org.kde.KeyboardLayouts");
 // option someone set in the full keyboard module is kept as it is.
 const QStringList switchPrefixes = {QStringLiteral("grp:")};
 const QStringList capsPrefixes = {QStringLiteral("caps:"), QStringLiteral("ctrl:nocaps"), QStringLiteral("ctrl:swapcaps")};
+const QStringList composePrefixes = {QStringLiteral("compose:")};
+const QStringList altGrPrefixes = {QStringLiteral("lv3:")};
+
+// What KWin builds the keymap with when kxkbrc names no model.
+const QString defaultModel = QStringLiteral("pc104");
 
 // The system layout when the account has none of its own: what the
 // installer wrote for the console and the sign-in screen.
@@ -69,8 +74,12 @@ void Keyboard::reload()
     QStringList layouts = splitList(layout.readEntry("LayoutList", QString()));
     QStringList variants = splitList(layout.readEntry("VariantList", QString()));
     m_options = layout.readEntry("Options", QString()).split(QLatin1Char(','), Qt::SkipEmptyParts);
+    m_model = layout.readEntry("Model", QString());
     if (!own || layouts.join(QString()).isEmpty()) {
         const auto system = systemKeyboard();
+        if (!own && m_model.isEmpty()) {
+            m_model = system.value(QStringLiteral("XKBMODEL"));
+        }
         layouts = splitList(system.value(QStringLiteral("XKBLAYOUT"), QStringLiteral("gb")));
         variants = splitList(system.value(QStringLiteral("XKBVARIANT")));
         if (!own) {
@@ -86,6 +95,9 @@ void Keyboard::reload()
     }
     if (m_layouts.isEmpty()) {
         m_layouts.append({QStringLiteral("gb"), QString()});
+    }
+    if (m_model.isEmpty()) {
+        m_model = defaultModel;
     }
 
     const KConfigGroup keys(KSharedConfig::openConfig(QStringLiteral("kcminputrc"), KConfig::NoGlobals), QStringLiteral("Keyboard"));
@@ -107,22 +119,28 @@ void Keyboard::loadNames()
     if (!file.open(QIODevice::ReadOnly)) {
         return;
     }
-    // <layout><configItem><name>gb</name><description>English (UK)</description>
-    // </configItem><variantList><variant><configItem>... per variant.
+    // <modelList><model><configItem><name>pc105</name><description>
+    // Generic 105-key PC</description>... comes first, then <layoutList>
+    // <layout><configItem><name>gb</name><description>English (UK)
+    // </description></configItem><variantList><variant><configItem>...
+    // per variant. The option groups after the layouts use the same
+    // elements, so reading stops there.
     QXmlStreamReader xml(&file);
+    QString section;
     QString layout;
     QString name;
     QString description;
     bool inVariant = false;
     while (!xml.atEnd()) {
         xml.readNext();
-        // The option groups after the layouts use the same elements.
         if (xml.isEndElement() && xml.name() == QLatin1String("layoutList")) {
             break;
         }
         if (xml.isStartElement()) {
             const auto tag = xml.name();
-            if (tag == QLatin1String("layout")) {
+            if (tag == QLatin1String("modelList") || tag == QLatin1String("layoutList")) {
+                section = tag.toString();
+            } else if (tag == QLatin1String("layout")) {
                 layout.clear();
                 inVariant = false;
             } else if (tag == QLatin1String("variant")) {
@@ -139,7 +157,12 @@ void Keyboard::loadNames()
             if (name.isEmpty() || description.isEmpty()) {
                 continue;
             }
-            if (!inVariant) {
+            if (section == QLatin1String("modelList")) {
+                m_modelNames.insert(name, description);
+                m_models.append(QVariantMap{{QStringLiteral("model"), name}, {QStringLiteral("name"), description}});
+            } else if (section != QLatin1String("layoutList")) {
+                continue;
+            } else if (!inVariant) {
                 layout = name;
                 m_names.insert(layout + QLatin1Char('|'), description);
                 m_available.append(QVariantMap{{QStringLiteral("layout"), layout}, {QStringLiteral("variant"), QString()}, {QStringLiteral("name"), description}});
@@ -154,6 +177,9 @@ void Keyboard::loadNames()
     QCollator collator;
     collator.setNumericMode(true);
     std::sort(m_available.begin(), m_available.end(), [&collator](const QVariant &a, const QVariant &b) {
+        return collator.compare(a.toMap().value(QStringLiteral("name")).toString(), b.toMap().value(QStringLiteral("name")).toString()) < 0;
+    });
+    std::sort(m_models.begin(), m_models.end(), [&collator](const QVariant &a, const QVariant &b) {
         return collator.compare(a.toMap().value(QStringLiteral("name")).toString(), b.toMap().value(QStringLiteral("name")).toString()) < 0;
     });
 }
@@ -181,6 +207,18 @@ QVariantList Keyboard::available()
 {
     loadNames();
     return m_available;
+}
+
+QVariantList Keyboard::models()
+{
+    loadNames();
+    return m_models;
+}
+
+QString Keyboard::modelName() const
+{
+    const_cast<Keyboard *>(this)->loadNames();
+    return m_modelNames.value(m_model, m_model);
 }
 
 QString Keyboard::optionWithPrefix(const QStringList &prefixes) const
@@ -219,6 +257,16 @@ QString Keyboard::capsLock() const
     return optionWithPrefix(capsPrefixes);
 }
 
+QString Keyboard::compose() const
+{
+    return optionWithPrefix(composePrefixes);
+}
+
+QString Keyboard::altGr() const
+{
+    return optionWithPrefix(altGrPrefixes);
+}
+
 void Keyboard::saveLayouts()
 {
     QStringList layouts;
@@ -234,6 +282,7 @@ void Keyboard::saveLayouts()
     // One empty display name per layout, as the keyboard module writes it,
     // so the indicator shows each layout's own short name.
     group.writeEntry("DisplayNames", QStringList(layouts.size(), QString()).join(QLatin1Char(',')));
+    group.writeEntry("Model", m_model);
     group.writeEntry("Options", m_options.join(QLatin1Char(',')));
     // Without this KWin adds the options to the ones it started with, so a
     // switch key once chosen could never be taken away again.
@@ -314,6 +363,25 @@ void Keyboard::setSwitchKeys(const QString &option)
 void Keyboard::setCapsLock(const QString &option)
 {
     replaceOptions(capsPrefixes, option);
+}
+
+void Keyboard::setCompose(const QString &option)
+{
+    replaceOptions(composePrefixes, option);
+}
+
+void Keyboard::setAltGr(const QString &option)
+{
+    replaceOptions(altGrPrefixes, option);
+}
+
+void Keyboard::setModel(const QString &model)
+{
+    if (model.isEmpty() || model == m_model) {
+        return;
+    }
+    m_model = model;
+    saveLayouts();
 }
 
 void Keyboard::saveRepeat()

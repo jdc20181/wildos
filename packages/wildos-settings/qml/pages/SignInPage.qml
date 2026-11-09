@@ -5,12 +5,27 @@ import WildOS.UI as UI
 
 // Sign-in options, after Windows 11: changing the password (current one
 // first, then the new one twice and an optional hint), signing in
-// automatically when the computer starts, and the way to the screen lock.
+// automatically when the computer starts, restarting apps after signing
+// in, and the way to the screen lock.
 PageScroll {
     id: page
 
     readonly property bool autoOn: Users.autoLogin.length > 0 && Users.autoLogin === Users.me.userName
     readonly property bool autoOther: Users.autoLogin.length > 0 && Users.autoLogin !== Users.me.userName
+
+    // ksmserver's loginMode, as KDE's session settings write it. It saves
+    // the open apps at sign-out only in restorePreviousLogout; a session
+    // someone saved by hand (restoreSavedSession) also counts as on.
+    property int sessionRevision: 0
+    readonly property bool restoreApps: {
+        sessionRevision;
+        return System.config("ksmserverrc", "General", "loginMode", "restorePreviousLogout") !== "emptySession";
+    }
+
+    function setRestoreApps(on) {
+        System.setConfig("ksmserverrc", "General", "loginMode", on ? "restorePreviousLogout" : "emptySession");
+        sessionRevision++;
+    }
 
     Connections {
         target: Users
@@ -96,6 +111,21 @@ PageScroll {
                         enabled: Users.busy !== "autologin"
                         Accessible.name: "Sign in automatically when this computer starts"
                         onToggled: Users.setAutoLogin(checked)
+                    }
+                }
+
+                UI.SettingRow {
+                    iconName: "restart"
+                    minHeight: 72
+                    title: "Restart my apps when I sign back in"
+                    description: "Apps that were open when you signed out or restarted open again, where the app supports it"
+                    status: page.restoreApps ? "On" : "Off"
+
+                    UI.Toggle {
+                        anchors.verticalCenter: parent.verticalCenter
+                        checked: page.restoreApps
+                        Accessible.name: "Restart my apps when I sign back in"
+                        onToggled: page.setRestoreApps(checked)
                     }
                 }
 

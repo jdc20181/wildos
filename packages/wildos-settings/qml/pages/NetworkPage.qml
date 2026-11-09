@@ -7,7 +7,7 @@ import WildOS.UI as UI
 // Network and internet: Wi-Fi on or off, flight mode, nearby networks with
 // connecting and password entry, and Ethernet. Everything goes through
 // plasma-nm, the same code as the network icon in the tray; the rarer
-// settings (VPN, proxy, IP addresses) open KDE's full editor.
+// settings (VPN, proxy, IP addresses) are on Advanced network settings.
 PageScroll {
     id: page
 
@@ -208,7 +208,7 @@ PageScroll {
                 iconName: "ethernet"
                 title: "Ethernet"
                 description: summary.connected && !summary.wifi ? "Connected. Addresses and other details are in the advanced settings." : "Not connected. Plug in a network cable to use it."
-                external: Pages.exists("networkadvanced")
+                chevron: true
                 onClicked: Navigator.open("networkadvanced")
             }
 
@@ -216,7 +216,7 @@ PageScroll {
                 iconName: "globe"
                 title: "Advanced network settings"
                 description: "VPN, proxy, IP addresses and saved networks"
-                external: true
+                chevron: true
                 onClicked: Navigator.open("networkadvanced")
             }
         }

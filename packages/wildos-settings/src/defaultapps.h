@@ -24,9 +24,17 @@ public:
     Q_INVOKABLE void reload();
     Q_INVOKABLE void setDefault(const QString &category, const QString &storageId);
 
+    // File types whose extension or name matches the search, after
+    // Windows' "Choose defaults by file type": [{ mime, description,
+    // extensions, icon, current, apps: [{ value, text }] }].
+    Q_INVOKABLE QVariantList fileTypes(const QString &search) const;
+    Q_INVOKABLE void setDefaultForType(const QString &mime, const QString &storageId);
+
 Q_SIGNALS:
     void changed();
 
 private:
+    void rebuild();
+
     QVariantList m_categories;
 };

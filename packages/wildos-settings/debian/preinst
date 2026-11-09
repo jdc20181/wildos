@@ -1,0 +1,13 @@
+#!/bin/sh
+set -e
+
+# KDE's systemsettings and kcmshell6 move aside so the redirect to Wild OS
+# Settings can take their names (see kde-settings-redirect).
+if [ "$1" = "install" ] || [ "$1" = "upgrade" ]; then
+    for bin in systemsettings kcmshell6; do
+        dpkg-divert --package wildos-settings --add --rename \
+            --divert "/usr/bin/$bin.kde" "/usr/bin/$bin" >/dev/null
+    done
+fi
+
+#DEBHELPER#

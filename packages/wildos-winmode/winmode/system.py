@@ -27,6 +27,7 @@ XML = """
   <interface name="org.wildos.WindowsMode1.Host">
     <method name="Status"><arg type="s" direction="out"/></method>
     <method name="Wake"><arg type="s" direction="out"/></method>
+    <method name="Prestart"><arg type="s" direction="out"/></method>
     <method name="Idle">
       <arg name="mode" type="s" direction="in"/>
       <arg type="s" direction="out"/>
@@ -145,6 +146,7 @@ class Service:
         self.export = dbusutil.Exported(bus, config.OBJECT_PATH, XML, config.HOST_INTERFACE, {
             "Status": (self.m_status, "s", False),
             "Wake": (self.m_wake, "s", True),
+            "Prestart": (self.m_prestart, "s", True),
             "Idle": (self.m_idle, "s", True),
             "Launch": (self.m_launch, "s", True),
             "Windows": (self.m_windows, "s", True),
@@ -760,6 +762,53 @@ class Service:
             return self.wake()
 
         dbusutil.in_thread(work, done=finished)
+        return defer
+
+    def prestart_blocker(self):
+        """Why Windows shouldn't be started ahead of time now, or None. Only
+        on mains, with room for it to stay paused in memory afterwards
+        (where the Automatic idle policy would otherwise save it straight
+        to disk), and only from switched off or saved."""
+        st = virsh.state(self.domain)
+        if st not in ("shut off", "saved"):
+            return f"it is {st or 'not set up'}"
+        if self.state.get("setting_up"):
+            return "it is being set up"
+        if self.state["when_idle"] == "save":
+            return "it is set to go to disk when idle"
+        if self.power.on_battery:
+            return "the PC is on battery"
+        if hostinfo.under_pressure():
+            return "memory is under pressure"
+        available, total = hostinfo.meminfo()
+        if total and (available - self.memory) / total < lifecycle.MEMORY_FREE_SHARE:
+            return "there isn't enough free memory"
+        if self.busy_action:
+            return "something else is under way"
+        return None
+
+    def m_prestart(self, sender, defer):
+        """Called by the session agent once sign-in has settled, so the first
+        Windows app opens from memory instead of a cold start. The guest
+        then idles into the paused state like any other."""
+        why = self.claim(sender)
+        if why:
+            return json.dumps({"ok": False, "error": why})
+        blocker = self.prestart_blocker()
+        if blocker:
+            log("not starting Windows ahead of time:", blocker)
+            return json.dumps({"ok": False, "skipped": blocker})
+        log("starting Windows ahead of time")
+
+        def finished(result):
+            self.refresh()
+            self.schedule_idle()
+            if isinstance(result, Exception):
+                defer.done(json.dumps({"ok": False, "error": str(result)}))
+            else:
+                defer.done(json.dumps(result))
+
+        dbusutil.in_thread(self.wake, done=finished)
         return defer
 
     def release_launch(self):

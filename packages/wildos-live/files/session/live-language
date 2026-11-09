@@ -1,0 +1,27 @@
+#!/bin/sh
+# Applies the language picked on the USB start-up menu, which GRUB passes as
+# wildos.lang=de_DE. It runs before the display manager, so the live desktop
+# and the installer start in it, and the installer takes the language and
+# keyboard from the live session for the computer it installs. Only a
+# language from the menu's own list is accepted.
+set -eu
+
+list=/usr/share/wildos-live/languages
+want=$(tr ' ' '\n' < /proc/cmdline | sed -n 's/^wildos\.lang=//p' | tail -n 1)
+[ -n "$want" ] || exit 0
+
+line=$(grep -v '^#' "$list" | awk -F '\t' -v want="$want" '$1 == want { print; exit }')
+[ -n "$line" ] || exit 0
+layout=$(printf '%s' "$line" | cut -f 2)
+
+update-locale LANG="$want.UTF-8"
+if [ -f /etc/default/keyboard ]; then
+    sed -i "s/^XKBLAYOUT=.*/XKBLAYOUT=\"$layout\"/" /etc/default/keyboard
+else
+    printf 'XKBMODEL="pc105"\nXKBLAYOUT="%s"\n' "$layout" > /etc/default/keyboard
+fi
+# A second layout is only there for typing addresses and passwords in Latin
+# letters; Alt+Shift switches, as on Windows.
+case $layout in
+    *,*) sed -i 's/^XKBOPTIONS=.*/XKBOPTIONS="grp:alt_shift_toggle"/' /etc/default/keyboard ;;
+esac

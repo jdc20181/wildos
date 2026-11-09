@@ -5,8 +5,8 @@
 <!-- The password prompts behind Settings. Each action runs one helper in
      /usr/libexec/wildos, which takes only its own fixed requests:
      settings-update-policy (Updates), settings-users (Accounts),
-     settings-locale (Time and language) and settings-protection (Privacy
-     and security). -->
+     settings-locale (Time and language), settings-protection (Privacy
+     and security) and settings-network (the VPN kill switch). -->
 <policyconfig>
   <vendor>Wild OS</vendor>
   <vendor_url>https://wildos.io</vendor_url>
@@ -33,6 +33,18 @@
       <allow_active>auth_admin_keep</allow_active>
     </defaults>
     <annotate key="org.freedesktop.policykit.exec.path">/usr/libexec/wildos/settings-protection</annotate>
+  </action>
+
+  <action id="org.wildos.settings.network">
+    <description>Turn the VPN kill switch on or off</description>
+    <message>Change whether Wild OS blocks the internet when a VPN drops?</message>
+    <icon_name>network-vpn</icon_name>
+    <defaults>
+      <allow_any>no</allow_any>
+      <allow_inactive>no</allow_inactive>
+      <allow_active>auth_admin_keep</allow_active>
+    </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/libexec/wildos/settings-network</annotate>
   </action>
 
   <action id="org.wildos.settings.users">

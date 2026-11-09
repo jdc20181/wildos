@@ -12,6 +12,12 @@ if [ "$1" = "configure" ]; then
         rm -f "$MENU"
         dpkg-divert --package wildos-settings --remove --rename --divert "$MENU.plasma" "$MENU" >/dev/null
     fi
+    # NetworkManager reads its new defaults (lookups through
+    # systemd-resolved, private Wi-Fi addresses) without dropping the
+    # connections it has up.
+    if [ -d /run/systemd/system ] && systemctl is-active --quiet NetworkManager.service; then
+        nmcli general reload >/dev/null 2>&1 || true
+    fi
 fi
 
 #DEBHELPER#

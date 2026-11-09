@@ -1,0 +1,2 @@
+usr/libexec/wildos/kde-settings-redirect usr/bin/systemsettings
+usr/libexec/wildos/kde-settings-redirect usr/bin/kcmshell6

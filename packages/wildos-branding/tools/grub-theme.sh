@@ -23,7 +23,7 @@ set -euo pipefail
 shopt -u patsub_replacement 2>/dev/null || true
 
 usage() {
-    echo "usage: grub-theme.sh usb <theme dir> <logo svg> <version>" >&2
+    echo "usage: grub-theme.sh usb <theme dir> <logo svg> <version> <languages file>" >&2
     echo "       grub-theme.sh installed <theme dir> <logo svg>" >&2
     exit 2
 }
@@ -32,7 +32,7 @@ mode=$1
 out=$2
 logo=$3
 case $mode in
-    usb) [ $# -eq 4 ] || usage; version=$4 ;;
+    usb) [ $# -eq 5 ] || usage; version=$4; languages=$5 ;;
     installed) [ $# -eq 3 ] || usage ;;
     *) usage ;;
 esac
@@ -99,6 +99,13 @@ if [ "$mode" = usb ]; then
     item wildos-install 600 "Install Wild OS" "Set up Wild OS on this computer"
     item wildos-try 500 "Try Wild OS" "Use it from the USB stick. Nothing on your computer changes."
     item wildos-check 500 "Check this USB stick" "Looks for download or copying errors first"
+    # The Language entry names the language in use, so there is one picture
+    # per language; each language in the list is named in itself.
+    while IFS=$'	' read -r code _ native english; do
+        case $code in '#'* | '') continue ;; esac
+        item "wildos-language-$code" 500 "Language" "$native"
+        item "wildos-lang-$code" 500 "$native" "$english"
+    done < "$languages"
     item wildos-advanced 500 "Advanced" "Safe graphics, other options"
     item wildos-install-safe 500 "Install with safe graphics" "Use this if the screen stays black or garbled"
     item wildos-try-safe 500 "Try with safe graphics" "The same fix, without installing anything"
@@ -347,6 +354,8 @@ EOF
         menu $((menu_h + 6))
     } > "$out/$1"
 }
-theme theme.txt hint.png 4 yes
+theme theme.txt hint.png 5 yes
 theme advanced-efi.txt hint-advanced.png 4 no
 theme advanced-pc.txt hint-advanced.png 3 no
+# The language list scrolls past six.
+theme language.txt hint-advanced.png 6 no

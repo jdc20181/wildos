@@ -5,3 +5,9 @@
 
 override_dh_auto_configure:
 	dh_auto_configure -- -Wno-dev
+
+# Mono audio is a choice in Settings > Accessibility, switched on per
+# person (systemctl --user enable); debhelper would otherwise enable it for
+# every account on install.
+override_dh_installsystemduser:
+	dh_installsystemduser --no-enable

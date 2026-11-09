@@ -20,6 +20,7 @@ UI.AppWindow {
     property string pendingId: ""
     readonly property var current: Pages.page(currentId)
     property string currentKcm: ""
+    property string pageError: ""
     readonly property bool currentIsKcm: currentKcm.length > 0
     readonly property bool canGoBack: history.length > 0 || (pageLoader.item !== null && pageLoader.item.depth !== undefined && pageLoader.item.depth > 1)
 
@@ -66,15 +67,17 @@ UI.AppWindow {
         }
         currentId = id;
         pageLoader.sourceComponent = null;
-        // A Wild OS page that cannot load (a desktop part it relies on is
-        // missing) falls back to the KDE module for the same setting.
+        // A Wild OS page that cannot load says so, rather than quietly
+        // showing KDE's module for the same setting in its place.
         let page = p.component ? Qt.createComponent("WildOS.Settings", p.component) : null;
+        pageError = "";
         if (page && page.status === Component.Error) {
             console.warn(page.errorString());
+            pageError = page.errorString();
             page = null;
         }
-        currentKcm = page ? "" : (p.kcm || p.fallback || "");
-        pageLoader.sourceComponent = page || kcmComponent;
+        currentKcm = page ? "" : (p.kcm || "");
+        pageLoader.sourceComponent = page || (currentKcm.length > 0 ? kcmComponent : errorComponent);
         search.text = "";
     }
 
@@ -123,6 +126,14 @@ UI.AppWindow {
     Shortcut {
         sequences: [StandardKey.Find, "Ctrl+E"]
         onActivated: search.forceActiveFocus()
+    }
+
+    Component {
+        id: errorComponent
+        PageError {
+            pageTitle: (Pages.page(window.currentId) || {}).title || ""
+            detail: window.pageError
+        }
     }
 
     Component {

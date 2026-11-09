@@ -13,8 +13,13 @@ Build-Depends:
  libkf6service-dev,
  libkf6i18n-dev,
  libkf6colorscheme-dev,
+ libkf6sonnet-dev,
+ libkscreen-dev,
+ libkf6networkmanagerqt-dev,
+ libkf6globalaccel-dev,
  libpackagekitqt6-dev,
  libcups2-dev,
+ libsdl2-dev,
  libglib2.0-dev,
  pkgconf,
 Standards-Version: 4.7.0
@@ -26,6 +31,9 @@ Depends:
  ${shlibs:Depends},
  ${misc:Depends},
  nftables,
+ network-manager,
+ network-manager-openvpn,
+ systemd-resolved,
  qml6-module-qtquick-controls,
  qml6-module-qtquick-templates,
  qml6-module-qtquick-layouts,
@@ -39,9 +47,12 @@ Depends:
  qml6-module-org-kde-desktop,
  qml6-module-org-kde-bluezqt,
  qml6-module-org-kde-plasma-plasma5support,
+ qml6-module-org-kde-kitemmodels,
  plasma-nm,
+ plasma-pa,
  plasma-workspace,
  plasma-desktop,
+ libkscreen-bin,
  wildos-branding,
  wildos-ui,
  kio6,
@@ -53,12 +64,24 @@ Depends:
  locales,
  accountsservice,
  passwd,
+ fontconfig,
+ sonnet6-plugins,
+ hunspell-en-gb | hunspell-dictionary,
+ pipewire-bin,
+ libpipewire-0.3-modules,
+ libglib2.0-bin,
 Recommends:
  systemsettings,
+ bolt,
  flatpak,
  cups,
  cups-filters,
  xdg-desktop-portal,
+ baloo6,
+ kactivitymanagerd,
+ orca,
+ speech-dispatcher-espeak-ng,
+ maliit-keyboard,
 Description: Wild OS Settings
  The Settings app of Wild OS, laid out and worded the way Windows 11
  Settings is: system, devices, network, personalisation, apps, Windows apps,
@@ -69,7 +92,22 @@ Description: Wild OS Settings
  .
  Its keyboard, printer, account, language and app permission pages work
  through kxkbrc and KWin, CUPS, AccountsService and two small root helpers,
- the regional settings KDE uses and Flatpak's override files.
+ the regional settings KDE uses and Flatpak's override files. Its
+ touchscreen, pen, game controller, AutoPlay and Thunderbolt pages use
+ KWin, SDL, Plasma's device automounter and boltd. Spell checking goes
+ through Sonnet, and fonts are installed for the account with fontconfig.
+ File search and activity history use Baloo's and the activity manager's
+ own settings.
+ .
+ Its accessibility page keeps every choice where KDE and KWin read it, and
+ wildos-access gives high contrast, the on-screen keyboard and sticky keys
+ their keyboard shortcuts in the session and on the lock and sign-in
+ screens. Mono audio is a PipeWire filter run as a user service.
  .
  It also points the desktop's right-click "Personalise" entry at Settings
  and installs the small helper that sets automatic security updates.
+ .
+ Advanced network settings work through NetworkManager. The wildos-network
+ service gives each new network Quad9's encrypted DNS (DNS over TLS through
+ systemd-resolved) and runs the VPN kill switch with nftables; Wi-Fi uses a
+ private hardware address for each network by default.

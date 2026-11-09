@@ -13,6 +13,10 @@ execute_after_dh_install:
 	install -Dm644 files/brave/managed.json debian/wildos-desktop/etc/brave/policies/managed/wildos.json
 	install -Dm644 files/brave/recommended.json debian/wildos-desktop/etc/brave/policies/recommended/wildos.json
 	install -Dm755 files/brave/brave-browser-stable debian/wildos-desktop/usr/bin/brave-browser-stable
+	# Sponsored new tab backgrounds have no policy, only a preference, so
+	# every new profile starts with them off. Brave reads this file from
+	# beside its own binary and ships none of its own.
+	install -Dm644 files/brave/initial_preferences debian/wildos-desktop/opt/brave.com/brave/initial_preferences
 
 execute_after_dh_fixperms:
 	chmod 0755 debian/wildos-desktop/usr/libexec/wildos/wildos-app-names \

@@ -3,10 +3,14 @@ import QtQuick.Layouts
 import WildOS.Settings
 import WildOS.UI as UI
 
-// Multitasking: snapping and Alt+Tab. Each switch writes kwinrc and asks
-// KWin to reload, so the change applies without signing out.
+// Multitasking: snapping, Alt+Tab and the taskbar across desktops. The
+// snapping and Alt+Tab switches write kwinrc and ask KWin to reload, so the
+// change applies without signing out; the taskbar choice is the taskbar's
+// own setting, changed through plasmashell.
 PageScroll {
     id: page
+
+    Component.onCompleted: System.readTaskbarDesktops()
 
     UI.Card {
         Layout.fillWidth: true
@@ -57,6 +61,22 @@ PageScroll {
 
             Column {
                 width: parent.width
+
+                UI.SettingRow {
+                    title: "On the taskbar, show all open windows"
+
+                    UI.ComboBox {
+                        anchors.verticalCenter: parent.verticalCenter
+                        Accessible.name: "On the taskbar, show all open windows"
+                        model: [
+                            { value: false, text: "Only on the desktop I'm using" },
+                            { value: true, text: "On all desktops" }
+                        ]
+                        readonly property bool choice: System.taskbarAllDesktops
+                        currentIndex: model.findIndex(o => o.value === choice)
+                        onActivated: index => System.setTaskbarAllDesktops(model[index].value)
+                    }
+                }
 
                 UI.SettingRow {
                     title: "Show windows from all desktops in Alt+Tab"

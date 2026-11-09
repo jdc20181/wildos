@@ -518,5 +518,26 @@ Item {
         easing.type: UI.Style.easeExit
     }
 
-    Component.onCompleted: focusPassword()
+    // The accessibility shortcuts from Settings > Accessibility, here before
+    // anyone has signed in. This screen's KWin has no global shortcuts, so
+    // the magnifier keys are handled here too. What the last person to sign
+    // out left on is copied to this screen's own settings
+    // (/usr/libexec/wildos/greeter-access), so it comes back on here.
+    UI.AccessShortcuts {
+        id: access
+        magnifier: true
+        onKeyboardRequested: {
+            if (keyboardLoader.item)
+                keyboardButton.clicked();
+        }
+    }
+
+    Component.onCompleted: {
+        focusPassword();
+        access.restore();
+        if (access.keyboardOn && keyboardLoader.item) {
+            keyboardLoader.item.wanted = true;
+            Qt.inputMethod.show();
+        }
+    }
 }

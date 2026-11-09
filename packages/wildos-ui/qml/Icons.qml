@@ -173,7 +173,7 @@ QtObject {
         // Lock, sign-in and power screens.
         "restart": "M20 12a8 8 0 1 1-2.3-5.7M20 4v5h-5",
         "hibernate": r(4, 4, 16, 16, 3) + "M9 9.5h6l-6 5h6",
-        "accessibility": c(12, 4.5, 1.8) + "M5 8.5l7 1.5 7-1.5M12 10v5M9 21l3-6 3 6",
+        "accessibility": c(12, 4.5, 1.8) + "M5 8.5l7 1.5 7-1.5M12 10v4.5M12 14.5l-3.5 6M12 14.5l3.5 6",
         "caps-lock": "M12 4l7 7h-4v5H9v-5H5zM9 20h6",
         "task-manager": "M3 12h4l3-7 4 14 3-7h4",
         // Task Manager's pages (TaskManager.dc navigation).

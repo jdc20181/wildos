@@ -1,0 +1,7 @@
+Name: Wild OS sign-in screen accessibility (carries the last person's choices to the sign-in screen)
+Default: yes
+Priority: 0
+Session-Type: Additional
+Session-Interactive-Only: yes
+Session:
+	optional	pam_exec.so quiet /usr/libexec/wildos/greeter-access

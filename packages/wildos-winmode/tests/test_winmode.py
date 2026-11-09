@@ -375,9 +375,22 @@ class Setup(unittest.TestCase):
 
     def test_office_plan(self):
         from winmode import setup
-        self.assertIn('Product ID="O365BusinessRetail"', setup.office_config("business"))
-        self.assertIn('Product ID="O365HomePremRetail"', setup.office_config("anything"))
-        self.assertNotIn('ExcludeApp ID="Excel"', setup.office_config("personal"))
+        self.assertIn('Product ID="O365BusinessRetail"', setup.office_config("business", "en-GB"))
+        self.assertIn('Product ID="O365HomePremRetail"', setup.office_config("anything", "en-GB"))
+        self.assertNotIn('ExcludeApp ID="Excel"', setup.office_config("personal", "en-GB"))
+
+    def test_office_follows_host_language(self):
+        from winmode import setup
+        uk = setup.office_config("personal", "en-GB")
+        self.assertIn('<Language ID="en-gb"/>', uk)
+        self.assertIn('<Product ID="ProofingTools">', uk)
+        self.assertIn('<Language ID="MatchOS"/>', uk)
+        # A language the Office Deployment Tool doesn't know would stop the
+        # install, so it falls back to Windows' own.
+        odd = setup.office_config("personal", "cy-GB")
+        self.assertNotIn("cy-gb", odd)
+        self.assertNotIn("ProofingTools", odd)
+        self.assertIn('<Language ID="MatchOS"/>', odd)
 
     def test_templates_fill_every_field(self):
         from winmode import setup

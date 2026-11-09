@@ -1,0 +1,8 @@
+{
+    "KPlugin": {
+        "Description": "Slow keys from Settings > Accessibility: a key counts only once it has been held down for a moment",
+        "EnabledByDefault": true,
+        "License": "GPL",
+        "Name": "Wild OS slow keys"
+    }
+}

@@ -5,3 +5,6 @@ files/session/wildos-live.desktop usr/share/wayland-sessions/
 files/session/live-session usr/libexec/wildos-live/
 files/dev/wildos-dev-only.conf usr/lib/systemd/system/qemu-guest-agent.service.d/
 files/systemd/wildos-live.conf etc/systemd/system/sddm.service.d/
+files/session/live-language usr/libexec/wildos-live/
+files/languages usr/share/wildos-live/
+files/systemd/wildos-live-language.service usr/lib/systemd/system/

@@ -5,15 +5,20 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 include(GNUInstallDirs)
 
-find_package(Qt6 6.8 REQUIRED COMPONENTS Core Gui Widgets DBus Qml Quick QuickControls2)
+find_package(Qt6 6.8 REQUIRED COMPONENTS Core Gui Widgets DBus Network Qml Quick QuickControls2)
 find_package(KF6KCMUtils REQUIRED)
 find_package(KF6Config REQUIRED)
 find_package(KF6CoreAddons REQUIRED)
 find_package(KF6Service REQUIRED)
 find_package(KF6I18n REQUIRED)
 find_package(KF6ColorScheme REQUIRED)
+find_package(KF6Sonnet REQUIRED)
+find_package(KF6Screen REQUIRED)
+find_package(KF6NetworkManagerQt REQUIRED)
+find_package(KF6GlobalAccel REQUIRED)
 find_package(packagekitqt6 REQUIRED)
 find_package(Cups REQUIRED)
+find_package(SDL2 2.0.16 REQUIRED)
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(GLIB REQUIRED IMPORTED_TARGET glib-2.0)
 
@@ -48,15 +53,33 @@ qt_add_qml_module(wildos-settings
         src/users.cpp src/users.h
         src/language.cpp src/language.h
         src/appaccess.cpp src/appaccess.h
+        src/poweroptions.cpp src/poweroptions.h
+        src/appnotifications.cpp src/appnotifications.h
+        src/desktops.cpp src/desktops.h
+        src/autoplay.cpp src/autoplay.h
+        src/gamecontrollers.cpp src/gamecontrollers.h
+        src/thunderbolt.cpp src/thunderbolt.h
+        src/spelling.cpp src/spelling.h
+        src/fonts.cpp src/fonts.h
+        src/display.cpp src/display.h
+        src/filesearch.cpp src/filesearch.h
+        src/activityhistory.cpp src/activityhistory.h
+        src/olderapps.cpp src/olderapps.h
+        src/network.cpp src/network.h src/netshared.h
+        src/accessibility.cpp src/accessibility.h
+        src/accesscore.cpp src/accesscore.h
 )
 
 target_include_directories(wildos-settings PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
 
 target_link_libraries(wildos-settings PRIVATE
-    Qt6::Widgets Qt6::DBus Qt6::Qml Qt6::Quick Qt6::QuickControls2
-    KF6::KCMUtils KF6::KCMUtilsQuick KF6::ConfigCore KF6::CoreAddons KF6::Service KF6::I18n KF6::ColorScheme
+    Qt6::Widgets Qt6::DBus Qt6::Network Qt6::Qml Qt6::Quick Qt6::QuickControls2
+    KF6::KCMUtils KF6::KCMUtilsQuick KF6::ConfigCore KF6::CoreAddons KF6::Service KF6::I18n KF6::ColorScheme KF6::SonnetCore
+    KF6::Screen
+    KF6::NetworkManagerQt
     PK::packagekitqt6
     Cups::Cups
+    SDL2::SDL2
     PkgConfig::GLIB
     util
 )
@@ -65,7 +88,7 @@ install(TARGETS wildos-settings RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 install(FILES data/org.wildos.settings.desktop DESTINATION ${CMAKE_INSTALL_DATADIR}/applications)
 # The helpers are looked up by these exact paths (polkit pins the update
 # helper to it), so they do not follow the distribution's libexec layout.
-install(PROGRAMS data/settings-update-policy data/settings-users data/settings-locale data/settings-protection DESTINATION ${CMAKE_INSTALL_PREFIX}/libexec/wildos)
+install(PROGRAMS data/settings-update-policy data/settings-users data/settings-locale data/settings-protection data/settings-network DESTINATION ${CMAKE_INSTALL_PREFIX}/libexec/wildos)
 install(FILES data/org.wildos.settings.policy DESTINATION ${CMAKE_INSTALL_DATADIR}/polkit-1/actions)
 
 # The automatic theme runs in every session and must not pull in the
@@ -74,5 +97,28 @@ qt_add_executable(wildos-auto-theme src/autotheme/main.cpp src/autotheme/sun.h)
 target_link_libraries(wildos-auto-theme PRIVATE Qt6::Core Qt6::Gui Qt6::DBus KF6::ConfigCore)
 install(TARGETS wildos-auto-theme RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 install(FILES data/org.wildos.auto-theme.desktop DESTINATION ${CMAKE_INSTALL_SYSCONFDIR}/xdg/autostart)
+# The accessibility shortcuts: a service in every session and the switches
+# the lock and sign-in screens run. It shares AccessCore with Settings so a
+# shortcut and its switch do the same thing.
+qt_add_executable(wildos-access src/access/main.cpp src/accesscore.cpp src/accesscore.h)
+target_include_directories(wildos-access PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+target_link_libraries(wildos-access PRIVATE Qt6::Core Qt6::Gui Qt6::DBus KF6::ConfigCore KF6::GlobalAccel)
+install(TARGETS wildos-access RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+install(FILES data/org.wildos.access.desktop DESTINATION ${CMAKE_INSTALL_SYSCONFDIR}/xdg/autostart)
+# Mono audio: a PipeWire filter run as its own user service.
+install(FILES data/wildos-mono-audio.conf DESTINATION ${CMAKE_INSTALL_DATADIR}/pipewire)
+install(FILES data/wildos-mono-audio.service DESTINATION ${CMAKE_INSTALL_PREFIX}/lib/systemd/user)
 # Loads the firewall for a Strict or Maximum protection level at start-up.
 install(FILES data/wildos-protection.service DESTINATION ${CMAKE_INSTALL_PREFIX}/lib/systemd/system)
+
+# The root half of Advanced network settings: encrypted DNS for each new
+# network and the VPN kill switch. A system service, so it carries none of
+# the Settings app's QML or KDE dependencies.
+qt_add_executable(wildos-network src/networkd/main.cpp src/netshared.h)
+target_include_directories(wildos-network PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+target_link_libraries(wildos-network PRIVATE Qt6::Core Qt6::DBus Qt6::Network)
+install(TARGETS wildos-network RUNTIME DESTINATION ${CMAKE_INSTALL_PREFIX}/libexec/wildos)
+install(FILES data/wildos-network.service DESTINATION ${CMAKE_INSTALL_PREFIX}/lib/systemd/system)
+install(FILES data/org.wildos.Network.conf DESTINATION ${CMAKE_INSTALL_DATADIR}/dbus-1/system.d)
+install(FILES data/90-wildos-network.conf DESTINATION ${CMAKE_INSTALL_PREFIX}/lib/NetworkManager/conf.d)
+install(FILES data/60-wildos-resolved.conf DESTINATION ${CMAKE_INSTALL_PREFIX}/lib/systemd/resolved.conf.d)

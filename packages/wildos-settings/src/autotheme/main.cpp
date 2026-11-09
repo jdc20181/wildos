@@ -22,6 +22,7 @@ namespace
 {
 const QString darkScheme = QStringLiteral("WildOS");
 const QString lightScheme = QStringLiteral("WildOSLight");
+const QString contrastScheme = QStringLiteral("WildOSHighContrast");
 
 const QString decorationGroup = QStringLiteral("org.kde.kdecoration2");
 const QString darkDecoration = QStringLiteral("__aurorae__svg__WildOS");
@@ -107,6 +108,12 @@ public:
         }
         KSharedConfigPtr globals = KSharedConfig::openConfig(QStringLiteral("kdeglobals"));
         globals->reparseConfiguration();
+        // High contrast (Settings > Accessibility) is not a time of day
+        // choice; it stays until it is turned off, which brings the
+        // automatic theme back.
+        if (globals->group(QStringLiteral("General")).readEntry("ColorScheme") == contrastScheme) {
+            return;
+        }
         if (schemeIsLight(globals) == (wanted == lightScheme)) {
             return;
         }

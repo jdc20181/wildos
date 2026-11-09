@@ -4,7 +4,9 @@ set -e
 # Kicksecure's desktop helpers are built for its own LXQt desktop and show
 # technical pop-ups (system check warnings, update checks, a deprecation
 # notice, a time-sync tray icon, and a display resize helper written for
-# wlroots desktops that fails and restarts every few seconds under KWin).
+# wlroots desktops that fails and restarts every few seconds under KWin,
+# and a shared-folder bookmark for virtual machines that fails at every
+# sign-in on a real computer).
 # Wild OS surfaces the same information in
 # plain English through the security chip and the Store, so the helpers are
 # taken out of autostart. A diversion survives updates of the packages that
@@ -18,6 +20,7 @@ systemcheck.desktop
 updatecheck.desktop
 sdwdate-gui.desktop
 wlr-resize-watcher.desktop
+config-mnt-shared-bookmark.desktop
 "
 
 if [ "$1" = "triggered" ]; then

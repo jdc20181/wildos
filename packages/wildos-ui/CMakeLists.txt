@@ -36,6 +36,7 @@ qt_add_qml_module(wildosui
         src/windowframe.cpp src/windowframe.h
         src/themeicon.cpp src/themeicon.h
         src/system.cpp src/system.h
+        src/accessshortcuts.cpp src/accessshortcuts.h
 )
 
 target_include_directories(wildosui PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)

@@ -61,6 +61,10 @@ execute_after_dh_install:
 	{ echo; echo "# Generated at build time from WildOS.colors."; \
 		awk -f debian/scheme-to-kdeglobals.awk files/WildOS.colors; } \
 		>> debian/wildos-branding/etc/xdg/kdeglobals
+	# The yellow and sea glass pointers Settings > Accessibility offers,
+	# recoloured from the Breeze Light this is built against so they keep
+	# Breeze's shapes and sizes.
+	python3 tools/cursor-colours.py /usr/share/icons/Breeze_Light debian/wildos-branding/usr/share/icons
 	# The start-up animation and disk unlock screen, every frame drawn from
 	# the logo masters and Inter at each screen scale (see the tool for why).
 	python3 tools/render-boot-assets.py debian/wildos-branding/usr/share/plymouth/themes/wildos \

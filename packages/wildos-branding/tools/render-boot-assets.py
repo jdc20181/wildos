@@ -194,8 +194,10 @@ COMPLETE_FRAMES = 46
 STATUS_TOP = {"i": 50 + 30 * 1.2109375 + 30 - 62, "u": 548 - 450}
 STATUS_CANVAS = {"i": (-100, 50, 200, 25), "u": (-100, 95, 200, 25)}
 
-# The glide from the tile to the glass W: 1 s at 50 frames a second.
-GLIDE_CANVAS = (-50, -205, 135, 255)
+# The glide from the tile to the glass W: 1 s at 50 frames a second. The
+# canvas spans where the W ends up (78px either side of centre), or its left
+# side was cut off until the finished W took over.
+GLIDE_CANVAS = (-85, -205, 170, 255)
 GLIDE_FRAMES = 50
 
 TILE_CANVAS = (-45, -200, 90, 90)

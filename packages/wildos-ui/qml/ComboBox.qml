@@ -13,7 +13,9 @@ import QtQuick.Templates as T
 //
 // Give it `model: [{ value, text }]` (textRole "text", valueRole "value"
 // are the defaults), read `currentValue`, and set the choice from the
-// backend with `currentIndex: indexOfValue(backend.value)`.
+// backend with `currentIndex: model.findIndex(o => o.value === backend.value)`.
+// Not indexOfValue(): a binding doesn't see the list it searches, so it ran
+// once before the list was loaded and left the box blank.
 T.ComboBox {
     id: control
 

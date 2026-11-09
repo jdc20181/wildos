@@ -1,0 +1,114 @@
+#pragma once
+
+#include <KConfigWatcher>
+
+#include <QObject>
+#include <QQmlEngine>
+#include <QVariantList>
+
+// Settings > Accessibility. The values and how they are applied live in
+// AccessCore, which the shortcut service shares; this follows them live,
+// so a shortcut pressed while the page is open (Super Alt H, Shift five
+// times) moves its switch too, and a page made again by the Loader reads
+// the current state rather than anything remembered from last time.
+class Accessibility : public QObject
+{
+    Q_OBJECT
+    QML_ELEMENT
+    QML_SINGLETON
+
+    Q_PROPERTY(QVariantList pointerColours READ pointerColours CONSTANT)
+    Q_PROPERTY(QList<int> pointerSizes READ pointerSizes CONSTANT)
+    Q_PROPERTY(QString pointerColour READ pointerColour NOTIFY changed)
+    Q_PROPERTY(int pointerSize READ pointerSize NOTIFY changed)
+    Q_PROPERTY(bool magnifier READ magnifier NOTIFY magnifierChanged)
+    Q_PROPERTY(bool screenReaderInstalled READ screenReaderInstalled CONSTANT)
+    Q_PROPERTY(bool screenReader READ screenReader NOTIFY changed)
+    Q_PROPERTY(bool highContrastInstalled READ highContrastInstalled CONSTANT)
+    Q_PROPERTY(bool highContrast READ highContrast NOTIFY changed)
+    // True while the colour scheme is being applied, which takes a moment.
+    Q_PROPERTY(bool highContrastBusy READ highContrastBusy NOTIFY changed)
+    Q_PROPERTY(bool visibleBell READ visibleBell NOTIFY changed)
+    Q_PROPERTY(bool monoAudioInstalled READ monoAudioInstalled CONSTANT)
+    Q_PROPERTY(bool monoAudio READ monoAudio NOTIFY changed)
+    Q_PROPERTY(bool onScreenKeyboardInstalled READ onScreenKeyboardInstalled CONSTANT)
+    Q_PROPERTY(bool onScreenKeyboard READ onScreenKeyboard NOTIFY changed)
+    Q_PROPERTY(bool stickyKeys READ stickyKeys NOTIFY changed)
+    Q_PROPERTY(bool slowKeys READ slowKeys NOTIFY changed)
+    Q_PROPERTY(int slowKeysDelay READ slowKeysDelay NOTIFY changed)
+    Q_PROPERTY(bool bounceKeys READ bounceKeys NOTIFY changed)
+    Q_PROPERTY(int bounceKeysDelay READ bounceKeysDelay NOTIFY changed)
+
+public:
+    explicit Accessibility(QObject *parent = nullptr);
+
+    QVariantList pointerColours() const { return m_pointerColours; }
+    QList<int> pointerSizes() const;
+    QString pointerColour() const { return m_pointerColour; }
+    int pointerSize() const { return m_pointerSize; }
+    bool magnifier() const { return m_magnifier; }
+    bool screenReaderInstalled() const { return m_screenReaderInstalled; }
+    bool screenReader() const { return m_screenReader; }
+    bool highContrastInstalled() const { return m_highContrastInstalled; }
+    bool highContrast() const { return m_highContrast; }
+    bool highContrastBusy() const { return m_highContrastBusy; }
+    bool visibleBell() const { return m_visibleBell; }
+    bool monoAudioInstalled() const { return m_monoAudioInstalled; }
+    bool monoAudio() const { return m_monoAudio; }
+    bool onScreenKeyboardInstalled() const { return m_keyboardInstalled; }
+    bool onScreenKeyboard() const { return m_onScreenKeyboard; }
+    bool stickyKeys() const { return m_stickyKeys; }
+    bool slowKeys() const { return m_slowKeys; }
+    int slowKeysDelay() const { return m_slowKeysDelay; }
+    bool bounceKeys() const { return m_bounceKeys; }
+    int bounceKeysDelay() const { return m_bounceKeysDelay; }
+
+    Q_INVOKABLE void setPointerColour(const QString &id);
+    Q_INVOKABLE void setPointerSize(int size);
+    Q_INVOKABLE void setMagnifier(bool on);
+    Q_INVOKABLE void setScreenReader(bool on);
+    Q_INVOKABLE void setHighContrast(bool on);
+    Q_INVOKABLE void setVisibleBell(bool on);
+    Q_INVOKABLE void setMonoAudio(bool on);
+    Q_INVOKABLE void setOnScreenKeyboard(bool on);
+    Q_INVOKABLE void setStickyKeys(bool on);
+    Q_INVOKABLE void setSlowKeys(bool on);
+    Q_INVOKABLE void setSlowKeysDelay(int ms);
+    Q_INVOKABLE void setBounceKeys(bool on);
+    Q_INVOKABLE void setBounceKeysDelay(int ms);
+
+public Q_SLOTS:
+    // Rereads everything. KWin has no signal for zoom, so the page also
+    // calls refreshMagnifier while it is showing.
+    void refresh();
+    void refreshMagnifier();
+
+Q_SIGNALS:
+    void changed();
+    void magnifierChanged();
+
+private:
+    void watch(const QString &file);
+
+    QVariantList m_pointerColours;
+    QString m_pointerColour;
+    int m_pointerSize = 24;
+    bool m_magnifier = false;
+    bool m_screenReaderInstalled = false;
+    bool m_screenReader = false;
+    bool m_highContrastInstalled = false;
+    bool m_highContrast = false;
+    bool m_highContrastBusy = false;
+    bool m_visibleBell = false;
+    bool m_monoAudioInstalled = false;
+    bool m_monoAudio = false;
+    bool m_keyboardInstalled = false;
+    bool m_onScreenKeyboard = false;
+    bool m_stickyKeys = false;
+    bool m_slowKeys = false;
+    int m_slowKeysDelay = 500;
+    bool m_bounceKeys = false;
+    int m_bounceKeysDelay = 500;
+
+    QList<KConfigWatcher::Ptr> m_watchers;
+};

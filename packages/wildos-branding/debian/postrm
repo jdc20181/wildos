@@ -10,6 +10,12 @@ if [ "$1" = "remove" ] || [ "$1" = "purge" ] || [ "$1" = "abort-install" ]; then
         --divert /etc/xdg/arkrc.ark /etc/xdg/arkrc >/dev/null || true
 fi
 
+if [ "$1" = "remove" ] || [ "$1" = "purge" ]; then
+    if command -v pam-auth-update >/dev/null; then
+        pam-auth-update --package --remove wildos-greeter-access
+    fi
+fi
+
 # Without this, grub.cfg would go on naming a theme that is no longer there.
 if [ "$1" = "remove" ] || [ "$1" = "purge" ]; then
     if [ -e /boot/grub/grub.cfg ] && command -v update-grub >/dev/null; then

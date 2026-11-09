@@ -84,6 +84,8 @@ XML = """
 NOT_YET = "This isn't available yet."
 # How long a launch waits for a new connection's session to be up.
 SESSION_WAIT = 90
+# Seconds after sign-in before Windows is started ahead of time.
+PRESTART_DELAY = 120
 SECRET_ATTRS = ["service", "org.wildos.WindowsMode1", "account"]
 
 
@@ -239,6 +241,17 @@ class Agent:
         self.refresh_host_now()
         self.watch_theme()
         GLib.timeout_add_seconds(5, lambda: (self.push_warm(), False)[1])
+        # Two minutes after sign-in, once the desktop and its startup apps
+        # have settled, Windows is started ahead of time so the first
+        # Windows app opens from memory. The service declines on battery,
+        # without enough free memory, or when Windows is already up.
+        GLib.timeout_add_seconds(PRESTART_DELAY, lambda: (self.prestart(), False)[1])
+
+    def prestart(self):
+        def done(reply):
+            if isinstance(reply, GLib.Error):
+                log("starting Windows ahead of time:", reply.message)
+        self.call("Prestart", done=done, timeout=600)
 
     # The system service.
     def call(self, method, args=None, signature=None, done=None, timeout=600):

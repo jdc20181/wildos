@@ -124,7 +124,7 @@ PlasmoidItem {
         screenGeometry: Plasmoid.containment.screenGeometry
         activity: activityInfo.currentActivity
 
-        filterByVirtualDesktop: true
+        filterByVirtualDesktop: Plasmoid.configuration.showOnlyCurrentDesktop
         filterByScreen: false
         filterByActivity: true
 

@@ -1,0 +1,18 @@
+#!/bin/sh
+set -e
+
+if [ "$1" = "remove" ] || [ "$1" = "purge" ] || [ "$1" = "abort-install" ]; then
+    for bin in systemsettings kcmshell6; do
+        dpkg-divert --package wildos-settings --remove --rename \
+            --divert "/usr/bin/$bin.kde" "/usr/bin/$bin" >/dev/null || true
+    done
+    # The kill switch's rules outlive its service on purpose (a crash must
+    # not let traffic out), so they go with the package.
+    nft delete table inet wildos_kill_switch 2>/dev/null || true
+fi
+
+if [ "$1" = "purge" ]; then
+    rm -f /etc/wildos/vpn-kill-switch /var/lib/wildos/network-dns-defaulted
+fi
+
+#DEBHELPER#

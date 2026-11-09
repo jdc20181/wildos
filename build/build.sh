@@ -409,9 +409,16 @@ mv "$ROOTFS/live-initrd.img" "$WORK/iso/live/initrd.img"
 # GRUB packages for the installer; must sit outside the squashfs or the
 # installed system would carry a copy of both.
 mv "$ROOTFS/live-pool" "$WORK/iso/pool"
-sed "s/@VOLID@/$VOLID/g; s/@VERSION@/$VERSION/g" "$SRC/build/iso/grub.cfg" > "$WORK/iso/boot/grub/grub.cfg"
+LANGUAGES="$SRC/packages/wildos-live/files/languages"
+# One entry per language: picking it shows the main menu again with that
+# language passed to the live system.
+grep -v '^#' "$LANGUAGES" | awk -F '\t' '{
+    printf "    menuentry \"%s\" --class wildos-lang-%s {\n        set wildos_lang=%s\n        export wildos_lang\n        configfile /boot/grub/grub.cfg\n    }\n", $3, $1, $1
+}' > "$WORK/grub-languages.cfg"
+sed "s/@VOLID@/$VOLID/g; s/@VERSION@/$VERSION/g" "$SRC/build/iso/grub.cfg" \
+    | sed -e "/^@LANGUAGES@\$/{r $WORK/grub-languages.cfg" -e 'd}' > "$WORK/iso/boot/grub/grub.cfg"
 bash "$SRC/packages/wildos-branding/tools/grub-theme.sh" usb "$WORK/iso/boot/grub/themes/wildos" \
-    "$SRC/branding/logo/wild-os-icon.svg" "$VERSION"
+    "$SRC/branding/logo/wild-os-icon.svg" "$VERSION" "$LANGUAGES"
 
 log "Compressing root filesystem"
 mksquashfs "$ROOTFS" "$WORK/iso/LiveOS/squashfs.img" \

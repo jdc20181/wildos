@@ -9,6 +9,7 @@ systemcheck.desktop
 updatecheck.desktop
 sdwdate-gui.desktop
 wlr-resize-watcher.desktop
+config-mnt-shared-bookmark.desktop
 "
 
 if [ "$1" = "remove" ] || [ "$1" = "purge" ]; then

@@ -1,0 +1,24 @@
+#!/bin/sh
+# Stands in for KDE's systemsettings and kcmshell6. KDE apps and Plasma open
+# those to show a settings module (a notification's Configure button,
+# Spectacle's shortcut settings), which would put KDE's own pages in front
+# of people. Settings knows every KDE module name and opens the Wild OS page
+# for it, so the module named here goes there instead.
+page=
+while [ $# -gt 0 ]; do
+    case $1 in
+        --args | --icon | --caption | --lang | -platform | --platform | -qwindowtitle | --qwindowtitle)
+            shift
+            ;;
+        -*) ;;
+        *)
+            [ -z "$page" ] && page=$1
+            ;;
+    esac
+    [ $# -gt 0 ] && shift
+done
+page=${page%.desktop}
+if [ -n "$page" ]; then
+    exec wildos-settings --page "$page"
+fi
+exec wildos-settings

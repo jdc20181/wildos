@@ -1,0 +1,31 @@
+#!/bin/sh
+# Turns the VPN kill switch on or off for Settings > Network and internet >
+# Advanced network settings. Runs as root through pkexec
+# (org.wildos.settings.policy) and takes only the requests below. The
+# wildos-network service watches the file and does the rest.
+#
+#   kill-switch on    Block the internet whenever a VPN that was connected
+#                     drops, until it reconnects or is switched off.
+#   kill-switch off   Stop blocking.
+
+set -eu
+
+FLAG=/etc/wildos/vpn-kill-switch
+
+case "${1:-} ${2:-}" in
+    "kill-switch on")
+        mkdir -p "$(dirname "$FLAG")"
+        echo "# Written by Wild OS Settings: the VPN kill switch is on." > "$FLAG"
+        ;;
+    "kill-switch off")
+        rm -f "$FLAG"
+        ;;
+    *)
+        echo "usage: settings-network kill-switch on|off" >&2
+        exit 2
+        ;;
+esac
+
+# The service is normally running; start it if something stopped it, so
+# the switch never says on while nothing guards.
+systemctl start wildos-network.service >/dev/null 2>&1 || true

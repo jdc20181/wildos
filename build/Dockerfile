@@ -20,6 +20,12 @@ RUN apt-get update \
         libkf6solid-dev \
         libkf6windowsystem-dev \
         libkf6colorscheme-dev \
+        libkscreen-dev \
+        libkf6sonnet-dev \
+        libkf6networkmanagerqt-dev \
+        libkf6globalaccel-dev \
+        libsdl2-dev \
+        breeze-cursor-theme \
         libkf6purpose-dev \
         libkf6guiaddons-dev \
         libkf6notifications-dev \

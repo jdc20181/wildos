@@ -31,9 +31,8 @@ function isCoreApp(favoriteId) {
 // KDE settings modules as a Windows user would know them: the page title,
 // the Settings category it lives in, and the Wild OS Settings page to open.
 // Modules missing from this list are developer or Plasma internals, or have
-// no Wild OS Settings page yet (accessibility, phone link, firewall and the
-// like), and are left out of search rather than landing on a page that does
-// not show them.
+// no Wild OS Settings page yet (phone link, firewall and the like), and are
+// left out of search rather than landing on a page that does not show them.
 const settingsPages = {
     "kcm_kscreen": ["Display", "System", "display"],
     "kcm_nightlight": ["Night light", "System › Display", "nightlight"],
@@ -55,7 +54,9 @@ const settingsPages = {
     "kcm_lookandfeel": ["Themes", "Personalisation", "personalisation"],
     "kcm_colors": ["Colours", "Personalisation", "colours"],
     "kcm_fonts": ["Fonts", "Personalisation", "fonts"],
-    "kcm_cursortheme": ["Mouse pointer", "Personalisation", "mouse"],
+    "kcm_cursortheme": ["Mouse pointer", "Accessibility", "accessibility"],
+    "kcm_access": ["Accessibility", "Settings", "accessibility"],
+    "kcm_virtualkeyboard": ["On-screen keyboard", "Accessibility", "accessibility"],
     "kcm_screenlocker": ["Lock screen", "Personalisation", "lockscreen"],
     "kcm_componentchooser": ["Default apps", "Apps", "defaultapps"],
     "kcm_autostart": ["Startup apps", "Apps", "startup"],
@@ -64,6 +65,21 @@ const settingsPages = {
     "kcm_clock": ["Date and time", "Time and language", "datetime"],
     "kcm_flatpak": ["App permissions", "Privacy and security", "apppermissions"],
     "kcm_app-permissions": ["App permissions", "Privacy and security", "apppermissions"],
+    "kcm_kwin_virtualdesktops": ["Desktops", "System › Multitasking", "desktops"],
+    "kcm_device_automounter": ["AutoPlay", "Bluetooth and devices", "autoplay"],
+    "kcm_gamecontroller": ["Game controllers", "Bluetooth and devices", "gamecontrollers"],
+    "kcm_tablet": ["Pen and tablet", "Bluetooth and devices", "pen"],
+    "kcm_touchscreen": ["Touchscreen", "Bluetooth and devices", "touchscreen"],
+    "kcm_bolt": ["Thunderbolt", "Bluetooth and devices", "thunderbolt"],
+    "kcm_fontinst": ["Fonts", "Personalisation", "fonts"],
+    "kcmspellchecking": ["Typing", "Time and language", "typing"],
+    "kcm_filetypes": ["Default apps by file type", "Apps › Default apps", "filetypes"],
+    "kcm_smserver": ["Sign-in options", "Accounts", "signin"],
+    "kcm_baloofile": ["Searching files", "Privacy and security", "searching"],
+    "kcm_recentFiles": ["Activity history", "Privacy and security", "activityhistory"],
+    "kcm_kwinxwayland": ["Old app compatibility", "Apps", "oldapps"],
+    "kcm_access": ["Accessibility", "Settings", "accessibility"],
+    "kcm_virtualkeyboard": ["On-screen keyboard", "Accessibility", "accessibility"],
 };
 
 function settingsPage(url) {

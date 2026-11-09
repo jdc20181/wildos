@@ -1,0 +1,12 @@
+{
+  "brave": {
+    "brave_ads": {
+      "sponsored": {
+        "enabled": false
+      }
+    },
+    "new_tab_page": {
+      "show_branded_background_image": false
+    }
+  }
+}

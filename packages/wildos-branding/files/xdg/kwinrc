@@ -40,3 +40,10 @@ OutScale=0.96
 [Effect-slidingpopups]
 SlideInTime=200
 SlideOutTime=150
+
+# Older (X11) apps may not see what is typed into other apps unless the
+# person allows it in Settings > Apps > Old app compatibility. KWin's own
+# default lets them see keys pressed with Ctrl, Alt or the Windows key.
+[Xwayland]
+XwaylandEavesdrops=None
+XwaylandEavesdropsMouse=false

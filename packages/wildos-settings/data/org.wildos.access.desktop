@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Accessibility shortcuts
+Comment=High contrast, the on-screen keyboard and sticky keys from the keyboard
+Exec=/usr/bin/wildos-access
+NoDisplay=true
+OnlyShowIn=KDE;
+X-KDE-autostart-phase=1

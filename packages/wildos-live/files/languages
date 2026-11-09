@@ -1,0 +1,23 @@
+# The languages the USB start-up menu offers. One per line, tab separated:
+# locale, keyboard layout (XKB, a second one for typing in Latin letters),
+# the name in that language, and in English. The first is the default.
+# build.sh makes the menu from this file, the image build generates each
+# locale, and wildos-live-language applies the one chosen.
+en_GB	gb	English (UK)	English (UK)
+en_US	us	English (US)	English (US)
+de_DE	de	Deutsch	German
+fr_FR	fr	Français	French
+es_ES	es	Español	Spanish
+it_IT	it	Italiano	Italian
+nl_NL	us	Nederlands	Dutch
+pt_PT	pt	Português	Portuguese
+pt_BR	br	Português (Brasil)	Portuguese (Brazil)
+pl_PL	pl	Polski	Polish
+sv_SE	se	Svenska	Swedish
+nb_NO	no	Norsk	Norwegian
+da_DK	dk	Dansk	Danish
+fi_FI	fi	Suomi	Finnish
+cs_CZ	cz	Čeština	Czech
+tr_TR	tr	Türkçe	Turkish
+el_GR	us,gr	Ελληνικά	Greek
+uk_UA	us,ua	Українська	Ukrainian

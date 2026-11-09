@@ -13,11 +13,9 @@
 #include <QDirIterator>
 #include <QFile>
 #include <QFileInfo>
-#include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QLocale>
-#include <QMap>
 #include <QProcess>
 #include <QRegularExpression>
 #include <QSet>
@@ -642,7 +640,17 @@ void System::setColourScheme(const QString &name)
     if (name == m_colourScheme) {
         return;
     }
-    const QColor accent = m_accent;
+    QColor accent = m_accent;
+    // High contrast has no accent of its own; leaving it for a theme brings
+    // back the accent from before it (Accessibility keeps it).
+    if (m_colourScheme == QLatin1String("WildOSHighContrast")) {
+        KSharedConfigPtr wildos = KSharedConfig::openConfig(QStringLiteral("wildosrc"));
+        wildos->reparseConfiguration();
+        const QStringList rgb = wildos->group(QStringLiteral("Accessibility")).readEntry("AccentBeforeContrast", QString()).split(QLatin1Char(','));
+        if (rgb.size() >= 3) {
+            accent = QColor(rgb[0].trimmed().toInt(), rgb[1].trimmed().toInt(), rgb[2].trimmed().toInt());
+        }
+    }
     // Applying a scheme resets the accent key, so the accent goes back on
     // once the tool is done, the way setAccent writes it.
     const auto finish = [this, accent] {
@@ -879,6 +887,36 @@ void System::setTaskbarCentred(bool centred)
               .arg(centred ? QStringLiteral("true") : QStringLiteral("false")));
     m_taskbarCentred = centred;
     Q_EMIT taskbarCentredChanged();
+}
+
+// The taskbar's showOnlyCurrentDesktop, the stock task manager's key, which
+// the Wild OS taskbar (org.wildos.tasks) binds its desktop filter to.
+namespace
+{
+const QString tasksScript = QStringLiteral(
+    "var tasks = []; panels().forEach(function (p) { tasks = tasks.concat(p.widgets('org.wildos.tasks')); });");
+}
+
+void System::readTaskbarDesktops()
+{
+    const QString only = evaluatePlasmaScript(tasksScript
+        + QStringLiteral("if (tasks.length) { tasks[0].currentConfigGroup = ['General']; print(String(tasks[0].readConfig('showOnlyCurrentDesktop', true))); }"));
+    const bool all = only == QLatin1String("false");
+    if (all != m_taskbarAllDesktops) {
+        m_taskbarAllDesktops = all;
+        Q_EMIT taskbarAllDesktopsChanged();
+    }
+}
+
+void System::setTaskbarAllDesktops(bool all)
+{
+    evaluatePlasmaScript(tasksScript
+        + QStringLiteral("tasks.forEach(function (t) { t.currentConfigGroup = ['General']; t.writeConfig('showOnlyCurrentDesktop', %1); t.reloadConfig(); });")
+              .arg(all ? QStringLiteral("false") : QStringLiteral("true")));
+    if (all != m_taskbarAllDesktops) {
+        m_taskbarAllDesktops = all;
+        Q_EMIT taskbarAllDesktopsChanged();
+    }
 }
 
 // Plasma's own slideshow wallpaper, pointed at one folder. Turning it off
@@ -1346,91 +1384,6 @@ void System::setPowerProfile(const QString &profile)
     });
     m_powerProfile = profile;
     Q_EMIT powerChanged();
-}
-
-// Screens are read and changed with kscreen-doctor, the command line side of
-// the same KScreen service the display module uses, so changes are kept and
-// restored at the next sign-in exactly as if made there.
-void System::refreshDisplays()
-{
-    if (!hasProgram(QStringLiteral("kscreen-doctor"))) {
-        return;
-    }
-    auto process = new QProcess(this);
-    connect(process, &QProcess::finished, this, [this, process] {
-        process->deleteLater();
-        const QJsonObject root = QJsonDocument::fromJson(process->readAllStandardOutput()).object();
-        QVariantList list;
-        const QJsonArray outputs = root.value(QStringLiteral("outputs")).toArray();
-        for (const QJsonValue &value : outputs) {
-            const QJsonObject output = value.toObject();
-            if (!output.value(QStringLiteral("connected")).toBool()) {
-                continue;
-            }
-            const QString currentMode = output.value(QStringLiteral("currentModeId")).toVariant().toString();
-            QVariantList modes;
-            QString currentSize;
-            double currentRate = 0;
-            // One entry per resolution, at its highest refresh rate, as
-            // Windows lists them; the rate has its own setting.
-            QMap<qint64, QVariantMap> bySize;
-            const QJsonArray modeList = output.value(QStringLiteral("modes")).toArray();
-            for (const QJsonValue &m : modeList) {
-                const QJsonObject mode = m.toObject();
-                const QJsonObject size = mode.value(QStringLiteral("size")).toObject();
-                const int w = size.value(QStringLiteral("width")).toInt();
-                const int h = size.value(QStringLiteral("height")).toInt();
-                const double rate = mode.value(QStringLiteral("refreshRate")).toDouble();
-                const QString id = mode.value(QStringLiteral("id")).toVariant().toString();
-                if (id == currentMode) {
-                    currentSize = QStringLiteral("%1 × %2").arg(w).arg(h);
-                    currentRate = rate;
-                }
-                const qint64 key = qint64(w) * 100000 + h;
-                if (!bySize.contains(key) || bySize[key].value(QStringLiteral("rate")).toDouble() < rate) {
-                    bySize[key] = {{QStringLiteral("id"), id}, {QStringLiteral("text"), QStringLiteral("%1 × %2").arg(w).arg(h)},
-                                   {QStringLiteral("rate"), rate}, {QStringLiteral("pixels"), qint64(w) * h}};
-                }
-            }
-            for (auto it = bySize.constEnd(); it != bySize.constBegin();) {
-                --it;
-                modes << it.value();
-            }
-            list << QVariantMap{
-                {QStringLiteral("name"), output.value(QStringLiteral("name")).toString()},
-                {QStringLiteral("enabled"), output.value(QStringLiteral("enabled")).toBool()},
-                {QStringLiteral("primary"), output.value(QStringLiteral("priority")).toInt() == 1},
-                {QStringLiteral("scale"), output.value(QStringLiteral("scale")).toDouble(1.0)},
-                {QStringLiteral("rotation"), output.value(QStringLiteral("rotation")).toInt(1)},
-                {QStringLiteral("modes"), modes},
-                {QStringLiteral("currentMode"), currentMode},
-                {QStringLiteral("currentSize"), currentSize},
-                {QStringLiteral("currentRate"), currentRate},
-                {QStringLiteral("builtIn"), output.value(QStringLiteral("type")).toInt() == 7 || output.value(QStringLiteral("name")).toString().startsWith(QLatin1String("eDP"))},
-            };
-        }
-        // The main screen first, as Windows numbers it 1.
-        std::stable_sort(list.begin(), list.end(), [](const QVariant &a, const QVariant &b) {
-            return a.toMap().value(QStringLiteral("primary")).toBool() && !b.toMap().value(QStringLiteral("primary")).toBool();
-        });
-        m_displays = list;
-        Q_EMIT displaysChanged();
-    });
-    process->start(QStringLiteral("kscreen-doctor"), {QStringLiteral("-j")});
-}
-
-void System::setDisplay(const QString &output, const QString &setting, const QString &value)
-{
-    static const QRegularExpression safe(QStringLiteral("^[A-Za-z0-9._-]+$"));
-    if (!safe.match(output).hasMatch() || !safe.match(setting).hasMatch() || !safe.match(value).hasMatch()) {
-        return;
-    }
-    auto process = new QProcess(this);
-    connect(process, &QProcess::finished, this, [this, process] {
-        process->deleteLater();
-        refreshDisplays();
-    });
-    process->start(QStringLiteral("kscreen-doctor"), {QStringLiteral("output.%1.%2.%3").arg(output, setting, value)});
 }
 
 void System::reloadScreenLocker()

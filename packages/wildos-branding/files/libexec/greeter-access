@@ -1,0 +1,113 @@
+#!/bin/sh
+# Carries the accessibility choices of whoever signs in or out to the
+# sign-in screen, so someone who needs the screen reader, high contrast, a
+# large pointer or sticky keys finds them already on at the next sign-in,
+# as on Windows. The sign-in screen runs as the sddm user with settings of
+# its own; this copies a fixed list of keys into them. Run as root by
+# pam_exec (the wildos-greeter-access PAM profile) when an SDDM session
+# starts and when it ends, so changes made during the session are there by
+# the time the sign-in screen comes back.
+#
+# Each file is read as the person and written as the sddm user, and every
+# value is checked against what it may hold, so neither account can point
+# root at a file of its choosing or carry anything else across.
+set -u
+
+case "${PAM_SERVICE:-}" in
+    sddm | sddm-autologin) ;;
+    *) exit 0 ;;
+esac
+case "${PAM_TYPE:-}" in
+    open_session | close_session) ;;
+    *) exit 0 ;;
+esac
+
+user=${PAM_USER:-}
+[ -n "$user" ] || exit 0
+entry=$(getent passwd "$user") || exit 0
+uid=$(printf '%s\n' "$entry" | cut -d: -f3)
+home=$(printf '%s\n' "$entry" | cut -d: -f6)
+[ "$uid" -ge 1000 ] 2>/dev/null || exit 0
+[ -d "$home" ] || exit 0
+
+greeter=$(getent passwd sddm) || exit 0
+greeter_home=$(printf '%s\n' "$greeter" | cut -d: -f6)
+[ -d "$greeter_home" ] || exit 0
+
+PATH=/usr/sbin:/usr/bin:/sbin:/bin
+
+as_user() {
+    setpriv --reuid="$user" --regid="$(id -g "$user")" --init-groups -- \
+        env -i HOME="$home" PATH="$PATH" "$@"
+}
+
+as_greeter() {
+    setpriv --reuid=sddm --regid="$(id -g sddm)" --init-groups -- \
+        env -i HOME="$greeter_home" PATH="$PATH" "$@"
+}
+
+read_key() {
+    as_user kreadconfig6 --file "$home/.config/$1" --group "$2" --key "$3" --default "$4" 2>/dev/null
+}
+
+write_key() {
+    as_greeter kwriteconfig6 --file "$greeter_home/.config/$1" --group "$2" --key "$3" "$4" "$5"
+}
+
+# file group key fallback
+copy_bool() {
+    value=$(read_key "$1" "$2" "$3" "$4")
+    case $value in
+        true | false) ;;
+        *) value=$4 ;;
+    esac
+    write_key "$1" "$2" "$3" --type=bool "$value"
+}
+
+# file group key fallback lowest highest
+copy_int() {
+    value=$(read_key "$1" "$2" "$3" "$4")
+    case $value in
+        '' | *[!0-9]*) value=$4 ;;
+    esac
+    if [ "$value" -lt "$5" ] || [ "$value" -gt "$6" ]; then
+        value=$4
+    fi
+    write_key "$1" "$2" "$3" --type=int "$value"
+}
+
+as_greeter mkdir -p "$greeter_home/.config" || exit 0
+
+# Sticky, slow and bounce keys and the screen flash, read by the sign-in
+# screen's KWin; the screen reader, started by the sign-in screen itself.
+copy_bool kaccessrc Keyboard StickyKeys false
+copy_bool kaccessrc Keyboard StickyKeysLatch true
+copy_bool kaccessrc Keyboard SlowKeys false
+copy_int kaccessrc Keyboard SlowKeysDelay 500 50 10000
+copy_bool kaccessrc Keyboard BounceKeys false
+copy_int kaccessrc Keyboard BounceKeysDelay 500 50 10000
+copy_bool kaccessrc Bell VisibleBell false
+copy_bool kaccessrc ScreenReader Enabled false
+copy_bool wildosrc Accessibility OnScreenKeyboard false
+
+# The pointer, only as one of the themes installed here.
+theme=$(read_key kcminputrc Mouse cursorTheme "")
+case $theme in
+    '' | *[!A-Za-z0-9_.-]* | .*) theme= ;;
+esac
+if [ -n "$theme" ] && [ -f "/usr/share/icons/$theme/index.theme" ]; then
+    write_key kcminputrc Mouse cursorTheme --type=string "$theme"
+fi
+copy_int kcminputrc Mouse cursorSize 24 16 256
+
+# High contrast: the sign-in screen has no other colour settings, so its
+# kdeglobals is the scheme itself, or nothing.
+scheme=$(read_key kdeglobals General ColorScheme "")
+current=$(as_greeter kreadconfig6 --file "$greeter_home/.config/kdeglobals" --group General --key ColorScheme --default "" 2>/dev/null)
+if [ "$scheme" = WildOSHighContrast ] && [ -f /usr/share/color-schemes/WildOSHighContrast.colors ]; then
+    as_greeter cp /usr/share/color-schemes/WildOSHighContrast.colors "$greeter_home/.config/kdeglobals"
+elif [ "$current" = WildOSHighContrast ]; then
+    as_greeter rm -f "$greeter_home/.config/kdeglobals"
+fi
+
+exit 0

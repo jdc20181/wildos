@@ -59,8 +59,6 @@ GUEST_STEPS = ["guest-tools", "shared-folder", "wild-guest", "remote-desktop", "
                "known-folders", "office-policies", "startup-trim", "theme", "ready-task"]
 
 TOOL_AGENT = "wildos-winmode (+https://wildos.io)"
-WINFSP_URL = "https://github.com/winfsp/winfsp/releases/download/v2.1/winfsp-2.1.25156.msi"
-WINFSP_SHA256 = "073a70e00f77423e34bed98b86e600def93393ba5822204fac57a29324db9f7a"
 VIRTIO_BASE = "https://fedorapeople.org/groups/virt/virtio-win/direct-downloads"
 # Microsoft's published generic installation key for Pro: installs Pro but
 # never activates. Every setup installs with it, so Windows is always Pro,
@@ -267,16 +265,35 @@ def render(name, values):
     return text
 
 
-def office_config(plan):
+# The languages Microsoft 365 installs in, as the Office Deployment Tool
+# names them. An ID it doesn't know stops the whole install, so anything else
+# falls back to Windows' own display language.
+OFFICE_LANGUAGES = {
+    "ar-sa", "bg-bg", "cs-cz", "da-dk", "de-de", "el-gr", "en-gb", "en-us", "es-es", "es-mx", "et-ee",
+    "fi-fi", "fr-ca", "fr-fr", "he-il", "hr-hr", "hu-hu", "id-id", "it-it", "ja-jp", "ko-kr", "lt-lt",
+    "lv-lv", "nb-no", "nl-nl", "pl-pl", "pt-br", "pt-pt", "ro-ro", "ru-ru", "sk-sk", "sl-si", "sr-latn-rs",
+    "sv-se", "th-th", "tr-tr", "uk-ua", "vi-vn", "zh-cn", "zh-tw",
+}
+
+
+def office_config(plan, lang):
+    """Microsoft 365 in the host's language, with its spelling and grammar
+    tools, rather than the US English MatchOS alone gave on a UK PC."""
     product = OFFICE_PRODUCTS.get(plan, "O365HomePremRetail")
     excluded = ["Access", "Bing", "Groove", "Lync", "OneDrive", "OutlookForWindows", "Publisher", "Teams"]
+    office_lang = lang.lower() if lang.lower() in OFFICE_LANGUAGES else ""
+    languages = (f'      <Language ID="{office_lang}"/>\n' if office_lang else "") + '      <Language ID="MatchOS"/>\n'
+    proofing = ('    <Product ID="ProofingTools">\n'
+                f'      <Language ID="{office_lang}"/>\n'
+                "    </Product>\n") if office_lang else ""
     return ("<Configuration>\n"
             '  <Add OfficeClientEdition="64" Channel="Current">\n'
             f'    <Product ID="{product}">\n'
-            '      <Language ID="MatchOS"/>\n'
+            + languages
             + "".join(f'      <ExcludeApp ID="{a}"/>\n' for a in excluded)
             + "    </Product>\n"
-            "  </Add>\n"
+            + proofing
+            + "  </Add>\n"
             '  <Updates Enabled="FALSE"/>\n'
             '  <Display Level="None" AcceptEULA="TRUE"/>\n'
             '  <Property Name="AUTOACTIVATE" Value="0"/>\n'
@@ -583,9 +600,6 @@ class Setup:
         self.check()
         self.set_stage("media", "active", 92, "Getting the drivers Windows needs")
         self.virtio_iso()
-        self.check()
-        self.set_stage("media", "active", 97, "Getting the shared folder driver")
-        self.winfsp()
         self.set_stage("media", "done", 100, "")
 
     def check_space(self):
@@ -777,16 +791,6 @@ class Setup:
             _remove(iso)
             raise Problem("download", "The drivers download came back as something other than the drivers. Try again in a while.")
 
-    def winfsp(self):
-        msi = os.path.join(CACHE, "winfsp.msi")
-        if os.path.exists(msi) and _sha256(msi) == WINFSP_SHA256:
-            return
-        _remove(msi)
-        self.download(WINFSP_URL, msi, "media", 97, 99, "Shared folder driver")
-        if _sha256(msi) != WINFSP_SHA256:
-            _remove(msi)
-            raise Problem("download", "A part Windows mode downloads didn't pass its check, so it was deleted. Try again later.")
-
     # install
     def step_install(self):
         if self.done("install"):
@@ -879,10 +883,9 @@ class Setup:
         guest = os.path.join(config.DATA, "guest")
         shutil.copy(os.path.join(guest, "setup.ps1"), os.path.join(work, "wildos", "setup.ps1"))
         shutil.copy(self.cfg["guest_exe"], os.path.join(work, "wildos", "wild-guest.exe"))
-        shutil.copy(os.path.join(CACHE, "winfsp.msi"), os.path.join(work, "wildos", "winfsp.msi"))
         plan = (self.rec.get("options") or {}).get("officePlan", "personal")
         with open(os.path.join(work, "wildos", "office.xml"), "w", encoding="utf-8") as f:
-            f.write(office_config(plan))
+            f.write(office_config(plan, lang))
         with open(os.path.join(work, "wildos", "settings.json"), "w", encoding="utf-8") as f:
             json.dump({"host": self.cfg["host_address"], "guest": self.cfg["guest_address"],
                        "account": self.cfg["account"], "folders": self.cfg["folders"], "drive": self.cfg["drive"],

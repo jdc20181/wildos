@@ -1,0 +1,15 @@
+[Unit]
+Description=Wild OS network privacy: encrypted DNS for new networks and the VPN kill switch
+Documentation=file:///usr/libexec/wildos/settings-network
+After=NetworkManager.service dbus.service
+Wants=NetworkManager.service
+
+[Service]
+Type=dbus
+BusName=org.wildos.Network
+ExecStart=/usr/libexec/wildos/wildos-network
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target

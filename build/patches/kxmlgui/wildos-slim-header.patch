@@ -24,15 +24,14 @@ diff -ru a/src/kmainwindow.cpp b/src/kmainwindow.cpp
  
  #include "kactionconflictdetector_p.h"
  #include "kcheckaccelerators.h"
-@@ -584,6 +589,49 @@
+@@ -584,6 +589,93 @@
      d->autoSaveWindowSize = oldASWS;
  }
  
-+// Wild OS: whether the window has a hamburger menu, which holds the same
-+// menus as the menu bar. Its actions live in the window's action
++// Wild OS: the toolbars holding the window's hamburger menu, which holds
++// the same menus as the menu bar. Its actions live in the window's action
 +// collection, which is not a child object of the window.
-+// Whether a hamburger menu is on screen in a toolbar that shows.
-+static bool wildosHamburgerShown(KMainWindow *window)
++static QList<QToolBar *> wildosHamburgerToolBars(KMainWindow *window)
 +{
 +    QList<KHamburgerMenu *> menus = window->findChildren<KHamburgerMenu *>();
 +    if (auto *gui = qobject_cast<KXmlGuiWindow *>(window)) {
@@ -43,16 +42,61 @@ diff -ru a/src/kmainwindow.cpp b/src/kmainwindow.cpp
 +            }
 +        }
 +    }
++    QList<QToolBar *> bars;
 +    for (KHamburgerMenu *menu : std::as_const(menus)) {
 +        const auto objects = menu->associatedObjects();
 +        for (QObject *object : objects) {
-+            auto *bar = qobject_cast<QToolBar *>(object);
-+            if (bar && !bar->isHidden()) {
-+                return true;
++            if (auto *bar = qobject_cast<QToolBar *>(object); bar && !bars.contains(bar)) {
++                bars << bar;
 +            }
 +        }
 +    }
++    return bars;
++}
++
++// Whether a hamburger menu is on screen in a toolbar that shows.
++static bool wildosHamburgerShown(KMainWindow *window)
++{
++    const auto bars = wildosHamburgerToolBars(window);
++    for (QToolBar *bar : bars) {
++        if (!bar->isHidden()) {
++            return true;
++        }
++    }
 +    return false;
++}
++
++// Set on a menu bar shown only because no hamburger menu was in sight. Such
++// a menu bar isn't the person's choice: it isn't saved as one, and it goes
++// again once the hamburger's toolbar is back. Without this, hiding the
++// toolbar once brought the stock menu bar back for good.
++static const char wildosFallbackProperty[] = "_wildos_menubar_fallback";
++
++static void wildosShowFallbackMenuBar(QMenuBar *mb)
++{
++    mb->show();
++    mb->setProperty(wildosFallbackProperty, true);
++}
++
++static void wildosFollowHamburgerToolBars(KMainWindow *window, QMenuBar *mb)
++{
++    const auto bars = wildosHamburgerToolBars(window);
++    for (QToolBar *bar : bars) {
++        if (bar->property("_wildos_watched").toBool()) {
++            continue;
++        }
++        bar->setProperty("_wildos_watched", true);
++        QObject::connect(bar, &QToolBar::visibilityChanged, mb, [window, mb] {
++            if (wildosHamburgerShown(window)) {
++                if (mb->property(wildosFallbackProperty).toBool()) {
++                    mb->hide();
++                    mb->setProperty(wildosFallbackProperty, false);
++                }
++            } else if (mb->isHidden()) {
++                wildosShowFallbackMenuBar(mb);
++            }
++        });
++    }
 +}
 +
 +static bool wildosHasHamburger(KMainWindow *window)
@@ -74,7 +118,7 @@ diff -ru a/src/kmainwindow.cpp b/src/kmainwindow.cpp
  void KMainWindow::saveMainWindowSettings(KConfigGroup &cg)
  {
      Q_D(KMainWindow);
-@@ -612,7 +660,10 @@
+@@ -612,10 +704,14 @@
      QMenuBar *mb = internalMenuBar(this);
  
      if (mb && !mb->isNativeMenuBar()) {
@@ -82,11 +126,16 @@ diff -ru a/src/kmainwindow.cpp b/src/kmainwindow.cpp
 +        // Wild OS: the default depends on the window (see below), so a
 +        // menu bar shown or hidden against it is written down either way.
 +        const bool hiddenByDefault = wildosHasHamburger(this);
-+        if (!cg.hasDefault("MenuBar") && mb->isHidden() == hiddenByDefault) {
++        const bool hidden = mb->isHidden() || mb->property(wildosFallbackProperty).toBool();
++        if (!cg.hasDefault("MenuBar") && hidden == hiddenByDefault) {
              cg.revertToDefault("MenuBar");
          } else {
-             cg.writeEntry("MenuBar", mb->isHidden() ? "Disabled" : "Enabled");
-@@ -725,7 +776,11 @@
+-            cg.writeEntry("MenuBar", mb->isHidden() ? "Disabled" : "Enabled");
++            cg.writeEntry("MenuBar", hidden ? "Disabled" : "Enabled");
+         }
+     }
+ 
+@@ -725,7 +821,11 @@
  
      QMenuBar *mb = internalMenuBar(this);
      if (mb && !mb->isNativeMenuBar()) {
@@ -99,16 +148,19 @@ diff -ru a/src/kmainwindow.cpp b/src/kmainwindow.cpp
          mb->setVisible(entry != QLatin1String("Disabled"));
      }
  
-@@ -760,6 +815,13 @@
+@@ -760,6 +860,16 @@
  
      d->settingsDirty = false;
      d->letDirtySettings = oldLetDirtySettings;
 +
 +    // Wild OS: the menus must always be reachable. With the menu bar hidden
 +    // and no hamburger menu on a toolbar that shows (its toolbar was hidden,
-+    // say), the menu bar comes back.
-+    if (mb && !mb->isNativeMenuBar() && mb->isHidden() && !wildosHamburgerShown(this)) {
-+        mb->show();
++    // say), the menu bar comes back, and follows that toolbar from then on.
++    if (mb && !mb->isNativeMenuBar()) {
++        wildosFollowHamburgerToolBars(this, mb);
++        if (mb->isHidden() && !wildosHamburgerShown(this)) {
++            wildosShowFallbackMenuBar(mb);
++        }
 +    }
  }
  

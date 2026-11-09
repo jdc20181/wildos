@@ -190,7 +190,7 @@ for (i = 0; i < BULLET_MAX; i++)
     bullets[i] = place("bullet.png", -145 + 10 * i, 20, 21);
 
 # The W after unlocking: the glide out of the tile, then its own loop.
-glide = place("", -50, -205, 22);
+glide = place("", -85, -205, 22);
 glide_k = -1;
 fill_u = place("fill-u.png", -100, -85, 22);
 base_u = place("base-u.png", -100, -85, 23);

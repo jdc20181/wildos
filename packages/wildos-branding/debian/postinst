@@ -39,6 +39,13 @@ if [ "$1" = "configure" ]; then
         fi
     fi
 
+    # The sign-in screen picks up the last person's accessibility choices
+    # through a PAM session step (see /usr/libexec/wildos/greeter-access);
+    # pam-auth-update adds it to common-session without touching the rest.
+    if command -v pam-auth-update >/dev/null; then
+        pam-auth-update --package
+    fi
+
     # grub.cfg names the theme, so a system that had none picks it up here.
     # The image has no grub.cfg (the installer makes one).
     if [ -e /boot/grub/grub.cfg ] && command -v update-grub >/dev/null; then

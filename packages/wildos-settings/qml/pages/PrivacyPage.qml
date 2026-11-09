@@ -5,7 +5,8 @@ import WildOS.UI as UI
 
 // Privacy and security, laid out as Settings.dc.html: the protection status
 // from security-status, a tile per protection, the protection level, what
-// apps can reach, then USB protection and usage data.
+// apps can reach, searching files and activity history, then USB protection
+// and usage data.
 PageScroll {
     id: page
 
@@ -226,6 +227,40 @@ PageScroll {
                     description: "Internet and everything else apps from the Store can reach"
                     chevron: true
                     onClicked: Navigator.open("apppermissions")
+                }
+            }
+        }
+    }
+
+    ColumnLayout {
+        Layout.fillWidth: true
+        spacing: 10
+
+        SectionTitle {
+            text: "Search and history"
+        }
+
+        UI.Card {
+            Layout.fillWidth: true
+
+            Column {
+                width: parent.width
+
+                UI.SettingRow {
+                    iconName: "search"
+                    title: "Searching files"
+                    description: !FileSearch.available ? "File indexing isn't installed"
+                        : FileSearch.enabled ? "Your files are indexed so search finds them at once" : "Indexing is off"
+                    chevron: true
+                    onClicked: Navigator.open("searching")
+                }
+
+                UI.SettingRow {
+                    iconName: "clock"
+                    title: "Activity history"
+                    description: ActivityHistory.remember ? "Recent files are remembered on this computer" : "Recent files are not remembered"
+                    chevron: true
+                    onClicked: Navigator.open("activityhistory")
                 }
             }
         }

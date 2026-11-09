@@ -71,7 +71,9 @@ void Theme::read()
     bool dark = true;
     const QByteArray forced = qgetenv("WILDOS_UI_THEME");
     const QColor window = parseColour(config->group(QStringLiteral("Colors:Window")).readEntry("BackgroundNormal"));
-    if (forced == "light" || forced == "dark") {
+    if (scheme == QLatin1String("WildOSHighContrast")) {
+        dark = true;
+    } else if (forced == "light" || forced == "dark") {
         dark = forced == "dark";
     } else if (window.isValid()) {
         dark = window.lightnessF() < 0.5;

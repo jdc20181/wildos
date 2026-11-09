@@ -50,6 +50,14 @@ PageScroll {
             width: parent.width
 
             UI.SettingRow {
+                iconName: "document"
+                title: "Choose defaults by file type"
+                description: "Pick the app for .pdf, .docx and every other kind of file"
+                chevron: true
+                onClicked: Navigator.open("filetypes")
+            }
+
+            UI.SettingRow {
                 visible: System.storeApp.length > 0
                 iconName: "store"
                 title: "Get more apps"

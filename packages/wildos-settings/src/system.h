@@ -48,6 +48,9 @@ class System : public QObject
     Q_PROPERTY(bool taskbarCentred READ taskbarCentred NOTIFY taskbarCentredChanged)
     // Floating panels instead of the docked bar (wildos-shell reads it).
     Q_PROPERTY(bool taskbarFloating READ taskbarFloating NOTIFY taskbarFloatingChanged)
+    // The taskbar shows windows from every desktop, not only the one in
+    // use. Read on demand, as it costs a call to plasmashell.
+    Q_PROPERTY(bool taskbarAllDesktops READ taskbarAllDesktops NOTIFY taskbarAllDesktopsChanged)
     Q_PROPERTY(QString wallpaperName READ wallpaperName NOTIFY wallpaperChanged)
     Q_PROPERTY(bool slideshow READ slideshow NOTIFY wallpaperChanged)
     Q_PROPERTY(QString slideshowFolder READ slideshowFolder NOTIFY wallpaperChanged)
@@ -62,7 +65,6 @@ class System : public QObject
     Q_PROPERTY(QString storeApp READ storeApp CONSTANT)
     Q_PROPERTY(QString powerProfile READ powerProfile NOTIFY powerChanged)
     Q_PROPERTY(QStringList powerProfiles READ powerProfiles NOTIFY powerChanged)
-    Q_PROPERTY(QVariantList displays READ displays NOTIFY displaysChanged)
 
     Q_PROPERTY(bool snapEdges READ snapEdges WRITE setSnapEdges NOTIFY kwinChanged)
     Q_PROPERTY(bool snapLayouts READ snapLayouts WRITE setSnapLayouts NOTIFY kwinChanged)
@@ -102,6 +104,7 @@ public:
     int taskbarHiding() const { return m_taskbarHiding; }
     bool taskbarCentred() const { return m_taskbarCentred; }
     bool taskbarFloating() const { return m_taskbarFloating; }
+    bool taskbarAllDesktops() const { return m_taskbarAllDesktops; }
     QString wallpaperName() const;
     bool slideshow() const { return m_slideshow; }
     QString slideshowFolder() const { return m_slideshowFolder; }
@@ -114,7 +117,6 @@ public:
     QString storeApp() const;
     QString powerProfile() const { return m_powerProfile; }
     QStringList powerProfiles() const { return m_powerProfiles; }
-    QVariantList displays() const { return m_displays; }
 
     bool snapEdges() const;
     void setSnapEdges(bool on);
@@ -145,6 +147,8 @@ public:
     Q_INVOKABLE void setTaskbarHiding(int mode);
     Q_INVOKABLE void setTaskbarCentred(bool centred);
     Q_INVOKABLE void setTaskbarFloating(bool floating);
+    Q_INVOKABLE void readTaskbarDesktops();
+    Q_INVOKABLE void setTaskbarAllDesktops(bool all);
     Q_INVOKABLE void setSlideshow(bool on, const QString &folder = {});
     Q_INVOKABLE void setTransparency(bool on);
     Q_INVOKABLE void setTextScale(int percent);
@@ -164,8 +168,6 @@ public:
     Q_INVOKABLE void reloadScreenLocker();
     Q_INVOKABLE void refreshPower();
     Q_INVOKABLE void setPowerProfile(const QString &profile);
-    Q_INVOKABLE void refreshDisplays();
-    Q_INVOKABLE void setDisplay(const QString &output, const QString &setting, const QString &value);
 
     Q_INVOKABLE bool hasProgram(const QString &program) const;
     Q_INVOKABLE void launch(const QString &program, const QStringList &arguments = {});
@@ -184,6 +186,7 @@ Q_SIGNALS:
     void taskbarHidingChanged();
     void taskbarCentredChanged();
     void taskbarFloatingChanged();
+    void taskbarAllDesktopsChanged();
     void transparencyChanged();
     void textScaleChanged();
     void updatePolicyChanged();
@@ -194,7 +197,6 @@ Q_SIGNALS:
     void firmwareRestartFailed(const QString &reason);
     void appUpdatesChanged();
     void powerChanged();
-    void displaysChanged();
     void kwinChanged();
     void binEmptied();
 
@@ -231,6 +233,7 @@ private:
     int m_taskbarHiding = 0;
     bool m_taskbarCentred = true;
     bool m_taskbarFloating = false;
+    bool m_taskbarAllDesktops = false;
     bool m_slideshow = false;
     QString m_slideshowFolder;
     int m_textScale = 100;
@@ -242,7 +245,6 @@ private:
     int m_appUpdates = -1;
     QString m_powerProfile;
     QStringList m_powerProfiles;
-    QVariantList m_displays;
 
     KConfigWatcher::Ptr m_globals;
 };

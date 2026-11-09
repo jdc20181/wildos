@@ -27,3 +27,4 @@ install(FILES ${CMAKE_CURRENT_BINARY_DIR}/org/wildos/shell/qmldir DESTINATION ${
 
 add_subdirectory(effects/roundcorners)
 add_subdirectory(windowmenu)
+add_subdirectory(slowkeys)

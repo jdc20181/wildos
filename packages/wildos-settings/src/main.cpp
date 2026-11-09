@@ -2,6 +2,7 @@
 
 #include <KColorScheme>
 #include <KConfigGroup>
+#include <KConfigWatcher>
 #include <KLocalizedString>
 #include <KSharedConfig>
 
@@ -15,6 +16,7 @@
 #include <QQuickStyle>
 #include <QQuickWindow>
 #include <QStandardPaths>
+#include <QTimer>
 
 namespace
 {
@@ -59,6 +61,34 @@ private:
     QQmlApplicationEngine *m_engine;
 };
 
+// The KDE modules shown inside Settings draw with the colour scheme.
+// Settings always uses a Wild OS one, light or dark to match the account's
+// colours, whatever scheme the account has, so a module never shows a page
+// of another look inside the window. This is what KColorSchemeManager does
+// for an app that picks its own scheme. Light or dark is judged by the
+// window colour, as every other part of Wild OS judges it.
+static void applyScheme(QApplication &app)
+{
+    const KColorScheme window(QPalette::Active, KColorScheme::Window, KSharedConfig::openConfig(QStringLiteral("kdeglobals")));
+    const bool light = window.background().color().lightness() > 127;
+    QString scheme;
+    if (light) {
+        scheme = QStandardPaths::locate(QStandardPaths::GenericDataLocation, QStringLiteral("color-schemes/WildOSLight.colors"));
+    }
+    if (scheme.isEmpty()) {
+        scheme = QStandardPaths::locate(QStandardPaths::GenericDataLocation, QStringLiteral("color-schemes/WildOS.colors"));
+    }
+    if (scheme.isEmpty() || app.property("KDE_COLOR_SCHEME_PATH").toString() == scheme) {
+        return;
+    }
+    app.setProperty("KDE_COLOR_SCHEME_PATH", scheme);
+    const QPalette palette = KColorScheme::createApplicationPalette(KSharedConfig::openConfig(scheme, KConfig::SimpleConfig));
+    app.setPalette(palette);
+    // QML modules miss QApplication::setPalette alone; plasma-integration
+    // sends this too when it changes the palette.
+    Q_EMIT app.paletteChanged(palette);
+}
+
 int main(int argc, char *argv[])
 {
     // Widgets are needed for the handful of KDE modules that are still
@@ -95,23 +125,22 @@ int main(int argc, char *argv[])
         return 0;
     }
 
-    // The KDE modules shown inside Settings draw with the colour scheme.
-    // Settings always uses a Wild OS one (light when the account picked
-    // WildOSLight, dark otherwise), whatever else the account has, so a
-    // module never shows a page of another look inside the window. This is
-    // what KColorSchemeManager does for an app that picks its own scheme.
-    const QString chosen = KSharedConfig::openConfig(QStringLiteral("kdeglobals"))->group(QStringLiteral("General")).readEntry("ColorScheme");
-    QString scheme;
-    if (chosen == QLatin1String("WildOSLight")) {
-        scheme = QStandardPaths::locate(QStandardPaths::GenericDataLocation, QStringLiteral("color-schemes/WildOSLight.colors"));
-    }
-    if (scheme.isEmpty()) {
-        scheme = QStandardPaths::locate(QStandardPaths::GenericDataLocation, QStringLiteral("color-schemes/WildOS.colors"));
-    }
-    if (!scheme.isEmpty()) {
-        app.setProperty("KDE_COLOR_SCHEME_PATH", scheme);
-        app.setPalette(KColorScheme::createApplicationPalette(KSharedConfig::openConfig(scheme, KConfig::SimpleConfig)));
-    }
+    applyScheme(app);
+    // Kept up to date while Settings is open: plasma-integration leaves an
+    // app with its own scheme alone, so a switch to light or dark (by hand
+    // or at sunset) left KDE's modules in the old colours until a restart.
+    auto watcher = KConfigWatcher::create(KSharedConfig::openConfig(QStringLiteral("kdeglobals")));
+    auto schemeTimer = new QTimer(&app);
+    schemeTimer->setSingleShot(true);
+    schemeTimer->setInterval(150);
+    QObject::connect(schemeTimer, &QTimer::timeout, &app, [&app] {
+        applyScheme(app);
+    });
+    QObject::connect(watcher.data(), &KConfigWatcher::configChanged, &app, [schemeTimer](const KConfigGroup &group) {
+        if (group.name() == QLatin1String("General") || group.name().startsWith(QLatin1String("Colors:"))) {
+            schemeTimer->start();
+        }
+    });
 
     // KDE's modules are written against the desktop style, which in turn
     // follows the Wild OS Kvantum theme.

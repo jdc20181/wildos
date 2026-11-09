@@ -84,6 +84,15 @@ PageScroll {
             }
 
             UI.SettingRow {
+                visible: Pages.exists("typing")
+                iconName: "pencil"
+                title: "Typing"
+                description: "Spell checking and your dictionary"
+                chevron: true
+                onClicked: Navigator.open("typing")
+            }
+
+            UI.SettingRow {
                 visible: Pages.exists("keyboard")
                 iconName: "keyboard"
                 title: "Keyboard layouts"

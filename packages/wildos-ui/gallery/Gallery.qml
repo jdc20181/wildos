@@ -298,6 +298,19 @@ Window {
                     UI.Chip { text: "No internet"; granted: false }
                 }
                 States {
+                    label: "Shortcut keys"
+                    UI.KeyChip { text: "Super" }
+                    UI.ShortcutKeys { keys: ["Super", "Alt", "S"] }
+                    UI.ShortcutKeys { keys: ["Shift ×5"] }
+                }
+                States {
+                    label: "Colour swatches"
+                    UI.Swatch { colour: "#ffffff"; name: "White"; selected: true }
+                    UI.Swatch { colour: "#111111"; name: "Black" }
+                    UI.Swatch { colour: "#f2d34a"; name: "Yellow" }
+                    UI.Swatch { colour: "#7fd6c8"; name: "Sea glass" }
+                }
+                States {
                     label: "Avatar"
                     UI.Avatar { size: 60 }
                     UI.Avatar { size: 60; source: typeof galleryPhoto !== "undefined" ? galleryPhoto : "" }

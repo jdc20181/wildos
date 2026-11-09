@@ -1,6 +1,7 @@
 #include "language.h"
 
 #include <KConfigGroup>
+#include <KFormat>
 #include <KSharedConfig>
 
 #include <QCollator>
@@ -8,6 +9,7 @@
 #include <QDBusMessage>
 #include <QDBusPendingCall>
 #include <QDate>
+#include <QDateTime>
 #include <QDir>
 #include <QFile>
 #include <QLocale>
@@ -26,6 +28,13 @@ const QStringList categories = {QStringLiteral("LC_NUMERIC"), QStringLiteral("LC
                                 QStringLiteral("LC_MEASUREMENT"), QStringLiteral("LC_COLLATE"), QStringLiteral("LC_CTYPE"),
                                 QStringLiteral("LC_PAPER"), QStringLiteral("LC_ADDRESS"), QStringLiteral("LC_NAME"),
                                 QStringLiteral("LC_TELEPHONE")};
+
+// The parts More format options offers on their own, under the keys
+// kcm_regionandlang writes (regionandlangsettingsbase.kcfg). Addresses,
+// names and telephone numbers are left to the regional format, as Windows
+// leaves them.
+const QStringList shownCategories = {QStringLiteral("LC_NUMERIC"), QStringLiteral("LC_MONETARY"), QStringLiteral("LC_TIME"),
+                                     QStringLiteral("LC_MEASUREMENT"), QStringLiteral("LC_PAPER")};
 
 // "en_GB.utf8", "en_GB.UTF-8" and "en_GB" are the same locale.
 QString canonical(QString locale)
@@ -107,6 +116,9 @@ Language::Language(QObject *parent)
     if (m_sessionLanguage.isEmpty() || m_sessionLanguage == QLatin1String("en")) {
         m_sessionLanguage = m_sessionFormat.startsWith(QLatin1String("en_")) ? fallbackLanguage : m_sessionFormat.section(QLatin1Char('_'), 0, 0);
     }
+    for (const QString &key : shownCategories) {
+        m_sessionCategories.insert(key, canonical(qEnvironmentVariable(key.toLatin1().constData())));
+    }
     read();
 }
 
@@ -131,12 +143,38 @@ void Language::read()
             m_detailed = true;
         }
     }
+    m_overrides.clear();
+    for (const QString &key : shownCategories) {
+        const QString value = canonical(formats.readEntry(key, QString()));
+        m_overrides.insert(key, value == m_format ? QString() : value);
+    }
+    auto globals = KSharedConfig::openConfig(QStringLiteral("kdeglobals"));
+    globals->reparseConfiguration();
+    const KConfigGroup locale(globals, QStringLiteral("Locale"));
+    m_fileSizeUnits = locale.readEntry("BinaryUnitDialect", int(KFormat::IECBinaryDialect));
     Q_EMIT changed();
 }
 
 bool Language::needsSignOut() const
 {
-    return m_language != m_sessionLanguage || m_format != m_sessionFormat;
+    if (m_language != m_sessionLanguage || m_format != m_sessionFormat) {
+        return true;
+    }
+    // A part chosen on its own reaches apps as its LC_ variable at sign-in;
+    // one this session did not get as a variable came from LANG.
+    for (const QString &key : shownCategories) {
+        const QString chosen = m_overrides.value(key).toString();
+        const QString session = m_sessionCategories.value(key).toString();
+        if (!chosen.isEmpty() && chosen != (session.isEmpty() ? m_sessionFormat : session)) {
+            return true;
+        }
+        // wildos.sh sets LC_TIME itself for some sessions, so a session
+        // value there says nothing about what was chosen.
+        if (chosen.isEmpty() && !session.isEmpty() && session != m_format && key != QLatin1String("LC_TIME")) {
+            return true;
+        }
+    }
+    return false;
 }
 
 QVariantList Language::languages() const
@@ -307,6 +345,102 @@ void Language::setFormat(const QString &locale)
         config->sync();
         read();
     });
+}
+
+QString Language::example(const QString &category, const QString &format) const
+{
+    const QString name = format.section(QLatin1Char('.'), 0, 0);
+    const QLocale locale(name);
+    if (category == QLatin1String("LC_NUMERIC")) {
+        return locale.toString(1234.56, 'f', 2);
+    }
+    if (category == QLatin1String("LC_MONETARY")) {
+        return locale.toCurrencyString(1234.56);
+    }
+    if (category == QLatin1String("LC_TIME")) {
+        const QDateTime now = QDateTime::currentDateTime();
+        return locale.toString(now.date(), QLocale::ShortFormat) + QStringLiteral(", ") + locale.toString(now.time(), QLocale::ShortFormat);
+    }
+    if (category == QLatin1String("LC_MEASUREMENT")) {
+        switch (locale.measurementSystem()) {
+        case QLocale::ImperialUSSystem:
+            return QStringLiteral("Inches, feet and pounds");
+        case QLocale::ImperialUKSystem:
+            return QStringLiteral("Metric, with miles and pints");
+        default:
+            return QStringLiteral("Centimetres, metres and kilograms");
+        }
+    }
+    if (category == QLatin1String("LC_PAPER")) {
+        // The same list KDE's region module uses (exampleutility.cpp):
+        // these regions measure in metric and still print on Letter.
+        static const QSet<QString> letter = {
+            QStringLiteral("en_CA"), QStringLiteral("en_PH"), QStringLiteral("es_BO"), QStringLiteral("es_CL"), QStringLiteral("es_CO"),
+            QStringLiteral("es_CR"), QStringLiteral("es_GT"), QStringLiteral("es_MX"), QStringLiteral("es_NI"), QStringLiteral("es_PA"),
+            QStringLiteral("es_PR"), QStringLiteral("es_SV"), QStringLiteral("es_VE"), QStringLiteral("fil_PH"), QStringLiteral("fr_CA"),
+            QStringLiteral("ik_CA"), QStringLiteral("iu_CA"), QStringLiteral("miq_NI"), QStringLiteral("nhn_MX"), QStringLiteral("shs_CA"),
+            QStringLiteral("tl_PH")};
+        const bool isLetter = letter.contains(name) || locale.measurementSystem() == QLocale::ImperialUSSystem;
+        return isLetter ? QStringLiteral("Letter, 8.5 by 11 inches") : QStringLiteral("A4, 210 by 297 mm");
+    }
+    return {};
+}
+
+void Language::setCategory(const QString &category, const QString &locale)
+{
+    if (!shownCategories.contains(category) || m_busy) {
+        return;
+    }
+    QString chosen = canonical(locale);
+    if (chosen == m_format) {
+        chosen.clear();
+    }
+    if (chosen == m_overrides.value(category).toString()) {
+        return;
+    }
+    const auto write = [this, category, chosen] {
+        auto config = KSharedConfig::openConfig(QStringLiteral("plasma-localerc"), KConfig::NoGlobals);
+        KConfigGroup formats(config, QStringLiteral("Formats"));
+        if (!chosen.isEmpty()) {
+            formats.writeEntry(category, chosen, KConfig::Notify);
+        } else if (category == QLatin1String("LC_TIME")) {
+            // Kept written out for the reason setFormat writes it.
+            formats.writeEntry(category, m_format, KConfig::Notify);
+        } else {
+            formats.deleteEntry(category, KConfig::Notify);
+        }
+        config->sync();
+        read();
+    };
+    if (chosen.isEmpty()) {
+        write();
+    } else {
+        ensure({chosen}, write);
+    }
+}
+
+QString Language::fileSizeExample(int units) const
+{
+    return KFormat().formatByteSize(1536000, 1, KFormat::BinaryUnitDialect(units));
+}
+
+void Language::setFileSizeUnits(int units)
+{
+    if (units < KFormat::IECBinaryDialect || units > KFormat::MetricBinaryDialect || units == m_fileSizeUnits) {
+        return;
+    }
+    // Saved as kcm_regionandlang saves it: the IEC default is not stored.
+    // KFormat reads this when an app starts, so open apps keep the old
+    // units until they are restarted.
+    auto config = KSharedConfig::openConfig(QStringLiteral("kdeglobals"));
+    KConfigGroup locale(config, QStringLiteral("Locale"));
+    if (units == KFormat::IECBinaryDialect) {
+        locale.deleteEntry("BinaryUnitDialect", KConfig::Notify);
+    } else {
+        locale.writeEntry("BinaryUnitDialect", units, KConfig::Notify);
+    }
+    config->sync();
+    read();
 }
 
 void Language::signOut()

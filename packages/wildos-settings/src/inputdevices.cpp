@@ -65,6 +65,8 @@ void InputDevices::reload()
 
     m_mice.clear();
     m_touchpads.clear();
+    m_touchscreens.clear();
+    m_pens.clear();
     for (const QString &name : std::as_const(names)) {
         QVariantMap device = allProperties(managerPath + QLatin1Char('/') + name);
         if (device.isEmpty()) {
@@ -73,6 +75,12 @@ void InputDevices::reload()
         device.insert(QStringLiteral("sysName"), name);
         if (device.value(QStringLiteral("touchpad")).toBool()) {
             m_touchpads << device;
+        } else if (device.value(QStringLiteral("touch")).toBool()) {
+            m_touchscreens << device;
+        } else if (device.value(QStringLiteral("tabletTool")).toBool()) {
+            // The pen side of a tablet; its buttons pad is a separate device
+            // with nothing a person maps or flips.
+            m_pens << device;
         } else if (device.value(QStringLiteral("pointer")).toBool() && !device.value(QStringLiteral("tabletTool")).toBool()) {
             m_mice << device;
         }
@@ -89,5 +97,13 @@ void InputDevices::set(const QString &kind, const QString &property, const QVari
         message << deviceInterface << property << QVariant::fromValue(QDBusVariant(value));
         QDBusConnection::sessionBus().call(message, QDBus::Block, 2000);
     }
+    reload();
+}
+
+void InputDevices::setDevice(const QString &sysName, const QString &property, const QVariant &value)
+{
+    auto message = QDBusMessage::createMethodCall(service, managerPath + QLatin1Char('/') + sysName, properties, QStringLiteral("Set"));
+    message << deviceInterface << property << QVariant::fromValue(QDBusVariant(value));
+    QDBusConnection::sessionBus().call(message, QDBus::Block, 2000);
     reload();
 }

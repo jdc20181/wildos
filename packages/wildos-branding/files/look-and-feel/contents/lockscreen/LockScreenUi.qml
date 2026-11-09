@@ -436,4 +436,29 @@ Item {
             }
         }
     }
+
+    // The accessibility shortcuts from Settings > Accessibility. The lock
+    // screen lets only KWin's magnifier keys through as global shortcuts, so
+    // the rest are caught here and run the same switches as on the desktop.
+    UI.AccessShortcuts {
+        id: access
+        onKeyboardRequested: {
+            if (inputPanel.status !== Loader.Ready)
+                return;
+            mainBlock.mainPasswordBox.forceActiveFocus();
+            inputPanel.showHide();
+        }
+    }
+
+    // Someone who uses the on-screen keyboard gets it here straight away.
+    Timer {
+        running: access.keyboardOn
+        interval: 300
+        onTriggered: {
+            if (inputPanel.status === Loader.Ready && !inputPanel.keyboardActive) {
+                mainBlock.mainPasswordBox.forceActiveFocus();
+                inputPanel.showHide();
+            }
+        }
+    }
 }
