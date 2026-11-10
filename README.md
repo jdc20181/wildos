@@ -8,7 +8,7 @@
   </picture>
 </a>
 
-### A hardened Linux desktop, rebuilt from scratch, with your Windows apps built in.
+### A hardened Linux desktop with your Windows apps built in, plus our own Mail, Write, Tables and Remote.
 
 **[Website](https://wildos.io)** · **[Take the tour](https://wildos.io/tour/)** · **[How it works](https://wildos.io/how-it-works/)** · **[FAQ](https://wildos.io/faq/)** · **[Download](https://wildos.io/faq/)**
 
@@ -20,13 +20,34 @@
 </div>
 
 > [!IMPORTANT]
-> Wild OS is in early alpha. Alpha 1 is out now: [download it](https://wildos.io/faq/), and back up anything that matters before you install.
+> Wild OS is young and moving fast. [Download the latest release](https://wildos.io/faq/), and back up anything that matters before you install.
 
-## What is Wild OS?
+## Why Wild OS
 
-Wild OS is a free, open source operating system for people who want the privacy of Linux without giving up the programs and habits they already have.
+<img src="docs/assets/features/windows-apps.webp" alt="Your Windows programs, in normal windows" width="100%">
 
-It is built in three layers, and each one has a single job.
+<img src="docs/assets/features/our-apps.webp" alt="Mail, Write, Tables and Remote, built in" width="100%">
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/assets/features/free.webp" alt="Over £170 a year of apps, for nothing" width="100%"></td>
+    <td width="50%"><img src="docs/assets/features/privacy.webp" alt="Private by default: no account, no telemetry, no adverts" width="100%"></td>
+  </tr>
+  <tr>
+    <td><img src="docs/assets/features/security.webp" alt="Hardened from the ground up: signed updates, sandboxed apps, encrypted disk, hardened Debian" width="100%"></td>
+    <td><img src="docs/assets/features/light.webp" alt="Windows only runs when you need it: running, paused, saved to disk" width="100%"></td>
+  </tr>
+  <tr>
+    <td><img src="docs/assets/features/desktop.webp" alt="A desktop you already know: Start, taskbar, snap, Alt+Tab" width="100%"></td>
+    <td><img src="docs/assets/features/remote.webp" alt="Every server and PC in one app" width="100%"></td>
+  </tr>
+</table>
+
+<img src="docs/assets/features/themes.webp" alt="Six one-click themes with RGB lighting" width="100%">
+
+## How it's built
+
+Wild OS is a free, open source operating system in three layers, and each one has a single job.
 
 | Layer | What it does |
 | --- | --- |
@@ -34,20 +55,24 @@ It is built in three layers, and each one has a single job.
 | **The Wild desktop** | KDE's proven engine underneath, with every screen you touch redesigned: Start, the taskbar, Settings, Files, the Store, the installer, first start and the system dialogs. Not a theme, a rebuilt interface. |
 | **Windows mode** | A genuine copy of Windows 11 Pro running out of sight. Each Windows program opens as its own normal window on your desktop. |
 
-There's no account, no telemetry and no adverts. The full story is at **[wildos.io](https://wildos.io)**.
+On top sit our own apps: Mail and Calendar, Write, Tables and Remote. The full story is at **[wildos.io](https://wildos.io)**.
 
-## Screens
+## See it
 
-These are the Wild OS designs every screen is built to.
+Real screens from the Wild OS designs every screen is built to.
 
 <table>
   <tr>
     <td width="50%"><img src="docs/assets/screens/main.webp" alt="The Wild OS desktop with Files open and a Windows app alongside"><br><sub><b>The desktop.</b> A Windows app running next to Files.</sub></td>
-    <td width="50%"><img src="docs/assets/screens/start.webp" alt="The Start menu with pinned apps and recent files"><br><sub><b>Start.</b> Pinned apps, recent files and search.</sub></td>
+    <td width="50%"><img src="docs/assets/screens/mail.webp" alt="Mail with favourites, the inbox and an email open"><br><sub><b>Mail.</b> Every account in one inbox, trackers blocked.</sub></td>
   </tr>
   <tr>
-    <td><img src="docs/assets/screens/winapp.webp" alt="Installing a Windows program in Windows mode"><br><sub><b>Windows apps.</b> Double-click an installer and it just installs.</sub></td>
-    <td><img src="docs/assets/screens/installerencryption.webp" alt="The installer's encryption step, on by default with a recovery key"><br><sub><b>Installer.</b> Encryption on by default, explained in one sentence.</sub></td>
+    <td><img src="docs/assets/screens/write.webp" alt="Write editing a report"><br><sub><b>Write.</b> Opens and saves Word files.</sub></td>
+    <td><img src="docs/assets/screens/tables.webp" alt="Tables editing a budget"><br><sub><b>Tables.</b> Opens and saves Excel files.</sub></td>
+  </tr>
+  <tr>
+    <td><img src="docs/assets/screens/remote-terminal.webp" alt="Remote with server tabs, suggestions and snippets"><br><sub><b>Remote.</b> Tabs, suggestions from your history and saved snippets.</sub></td>
+    <td><img src="docs/assets/screens/start.webp" alt="The Start menu"><br><sub><b>Start.</b> Pinned apps, recent files and search.</sub></td>
   </tr>
 </table>
 
@@ -57,17 +82,36 @@ These are the Wild OS designs every screen is built to.
 
 | | |
 | --- | --- |
-| ![Light mode desktop](docs/assets/screens/mainlight.webp) | ![Setting up Windows mode](docs/assets/screens/winmodesetup.webp) |
-| ![Snap layouts](docs/assets/screens/snap.webp) | ![Settings](docs/assets/screens/settings.webp) |
-| ![Shutting down with unsaved work](docs/assets/screens/winmodeshutdown.webp) | ![A permission prompt](docs/assets/screens/dialogpermission.webp) |
-| ![First start welcome](docs/assets/screens/welcome.webp) | ![Task Manager](docs/assets/screens/taskmanagerperf.webp) |
-| ![The Store](docs/assets/screens/store.webp) | ![Alt+Tab](docs/assets/screens/alttab.webp) |
-| ![The lock screen](docs/assets/screens/lock.webp) | ![The installer](docs/assets/screens/installer.webp) |
-| ![Windows programs found at first start](docs/assets/screens/firstwinapps.webp) | ![Camera and microphone for Windows apps](docs/assets/screens/winmodecalls.webp) |
+| ![Remote's host list](docs/assets/screens/remote-hosts.webp) | ![Remote copying files to a server](docs/assets/screens/remote-files.webp) |
+| ![Remote's full-screen remote desktop](docs/assets/screens/remote-session.webp) | ![Remote's keychain](docs/assets/screens/remote-keychain.webp) |
+| ![Calendar week view](docs/assets/screens/calendar.webp) | ![The Store](docs/assets/screens/store.webp) |
+| ![Themes](docs/assets/screens/themes.webp) | ![The Overclock theme with RGB lighting](docs/assets/screens/overclock.webp) |
+| ![Installing a Windows program](docs/assets/screens/winapp.webp) | ![Windows mode status and controls](docs/assets/screens/winmodepanel.webp) |
+| ![Light mode desktop](docs/assets/screens/mainlight.webp) | ![Settings](docs/assets/screens/settings.webp) |
+| ![Snap layouts](docs/assets/screens/snap.webp) | ![Alt+Tab](docs/assets/screens/alttab.webp) |
+| ![The installer's encryption step](docs/assets/screens/installerencryption.webp) | ![A permission prompt](docs/assets/screens/dialogpermission.webp) |
+| ![Shutting down with unsaved work](docs/assets/screens/winmodeshutdown.webp) | ![Task Manager](docs/assets/screens/taskmanagerperf.webp) |
+| ![First start welcome](docs/assets/screens/welcome.webp) | ![The lock screen](docs/assets/screens/lock.webp) |
+| ![Loading screens for the four apps](docs/assets/screens/splashes.webp) | ![Windows programs found at first start](docs/assets/screens/firstwinapps.webp) |
 
 Or click through every screen yourself in the **[interactive tour](https://wildos.io/tour/)**.
 
 </details>
+
+## The little things
+
+The details you'd miss if they weren't there, borrowed from the best of Windows and macOS.
+
+- **Taskbar previews.** Hover a taskbar app to see its windows, and hover a preview to peek at it.
+- **Snap assist.** Snap one window and Wild OS offers the rest to fill the other side.
+- **Quick Look.** Press Space on a file in Files to preview it without opening anything.
+- **End task from the taskbar.** Right-click a frozen app to close it for good, no Task Manager needed.
+- **Switch between windows of one app** with Super and the key above Tab.
+- **Title bar double-click** does what you choose: maximise, shade or nothing.
+- **A clock your way.** Seconds, the long date and battery percentage, each one switch away.
+- **Keep awake.** One tile in Quick settings stops the PC sleeping during a download or a talk.
+- **Lid and power button** do what you set, on battery and plugged in.
+- **Do not disturb on a schedule**, so evenings and weekends stay quiet.
 
 ## Windows mode
 
@@ -80,6 +124,7 @@ Windows mode doesn't imitate Windows. It runs a real, licensed copy of Windows 1
 </picture>
 
 - **Light when you're not using it.** A minute after you close your last Windows app it pauses, using no processor time. On battery or short of memory it saves itself to disk instead.
+- **In your control.** Click the Windows mode status in the taskbar to pause, save to disk, restart or shut it down. The same controls are in Settings.
 - **Never lose work.** Shut down with an unsaved document and Windows is kept exactly as it was, then reopened next time.
 - **Your files stay yours.** Windows only sees the folders you share. Saving in Word puts the file straight into your Documents folder.
 - **Sealed off.** Its own private network, no view of your home network, and snapshots so a bad Windows update can be rolled back.
@@ -152,7 +197,7 @@ The ISO is written to `out/`. The first build downloads about 3 GB of packages; 
 | Path | What's in it |
 | --- | --- |
 | `build/` | Image build: builder container, package list, chroot hooks, boot menu, patches to upstream packages |
-| `packages/` | Wild OS's own Debian packages: base system, desktop and shell, Settings, Files, Store, Terminal, Task Manager, welcome, installer and Windows mode (`wildos-winmode`) |
+| `packages/` | Wild OS's own Debian packages: base system, desktop and shell, Settings, Files, Store, Mail and Calendar (`wildos-mail`), Remote (`wildos-remote`), Terminal, Task Manager, lighting, welcome, installer and Windows mode (`wildos-winmode`) |
 | `branding/` | Logo, glyphs and wallpaper |
 | `docs/assets/` | The images on this page |
 
@@ -161,8 +206,12 @@ The ISO is written to `out/`. The first build downloads about 3 GB of packages; 
 - [x] Bootable live ISO and installer, with Secure Boot and encryption by default
 - [x] The Wild desktop: Start, taskbar, Settings, Files, Store, welcome, light and dark
 - [x] Signed update channel with stable and beta
-- [x] Windows mode, first alpha, for PCs with Windows 11 Pro
-- [ ] **Now:** Alpha testing and fixes on real hardware
+- [x] Windows mode for PCs with Windows 11 Pro, with pause, save to disk, restart and shut down
+- [x] Our own apps: Mail and Calendar, Write, Tables and Remote
+- [x] Themes and RGB lighting
+- [x] Taskbar previews, snap assist, Quick Look and the rest of the little things
+- [ ] **Now:** Testing and fixes on real hardware
+- [ ] **Next:** Windows programs that open instantly
 - [ ] **Later:** Windows 11 Home support, device passthrough, Strict and Maximum protection levels
 
 ## Contributing
@@ -175,7 +224,7 @@ Wild OS is built in the open and help is welcome, from code to testing Windows a
 
 ## Credits
 
-Wild OS stands on the work of [Kicksecure](https://www.kicksecure.com) and the [Whonix](https://www.whonix.org) project, whose security packages it installs unmodified from their repository. Wild OS is an independent project and is not affiliated with or endorsed by them; Kicksecure is a trademark of its owners. It is built on [Debian](https://www.debian.org), [KDE](https://kde.org), [Calamares](https://calamares.io), [QEMU and KVM](https://www.qemu.org), [libvirt](https://libvirt.org) and [FreeRDP](https://www.freerdp.com). Thank you.
+Wild OS stands on the work of [Kicksecure](https://www.kicksecure.com) and the [Whonix](https://www.whonix.org) project, whose security packages it installs unmodified from their repository. Wild OS is an independent project and is not affiliated with or endorsed by them; Kicksecure is a trademark of its owners. It is built on [Debian](https://www.debian.org), [KDE](https://kde.org), [Calamares](https://calamares.io), [LibreOffice](https://www.libreoffice.org), [QEMU and KVM](https://www.qemu.org), [libvirt](https://libvirt.org) and [FreeRDP](https://www.freerdp.com). Thank you.
 
 The default wallpaper is a photograph by Quang Nguyen Vinh. Artwork credits and licences are in [branding/CREDITS.md](branding/CREDITS.md).
 
