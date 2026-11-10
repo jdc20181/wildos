@@ -58,6 +58,16 @@ public:
     // port when none is given.
     Q_INVOKABLE QString hostName(const QVariantMap &host) const;
     Q_INVOKABLE int port(const QVariantMap &host) const;
+    // An address as the host settings show it: {host, port}, the port 0
+    // when none is given. joinAddress puts them back together, leaving out
+    // the kind's default port, which is how hosts store it.
+    Q_INVOKABLE QVariantMap addressParts(const QString &address) const;
+    Q_INVOKABLE QString joinAddress(const QString &host, int port, const QString &kind) const;
+    // Where a terminal host's SSH password is kept in the keyring (Secrets),
+    // or empty for a desktop. A host that is deleted, or moved to another
+    // address or account, takes its saved password with it unless another
+    // host still uses that account.
+    Q_INVOKABLE QString passwordKey(const QVariantMap &host) const;
 
     // Whether each host answers on its port, for Online and Offline on the
     // recent desktops. Only opens and closes a TCP connection.
@@ -79,6 +89,7 @@ private:
     void load();
     void write();
     int indexOf(const QString &id) const;
+    void forgetUnused(const QString &key);
 
     QVariantList m_hosts;
     QStringList m_groups;

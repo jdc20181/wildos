@@ -1,5 +1,6 @@
 #include "hosts.h"
 #include "paths.h"
+#include "secrets.h"
 
 #include <QDateTime>
 #include <QDir>
@@ -168,7 +169,9 @@ QString Hosts::save(const QVariantMap &input)
         h.insert(QStringLiteral("id"), id);
         m_hosts.append(h);
     } else {
+        const QString before = passwordKey(m_hosts[i].toMap());
         m_hosts[i] = h;
+        forgetUnused(before);
     }
     const QString group = h.value(QStringLiteral("group")).toString();
     if (!group.isEmpty() && !m_groups.contains(group)) {
@@ -184,8 +187,10 @@ void Hosts::remove(const QString &id)
     if (i < 0) {
         return;
     }
+    const QString key = passwordKey(m_hosts[i].toMap());
     m_hosts.removeAt(i);
     QFile::remove(screenPath(id));
+    forgetUnused(key);
     write();
 }
 
@@ -325,6 +330,49 @@ QVariantMap Hosts::parseAddress(const QString &text) const
         return out;
     }
     return {};
+}
+
+QString Hosts::passwordKey(const QVariantMap &h) const
+{
+    if (h.value(QStringLiteral("kind")).toString() != QLatin1String("terminal")) {
+        return {};
+    }
+    QString user = h.value(QStringLiteral("user")).toString();
+    if (user.isEmpty()) {
+        // ssh signs in as the person using this PC when no user is given.
+        user = qEnvironmentVariable("USER");
+    }
+    return Secrets::sshKey(user, hostName(h), port(h));
+}
+
+void Hosts::forgetUnused(const QString &key)
+{
+    if (key.isEmpty()) {
+        return;
+    }
+    for (const QVariant &v : std::as_const(m_hosts)) {
+        if (passwordKey(v.toMap()) == key) {
+            return;
+        }
+    }
+    Secrets::instance()->remove(key);
+}
+
+QVariantMap Hosts::addressParts(const QString &address) const
+{
+    const auto [h, p] = splitAddress(address);
+    return {{QStringLiteral("host"), h}, {QStringLiteral("port"), p}};
+}
+
+QString Hosts::joinAddress(const QString &host, int port, const QString &kind) const
+{
+    const QString h = host.trimmed();
+    const int standard = kind == QLatin1String("desktop") ? 3389 : 22;
+    if (port <= 0 || port > 65535 || port == standard) {
+        return h;
+    }
+    // An IPv6 address takes brackets before a port.
+    return QString::fromLatin1(h.contains(QLatin1Char(':')) ? "[%1]:%2" : "%1:%2").arg(h).arg(port);
 }
 
 QString Hosts::hostName(const QVariantMap &h) const

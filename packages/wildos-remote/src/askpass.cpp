@@ -7,6 +7,7 @@
 #include <QJsonObject>
 #include <QLocalServer>
 #include <QLocalSocket>
+#include <QRegularExpression>
 #include <QTextStream>
 #include <QUuid>
 
@@ -55,10 +56,28 @@ void AskPass::listen()
 
 QString AskPass::newToken(const Provider &provider, const QString &title)
 {
+    Options options;
+    options.title = title;
+    if (provider) {
+        options.provider = [provider](const QString &prompt, int count, const std::function<void(const Lookup &)> &done) {
+            done({provider(prompt, count), {}});
+        };
+    }
+    return newToken(options);
+}
+
+QString AskPass::newToken(const Options &options)
+{
     listen();
     const QString token = QUuid::createUuid().toString(QUuid::WithoutBraces);
-    m_runs.insert(token, {provider, title, 0});
+    m_runs.insert(token, {options, 0});
     return token;
+}
+
+bool AskPass::isPassword(const QString &prompt)
+{
+    static const QRegularExpression password(QStringLiteral("^(\\S+@\\S+'s )?password:$"), QRegularExpression::CaseInsensitiveOption);
+    return password.match(prompt.trimmed()).hasMatch();
 }
 
 void AskPass::release(const QString &token)
@@ -99,30 +118,48 @@ void AskPass::incoming()
                 reply(socket, false, {});
                 return;
             }
-            ++run->count;
-            if (run->provider && kind != QLatin1String("touch")) {
-                if (const auto answer = run->provider(prompt, run->count)) {
-                    reply(socket, true, *answer);
+            const int count = ++run->count;
+            if (!run->options.provider || kind == QLatin1String("touch")) {
+                askPerson(socket, token, prompt, kind, {});
+                return;
+            }
+            run->options.provider(prompt, count, [this, socket = QPointer(socket), token, prompt, kind](const Lookup &lookup) {
+                if (!socket) {
                     return;
                 }
-            }
-            const QString id = QString::number(m_next++);
-            m_waiting.insert(id, socket);
-            // The tool gave up waiting, or (for a touch notice) is done.
-            connect(socket, &QLocalSocket::disconnected, this, [this, id] {
-                if (m_waiting.remove(id)) {
-                    Q_EMIT questionClosed(id);
+                if (lookup.answer) {
+                    reply(socket, true, *lookup.answer);
+                    return;
                 }
+                askPerson(socket, token, prompt, kind, lookup.details);
             });
-            QString shown = kind;
-            if (shown.isEmpty()) {
-                shown = prompt.contains(QLatin1String("passphrase"), Qt::CaseInsensitive) ? QStringLiteral("passphrase")
-                        : prompt.contains(QLatin1String("PIN"))                         ? QStringLiteral("pin")
-                                                                                         : QStringLiteral("password");
-            }
-            Q_EMIT passphraseNeeded(id, run->title, prompt, shown);
         });
     }
+}
+
+void AskPass::askPerson(QLocalSocket *socket, const QString &token, const QString &prompt, const QString &kind, const QVariantMap &details)
+{
+    const auto run = m_runs.constFind(token);
+    // Released while the keyring was being read, or never to be asked.
+    if (run == m_runs.cend() || !run->options.askPerson) {
+        reply(socket, false, {});
+        return;
+    }
+    const QString id = QString::number(m_next++);
+    m_waiting.insert(id, {socket, token, prompt});
+    // The tool gave up waiting, or (for a touch notice) is done.
+    connect(socket, &QLocalSocket::disconnected, this, [this, id] {
+        if (m_waiting.remove(id)) {
+            Q_EMIT questionClosed(id);
+        }
+    });
+    QString shown = kind;
+    if (shown.isEmpty()) {
+        shown = prompt.contains(QLatin1String("passphrase"), Qt::CaseInsensitive) ? QStringLiteral("passphrase")
+                : prompt.contains(QLatin1String("PIN"))                         ? QStringLiteral("pin")
+                                                                                 : QStringLiteral("password");
+    }
+    Q_EMIT passphraseNeeded(id, run->options.title, prompt, shown, run->options.context, details);
 }
 
 void AskPass::reply(QLocalSocket *socket, bool ok, const QString &text)
@@ -134,17 +171,24 @@ void AskPass::reply(QLocalSocket *socket, bool ok, const QString &text)
     socket->flush();
 }
 
-void AskPass::answer(const QString &id, const QString &text)
+void AskPass::answer(const QString &id, const QString &text, bool save)
 {
-    if (QLocalSocket *socket = m_waiting.take(id)) {
-        reply(socket, true, text);
+    const Waiting w = m_waiting.take(id);
+    if (!w.socket) {
+        return;
     }
+    // Told before the tool has the answer, so whatever follows from it
+    // (the server accepting it, or asking again) comes after.
+    if (const auto run = m_runs.constFind(w.token); run != m_runs.cend() && run->options.answered) {
+        run->options.answered(w.prompt, text, save);
+    }
+    reply(w.socket, true, text);
 }
 
 void AskPass::cancel(const QString &id)
 {
-    if (QLocalSocket *socket = m_waiting.take(id)) {
-        reply(socket, false, {});
+    if (const Waiting w = m_waiting.take(id); w.socket) {
+        reply(w.socket, false, {});
     }
 }
 

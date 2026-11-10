@@ -3,7 +3,7 @@
 #include <QDBusMessage>
 #include <QDir>
 #include <QFileInfo>
-#include <QGuiApplication>
+#include <QApplication>
 #include <QIcon>
 #include <QProcess>
 #include <QQmlApplicationEngine>
@@ -137,7 +137,9 @@ int main(int argc, char *argv[])
         return 127;
     }
 
-    QGuiApplication app(argc, argv);
+    // A QApplication, not a QGuiApplication: only then does the KDE
+    // platform theme hand open and save dialogs to the Wild OS file dialog.
+    QApplication app(argc, argv);
     app.setApplicationName(QStringLiteral("wildos-office"));
     app.setOrganizationDomain(QStringLiteral("wildos.io"));
     app.setApplicationVersion(QStringLiteral(WILDOS_OFFICE_VERSION));

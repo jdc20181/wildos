@@ -5,7 +5,7 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 include(GNUInstallDirs)
 
-find_package(Qt6 6.8 REQUIRED COMPONENTS Core Gui DBus Network Qml Quick QuickControls2)
+find_package(Qt6 6.8 REQUIRED COMPONENTS Core Gui Widgets DBus Network Qml Quick QuickControls2)
 find_package(Qt6Keychain REQUIRED)
 find_package(litehtml REQUIRED)
 find_package(PkgConfig REQUIRED)
@@ -49,7 +49,7 @@ qt_add_qml_module(wildos-mail
 
 target_include_directories(wildos-mail PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
 
-target_link_libraries(wildos-mail PRIVATE
+target_link_libraries(wildos-mail PRIVATE Qt6::Widgets
     Qt6::Gui Qt6::DBus Qt6::Network Qt6::Qml Qt6::Quick Qt6::QuickControls2
     qt6keychain
     litehtml

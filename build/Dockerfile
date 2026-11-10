@@ -126,6 +126,12 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends libdbus-1-dev libsystemd-dev pkgconf \
     && rm -rf /var/lib/apt/lists/*
 
+# The password strength hint in Settings and first boot setup scores the
+# password with libpwquality.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends libpwquality-dev \
+    && rm -rf /var/lib/apt/lists/*
+
 # Compiles go through ccache (a volume shared by every build, see
 # build-iso.sh), so a package whose code barely changed rebuilds in seconds.
 RUN apt-get update \

@@ -1,8 +1,10 @@
 #include "sessionwindow.h"
+#include "askpass.h"
 #include "filebrowser.h"
 #include "hosts.h"
 #include "keychain.h"
 #include "paths.h"
+#include "secrets.h"
 #include "terminalview.h"
 #include "windowframe.h"
 
@@ -10,6 +12,7 @@
 #include <QGuiApplication>
 #include <QPainter>
 #include <QPainterPath>
+#include <QProcess>
 #include <QQmlContext>
 #include <QQmlEngine>
 #include <QQuickItem>
@@ -64,6 +67,7 @@ SessionTab::SessionTab(const QVariantMap &host, QObject *parent)
             m_forwards.append(QStringLiteral("localhost:%1 to %2").arg(f.value(QStringLiteral("localPort")).toInt())
                                   .arg(target.isEmpty() || target == QLatin1String("localhost") ? m_title : target));
         }
+        m_passwordKey = hosts->passwordKey(host);
         m_files = new FileBrowser(m_title, this);
         measureLatency();
     }
@@ -128,7 +132,11 @@ TerminalView *SessionTab::makeView(bool first)
     } else if (const QStringList exec = m_host.value(QStringLiteral("exec")).toStringList(); !exec.isEmpty()) {
         view = new TerminalView(exec.first(), exec.mid(1), QString());
     } else {
-        view = new TerminalView(QStringLiteral("ssh"), sshArgs(first), m_hostId);
+        const QString token = signInToken();
+        view = new TerminalView(QStringLiteral("ssh"), sshArgs(first), m_hostId, AskPass::instance()->environment(token));
+        connect(view, &QObject::destroyed, AskPass::instance(), [token] {
+            AskPass::instance()->release(token);
+        });
     }
     m_splitter->addWidget(view);
     m_views.append(view);
@@ -213,7 +221,7 @@ void SessionTab::setFilesOpen(bool open)
     }
     m_filesOpen = open;
     if (open && !m_files->remoteReady()) {
-        m_files->connectTo(sshArgs(false));
+        m_files->connectTo(sshArgs(false), m_passwordKey);
     }
     m_splitter->setVisible(!open);
     Q_EMIT changed();
@@ -284,6 +292,116 @@ void SessionTab::measureLatency()
         socket->deleteLater();
     });
     socket->connectToHost(Hosts::instance()->hostName(m_host), quint16(Hosts::instance()->port(m_host)));
+}
+
+// One ssh's sign-in. The first password prompt is answered from the
+// keyring when one is saved; the window asks for anything else, and for the
+// password again when the server turns it down.
+struct SessionTab::SignIn {
+    int passwords = 0;
+    // A password is saved for this account.
+    bool saved = false;
+    // The last password ssh was given came from the keyring.
+    bool fromKeyring = false;
+    // Moves on whenever an answer being checked is overtaken.
+    int watch = 0;
+};
+
+QString SessionTab::signInToken()
+{
+    auto signIn = std::make_shared<SignIn>();
+    const QVariantMap details{
+        {QStringLiteral("save"), true},
+        {QStringLiteral("hostId"), m_hostId},
+        {QStringLiteral("name"), m_title},
+        {QStringLiteral("address"), m_userHost},
+    };
+    AskPass::Options options;
+    options.title = m_title;
+    options.context = QStringLiteral("terminal");
+    options.provider = [key = m_passwordKey, signIn, details](const QString &prompt, int, const std::function<void(const AskPass::Lookup &)> &done) {
+        if (!AskPass::isPassword(prompt)) {
+            done({});
+            return;
+        }
+        ++signIn->passwords;
+        // Asked again: the answer being checked was wrong.
+        ++signIn->watch;
+        const bool keyringFailed = std::exchange(signIn->fromKeyring, false);
+        auto ask = [signIn, details, done, keyringFailed] {
+            QVariantMap d = details;
+            d.insert(QStringLiteral("saved"), signIn->saved);
+            d.insert(QStringLiteral("retry"), signIn->passwords > 1);
+            d.insert(QStringLiteral("savedFailed"), keyringFailed);
+            done({std::nullopt, d});
+        };
+        if (signIn->passwords > 1) {
+            ask();
+            return;
+        }
+        Secrets::instance()->read(key, [signIn, done, ask](const QString &secret, bool found) {
+            signIn->saved = found;
+            if (found) {
+                signIn->fromKeyring = true;
+                done({secret, {}});
+            } else {
+                ask();
+            }
+        });
+    };
+    options.answered = [this, guard = QPointer(this), signIn](const QString &prompt, const QString &text, bool save) {
+        // Only a password is ever kept, never a code or a passphrase, and
+        // only once the server has taken it.
+        if (!guard || !AskPass::isPassword(prompt) || (!save && !signIn->saved)) {
+            return;
+        }
+        confirmSignIn(signIn, ++signIn->watch, text, save, 0);
+    };
+    return AskPass::instance()->newToken(options);
+}
+
+void SessionTab::confirmSignIn(const std::shared_ptr<SignIn> &signIn, int watch, const QString &password, bool save, int tries)
+{
+    // ssh opens its shared connection only once the server has signed it
+    // in, so the connection being there means the password worked.
+    if (signIn->watch != watch || tries > 240) {
+        return;
+    }
+    QStringList args = sshArgs(false);
+    const qsizetype end = args.lastIndexOf(QStringLiteral("--"));
+    args.insert(end >= 0 ? end : args.size() - 1, QStringLiteral("check"));
+    args.insert(end >= 0 ? end : args.size() - 1, QStringLiteral("-O"));
+    args.prepend(QStringLiteral("BatchMode=yes"));
+    args.prepend(QStringLiteral("-o"));
+    auto *check = new QProcess(this);
+    check->setProcessChannelMode(QProcess::MergedChannels);
+    connect(check, &QProcess::finished, this, [=, this](int code, QProcess::ExitStatus status) {
+        check->deleteLater();
+        if (signIn->watch != watch) {
+            return;
+        }
+        if (status == QProcess::NormalExit && code == 0) {
+            ++signIn->watch;
+            if (save) {
+                Secrets::instance()->write(m_passwordKey, password);
+                signIn->saved = true;
+            } else {
+                // Typed again without saving: the saved one was wrong.
+                Secrets::instance()->remove(m_passwordKey);
+                signIn->saved = false;
+            }
+            return;
+        }
+        QTimer::singleShot(500, this, [=, this] {
+            confirmSignIn(signIn, watch, password, save, tries + 1);
+        });
+    });
+    connect(check, &QProcess::errorOccurred, check, [check](QProcess::ProcessError e) {
+        if (e == QProcess::FailedToStart) {
+            check->deleteLater();
+        }
+    });
+    check->start(QStringLiteral("ssh"), args);
 }
 
 SessionWindow *SessionWindow::instance(bool create)
@@ -450,6 +568,15 @@ void SessionWindow::runEverywhere(const QString &command)
         if (!t->ended()) {
             t->run(command);
         }
+    }
+}
+
+void SessionWindow::focusChrome()
+{
+    raise();
+    activateWindow();
+    if (m_chrome) {
+        m_chrome->setFocus();
     }
 }
 

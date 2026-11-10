@@ -37,8 +37,9 @@ public:
     FileBrowser(const QString &hostName, QObject *parent = nullptr);
     ~FileBrowser() override;
 
-    // Connects through the terminal's shared connection.
-    void connectTo(const QStringList &sshArgs);
+    // Connects through the terminal's shared connection, or with the
+    // password saved under passwordKey (Secrets) when there is one.
+    void connectTo(const QStringList &sshArgs, const QString &passwordKey = {});
     void disconnectNow();
 
     QString localPath() const { return m_localPath; }
@@ -106,6 +107,7 @@ private:
     QString m_hostName;
     Sftp *m_sftp;
     QStringList m_sshArgs;
+    QString m_passwordKey;
     QString m_localPath;
     QStringList m_localHistory;
     QVariantList m_localEntries;

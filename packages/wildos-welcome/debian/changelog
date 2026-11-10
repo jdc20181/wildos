@@ -1,3 +1,11 @@
+wildos-welcome (0.1.1) trixie; urgency=medium
+
+  * Creating your account at first boot shows how strong the password
+    looks (weak, fair or strong, and why when it is weak), scored with
+    libpwquality. It is advice only and never stops a password.
+
+ -- Wild OS Developers <dev@wildos.io>  Tue, 10 Nov 2026 17:40:00 +0000
+
 wildos-welcome (0.1.0) trixie; urgency=medium
 
   * Initial release.

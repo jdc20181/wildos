@@ -225,6 +225,12 @@ PageScroll {
             onAccepted: confirmField.forceActiveFocus()
         }
 
+        StrengthLine {
+            Layout.fillWidth: true
+            password: passwordField.text
+            names: [userField.text, fullField.text]
+        }
+
         UI.TextField {
             id: confirmField
             Layout.fillWidth: true

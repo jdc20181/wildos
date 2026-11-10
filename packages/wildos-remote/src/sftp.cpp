@@ -1,4 +1,5 @@
 #include "sftp.h"
+#include "askpass.h"
 
 #include <QFile>
 #include <QSharedPointer>
@@ -152,15 +153,33 @@ Sftp::~Sftp()
     stop();
 }
 
-void Sftp::start(const QStringList &sshArgs)
+void Sftp::start(const QStringList &sshArgs, const std::optional<QString> &password)
 {
     stop();
     m_process = new QProcess(this);
     m_process->setProgram(QStringLiteral("ssh"));
     QStringList args = sshArgs;
-    // Never a prompt: the terminal's connection is used, or nothing.
-    args.prepend(QStringLiteral("BatchMode=yes"));
-    args.prepend(QStringLiteral("-o"));
+    if (password) {
+        // The saved password answers ssh's first password prompt, once.
+        // Anything else it asks (a one-time code, a key's passphrase, the
+        // password again) is turned down, never shown.
+        AskPass::Options options;
+        options.askPerson = false;
+        options.provider = [secret = *password, given = false](const QString &prompt, int, const std::function<void(const AskPass::Lookup &)> &done) mutable {
+            if (!given && AskPass::isPassword(prompt)) {
+                given = true;
+                done({secret, {}});
+            } else {
+                done({});
+            }
+        };
+        m_askToken = AskPass::instance()->newToken(options);
+        m_process->setProcessEnvironment(AskPass::instance()->environment(m_askToken));
+    } else {
+        // Never a prompt: the terminal's connection is used, or nothing.
+        args.prepend(QStringLiteral("BatchMode=yes"));
+        args.prepend(QStringLiteral("-o"));
+    }
     // -s is an option, so it goes before the destination (the last of
     // sshArgs, after its "--"); the subsystem's name comes after it, where
     // a command would.
@@ -211,6 +230,9 @@ void Sftp::stop()
     }
     m_process->deleteLater();
     m_process = nullptr;
+    if (!m_askToken.isEmpty()) {
+        AskPass::instance()->release(std::exchange(m_askToken, {}));
+    }
     m_pending.clear();
     m_buffer.clear();
     if (m_ready) {

@@ -50,6 +50,14 @@ Depends:
  breeze-gtk-theme,
  pipewire-audio,
  pipewire-pulse,
+# The start-up sound (wildos-branding) is played by startplasma through
+# libcanberra. Without this backend libcanberra falls back to ALSA, whose
+# player thread can still be running in libcanberra-alsa.so after it
+# reports the sound finished; startplasma then frees the context, the
+# module is unloaded under the thread, and the whole session crashes back
+# to the sign-in screen about 6 seconds in. The PulseAudio backend, served
+# by pipewire-pulse, stops its thread before the context goes.
+ libcanberra-pulse,
  wireplumber,
  fonts-noto-core,
  fonts-noto-color-emoji,

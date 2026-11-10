@@ -5,7 +5,7 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 include(GNUInstallDirs)
 
-find_package(Qt6 6.8 REQUIRED COMPONENTS Core Gui DBus Qml Quick QuickControls2)
+find_package(Qt6 6.8 REQUIRED COMPONENTS Core Gui Widgets DBus Qml Quick QuickControls2)
 qt_standard_project_setup(REQUIRES 6.8)
 
 # The start screen: wildos-office, run as wildos-write or wildos-tables
@@ -30,7 +30,7 @@ qt_add_qml_module(wildos-office
     SOURCES src/office.cpp src/office.h
 )
 target_include_directories(wildos-office PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
-target_link_libraries(wildos-office PRIVATE Qt6::Gui Qt6::DBus Qt6::Qml Qt6::Quick Qt6::QuickControls2)
+target_link_libraries(wildos-office PRIVATE Qt6::Widgets Qt6::Gui Qt6::DBus Qt6::Qml Qt6::Quick Qt6::QuickControls2)
 
 install(TARGETS wildos-office RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 foreach(link wildos-write wildos-tables)

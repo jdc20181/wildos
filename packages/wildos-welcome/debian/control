@@ -13,6 +13,7 @@ Build-Depends:
  libkf6jobwidgets-dev,
  libpackagekitqt6-dev,
  libhivex-dev,
+ libpwquality-dev,
  pkgconf,
 Standards-Version: 4.7.0
 Rules-Requires-Root: no
@@ -35,6 +36,8 @@ Depends:
  pkexec,
  fonts-inter,
  libqt6sql6-sqlite,
+ libpwquality1,
+ cracklib-runtime,
 Recommends:
  wildos-appbridge,
  ntfs-3g,

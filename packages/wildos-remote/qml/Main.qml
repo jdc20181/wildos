@@ -64,15 +64,15 @@ UI.AppWindow {
     // or a new one saved as typed.
     function quickConnect(address) {
         for (const h of Hosts.hosts) {
-            if (h.kind === address.kind && h.address === address.address && (h.user === address.user || !address.user)) {
+            if (h.kind === address.kind && Hosts.hostName(h) === Hosts.hostName(address) && Hosts.port(h) === Hosts.port(address) && (h.user === address.user || !address.user)) {
                 connectHost(h.id);
                 return;
             }
         }
         const id = Hosts.save({
             kind: address.kind,
-            name: address.address.split(":")[0],
-            address: address.address,
+            name: Hosts.hostName(address),
+            address: Hosts.joinAddress(Hosts.hostName(address), Hosts.port(address), address.kind),
             user: address.user,
             group: ""
         });
@@ -119,7 +119,11 @@ UI.AppWindow {
     }
     Connections {
         target: AskPass
-        function onPassphraseNeeded(id, title, prompt, kind) {
+        function onPassphraseNeeded(id, title, prompt, kind, context) {
+            // The terminal window asks its own.
+            if (context === "terminal") {
+                return;
+            }
             window.raise();
             passphraseDialog.ask(id, title, prompt, kind);
         }
@@ -137,9 +141,11 @@ UI.AppWindow {
         onActivated: hostDialog.create(window.page === "keychain" ? "terminal" : "")
     }
 
+    // No inset: the title bar, and the window buttons in it, reach the
+    // window's top and right edges as in Files and Settings, so a pointer
+    // flung into the corner of a maximised window lands on Close.
     ColumnLayout {
         anchors.fill: parent
-        anchors.margins: window.maximised ? 0 : 1
         spacing: 0
 
         // The title bar: 56px, as the boards draw it.
@@ -225,7 +231,8 @@ UI.AppWindow {
             UI.WindowButtons {
                 id: windowButtons
                 anchors.right: parent.right
-                anchors.verticalCenter: parent.verticalCenter
+                anchors.top: parent.top
+                buttonHeight: parent.height
                 frame: window.frame
             }
 
@@ -418,7 +425,7 @@ UI.AppWindow {
             title = qsTr("Delete %1?").arg(h.name);
             text = h.kind === "desktop"
                 ? qsTr("It goes from your hosts, with its saved password and its last screen. The PC itself isn't changed.")
-                : qsTr("It goes from your hosts. Its entry in known hosts stays, so Remote still knows it if you add it again.");
+                : qsTr("It goes from your hosts, with any password saved for it. Its entry in known hosts stays, so Remote still knows it if you add it again.");
             open();
         }
         buttons: [

@@ -5,7 +5,7 @@
 #include <QDBusConnection>
 #include <QDBusConnectionInterface>
 #include <QDBusMessage>
-#include <QGuiApplication>
+#include <QApplication>
 #include <QIcon>
 #include <QQmlApplicationEngine>
 #include <QQuickWindow>
@@ -195,7 +195,9 @@ int runReminders(int argc, char *argv[])
 
 int runCalendar(int argc, char *argv[])
 {
-    QGuiApplication app(argc, argv);
+    // A QApplication, not a QGuiApplication: only then does the KDE
+    // platform theme hand open and save dialogs to the Wild OS file dialog.
+    QApplication app(argc, argv);
     app.setApplicationName(QStringLiteral("wildos-mail"));
     app.setOrganizationDomain(QStringLiteral("wildos.io"));
     app.setApplicationDisplayName(QStringLiteral("Calendar"));
@@ -308,7 +310,9 @@ int main(int argc, char *argv[])
         calendar = calendar || qstrcmp(argv[i], "--calendar") == 0;
     }
 
-    QGuiApplication app(argc, argv);
+    // A QApplication, not a QGuiApplication: only then does the KDE
+    // platform theme hand open and save dialogs to the Wild OS file dialog.
+    QApplication app(argc, argv);
     app.setApplicationName(QStringLiteral("wildos-mail"));
     app.setOrganizationDomain(QStringLiteral("wildos.io"));
     app.setApplicationDisplayName(QStringLiteral("Mail"));

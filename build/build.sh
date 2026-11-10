@@ -640,7 +640,9 @@ repack_open() {
         grep -qxF "$dep" <<<"$deps" || repack_fail "$name"
     done
     kept=$(grep -vxF -f <(printf '%s\n' "$@") <<<"$deps" | paste -sd, | sed 's/,/, /g')
-    sed -i -e "s/^Depends: .*/Depends: $kept/" -e 's/^Version: \(.*\)$/Version: \1+wildos1/' "$control"
+    # REPACK_REVISION goes up when a repack changes while Kicksecure's version
+    # stays the same, so machines take the new one.
+    sed -i -e "s/^Depends: .*/Depends: $kept/" -e "s/^Version: \(.*\)\$/Version: \1+wildos${REPACK_REVISION:-1}/" "$control"
 }
 # Adds programs compiled into $REPACK/pkg to the package: it becomes amd64
 # and depends on the libraries they link.
@@ -674,9 +676,17 @@ repack_close() {
 # boot drive is pulled out) and fm-shim-backend (its org.freedesktop.FileManager1
 # service) in its postinst. emerg-shutdown would also compile at run time,
 # but only when its program is missing.
-repack_open security-misc-shared build-essential libdbus-1-dev libsystemd-dev pkgconf
+#
+# Its preinst also stops an install or upgrade when no account is in the sudo
+# or console groups, to keep someone from locking themselves out. Wild OS makes
+# and manages the accounts (Settings keeps an administrator in sudo, and every
+# account that signs in is in console), so the check can only block updates,
+# as it did on a computer still at first-run setup.
+REPACK_REVISION=2 repack_open security-misc-shared build-essential libdbus-1-dev libsystemd-dev pkgconf
 (
     cd "$REPACK/pkg"
+    [ "$(grep -cxE '   (sudo|console)_users_check' DEBIAN/preinst)" = 2 ] || repack_fail security-misc-shared
+    sed -i -E 's/^   (sudo|console)_users_check$/   true/' DEBIAN/preinst
     [ "$(grep -cxE '        build_(fm_shim_backend|emerg_shutdown)' DEBIAN/postinst)" = 2 ] || repack_fail security-misc-shared
     sed -i -E '/^        build_(fm_shim_backend|emerg_shutdown)$/d' DEBIAN/postinst
     for program in emerg-shutdown fm-shim-backend; do

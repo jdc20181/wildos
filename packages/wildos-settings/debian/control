@@ -21,6 +21,7 @@ Build-Depends:
  libcups2-dev,
  libsdl2-dev,
  libglib2.0-dev,
+ libpwquality-dev,
  pkgconf,
 Standards-Version: 4.7.0
 Rules-Requires-Root: no
@@ -70,6 +71,8 @@ Depends:
  pipewire-bin,
  libpipewire-0.3-modules,
  libglib2.0-bin,
+ libpwquality1,
+ cracklib-runtime,
 Recommends:
  systemsettings,
  bolt,

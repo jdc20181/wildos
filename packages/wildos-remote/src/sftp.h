@@ -6,10 +6,13 @@
 #include <QProcess>
 
 #include <functional>
+#include <optional>
 
 // An SFTP (version 3) client over `ssh -s sftp`. It rides on the
 // terminal's connection through OpenSSH's connection sharing, so it needs
-// no second sign-in and checks nothing ssh hasn't already checked.
+// no second sign-in and checks nothing ssh hasn't already checked. With no
+// terminal signed in, it signs in itself only with a password saved in the
+// keyring, and never asks.
 class Sftp : public QObject
 {
     Q_OBJECT
@@ -32,7 +35,7 @@ public:
     ~Sftp() override;
 
     // The ssh arguments that reach the host (control path, port, user@host).
-    void start(const QStringList &sshArgs);
+    void start(const QStringList &sshArgs, const std::optional<QString> &password = {});
     void stop();
     bool ready() const { return m_ready; }
 
@@ -61,6 +64,7 @@ private:
     void closeHandle(const QByteArray &handle);
 
     QProcess *m_process = nullptr;
+    QString m_askToken;
     QByteArray m_buffer;
     quint32 m_nextId = 1;
     QHash<quint32, Reply> m_pending;

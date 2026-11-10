@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QPointer>
+#include <QProcessEnvironment>
 #include <QVariantList>
 #include <qtermwidget.h>
 
@@ -18,7 +19,10 @@ class TerminalView : public QTermWidget
     Q_OBJECT
 
 public:
-    TerminalView(const QString &program, const QStringList &args, const QString &historyKey, QWidget *parent = nullptr);
+    // `environment` is what the program runs with, before the terminal's own
+    // settings (TERM and the like) go on top.
+    TerminalView(const QString &program, const QStringList &args, const QString &historyKey,
+                 QProcessEnvironment environment = QProcessEnvironment::systemEnvironment(), QWidget *parent = nullptr);
 
     QVariantList suggestions() const { return m_suggestions; }
     int selected() const { return m_selected; }

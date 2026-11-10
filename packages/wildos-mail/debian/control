@@ -23,7 +23,7 @@ Depends:
  ${misc:Depends},
  evolution-data-server-camel-providers,
  evolution-data-server-core,
- wildos-ui,
+ wildos-ui (>= 0.1.2),
  evolution-data-server-common,
  qml6-module-qtcore,
  qml6-module-qtquick,

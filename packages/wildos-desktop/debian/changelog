@@ -1,3 +1,15 @@
+wildos-desktop (0.1.1) trixie; urgency=medium
+
+  * Depend on libcanberra-pulse, so the start-up sound plays through
+    PipeWire's PulseAudio service instead of libcanberra's ALSA backend.
+    The ALSA backend's player thread could still be inside
+    libcanberra-alsa.so when startplasma freed the context after the sound
+    ended, and the module was unloaded under it: startplasma-wayland
+    segfaulted about 6 seconds into the session and SDDM logged
+    "sddm-helper exited with 11", leaving the sign-in screen.
+
+ -- Wild OS Developers <dev@wildos.io>  Tue, 10 Nov 2026 17:00:00 +0000
+
 wildos-desktop (0.1.0) trixie; urgency=medium
 
   * Initial release.

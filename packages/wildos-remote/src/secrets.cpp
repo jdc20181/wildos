@@ -76,3 +76,12 @@ void Secrets::write(const QString &key, const QString &secret, const QJSValue &c
         }
     });
 }
+
+void Secrets::exists(const QString &key, const QJSValue &callback)
+{
+    read(key, [callback](const QString &, bool found) mutable {
+        if (callback.isCallable()) {
+            callback.call({QJSValue(found)});
+        }
+    });
+}

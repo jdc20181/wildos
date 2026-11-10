@@ -25,7 +25,35 @@ Item {
     Binding {
         target: host
         property: "chromeFull"
-        value: tabMenu.opened || plusMenu.opened || runAllDialog.opened || forwardMenu.opened
+        value: tabMenu.opened || plusMenu.opened || runAllDialog.opened || forwardMenu.opened || signInDialog.opened || questionDialog.opened
+    }
+
+    // The terminal's ssh asking for a password, a code or a passphrase:
+    // asked here, over the tab it's for, not in the home window.
+    Connections {
+        target: AskPass
+        function onPassphraseNeeded(id, title, prompt, kind, context, details) {
+            if (context !== "terminal") {
+                return;
+            }
+            const tabs = host.tabs;
+            for (let i = 0; i < tabs.length; ++i) {
+                if (details.hostId && tabs[i].hostId === details.hostId) {
+                    host.currentIndex = i;
+                    break;
+                }
+            }
+            host.focusChrome();
+            if (kind === "password" && details.save) {
+                signInDialog.ask(id, details);
+            } else {
+                questionDialog.ask(id, title, prompt, kind);
+            }
+        }
+        function onQuestionClosed(id) {
+            signInDialog.closeFor(id);
+            questionDialog.closeFor(id);
+        }
     }
 
     // The suggestions under the cursor, and the part of the window they
@@ -564,6 +592,15 @@ Item {
                 }
             }
         ]
+    }
+
+    SshSignInDialog {
+        id: signInDialog
+        onClosed: if (root.tab) root.tab.focusTerminal()
+    }
+    PassphraseDialog {
+        id: questionDialog
+        onClosed: if (root.tab) root.tab.focusTerminal()
     }
 
     UI.Toast {

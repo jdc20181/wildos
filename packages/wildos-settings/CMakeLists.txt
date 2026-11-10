@@ -21,6 +21,7 @@ find_package(Cups REQUIRED)
 find_package(SDL2 2.0.16 REQUIRED)
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(GLIB REQUIRED IMPORTED_TARGET glib-2.0)
+pkg_check_modules(PWQUALITY REQUIRED IMPORTED_TARGET pwquality)
 
 qt_standard_project_setup(REQUIRES 6.8)
 
@@ -54,6 +55,7 @@ qt_add_qml_module(wildos-settings
         src/keyboard.cpp src/keyboard.h
         src/printers.cpp src/printers.h
         src/users.cpp src/users.h
+        src/passwordcheck.cpp src/passwordcheck.h
         src/language.cpp src/language.h
         src/appaccess.cpp src/appaccess.h
         src/poweroptions.cpp src/poweroptions.h
@@ -85,6 +87,7 @@ target_link_libraries(wildos-settings PRIVATE
     Cups::Cups
     SDL2::SDL2
     PkgConfig::GLIB
+    PkgConfig::PWQUALITY
     util
 )
 

@@ -45,8 +45,10 @@ Panel {
         const h = host;
         const d = h.desktop || {};
         const s = h.ssh || {};
-        address.text = h.address || "";
-        name.text = h.name && h.name !== h.address ? h.name : "";
+        const where = Hosts.addressParts(h.address || "");
+        address.text = where.host;
+        port.text = where.port > 0 ? String(where.port) : "";
+        name.text = h.name && h.name !== h.address && h.name !== where.host ? h.name : "";
         group.currentIndex = Math.max(0, groupModel.findIndex(o => o.value === (h.group || "")));
         user.text = h.user || "";
         note.text = h.note || "";
@@ -66,12 +68,23 @@ Panel {
         forwards = (s.forwards || []).slice();
         colour = s.colour || Hosts.colours()[0];
         identity.currentIndex = Math.max(0, identityModel.findIndex(o => o.value === (s.identity || "")));
+        passwordSaved = false;
+        if (editing && h.kind === "terminal") {
+            const key = Hosts.passwordKey(h);
+            Secrets.exists(key, found => {
+                if (dialog.host.id === h.id) {
+                    dialog.passwordSaved = found;
+                }
+            });
+        }
     }
     function collect() {
         const out = Object.assign({}, host);
         out.kind = kind;
-        out.address = address.text.trim();
-        out.name = name.text.trim() || out.address.split(":")[0];
+        // A port typed into the address still counts; the Port field wins.
+        const where = Hosts.addressParts(address.text.trim());
+        out.address = Hosts.joinAddress(where.host, port.text.length > 0 ? parseInt(port.text) : where.port, kind);
+        out.name = name.text.trim() || where.host;
         out.group = group.currentValue || "";
         out.user = user.text.trim();
         out.note = note.text.trim();
@@ -114,6 +127,8 @@ Panel {
     property string folderPath
     property bool advanced: false
     property string colour: "#5fd39a"
+    // An SSH password saved for this host's account, as it was opened.
+    property bool passwordSaved: false
 
     readonly property var groupModel: [{ value: "", text: qsTr("No group") }].concat(Hosts.groups.map(g => ({ value: g, text: g })))
     readonly property var resolutionModel: [
@@ -187,26 +202,57 @@ Panel {
                 spacing: 8
 
                 Heading { text: dialog.kind === "desktop" ? qsTr("Computer") : qsTr("Server") }
-                FieldLabel { text: qsTr("Address") }
-                UI.TextField {
-                    id: address
+                RowLayout {
                     Layout.fillWidth: true
-                    size: "large"
-                    leftPadding: 40
-                    placeholderText: dialog.kind === "desktop" ? "studio-02.office.lan" : "web-01.hosting.lan"
-                    UI.Icon {
-                        x: 14
-                        anchors.verticalCenter: parent.verticalCenter
-                        name: dialog.kind === "desktop" ? "monitor" : "terminal"
-                        size: 15
-                        color: UI.Style.iconMuted
+                    spacing: 12
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        spacing: 8
+                        FieldLabel { text: qsTr("Address") }
+                        UI.TextField {
+                            id: address
+                            Layout.fillWidth: true
+                            size: "large"
+                            leftPadding: 40
+                            placeholderText: dialog.kind === "desktop" ? "studio-02.office.lan" : "web-01.hosting.lan"
+                            // "host:2222" typed or pasted: the port goes to its own field.
+                            onEditingFinished: {
+                                const where = Hosts.addressParts(text.trim());
+                                if (where.port > 0) {
+                                    text = where.host;
+                                    port.text = String(where.port);
+                                }
+                            }
+                            UI.Icon {
+                                x: 14
+                                anchors.verticalCenter: parent.verticalCenter
+                                name: dialog.kind === "desktop" ? "monitor" : "terminal"
+                                size: 15
+                                color: UI.Style.iconMuted
+                            }
+                        }
+                    }
+                    ColumnLayout {
+                        Layout.preferredWidth: 110
+                        spacing: 8
+                        FieldLabel { text: qsTr("Port") }
+                        UI.TextField {
+                            id: port
+                            Layout.fillWidth: true
+                            size: "large"
+                            placeholderText: dialog.kind === "desktop" ? "3389" : "22"
+                            inputMethodHints: Qt.ImhDigitsOnly
+                            validator: IntValidator { bottom: 1; top: 65535 }
+                        }
                     }
                 }
                 UI.Label {
-                    text: dialog.kind === "desktop" ? qsTr("A name or IP address. Add :port if it isn't 3389")
-                        : qsTr("A name or IP address. Add :port if it isn't 22")
+                    Layout.fillWidth: true
+                    text: dialog.kind === "desktop" ? qsTr("A name or IP address. Leave the port empty for 3389, the usual one.")
+                        : qsTr("A name or IP address. Leave the port empty for 22, the usual one.")
                     size: 12
                     color: UI.Style.inkSubtle
+                    wrapMode: Text.Wrap
                 }
                 RowLayout {
                     Layout.fillWidth: true
@@ -281,11 +327,32 @@ Panel {
                     UI.Label {
                         Layout.fillWidth: true
                         text: identity.currentIndex === 0
-                            ? qsTr("ssh tries your keys and the key agent, then asks for a password in the terminal.")
+                            ? qsTr("ssh tries your keys and the key agent, then asks for a password.")
                             : qsTr("Only this key is offered to the server.")
                         size: 12
                         color: UI.Style.inkSubtle
                         wrapMode: Text.Wrap
+                    }
+                    RowLayout {
+                        visible: dialog.passwordSaved
+                        Layout.fillWidth: true
+                        Layout.topMargin: 4
+                        spacing: 12
+                        UI.Label {
+                            Layout.fillWidth: true
+                            text: qsTr("A password for %1 is saved in your keyring.").arg(dialog.host.user ? dialog.host.user + "@" + Hosts.hostName(dialog.host) : Hosts.hostName(dialog.host))
+                            size: 12
+                            color: UI.Style.inkSubtle
+                            wrapMode: Text.Wrap
+                        }
+                        UI.Button {
+                            size: "small"
+                            text: qsTr("Forget saved password")
+                            onClicked: {
+                                Secrets.remove(Hosts.passwordKey(dialog.host));
+                                dialog.passwordSaved = false;
+                            }
+                        }
                     }
                 }
 
@@ -561,14 +628,14 @@ Panel {
             UI.Button {
                 size: "large"
                 text: qsTr("Save")
-                enabled: address.text.trim().length > 0
+                enabled: address.text.trim().length > 0 && (port.text.length === 0 || port.acceptableInput)
                 onClicked: dialog.save(false)
             }
             UI.Button {
                 size: "large"
                 kind: "primary"
                 text: qsTr("Save and connect")
-                enabled: address.text.trim().length > 0
+                enabled: address.text.trim().length > 0 && (port.text.length === 0 || port.acceptableInput)
                 onClicked: dialog.save(true)
             }
         }

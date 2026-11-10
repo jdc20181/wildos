@@ -173,6 +173,12 @@ StepPage {
                     Accessible.name: "Password"
                     onAccepted: page.submit()
                 }
+                StrengthLine {
+                    Layout.fillWidth: true
+                    Layout.topMargin: 6
+                    password: passwordField.text
+                    names: [nameField.text]
+                }
                 hint: page.passwordShort ? "Use at least 8 characters." : ""
                 hintError: !passwordField.activeFocus
             }

@@ -1,3 +1,11 @@
+wildos-settings (0.1.5) trixie; urgency=medium
+
+  * Changing your password and creating an account show how strong the new
+    password looks (weak, fair or strong, and why when it is weak), scored
+    with libpwquality. It is advice only and never stops a password.
+
+ -- Wild OS Developers <dev@wildos.io>  Tue, 10 Nov 2026 17:40:00 +0000
+
 wildos-settings (0.1.4) trixie; urgency=medium
 
   * Sign-in options has a saved passwords dialog, opened from that

@@ -12,6 +12,7 @@ find_package(KF6JobWidgets REQUIRED)
 find_package(packagekitqt6 REQUIRED)
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(HIVEX REQUIRED IMPORTED_TARGET hivex)
+pkg_check_modules(PWQUALITY REQUIRED IMPORTED_TARGET pwquality)
 
 qt_standard_project_setup(REQUIRES 6.8)
 
@@ -35,6 +36,7 @@ qt_add_qml_module(wildos-welcome
         src/wifi.cpp src/wifi.h
         src/windowsprograms.cpp src/windowsprograms.h
         src/firstrun.cpp src/firstrun.h
+        src/passwordcheck.cpp src/passwordcheck.h
 )
 
 target_include_directories(wildos-welcome PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
@@ -44,6 +46,7 @@ target_link_libraries(wildos-welcome PRIVATE
     KF6::ConfigCore KF6::CoreAddons KF6::JobWidgets
     PK::packagekitqt6
     PkgConfig::HIVEX
+    PkgConfig::PWQUALITY
 )
 
 install(TARGETS wildos-welcome RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})

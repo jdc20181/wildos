@@ -1,3 +1,17 @@
+wildos-remote (0.1.3) trixie; urgency=medium
+
+  * SSH passwords can be saved in the keyring. The terminal's password
+    prompt opens in the terminal window with "Save in my keyring", and the
+    password is saved once the server accepts it. The next connection
+    signs in with it, and asks again (replacing it) if it stops working.
+    Files sign in with it too. A host's settings can forget it, and
+    deleting a host deletes it.
+  * A host's settings have a Port field next to the address, for desktops
+    and terminals. Empty means the usual port, and an address typed as
+    host:port fills it in.
+
+ -- Wild OS Developers <dev@wildos.io>  Tue, 10 Nov 2026 17:00:00 +0000
+
 wildos-remote (0.1.2) trixie; urgency=medium
 
   * The loading splash shows on every start, for about a second, as Write

@@ -41,14 +41,13 @@ QFont terminalFont()
 }
 }
 
-TerminalView::TerminalView(const QString &program, const QStringList &args, const QString &historyKey, QWidget *parent)
+TerminalView::TerminalView(const QString &program, const QStringList &args, const QString &historyKey, QProcessEnvironment env, QWidget *parent)
     : QTermWidget(0, parent)
     , m_historyKey(historyKey)
 {
     setShellProgram(program);
     setArgs(args);
     setWorkingDirectory(QDir::homePath());
-    QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
     env.insert(QStringLiteral("TERM"), QStringLiteral("xterm-256color"));
     env.insert(QStringLiteral("COLORTERM"), QStringLiteral("truecolor"));
     env.remove(QStringLiteral("DESKTOP_STARTUP_ID"));

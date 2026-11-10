@@ -1,5 +1,6 @@
 #include "filebrowser.h"
 #include "paths.h"
+#include "secrets.h"
 
 #include <QDateTime>
 #include <QDesktopServices>
@@ -8,6 +9,7 @@
 #include <QFileInfo>
 #include <QFileSystemWatcher>
 #include <QLocale>
+#include <QPointer>
 #include <QUrl>
 
 #include <algorithm>
@@ -102,13 +104,23 @@ FileBrowser::FileBrowser(const QString &hostName, QObject *parent)
 
 FileBrowser::~FileBrowser() = default;
 
-void FileBrowser::connectTo(const QStringList &sshArgs)
+void FileBrowser::connectTo(const QStringList &sshArgs, const QString &passwordKey)
 {
     m_sshArgs = sshArgs;
+    m_passwordKey = passwordKey;
     m_loading = true;
     m_remoteError.clear();
     Q_EMIT remoteChanged();
-    m_sftp->start(sshArgs);
+    if (passwordKey.isEmpty()) {
+        m_sftp->start(sshArgs);
+        return;
+    }
+    Secrets::instance()->read(passwordKey, [this, guard = QPointer(this), sshArgs](const QString &secret, bool found) {
+        if (!guard || sshArgs != m_sshArgs) {
+            return;
+        }
+        m_sftp->start(sshArgs, found ? std::optional<QString>(secret) : std::nullopt);
+    });
 }
 
 void FileBrowser::disconnectNow()
@@ -119,7 +131,7 @@ void FileBrowser::disconnectNow()
 void FileBrowser::retry()
 {
     if (!m_sshArgs.isEmpty()) {
-        connectTo(m_sshArgs);
+        connectTo(m_sshArgs, m_passwordKey);
     }
 }
 

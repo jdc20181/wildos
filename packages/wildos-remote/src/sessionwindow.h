@@ -7,6 +7,8 @@
 #include <QVariantMap>
 #include <QWidget>
 
+#include <memory>
+
 class FileBrowser;
 class QQuickWidget;
 class QSplitter;
@@ -80,6 +82,10 @@ Q_SIGNALS:
 
 private:
     TerminalView *makeView(bool first);
+    struct SignIn;
+    // A token for one ssh (AskPass), and the check that its password worked.
+    QString signInToken();
+    void confirmSignIn(const std::shared_ptr<SignIn> &signIn, int watch, const QString &password, bool save, int tries);
     void measureLatency();
 
     QString m_title;
@@ -87,6 +93,7 @@ private:
     bool m_local = false;
     QString m_hostId;
     QVariantMap m_host;
+    QString m_passwordKey;
     QString m_userHost;
     QString m_auth;
     QStringList m_forwards;
@@ -159,6 +166,8 @@ public:
     // Runs a snippet in every terminal tab.
     Q_INVOKABLE void runEverywhere(const QString &command);
     Q_INVOKABLE int terminalTabCount() const;
+    // Keyboard to the layer over the terminals, for a dialog in it.
+    Q_INVOKABLE void focusChrome();
 
 Q_SIGNALS:
     void tabsChanged();
