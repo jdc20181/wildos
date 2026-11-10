@@ -107,7 +107,7 @@ The details you'd miss if they weren't there, borrowed from the best of Windows 
 - **Quick Look.** Press Space on a file in Files to preview it without opening anything.
 - **End task from the taskbar.** Right-click a frozen app to close it for good, no Task Manager needed.
 - **Switch between windows of one app** with Super and the key above Tab.
-- **Title bar double-click** does what you choose: maximise, shade or nothing.
+- **Title bar double-click** does what you choose: maximise, minimise or nothing.
 - **A clock your way.** Seconds, the long date and battery percentage, each one switch away.
 - **Keep awake.** One tile in Quick settings stops the PC sleeping during a download or a talk.
 - **Lid and power button** do what you set, on battery and plugged in.
@@ -123,7 +123,7 @@ Windows mode doesn't imitate Windows. It runs a real, licensed copy of Windows 1
   <img alt="How Wild OS handles a Windows program: wild-run sends most programs to Windows mode, which shows them as normal windows on your desktop; programs with a Linux version, like Zoom, Slack and Steam, install that from the Store; games with kernel anti-cheat aren't supported, and Wild OS says so." src="docs/assets/windows-mode-flow-light.svg" width="100%">
 </picture>
 
-- **Light when you're not using it.** A minute after you close your last Windows app it pauses, using no processor time. Save it to disk from the taskbar to hand back its memory too.
+- **Light when you're not using it.** A minute after you close your last Windows app it pauses, using no processor time. On battery or short of memory it saves itself to disk instead, and you can save it from the taskbar any time.
 - **In your control.** Click the Windows mode status in the taskbar to pause, save to disk, restart or shut it down. The same controls are in Settings.
 - **Never lose work.** Shut down with an unsaved document and Windows is kept exactly as it was, then reopened next time.
 - **Your files stay yours.** Windows only sees the folders you share. Saving in Word puts the file straight into your Documents folder.
@@ -197,7 +197,7 @@ The ISO is written to `out/`. The first build downloads about 3 GB of packages; 
 | Path | What's in it |
 | --- | --- |
 | `build/` | Image build: builder container, package list, chroot hooks, boot menu, patches to upstream packages |
-| `packages/` | Wild OS's own Debian packages: base system, desktop and shell, Settings, Files, Store, Mail and Calendar (`wildos-mail`), Remote (`wildos-remote`), Terminal, Task Manager, lighting, welcome, installer and Windows mode (`wildos-winmode`) |
+| `packages/` | Wild OS's own Debian packages: base system, desktop and shell, Settings, Files, Store, Mail and Calendar (`wildos-mail`), Write and Tables (`wildos-office`), Remote (`wildos-remote`), Terminal, Task Manager, lighting, welcome, installer and Windows mode (`wildos-winmode`) |
 | `branding/` | Logo, glyphs and wallpaper |
 | `docs/assets/` | The images on this page |
 
