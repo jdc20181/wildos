@@ -51,7 +51,7 @@ Wild OS is a free, open source operating system in three layers, and each one ha
 
 | Layer | What it does |
 | --- | --- |
-| **Hardened foundation** | Debian 13 with an established security hardening layer: kernel and sysctl hardening, AppArmor, USB device control and RAM wiped on shutdown. Full-disk encryption is on from install, and updates are signed. |
+| **Hardened foundation** | Debian 13 with an established security hardening layer: kernel and sysctl hardening, AppArmor, USB device control and RAM wiped on shutdown. Full-disk encryption is on by default at install, and updates are signed. |
 | **The Wild desktop** | KDE's proven engine underneath, with every screen you touch redesigned: Start, the taskbar, Settings, Files, the Store, the installer, first start and the system dialogs. Not a theme, a rebuilt interface. |
 | **Windows mode** | A genuine copy of Windows 11 Pro running out of sight. Each Windows program opens as its own normal window on your desktop. |
 
@@ -64,7 +64,7 @@ Real screens from the Wild OS designs every screen is built to.
 <table>
   <tr>
     <td width="50%"><img src="docs/assets/screens/main.webp" alt="The Wild OS desktop with Files open and a Windows app alongside"><br><sub><b>The desktop.</b> A Windows app running next to Files.</sub></td>
-    <td width="50%"><img src="docs/assets/screens/mail.webp" alt="Mail with favourites, the inbox and an email open"><br><sub><b>Mail.</b> Every account in one inbox, trackers blocked.</sub></td>
+    <td width="50%"><img src="docs/assets/screens/mail.webp" alt="Mail with favourites, the inbox and an email open"><br><sub><b>Mail.</b> Gmail, iCloud and other IMAP accounts in one inbox, trackers blocked.</sub></td>
   </tr>
   <tr>
     <td><img src="docs/assets/screens/write.webp" alt="Write editing a report"><br><sub><b>Write.</b> Opens and saves Word files.</sub></td>
@@ -123,11 +123,11 @@ Windows mode doesn't imitate Windows. It runs a real, licensed copy of Windows 1
   <img alt="How Wild OS handles a Windows program: wild-run sends most programs to Windows mode, which shows them as normal windows on your desktop; programs with a Linux version, like Zoom, Slack and Steam, install that from the Store; games with kernel anti-cheat aren't supported, and Wild OS says so." src="docs/assets/windows-mode-flow-light.svg" width="100%">
 </picture>
 
-- **Light when you're not using it.** A minute after you close your last Windows app it pauses, using no processor time. On battery or short of memory it saves itself to disk instead.
+- **Light when you're not using it.** A minute after you close your last Windows app it pauses, using no processor time. Save it to disk from the taskbar to hand back its memory too.
 - **In your control.** Click the Windows mode status in the taskbar to pause, save to disk, restart or shut it down. The same controls are in Settings.
 - **Never lose work.** Shut down with an unsaved document and Windows is kept exactly as it was, then reopened next time.
 - **Your files stay yours.** Windows only sees the folders you share. Saving in Word puts the file straight into your Documents folder.
-- **Sealed off.** Its own private network, no view of your home network, and snapshots so a bad Windows update can be rolled back.
+- **Sealed off.** Its own private network, no view of your home network, and a repair that puts Windows back to how it was after setup.
 
 ### What you need
 
@@ -210,8 +210,8 @@ The ISO is written to `out/`. The first build downloads about 3 GB of packages; 
 - [x] Our own apps: Mail and Calendar, Write, Tables and Remote
 - [x] Themes and RGB lighting
 - [x] Taskbar previews, snap assist, Quick Look and the rest of the little things
+- [x] Windows programs that open the moment you click
 - [ ] **Now:** Testing and fixes on real hardware
-- [ ] **Next:** Windows programs that open instantly
 - [ ] **Later:** Windows 11 Home support, device passthrough, Strict and Maximum protection levels
 
 ## Contributing
