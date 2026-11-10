@@ -72,6 +72,8 @@ private:
     void readLastChecked();
     void watchProgress(PackageKit::Transaction *transaction);
     static QString errorText(PackageKit::Transaction::Error error, bool installing);
+    void startInstall();
+    void refreshThenInstall();
 
     QString m_state = QStringLiteral("idle");
     QVariantList m_updates;
@@ -84,4 +86,10 @@ private:
     QString m_detail;
     QString m_error;
     bool m_restartNeeded = false;
+    // An install that failed because the update lists were out of date
+    // (a package file the lists name is gone) checks again and retries
+    // once by itself.
+    bool m_staleRetrying = false;
+    bool m_staleRetried = false;
+    bool m_installAfterList = false;
 };

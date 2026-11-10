@@ -1,0 +1,29 @@
+{
+    "id": "overclock",
+    "name": "Overclock",
+    "order": 4,
+    "default": false,
+    "description": "Black glass and neon green for gaming setups, with lighting that follows your accent.",
+    "mode": "dark",
+    "accent": {
+        "name": "Neon",
+        "colour": "#3dff7a"
+    },
+    "textOnAccent": "#06120a",
+    "accentText": "#8bffaf",
+    "glass": {
+        "colour": "#0a0d0c",
+        "alpha": 0.88
+    },
+    "taskbarGlass": {
+        "colour": "#080a09",
+        "alpha": 0.92
+    },
+    "wallpaper": "/usr/share/wallpapers/WildOS-green-lines",
+    "moreWallpapers": [
+        "/usr/share/wallpapers/WildOS-green-ribbons",
+        "/usr/share/wallpapers/WildOS-spectrum"
+    ],
+    "underglow": true,
+    "desktopTheme": "wildos-overclock"
+}

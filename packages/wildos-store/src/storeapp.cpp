@@ -23,12 +23,24 @@
 #include <QProcess>
 #include <QRegularExpression>
 #include <QStandardPaths>
+#include <QStorageInfo>
 #include <QUrl>
 
 #include <glib.h>
 
 namespace
 {
+// Looking a launcher up checks KDE's service cache against the disk, which
+// is far too slow to do for every card each time it is drawn, so each answer
+// is kept until StoreApp::forgetServices().
+QHash<QString, KService::Ptr> &serviceCache()
+{
+    static QHash<QString, KService::Ptr> cache;
+    return cache;
+}
+
+bool serviceCacheChecked = false;
+
 // Apps installed while the Store is open are not in KDE's service cache
 // yet; reading the launcher file directly finds them anyway.
 KService::Ptr findService(const QString &desktopId)
@@ -36,16 +48,24 @@ KService::Ptr findService(const QString &desktopId)
     if (desktopId.isEmpty()) {
         return {};
     }
-    KSycoca::self()->ensureCacheValid();
+    auto &cache = serviceCache();
+    auto it = cache.constFind(desktopId);
+    if (it != cache.cend()) {
+        return it.value();
+    }
+    if (!serviceCacheChecked) {
+        KSycoca::self()->ensureCacheValid();
+        serviceCacheChecked = true;
+    }
     KService::Ptr service = KService::serviceByStorageId(desktopId);
-    if (service) {
-        return service;
+    if (!service) {
+        const QString path = QStandardPaths::locate(QStandardPaths::ApplicationsLocation, desktopId);
+        if (!path.isEmpty()) {
+            service = KService::Ptr(new KService(path));
+        }
     }
-    const QString path = QStandardPaths::locate(QStandardPaths::ApplicationsLocation, desktopId);
-    if (!path.isEmpty()) {
-        return KService::Ptr(new KService(path));
-    }
-    return {};
+    cache.insert(desktopId, service);
+    return service;
 }
 
 const AppStream::Component *primary(const Record *r, const QString &source)
@@ -138,6 +158,12 @@ const QList<PermissionDef> &permissionDefs()
 }
 }
 
+void StoreApp::forgetServices()
+{
+    serviceCache().clear();
+    serviceCacheChecked = false;
+}
+
 StoreApp::StoreApp(Catalog *catalog, const QString &key)
     : QObject(catalog)
     , m_catalog(catalog)
@@ -175,21 +201,30 @@ QString StoreApp::name() const
         return fromStart;
     }
     const Record *r = m_catalog->record(m_key);
-    if (r && r->curated && !r->curated->name.isEmpty()) {
+    if (!r) {
+        return m_key;
+    }
+    if (r->curated && !r->curated->name.isEmpty()) {
         return r->curated->name;
     }
-    const auto c = primary(r, source());
-    return c ? c->name() : m_key;
+    const bool flat = source() == QLatin1String("flatpak");
+    const QString &first = flat ? r->flatName : r->aptName;
+    const QString &second = flat ? r->aptName : r->flatName;
+    return !first.isEmpty() ? first : !second.isEmpty() ? second : m_key;
 }
 
 QString StoreApp::summary() const
 {
     const Record *r = m_catalog->record(m_key);
-    if (r && r->curated && !r->curated->summary.isEmpty()) {
+    if (!r) {
+        return {};
+    }
+    if (r->curated && !r->curated->summary.isEmpty()) {
         return r->curated->summary;
     }
-    const auto c = primary(r, source());
-    return c ? c->summary() : QString();
+    const bool flat = source() == QLatin1String("flatpak");
+    const QString &first = flat ? r->flatSummary : r->aptSummary;
+    return !first.isEmpty() ? first : flat ? r->aptSummary : r->flatSummary;
 }
 
 QString StoreApp::tagline() const
@@ -278,57 +313,22 @@ QString StoreApp::iconSource() const
         }
     }
 
-    const auto c = primary(r, source());
+    // Worked out when the catalogue was built (see iconFor in catalog.cpp).
+    const bool flat = source() == QLatin1String("flatpak");
+    const QString &first = flat ? r->flatIcon : r->aptIcon;
+    const QString &second = flat ? r->aptIcon : r->flatIcon;
     // Flathub's catalogue arrives a few seconds after the first launch.
-    // Until then a curated app has a name but nothing to draw, and an empty
-    // tile reads better than a broken file icon.
-    if (!c && !(r->curated && !r->curated->icon.isEmpty())) {
-        return QString();
-    }
-    const QList<AppStream::Icon> icons = c ? c->icons() : QList<AppStream::Icon>();
-
-    QString best;
-    uint bestSize = 0;
-    QString remote;
-    const QString flatDir = m_catalog->flatpakAppstreamDir();
-    for (const AppStream::Icon &icon : icons) {
-        if (icon.kind() == AppStream::Icon::KindCached || icon.kind() == AppStream::Icon::KindLocal) {
-            QString path = icon.url().isLocalFile() ? icon.url().toLocalFile() : icon.url().toString();
-            if (!QFileInfo::exists(path) && c == (r->flat ? &*r->flat : nullptr) && !flatDir.isEmpty()) {
-                path = QStringLiteral("%1/icons/%2x%3/%4").arg(flatDir).arg(icon.width()).arg(icon.height()).arg(icon.name());
-            }
-            if (QFileInfo::exists(path) && icon.width() > bestSize) {
-                best = path;
-                bestSize = icon.width();
-            }
-        } else if (icon.kind() == AppStream::Icon::KindRemote && remote.isEmpty()) {
-            remote = icon.url().toString();
-        }
-    }
-    // Catalogue icons on disk first: the remote copies of older catalogue
-    // entries are not always kept online.
-    if (!best.isEmpty()) {
-        return QUrl::fromLocalFile(best).toString();
-    }
-    if (!remote.isEmpty()) {
-        return remote;
-    }
-    if (r->curated && !r->curated->icon.isEmpty()) {
-        return themeIcon(r->curated->icon);
-    }
-    for (const AppStream::Icon &icon : icons) {
-        if (icon.kind() == AppStream::Icon::KindStock) {
-            return themeIcon(icon.name());
-        }
-    }
-    return themeIcon(QStringLiteral("application-x-executable"));
+    // Until then a curated app may have nothing to draw, and an empty tile
+    // reads better than a broken file icon.
+    return !first.isEmpty() ? first : second;
 }
 
 QVariantList StoreApp::screenshots() const
 {
     const Record *r = m_catalog->record(m_key);
-    // Flathub keeps every screenshot online; the Wild OS catalogue's links
-    // can point at media that has since been pruned.
+    // Flathub keeps every screenshot online and its CDN is quick; the Wild
+    // OS catalogue's links can point at media that has since been pruned.
+    // So Flathub's pictures are used whenever the app is there too.
     auto c = primary(r, source());
     if (r && r->flat && !r->flat->screenshotsAll().isEmpty()) {
         c = &*r->flat;
@@ -345,21 +345,27 @@ QVariantList StoreApp::screenshots() const
         if (images.isEmpty()) {
             continue;
         }
-        AppStream::Image thumb = images.constFirst();
-        AppStream::Image full = images.constFirst();
+        // Every size the catalogue has, so the page can fetch the one
+        // closest to what it shows (Catalog::pickImage). The shape comes
+        // from whichever size says it.
+        QVariantList sizes;
+        uint width = 0;
+        uint height = 0;
         for (const AppStream::Image &img : images) {
-            if (qAbs(int(img.width()) - 752) < qAbs(int(thumb.width()) - 752)) {
-                thumb = img;
-            }
-            if (img.kind() == AppStream::Image::KindSource || img.width() > full.width()) {
-                full = img;
+            sizes << QVariantMap{
+                {QStringLiteral("url"), img.url().toString()},
+                {QStringLiteral("width"), img.width()},
+                {QStringLiteral("height"), img.height()},
+            };
+            if (img.width() > width && img.height() > 0) {
+                width = img.width();
+                height = img.height();
             }
         }
         out << QVariantMap{
-            {QStringLiteral("thumb"), thumb.url().toString()},
-            {QStringLiteral("full"), full.url().toString()},
-            {QStringLiteral("width"), thumb.width()},
-            {QStringLiteral("height"), thumb.height()},
+            {QStringLiteral("images"), sizes},
+            {QStringLiteral("width"), width},
+            {QStringLiteral("height"), height},
             {QStringLiteral("caption"), shot.caption()},
         };
         if (out.size() >= 8) {
@@ -434,13 +440,13 @@ CURATED_FIELD(swapText, swapText)
 bool StoreApp::hasFlatpak() const
 {
     const Record *r = m_catalog->record(m_key);
-    return r && (r->flat.has_value() || (!r->flatpakId.isEmpty() && m_catalog->flathubAvailable()));
+    return r && (r->hasFlat || (!r->flatpakId.isEmpty() && m_catalog->flathubAvailable()));
 }
 
 bool StoreApp::hasApt() const
 {
     const Record *r = m_catalog->record(m_key);
-    return r && (r->apt.has_value() || !r->packages.isEmpty()) && !r->packages.isEmpty();
+    return r && !r->packages.isEmpty();
 }
 
 QString StoreApp::source() const
@@ -513,13 +519,439 @@ QString StoreApp::sizeText() const
         const qint64 size = m_catalog->installedSize(m_key);
         return size > 0 ? QStringLiteral("Uses %1").arg(locale.formattedDataSize(size, 0, QLocale::DataSizeTraditionalFormat)) : QString();
     }
-    // The download size comes from PackageKit, so it only describes the Wild
-    // OS package.
-    const qint64 download = m_catalog->state(m_key).downloadSize;
-    if (download > 0 && source() == QLatin1String("apt")) {
+    const AppState &s = m_catalog->state(m_key);
+    // PackageKit sizes the Wild OS package; Flathub's figure is everything
+    // the install would download, shared parts included.
+    const qint64 download = source() == QLatin1String("apt") ? s.downloadSize : s.planTotal;
+    if (download > 0) {
         return QStringLiteral("About %1 to download").arg(locale.formattedDataSize(download, 0, QLocale::DataSizeTraditionalFormat));
     }
     return {};
+}
+
+QString StoreApp::progressText() const
+{
+    const AppState &s = m_catalog->state(m_key);
+    if (!s.error.isEmpty() && !s.busy && !s.queued) {
+        return s.error;
+    }
+    if (s.queued) {
+        return QStringLiteral("Waiting for the apps before it");
+    }
+    if (!s.busy) {
+        return {};
+    }
+    const QLocale locale;
+    auto size = [&locale](qint64 bytes) {
+        return locale.formattedDataSize(bytes, 0, QLocale::DataSizeTraditionalFormat);
+    };
+    if (s.phase == QLatin1String("auth")) {
+        return QStringLiteral("Waiting for the administrator password");
+    }
+    if (s.action == QLatin1String("remove")) {
+        return QStringLiteral("Uninstalling");
+    }
+    const bool downloading = s.phase == QLatin1String("download") && s.totalBytes > 0 && s.doneBytes < s.totalBytes;
+    if (downloading) {
+        return QStringLiteral("Downloading %1 of %2").arg(size(qMax<qint64>(0, s.doneBytes)), size(s.totalBytes));
+    }
+    if (s.phase == QLatin1String("download")) {
+        return QStringLiteral("Downloading");
+    }
+    if (s.phase == QLatin1String("install") || s.progress >= 99) {
+        return s.action == QLatin1String("update") ? QStringLiteral("Updating") : QStringLiteral("Installing");
+    }
+    return QStringLiteral("Getting ready");
+}
+
+QString StoreApp::sharedNote() const
+{
+    const AppState &s = m_catalog->state(m_key);
+    if (isInstalled() || source() != QLatin1String("flatpak")) {
+        return {};
+    }
+    // Named while it downloads, or before installing when Flathub said this
+    // app would bring it.
+    const QString runtime = !s.detail.isEmpty() ? s.detail : s.planRuntime;
+    if (runtime.isEmpty()) {
+        return {};
+    }
+    if (!s.busy && !s.queued && s.planShared > 0) {
+        const QLocale locale;
+        return QStringLiteral("Includes %1 (%2), shared with other apps").arg(runtime, locale.formattedDataSize(s.planShared, 0, QLocale::DataSizeTraditionalFormat));
+    }
+    return QStringLiteral("Includes %1, shared with other apps").arg(runtime);
+}
+
+bool StoreApp::cancellable() const
+{
+    const AppState &s = m_catalog->state(m_key);
+    // Once files are being put in place, stopping would leave the app half
+    // installed, so only waiting and downloading can be cancelled.
+    if (s.queued) {
+        return true;
+    }
+    return s.busy && s.action != QLatin1String("remove") && s.phase != QLatin1String("install") && s.phase != QLatin1String("auth");
+}
+
+void StoreApp::cancel()
+{
+    m_catalog->cancel(m_key);
+}
+
+void StoreApp::pause()
+{
+    m_catalog->pause(m_key);
+}
+
+namespace
+{
+// What a Flathub app may reach: the permissions in its metadata with the
+// person's overrides on top, as flatpak itself combines them.
+struct Access {
+    QHash<QString, QSet<QString>> granted;
+    QSet<QString> requested;
+    QSet<QString> busNames;
+};
+
+Access accessOf(const QString &metadata, const QString &overridePath)
+{
+    Access access;
+    GKeyFile *meta = g_key_file_new();
+    const QByteArray data = metadata.toUtf8();
+    g_key_file_load_from_data(meta, data.constData(), data.size(), G_KEY_FILE_NONE, nullptr);
+    GKeyFile *over = g_key_file_new();
+    g_key_file_load_from_file(over, QFile::encodeName(overridePath).constData(), G_KEY_FILE_NONE, nullptr);
+    for (const char *group : {"filesystems", "devices", "sockets", "shared", "features"}) {
+        QSet<QString> &set = access.granted[QString::fromLatin1(group)];
+        for (const QString &e : keyList(meta, group)) {
+            if (!e.startsWith(QLatin1Char('!'))) {
+                set.insert(baseOf(e));
+                access.requested.insert(QString::fromLatin1(group) + QLatin1Char(':') + baseOf(e));
+            }
+        }
+        for (const QString &e : keyList(over, group)) {
+            if (e.startsWith(QLatin1Char('!'))) {
+                set.remove(baseOf(e));
+            } else {
+                set.insert(baseOf(e));
+            }
+        }
+    }
+    for (const char *policy : {"Session Bus Policy", "System Bus Policy"}) {
+        gchar **keys = g_key_file_get_keys(meta, policy, nullptr, nullptr);
+        for (gchar **k = keys; k && *k; ++k) {
+            access.busNames.insert(QString::fromUtf8(*k));
+        }
+        g_strfreev(keys);
+    }
+    g_key_file_free(meta);
+    g_key_file_free(over);
+    return access;
+}
+
+struct Reach {
+    const char *group;
+    const char *base;
+    const char *icon;
+    const char *label;
+    const char *detail;
+};
+
+// In the order the app page lists them. The details are what each one
+// lets an app do in general; nothing here claims to know why an app asks.
+const QList<Reach> &reaches()
+{
+    static const QList<Reach> list = {
+        {"filesystems", "host", "drive", "Every file on this computer", "Including other people's files it can open"},
+        {"filesystems", "home", "home", "Your home folder", "All your documents, pictures and settings"},
+        {"filesystems", "xdg-documents", "folder", "Documents folder", "To open and save documents there"},
+        {"filesystems", "xdg-pictures", "image", "Pictures folder", "To open and save pictures there"},
+        {"filesystems", "xdg-music", "music", "Music folder", "To open and save music there"},
+        {"filesystems", "xdg-videos", "film", "Videos folder", "To open and save videos there"},
+        {"filesystems", "xdg-download", "download", "Downloads folder", "To open and save downloads there"},
+        {"filesystems", "xdg-desktop", "desktop", "Desktop", "To open and save files there"},
+        {"devices", "dri", "gpu", "Your graphics card", ""},
+        {"devices", "all", "camera", "Camera and other devices", "Webcams, game controllers and USB devices"},
+        {"sockets", "pulseaudio", "mic", "Sound and microphone", "To play sound and hear your microphone"},
+        {"sockets", "cups", "printer", "Printer", "To print"},
+        {"shared", "network", "globe", "The internet", "To go online"},
+    };
+    return list;
+}
+
+QVariantMap reachEntry(const Reach &r)
+{
+    return {{QStringLiteral("icon"), QString::fromLatin1(r.icon)}, {QStringLiteral("label"), QString::fromLatin1(r.label)}};
+}
+}
+
+bool StoreApp::sandboxed() const
+{
+    return source() == QLatin1String("flatpak");
+}
+
+bool StoreApp::isChecked() const
+{
+    const Record *r = m_catalog->record(m_key);
+    if (!r) {
+        return false;
+    }
+    return r->curated || (r->flat && r->flat->customValue(QStringLiteral("flathub::verification::verified")) == QLatin1String("true"));
+}
+
+bool StoreApp::reachKnown() const
+{
+    return sandboxed() && !m_catalog->state(m_key).flatpakMetadata.isEmpty();
+}
+
+QVariantList StoreApp::canReach() const
+{
+    QVariantList out;
+    if (!reachKnown()) {
+        return out;
+    }
+    const Access a = accessOf(m_catalog->state(m_key).flatpakMetadata, flatpakOverridePath());
+    // The file picker always works: it is how a sandboxed app opens anything.
+    out << QVariantMap{{QStringLiteral("icon"), QStringLiteral("file")}, {QStringLiteral("label"), QStringLiteral("Files you open with it")}};
+    const bool wholeHome = a.granted.value(QStringLiteral("filesystems")).contains(QStringLiteral("home"))
+        || a.granted.value(QStringLiteral("filesystems")).contains(QStringLiteral("host"));
+    for (const Reach &r : reaches()) {
+        if (wholeHome && QByteArray(r.base).startsWith("xdg-")) {
+            continue;
+        }
+        if (a.granted.value(QString::fromLatin1(r.group)).contains(QString::fromLatin1(r.base))) {
+            out << reachEntry(r);
+        }
+    }
+    if (a.busNames.contains(QStringLiteral("org.freedesktop.GeoClue2"))) {
+        out << QVariantMap{{QStringLiteral("icon"), QStringLiteral("location")}, {QStringLiteral("label"), QStringLiteral("Your location")}};
+    }
+    return out;
+}
+
+QVariantList StoreApp::cantReach() const
+{
+    QVariantList out;
+    if (!reachKnown()) {
+        return out;
+    }
+    const Access a = accessOf(m_catalog->state(m_key).flatpakMetadata, flatpakOverridePath());
+    auto has = [&a](const char *group, const char *base) {
+        return a.granted.value(QString::fromLatin1(group)).contains(QString::fromLatin1(base));
+    };
+    if (!has("shared", "network")) {
+        out << QVariantMap{{QStringLiteral("icon"), QStringLiteral("globe")}, {QStringLiteral("label"), QStringLiteral("The internet")}};
+    }
+    const bool camera = has("devices", "all");
+    const bool microphone = has("sockets", "pulseaudio");
+    if (!camera && !microphone) {
+        out << QVariantMap{{QStringLiteral("icon"), QStringLiteral("camera")}, {QStringLiteral("label"), QStringLiteral("Camera and microphone")}};
+    } else if (!camera) {
+        out << QVariantMap{{QStringLiteral("icon"), QStringLiteral("camera")}, {QStringLiteral("label"), QStringLiteral("Your camera")}};
+    }
+    if (!a.busNames.contains(QStringLiteral("org.freedesktop.GeoClue2"))) {
+        out << QVariantMap{{QStringLiteral("icon"), QStringLiteral("location")}, {QStringLiteral("label"), QStringLiteral("Your location")}};
+    }
+    if (!has("filesystems", "home") && !has("filesystems", "host")) {
+        out << QVariantMap{{QStringLiteral("icon"), QStringLiteral("home")}, {QStringLiteral("label"), QStringLiteral("The rest of your files")}};
+    }
+    return out.mid(0, 3);
+}
+
+bool StoreApp::worksOffline() const
+{
+    if (!reachKnown()) {
+        return false;
+    }
+    const Access a = accessOf(m_catalog->state(m_key).flatpakMetadata, flatpakOverridePath());
+    return !a.granted.value(QStringLiteral("shared")).contains(QStringLiteral("network"));
+}
+
+QVariantList StoreApp::consentItems() const
+{
+    QVariantList out;
+    if (!reachKnown() || isInstalled()) {
+        return out;
+    }
+    const Access a = accessOf(m_catalog->state(m_key).flatpakMetadata, flatpakOverridePath());
+    for (const Reach &r : reaches()) {
+        const QString token = QString::fromLatin1(r.group) + QLatin1Char(':') + QString::fromLatin1(r.base);
+        // The graphics card is left out: switching it off breaks drawing in
+        // nearly every app, so it is not a real choice.
+        if (!a.requested.contains(token) || qstrcmp(r.base, "dri") == 0) {
+            continue;
+        }
+        out << QVariantMap{
+            {QStringLiteral("token"), token},
+            {QStringLiteral("icon"), QString::fromLatin1(r.icon)},
+            {QStringLiteral("label"), QString::fromLatin1(r.label)},
+            {QStringLiteral("detail"), QString::fromLatin1(r.detail)},
+            {QStringLiteral("allowed"), a.granted.value(QString::fromLatin1(r.group)).contains(QString::fromLatin1(r.base))},
+            {QStringLiteral("required"), false},
+        };
+    }
+    return out;
+}
+
+void StoreApp::installWith(const QVariantMap &choices)
+{
+    for (const QVariant &v : consentItems()) {
+        const QVariantMap item = v.toMap();
+        const QString token = item.value(QStringLiteral("token")).toString();
+        if (choices.contains(token)) {
+            setPermission(token, choices.value(token).toBool());
+        }
+    }
+    install();
+}
+
+qint64 StoreApp::spaceShort() const
+{
+    const AppState &s = m_catalog->state(m_key);
+    if (s.planInstalled <= 0 || isInstalled() || source() != QLatin1String("flatpak")) {
+        return 0;
+    }
+    QString dir = FlatpakBackend::userDataDir();
+    while (!dir.isEmpty() && !QFileInfo::exists(dir)) {
+        dir = QFileInfo(dir).absolutePath();
+        if (dir == QLatin1String("/")) {
+            break;
+        }
+    }
+    const qint64 free = QStorageInfo(dir).bytesAvailable();
+    return free >= 0 && free < s.planInstalled ? s.planInstalled - free : 0;
+}
+
+QString StoreApp::buttonState() const
+{
+    const AppState &s = m_catalog->state(m_key);
+    if (s.queued) {
+        return QStringLiteral("waiting");
+    }
+    if (s.stopping) {
+        return QStringLiteral("paused");
+    }
+    if (s.busy) {
+        if (s.action == QLatin1String("remove")) {
+            return QStringLiteral("removing");
+        }
+        if (s.phase == QLatin1String("install") || s.progress >= 99) {
+            return QStringLiteral("installing");
+        }
+        if (s.phase == QLatin1String("download") || s.progress > 0) {
+            return QStringLiteral("downloading");
+        }
+        return QStringLiteral("preparing");
+    }
+    if (isInstalled()) {
+        if (updateAvailable()) {
+            return QStringLiteral("update");
+        }
+        return canOpen() ? QStringLiteral("open") : QStringLiteral("installed");
+    }
+    if (s.paused) {
+        return QStringLiteral("paused");
+    }
+    if (!s.error.isEmpty()) {
+        return QStringLiteral("retry");
+    }
+    if (spaceShort() > 0) {
+        return QStringLiteral("nospace");
+    }
+    return QStringLiteral("get");
+}
+
+QString StoreApp::statusLine() const
+{
+    const QString state = buttonState();
+    if (state == QLatin1String("nospace")) {
+        return QStringLiteral("Needs %1 free").arg(m_catalog->sizeText(m_catalog->state(m_key).planInstalled));
+    }
+    if (state == QLatin1String("retry")) {
+        return QStringLiteral("Download failed");
+    }
+    if (state == QLatin1String("paused")) {
+        return QStringLiteral("Paused");
+    }
+    return {};
+}
+
+QString StoreApp::bytesText() const
+{
+    const AppState &s = m_catalog->state(m_key);
+    if (s.totalBytes <= 0 || s.doneBytes < 0) {
+        return {};
+    }
+    const QLocale locale;
+    // Both in the larger unit, as "412 of 1,080 MB" reads.
+    if (s.totalBytes >= qint64(10) * 1000 * 1000 * 1000) {
+        return QStringLiteral("%1 of %2 GB").arg(locale.toString(double(s.doneBytes) / 1e9, 'f', 1), locale.toString(double(s.totalBytes) / 1e9, 'f', 1));
+    }
+    return QStringLiteral("%1 of %2 MB").arg(locale.toString(qRound64(double(s.doneBytes) / 1e6)), locale.toString(qMax<qint64>(1, qRound64(double(s.totalBytes) / 1e6))));
+}
+
+QString StoreApp::timeLeftText() const
+{
+    const qint64 left = m_catalog->state(m_key).secondsLeft;
+    if (left < 0) {
+        return {};
+    }
+    if (left < 45) {
+        return QStringLiteral("Less than a minute left");
+    }
+    if (left < 90) {
+        return QStringLiteral("About a minute left");
+    }
+    if (left < 90 * 60) {
+        return QStringLiteral("About %1 minutes left").arg((left + 30) / 60);
+    }
+    return QStringLiteral("About %1 hours left").arg((left + 1800) / 3600);
+}
+
+QString StoreApp::downloadText() const
+{
+    const AppState &s = m_catalog->state(m_key);
+    const qint64 bytes = source() == QLatin1String("apt") ? s.downloadSize : s.planTotal;
+    return bytes > 0 ? m_catalog->sizeText(bytes) : QString();
+}
+
+QString StoreApp::updateSizeText() const
+{
+    const qint64 bytes = m_catalog->updateSize(m_key);
+    return bytes > 0 ? m_catalog->sizeText(bytes) : QString();
+}
+
+QString StoreApp::releaseNote() const
+{
+    const auto c = primary(m_catalog->record(m_key), source());
+    if (!c) {
+        return {};
+    }
+    const auto releases = c->releasesPlain().entries();
+    if (releases.isEmpty()) {
+        return {};
+    }
+    QString text = releases.constFirst().description();
+    // The first paragraph or list item, without markup.
+    text.replace(QRegularExpression(QStringLiteral("</(p|li)>.*"), QRegularExpression::DotMatchesEverythingOption), QString());
+    text.remove(QRegularExpression(QStringLiteral("<[^>]*>")));
+    return text.simplified();
+}
+
+QString StoreApp::newVersion() const
+{
+    const auto c = primary(m_catalog->record(m_key), source());
+    if (!c) {
+        return {};
+    }
+    const auto releases = c->releasesPlain().entries();
+    return releases.isEmpty() ? QString() : releases.constFirst().version();
+}
+
+QString StoreApp::updatedText() const
+{
+    return m_catalog->dayText(m_catalog->updatedTime(m_key));
 }
 
 QString StoreApp::desktopId() const

@@ -18,6 +18,11 @@ if [ "$1" = "configure" ]; then
     if [ -d /run/systemd/system ] && systemctl is-active --quiet NetworkManager.service; then
         nmcli general reload >/dev/null 2>&1 || true
     fi
+    # The firewall's rules change with the package; loaded again now rather
+    # than at the next start-up.
+    if [ -d /run/systemd/system ] && [ -x /usr/libexec/wildos/settings-protection ] && command -v nft >/dev/null; then
+        /usr/libexec/wildos/settings-protection boot || true
+    fi
 fi
 
 #DEBHELPER#

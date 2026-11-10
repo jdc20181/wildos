@@ -12,6 +12,7 @@ import io
 import os
 import re
 import subprocess
+import threading
 
 from . import config
 
@@ -90,6 +91,46 @@ def app_id_for_image(image, registry):
                 return app_id
         return make_id(stem)
     return None
+
+
+def document_title(title, name):
+    """What a window has open, from its title: Windows apps put their own
+    name last ("Budget 2027.xlsx - Excel"), which the taskbar's panel
+    already shows beside it."""
+    title = (title or "").strip()
+    name = (name or "").lower()
+    head, sep, tail = title.rpartition(" - ")
+    tail = tail.strip().lower()
+    if sep and head and tail and (tail == name or name.endswith(" " + tail)):
+        return head.strip()
+    return "" if title.lower() == name else title
+
+
+def open_windows(windows, registry):
+    """The Windows app windows open now, each with its app's id, name and
+    icon and the document in it, for the taskbar's Windows mode panel.
+    Dialogs are left out: the window that owns one is listed already."""
+    out = []
+    for w in windows:
+        if not isinstance(w, dict) or w.get("owner") or is_shell(w.get("image")):
+            continue
+        app_id = app_id_for_image(w.get("image"), registry)
+        if not app_id:
+            continue
+        app = registry.get(app_id)
+        name = app["name"] if app and app.get("name") else exe_stem(w.get("image")).capitalize()
+        out.append({"id": app_id, "name": name, "icon": PREFIX + app_id if app else "wildos-windows-app",
+                    "title": document_title(w.get("title"), name), "installed": app is not None})
+    return out
+
+
+def last_app(registry, last, history):
+    """The app to offer to open again: the last one opened, or else the one
+    opened most often. None when neither is still installed."""
+    if last in registry:
+        return last
+    counts = [(n, i) for i, n in (history or {}).items() if i in registry and isinstance(n, int)]
+    return max(counts)[1] if counts else None
 
 
 def registry_file():
@@ -188,11 +229,16 @@ def remove_all():
 
 
 def refresh_menus():
-    for cmd in (["update-desktop-database", config.applications_dir()], ["kbuildsycoca6"]):
-        try:
-            subprocess.run(cmd, capture_output=True, timeout=60)
-        except (OSError, subprocess.TimeoutExpired):
-            pass
+    """The desktop's menus read the app entries again. kbuildsycoca6 can take
+    seconds, so it runs beside the caller (the agent's main loop), which
+    never waits for it."""
+    def run():
+        for cmd in (["update-desktop-database", config.applications_dir()], ["kbuildsycoca6"]):
+            try:
+                subprocess.run(cmd, capture_output=True, timeout=60)
+            except (OSError, subprocess.TimeoutExpired):
+                pass
+    threading.Thread(target=run, daemon=True).start()
 
 
 def mimeapps_path():

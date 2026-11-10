@@ -232,7 +232,7 @@ void System::readHardware()
                               .match(readFile(QStringLiteral("/proc/meminfo")));
     if (memTotal.hasMatch()) {
         const double gib = memTotal.captured(1).toDouble() / (1024.0 * 1024.0);
-        m_memory = QStringLiteral("%1 GB usable").arg(QLocale(QLocale::English, QLocale::UnitedKingdom).toString(gib, 'f', 1));
+        m_memory = QStringLiteral("%1 GB usable").arg(QLocale::system().toString(gib, 'f', 1));
     }
 }
 
@@ -632,18 +632,29 @@ bool System::hasColourScheme(const QString &name) const
 
 void System::setColourScheme(const QString &name)
 {
+    setColours(name, QColor());
+}
+
+void System::setColours(const QString &name, const QColor &newAccent)
+{
     if (!hasColourScheme(name)) {
+        if (newAccent.isValid()) {
+            setAccent(newAccent);
+        }
         return;
     }
     // Choosing a theme by hand ends automatic switching.
     setThemeMode(name == QLatin1String("WildOSLight") ? QStringLiteral("light") : QStringLiteral("dark"));
     if (name == m_colourScheme) {
+        if (newAccent.isValid() && newAccent != m_accent) {
+            setAccent(newAccent);
+        }
         return;
     }
-    QColor accent = m_accent;
+    QColor accent = newAccent.isValid() ? newAccent : m_accent;
     // High contrast has no accent of its own; leaving it for a theme brings
     // back the accent from before it (Accessibility keeps it).
-    if (m_colourScheme == QLatin1String("WildOSHighContrast")) {
+    if (!newAccent.isValid() && m_colourScheme == QLatin1String("WildOSHighContrast")) {
         KSharedConfigPtr wildos = KSharedConfig::openConfig(QStringLiteral("wildosrc"));
         wildos->reparseConfiguration();
         const QStringList rgb = wildos->group(QStringLiteral("Accessibility")).readEntry("AccentBeforeContrast", QString()).split(QLatin1Char(','));
@@ -770,22 +781,59 @@ void System::setSnapEdges(bool on)
     reconfigureKWin();
 }
 
+// Snap layouts and snap assist are one KWin effect, org.wildos.snap, which
+// reads its two switches from its own kwinrc group. A switch only counts as
+// on while the effect is enabled, so turning both off unloads it, and
+// systems that turned snap layouts off before assist existed read as both
+// off.
 bool System::snapLayouts() const
 {
-    return KSharedConfig::openConfig(QStringLiteral("kwinrc"))->group(QStringLiteral("Plugins")).readEntry("org.wildos.snapEnabled", true);
+    KSharedConfigPtr config = KSharedConfig::openConfig(QStringLiteral("kwinrc"));
+    return config->group(QStringLiteral("Plugins")).readEntry("org.wildos.snapEnabled", true)
+        && config->group(QStringLiteral("Effect-org.wildos.snap")).readEntry("ShowLayouts", true);
 }
 
 void System::setSnapLayouts(bool on)
 {
+    applySnapEffect(on, snapAssist());
+}
+
+bool System::snapAssist() const
+{
     KSharedConfigPtr config = KSharedConfig::openConfig(QStringLiteral("kwinrc"));
-    config->group(QStringLiteral("Plugins")).writeEntry("org.wildos.snapEnabled", on);
+    return config->group(QStringLiteral("Plugins")).readEntry("org.wildos.snapEnabled", true)
+        && config->group(QStringLiteral("Effect-org.wildos.snap")).readEntry("SnapAssist", true);
+}
+
+void System::setSnapAssist(bool on)
+{
+    applySnapEffect(snapLayouts(), on);
+}
+
+void System::applySnapEffect(bool layouts, bool assist)
+{
+    KSharedConfigPtr config = KSharedConfig::openConfig(QStringLiteral("kwinrc"));
+    KConfigGroup plugins = config->group(QStringLiteral("Plugins"));
+    const bool wasLoaded = plugins.readEntry("org.wildos.snapEnabled", true);
+    const bool load = layouts || assist;
+    KConfigGroup effect = config->group(QStringLiteral("Effect-org.wildos.snap"));
+    effect.writeEntry("ShowLayouts", layouts);
+    effect.writeEntry("SnapAssist", assist);
+    plugins.writeEntry("org.wildos.snapEnabled", load);
     config->sync();
-    // Effects are loaded and unloaded by name; a plain reconfigure does not
-    // start or stop one.
-    auto message = QDBusMessage::createMethodCall(QStringLiteral("org.kde.KWin"), QStringLiteral("/Effects"), QStringLiteral("org.kde.kwin.Effects"),
-                                                  on ? QStringLiteral("loadEffect") : QStringLiteral("unloadEffect"));
-    message << QStringLiteral("org.wildos.snap");
-    QDBusConnection::sessionBus().asyncCall(message);
+    // Effects are loaded and unloaded by name; a plain reconfigure neither
+    // starts nor stops one, nor makes a running one read its settings again.
+    QString method = QStringLiteral("reconfigureEffect");
+    if (load != wasLoaded) {
+        method = load ? QStringLiteral("loadEffect") : QStringLiteral("unloadEffect");
+    } else if (!load) {
+        method.clear();
+    }
+    if (!method.isEmpty()) {
+        auto message = QDBusMessage::createMethodCall(QStringLiteral("org.kde.KWin"), QStringLiteral("/Effects"), QStringLiteral("org.kde.kwin.Effects"), method);
+        message << QStringLiteral("org.wildos.snap");
+        QDBusConnection::sessionBus().asyncCall(message);
+    }
     reconfigureKWin();
 }
 
@@ -800,6 +848,114 @@ void System::setAltTabAllDesktops(bool on)
     config->group(QStringLiteral("TabBox")).writeEntry("DesktopMode", on ? 0 : 1);
     config->sync();
     reconfigureKWin();
+}
+
+namespace
+{
+// KWin's corner numbers and the names its [ElectricBorders] group uses.
+const QList<std::pair<int, QString>> corners = {
+    {1, QStringLiteral("TopRight")},
+    {3, QStringLiteral("BottomRight")},
+    {5, QStringLiteral("BottomLeft")},
+    {7, QStringLiteral("TopLeft")},
+};
+// KWin's "no corner", which a list needs to stay empty: an empty list would
+// read back as the default.
+constexpr int noCorner = 9;
+// Task view is KWin's Overview, which takes the top left corner unless told
+// otherwise.
+const QList<int> overviewDefault = {7};
+}
+
+QVariantMap System::screenCorners() const
+{
+    KSharedConfigPtr config = KSharedConfig::openConfig(QStringLiteral("kwinrc"));
+    config->reparseConfiguration();
+    const QList<int> overview = config->group(QStringLiteral("Effect-overview")).readEntry("BorderActivate", overviewDefault);
+    const KConfigGroup borders = config->group(QStringLiteral("ElectricBorders"));
+    QVariantMap result;
+    for (const auto &[corner, name] : corners) {
+        const QString action = borders.readEntry(name, QStringLiteral("None")).toLower();
+        QString value = QStringLiteral("none");
+        if (overview.contains(corner)) {
+            value = QStringLiteral("taskview");
+        } else if (action == QLatin1String("showdesktop")) {
+            value = QStringLiteral("desktop");
+        } else if (action == QLatin1String("lockscreen")) {
+            value = QStringLiteral("lock");
+        }
+        result.insert(QString::number(corner), value);
+    }
+    return result;
+}
+
+void System::setScreenCorner(int corner, const QString &action)
+{
+    QString name;
+    for (const auto &[number, key] : corners) {
+        if (number == corner) {
+            name = key;
+        }
+    }
+    if (name.isEmpty()) {
+        return;
+    }
+    KSharedConfigPtr config = KSharedConfig::openConfig(QStringLiteral("kwinrc"));
+    config->reparseConfiguration();
+
+    KConfigGroup overviewGroup = config->group(QStringLiteral("Effect-overview"));
+    QList<int> overview = overviewGroup.readEntry("BorderActivate", overviewDefault);
+    overview.removeAll(corner);
+    overview.removeAll(noCorner);
+    if (action == QLatin1String("taskview")) {
+        overview.append(corner);
+    }
+    overviewGroup.writeEntry("BorderActivate", overview.isEmpty() ? QList<int>{noCorner} : overview);
+
+    // A corner given to KWin's window view by hand would still fire beside
+    // the new choice.
+    KConfigGroup windowView = config->group(QStringLiteral("Effect-windowview"));
+    for (const char *key : {"BorderActivate", "BorderActivateAll", "BorderActivateClass"}) {
+        if (windowView.hasKey(key)) {
+            QList<int> list = windowView.readEntry(key, QList<int>());
+            if (list.removeAll(corner) > 0) {
+                windowView.writeEntry(key, list.isEmpty() ? QList<int>{noCorner} : list);
+            }
+        }
+    }
+
+    const QString built = action == QLatin1String("desktop") ? QStringLiteral("ShowDesktop")
+        : action == QLatin1String("lock")                    ? QStringLiteral("LockScreen")
+                                                             : QStringLiteral("None");
+    config->group(QStringLiteral("ElectricBorders")).writeEntry(name, built);
+    config->sync();
+    reconfigureKWin();
+}
+
+bool System::taskbarShowDesktop() const
+{
+    return KSharedConfig::openConfig(QStringLiteral("wildosrc"))->group(QStringLiteral("Taskbar")).readEntry("ShowDesktop", true);
+}
+
+void System::setTaskbarShowDesktop(bool on)
+{
+    KSharedConfigPtr wildos = KSharedConfig::openConfig(QStringLiteral("wildosrc"));
+    wildos->group(QStringLiteral("Taskbar")).writeEntry("ShowDesktop", on, KConfig::Notify);
+    wildos->sync();
+    Q_EMIT taskbarShowDesktopChanged();
+}
+
+bool System::taskbarPeek() const
+{
+    return KSharedConfig::openConfig(QStringLiteral("wildosrc"))->group(QStringLiteral("Taskbar")).readEntry("PeekDesktop", false);
+}
+
+void System::setTaskbarPeek(bool on)
+{
+    KSharedConfigPtr wildos = KSharedConfig::openConfig(QStringLiteral("wildosrc"));
+    wildos->group(QStringLiteral("Taskbar")).writeEntry("PeekDesktop", on, KConfig::Notify);
+    wildos->sync();
+    Q_EMIT taskbarShowDesktopChanged();
 }
 
 void System::reconfigureKWin()
@@ -836,7 +992,7 @@ QString System::formatBytes(qint64 bytes) const
 {
     // Units of 1024 labelled GB, as Windows shows sizes everywhere and as
     // Files shows them, so a drive reads the same in both places.
-    const QLocale locale(QLocale::English, QLocale::UnitedKingdom);
+    const QLocale locale = QLocale::system();
     const double value = double(bytes);
     const double kb = 1024.0, mb = kb * 1024, gb = mb * 1024, tb = gb * 1024;
     if (value >= tb) {
@@ -916,6 +1072,37 @@ void System::setTaskbarAllDesktops(bool all)
     if (all != m_taskbarAllDesktops) {
         m_taskbarAllDesktops = all;
         Q_EMIT taskbarAllDesktopsChanged();
+    }
+}
+
+// The item's own "shown" setting (its contents/config/main.xml), which it
+// reads live, so turning it off keeps it on the taskbar, and in its place,
+// for turning on again.
+namespace
+{
+const QString winModeScript = QStringLiteral(
+    "var items = []; panels().forEach(function (p) { items = items.concat(p.widgets('org.wildos.winmode')); });");
+}
+
+void System::readTaskbarWinModeStatus()
+{
+    const QString shown = evaluatePlasmaScript(winModeScript
+        + QStringLiteral("if (items.length) { items[0].currentConfigGroup = ['General']; print(String(items[0].readConfig('shown', true))); }"));
+    const bool on = shown != QLatin1String("false");
+    if (on != m_taskbarWinModeStatus) {
+        m_taskbarWinModeStatus = on;
+        Q_EMIT taskbarWinModeStatusChanged();
+    }
+}
+
+void System::setTaskbarWinModeStatus(bool shown)
+{
+    evaluatePlasmaScript(winModeScript
+        + QStringLiteral("items.forEach(function (w) { w.currentConfigGroup = ['General']; w.writeConfig('shown', %1); w.reloadConfig(); });")
+              .arg(shown ? QStringLiteral("true") : QStringLiteral("false")));
+    if (shown != m_taskbarWinModeStatus) {
+        m_taskbarWinModeStatus = shown;
+        Q_EMIT taskbarWinModeStatusChanged();
     }
 }
 
@@ -1038,7 +1225,9 @@ void System::setUsbProtection(bool on)
     const QString service = QStringLiteral("org.freedesktop.systemd1");
     const QString path = QStringLiteral("/org/freedesktop/systemd1");
     const QString manager = QStringLiteral("org.freedesktop.systemd1.Manager");
-    const QStringList units = {QStringLiteral("usbguard.service")};
+    // usbguard-dbus requires usbguard and is enabled on its own, so left
+    // enabled it started USBGuard again at the next start-up.
+    const QStringList units = {QStringLiteral("usbguard.service"), QStringLiteral("usbguard-dbus.service")};
 
     auto unitFiles = QDBusMessage::createMethodCall(service, path, manager, on ? QStringLiteral("EnableUnitFiles") : QStringLiteral("DisableUnitFiles"));
     if (on) {
@@ -1393,6 +1582,32 @@ void System::reloadScreenLocker()
     QDBusConnection::sessionBus().asyncCall(message);
 }
 
+namespace
+{
+// Windows mode's status (boards 4.13 and 4.14) is at the left end of the
+// bar in both styles. A bar from when floating put it just before Start gets
+// it moved back: Plasma's scripting can't reorder a panel, so the item is
+// taken off and dropped on the bar's first pixel, which a panel takes to mean
+// "before everything". It holds no settings of its own to lose; it is locked
+// again afterwards, as the layout locks it.
+const QString placeWinModeScript = QStringLiteral(
+    "panels().forEach(function (p) {"
+    "  var all = p.widgets();"
+    "  all.sort(function (a, b) { return a.geometry.x - b.geometry.x; });"
+    "  var w = -1;"
+    "  for (var i = 0; i < all.length; i++) {"
+    "    if (all[i].type === 'org.wildos.winmode') w = i;"
+    "  }"
+    "  if (w <= 0) return;"
+    "  var locked = p.locked;"
+    "  p.locked = false;"
+    "  all[w].remove();"
+    "  var item = p.addWidget('org.wildos.winmode', 0, 0, -1, -1);"
+    "  if (item) { item.currentConfigGroup = []; item.writeConfig('immutability', 2); item.locked = true; }"
+    "  p.locked = locked;"
+    "});");
+}
+
 // The panel (wildos-shell) watches this key and redraws straight away.
 void System::setTaskbarFloating(bool floating)
 {
@@ -1402,6 +1617,7 @@ void System::setTaskbarFloating(bool floating)
     // The panel's height keeps maximised windows clear of the bar: 52 px
     // docked, 76 floating (62 px pills 14 px above the screen edge).
     evaluatePlasmaScript(QStringLiteral("panels().forEach(function (p) { if (p.location === 'bottom') p.height = %1; });").arg(floating ? 76 : 52));
+    evaluatePlasmaScript(placeWinModeScript);
     if (floating != m_taskbarFloating) {
         m_taskbarFloating = floating;
         Q_EMIT taskbarFloatingChanged();

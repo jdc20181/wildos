@@ -20,6 +20,11 @@ PageScroll {
         return on ? "On" : "Off";
     }
 
+    readonly property var blurSteps: ["Lightest", "Light", "Medium", "Strong", "Strongest"]
+    readonly property string windowEffectsReason: Accessibility.windowEffectsInstalled
+        ? "This needs graphics acceleration, which this computer isn't using"
+        : "The window effects aren't installed on this computer"
+
     Component.onCompleted: {
         Accessibility.refresh();
         Accessibility.refreshMagnifier();
@@ -203,6 +208,91 @@ PageScroll {
                             lockedReason: "The high contrast theme isn't installed on this computer"
                             Accessible.name: "High contrast"
                             onToggled: Accessibility.setHighContrast(checked)
+                        }
+                    }
+
+                    UI.SettingRow {
+                        title: "Outline windows"
+                        description: "A clear edge round every window, and a thick one round the window you're using"
+                        status: page.onOff(Accessibility.outlineWindows)
+
+                        UI.Toggle {
+                            anchors.verticalCenter: parent.verticalCenter
+                            checked: Accessibility.outlineWindows
+                            locked: !Accessibility.windowEffectsSupported
+                            lockedReason: page.windowEffectsReason
+                            Accessible.name: "Outline windows"
+                            onToggled: Accessibility.setOutlineWindows(checked)
+                        }
+                    }
+
+                    UI.SettingRow {
+                        title: "Stronger text on glass"
+                        description: "Solid backing and brighter text on the taskbar, Start, flyouts and Wild OS apps"
+                        status: page.onOff(Accessibility.strongerText)
+
+                        UI.Toggle {
+                            anchors.verticalCenter: parent.verticalCenter
+                            checked: Accessibility.strongerText
+                            Accessible.name: "Stronger text on glass"
+                            onToggled: Accessibility.setStrongerText(checked)
+                        }
+                    }
+
+                    UI.SettingRow {
+                        title: "Blur windows in the background"
+                        description: "Every window but the one you're using goes soft and a little darker"
+                        status: page.onOff(Accessibility.blurBackground)
+
+                        UI.Toggle {
+                            anchors.verticalCenter: parent.verticalCenter
+                            checked: Accessibility.blurBackground
+                            locked: !Accessibility.windowEffectsSupported
+                            lockedReason: page.windowEffectsReason
+                            Accessible.name: "Blur windows in the background"
+                            onToggled: Accessibility.setBlurBackground(checked)
+                        }
+                    }
+
+                    UI.SettingRow {
+                        visible: Accessibility.blurBackground && Accessibility.windowEffectsSupported
+                        title: "Blur strength"
+                        status: page.blurSteps[Math.round(blurStrength.value) - 1]
+
+                        UI.Slider {
+                            id: blurStrength
+                            anchors.verticalCenter: parent.verticalCenter
+                            implicitWidth: 140
+                            implicitHeight: 20
+                            flat: true
+                            from: 1
+                            to: page.blurSteps.length
+                            stepSize: 1
+                            snapMode: T.Slider.SnapAlways
+                            wheelEnabled: false
+                            value: Accessibility.blurStrength
+                            accessibleName: "Blur strength"
+                            Accessible.description: page.blurSteps[Math.round(value) - 1]
+                            // KWin redraws the blur at each step, so dragging
+                            // shows each strength as it is passed.
+                            onMoved: {
+                                Accessibility.setBlurStrength(Math.round(value));
+                                value = Qt.binding(() => Accessibility.blurStrength);
+                            }
+                        }
+                    }
+
+                    UI.SettingRow {
+                        visible: Accessibility.blurBackground && Accessibility.windowEffectsSupported
+                        title: "Blur the desktop too"
+                        description: "Whenever a window is in use"
+                        status: page.onOff(Accessibility.blurDesktop)
+
+                        UI.Toggle {
+                            anchors.verticalCenter: parent.verticalCenter
+                            checked: Accessibility.blurDesktop
+                            Accessible.name: "Blur the desktop too"
+                            onToggled: Accessibility.setBlurDesktop(checked)
                         }
                     }
                 }

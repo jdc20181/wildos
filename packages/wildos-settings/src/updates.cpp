@@ -191,6 +191,7 @@ void Updates::listUpdates()
     });
     connect(list, &Transaction::finished, this, [this, collected, ids](Transaction::Exit status, uint) {
         if (status != Transaction::ExitSuccess) {
+            m_installAfterList = false;
             if (m_state != QLatin1String("error")) {
                 setState(QStringLiteral("error"), QStringLiteral("Wild OS could not read the list of updates."));
             }
@@ -210,6 +211,12 @@ void Updates::listUpdates()
         m_pending = *ids;
         Q_EMIT updatesChanged();
         setState(m_updates.isEmpty() ? QStringLiteral("uptodate") : QStringLiteral("available"));
+        if (m_installAfterList) {
+            m_installAfterList = false;
+            if (!m_pending.isEmpty()) {
+                startInstall();
+            }
+        }
     });
 }
 
@@ -218,14 +225,37 @@ void Updates::install()
     if (m_pending.isEmpty() || m_state == QLatin1String("installing")) {
         return;
     }
+    m_staleRetried = false;
+    startInstall();
+}
+
+void Updates::startInstall()
+{
+    m_staleRetrying = false;
     setState(QStringLiteral("installing"));
     Transaction *update = Daemon::updatePackages(m_pending, Transaction::TransactionFlagOnlyTrusted);
     watchProgress(update);
     connect(update, &Transaction::errorCode, this, [this](Transaction::Error error, const QString &) {
+        // The list being installed came from the last check, and the update
+        // server may have moved on since (a newer build replaces the files
+        // it named). Checking again fixes that, so it happens once here
+        // rather than as an error the person has to retry by hand.
+        const bool stale = error == Transaction::ErrorPackageDownloadFailed || error == Transaction::ErrorPackageNotFound
+            || error == Transaction::ErrorUpdateNotFound || error == Transaction::ErrorDepResolutionFailed;
+        if (stale && !m_staleRetried) {
+            m_staleRetrying = true;
+            return;
+        }
         setState(QStringLiteral("error"), errorText(error, true));
     });
     connect(update, &Transaction::finished, this, [this](Transaction::Exit status, uint) {
         loadHistory();
+        if (status != Transaction::ExitSuccess && m_staleRetrying) {
+            m_staleRetrying = false;
+            m_staleRetried = true;
+            refreshThenInstall();
+            return;
+        }
         if (status == Transaction::ExitSuccess) {
             if (needsRestart(m_pending)) {
                 QFile marker(restartMarker());
@@ -248,6 +278,24 @@ void Updates::install()
         } else if (m_state != QLatin1String("error")) {
             setState(QStringLiteral("error"), status == Transaction::ExitCancelled ? QStringLiteral("Installing was cancelled.")
                                                                                     : QStringLiteral("The updates could not be installed."));
+        }
+    });
+}
+
+void Updates::refreshThenInstall()
+{
+    Transaction *refresh = Daemon::refreshCache(true);
+    watchProgress(refresh);
+    connect(refresh, &Transaction::errorCode, this, [this](Transaction::Error error, const QString &) {
+        setState(QStringLiteral("error"), errorText(error, true));
+    });
+    connect(refresh, &Transaction::finished, this, [this](Transaction::Exit status, uint) {
+        readLastChecked();
+        if (status == Transaction::ExitSuccess) {
+            m_installAfterList = true;
+            listUpdates();
+        } else if (m_state != QLatin1String("error")) {
+            setState(QStringLiteral("error"), QStringLiteral("The updates could not be installed."));
         }
     });
 }
@@ -340,6 +388,8 @@ QString Updates::errorText(Transaction::Error error, bool installing)
     case Transaction::ErrorNotAuthorized:
         return installing ? QStringLiteral("Installing needs the administrator password, and it was not given.")
                           : QStringLiteral("Checking needs the administrator password, and it was not given.");
+    case Transaction::ErrorPackageDownloadFailed:
+        return QStringLiteral("Some updates could not be downloaded. Check your internet connection and try again.");
     case Transaction::ErrorNoSpaceOnDevice:
         return QStringLiteral("There is not enough free space to install the updates.");
     case Transaction::ErrorLockRequired:

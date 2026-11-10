@@ -19,6 +19,11 @@ execute_after_dh_install:
 	magick $(SRC_WALL) -resize 600x375^ -gravity center -extent 600x375 \
 		-quality 85 $(WALL)/contents/screenshot.jpg
 	install -Dm644 files/wallpaper-metadata.json $(WALL)/metadata.json
+	# The themes' photos, one package each, from the 5K masters in
+	# branding/wallpaper/photos (see the tool and photos.json).
+	python3 tools/wallpapers.py branding debian/wildos-branding/usr/share/wallpapers
+	# A Plasma style per theme glass, for Start, the flyouts and tooltips.
+	python3 tools/theme-variants.py files/desktoptheme files/themes 		debian/wildos-branding/usr/share/plasma/desktoptheme
 	# The default account picture is a square of the same photo centred on
 	# the island, so it stays a proper picture when cropped to a circle.
 	# The offsets are the island's place in misty-lake.jpg (7792x5197).

@@ -42,6 +42,7 @@ qt_add_qml_module(wildos-files
         src/zipjob.cpp src/zipjob.h
         src/filemeta.cpp src/filemeta.h
         src/imageproviders.cpp src/imageproviders.h
+        src/previewsource.cpp src/previewsource.h
 )
 
 target_include_directories(wildos-files PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)

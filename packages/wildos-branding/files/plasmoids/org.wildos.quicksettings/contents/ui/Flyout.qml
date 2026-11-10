@@ -59,8 +59,8 @@ FocusScope {
     // does, rather than shown greyed out (EmptyStates.dc): on a desktop PC
     // Ethernet moves up to the first slot. Cast and Accessibility fill the
     // free slots of a six-tile grid, or stay once someone adds them.
-    readonly property var allTiles: ["wifi", "ethernet", "bluetooth", "flight", "dnd", "nightlight", "vpn", "cast", "accessibility"]
-    readonly property var fillers: ["cast", "accessibility"]
+    readonly property var allTiles: ["wifi", "ethernet", "bluetooth", "flight", "dnd", "nightlight", "vpn", "cast", "accessibility", "awake"]
+    readonly property var fillers: ["cast", "accessibility", "awake"]
     readonly property var presentTiles: allTiles.filter(id => tileApplies(id))
     readonly property var visibleTiles: {
         const core = presentTiles.filter(id => fillers.indexOf(id) < 0 && quick.hiddenTiles.indexOf(id) < 0);
@@ -91,6 +91,8 @@ FocusScope {
             return true;
         case "accessibility":
             return quick.access !== null;
+        case "awake":
+            return power !== null;
         }
         return false;
     }
@@ -212,6 +214,22 @@ FocusScope {
                 pageName: "",
                 description: quick.access.anyOn ? "Some accessibility features are on. Opens the list" : "Opens magnifier and colour settings"
             };
+        case "awake": {
+            const until = quick.keepAwakeUntil > 0
+                ? "Until " + Qt.formatTime(new Date(quick.keepAwakeUntil), Qt.locale().timeFormat(Locale.ShortFormat)) : "";
+            return {
+                label: "Keep awake",
+                status: quick.keepingAwake ? until : "",
+                icon: Icons.coffee,
+                fill: "",
+                checked: quick.keepingAwake,
+                hasPage: false,
+                pageName: "",
+                description: !quick.keepingAwake ? "Off"
+                    : until.length > 0 ? "The screen stays on and the computer won't sleep " + until.toLowerCase()
+                    : "The screen stays on and the computer won't sleep until you turn this off"
+            };
+        }
         }
         return {};
     }
@@ -248,6 +266,9 @@ FocusScope {
         case "accessibility":
             showPage("accessibility");
             break;
+        case "awake":
+            quick.keepAwake(quick.keepingAwake ? -1 : 0);
+            break;
         }
     }
 
@@ -269,6 +290,21 @@ FocusScope {
         const entries = [];
         if (info.switchable !== false) {
             entries.push({ text: info.checked ? "Turn off" : "Turn on", icon: "menu-power", run: () => flyout.toggle(id) });
+        }
+        if (id === "awake") {
+            entries.push({ text: "For 1 hour", icon: "clock", run: () => flyout.quick.keepAwake(60) });
+            entries.push({ text: "For 4 hours", icon: "clock", run: () => flyout.quick.keepAwake(240) });
+            entries.push({ text: "Until I turn it off", icon: "clock", run: () => flyout.quick.keepAwake(0) });
+            if (info.checked) {
+                entries.push({ text: "Turn off", icon: "menu-power", run: () => flyout.quick.keepAwake(-1) });
+            }
+            entries.push({ separator: true });
+            entries.push({ text: "Power settings", icon: "menu-settings", run: () => flyout.quick.openSettings("power") });
+            entries.push({ separator: true });
+            entries.push({ text: "Edit quick settings", icon: "menu-apps", run: () => flyout.editing = true });
+            tileMenu.entries = entries;
+            tileMenu.popup(item, x, y);
+            return;
         }
         const settings = tileSettings[id];
         if (settings) {

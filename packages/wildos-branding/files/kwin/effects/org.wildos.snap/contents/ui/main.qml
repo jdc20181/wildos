@@ -1,4 +1,5 @@
 import QtQuick
+import QtQml.Models
 import org.kde.kwin as KWin
 
 import "layouts.js" as Layouts
@@ -15,12 +16,29 @@ import "layouts.js" as Layouts
 // This is a scene effect rather than a KWin script because only effects can
 // take the keyboard, which Meta+Z needs. The hover and drag pickers are
 // ordinary flyout windows owned by the same effect.
+//
+// Snap assist, as in Windows: once a window lands in a zone, by any of those
+// or by KWin's own quick tiling (edge drag, Meta+arrow, the window menu), the
+// other zones of its layout offer the remaining windows, one zone at a time.
+// It shares the scene with Meta+Z; `mode` says which one the scene shows.
 KWin.SceneEffect {
     id: effect
 
     // The Workspace.clientArea option for the area a window maximises into,
     // which leaves out the taskbar.
     readonly property int maximizeArea: 2
+
+    // "layouts" for Meta+Z, "assist" for snap assist.
+    property string mode: "layouts"
+
+    readonly property bool showLayouts: effect.configuration.ShowLayouts !== false
+    readonly property bool assistEnabled: effect.configuration.SnapAssist !== false
+
+    onShowLayoutsChanged: {
+        if (!showLayouts) {
+            hideFlyout();
+        }
+    }
 
     property var target: null
 
@@ -82,6 +100,18 @@ KWin.SceneEffect {
         if (!eligible(window) || layoutIndex < 0 || zoneIndex < 0) {
             return;
         }
+        const screen = output ?? window.output;
+        // Halves and quarters go through quick tiling, whose tile change
+        // would offer assist a second time.
+        quietTimer.restart();
+        placeWindow(window, layoutIndex, zoneIndex, screen);
+        offerAssist(window, layoutIndex, zoneIndex, screen);
+    }
+
+    function placeWindow(window: var, layoutIndex: int, zoneIndex: int, output: var): void {
+        if (!eligible(window) || layoutIndex < 0 || zoneIndex < 0) {
+            return;
+        }
         const zone = Layouts.layouts[layoutIndex].zones[zoneIndex];
         const screen = output ?? window.output;
         const rect = Layouts.zoneRect(zone, areaFor(screen));
@@ -110,17 +140,32 @@ KWin.SceneEffect {
 
     function open(): void {
         const window = KWin.Workspace.activeWindow;
-        if (!eligible(window)) {
+        if (!showLayouts || !eligible(window)) {
             return;
         }
         hideFlyout();
+        // Clears an assist waiting between zones.
+        close();
         target = window;
         visible = true;
     }
 
     function close(): void {
+        const assisting = mode === "assist";
         visible = false;
+        resumeTimer.stop();
         target = null;
+        mode = "layouts";
+        assistOutput = null;
+        assistLayout = -1;
+        assistZones = [];
+        assistWindows = [];
+        assistIndex = -1;
+        // The windows assist just placed report their new tiles late on
+        // Wayland, and must not start it again.
+        if (assisting) {
+            quietTimer.restart();
+        }
     }
 
     function choose(layoutIndex: int, zoneIndex: int): void {
@@ -134,6 +179,177 @@ KWin.SceneEffect {
         text: "Show snap layouts for the active window"
         sequence: "Meta+Z"
         onActivated: effect.visible ? effect.close() : effect.open()
+    }
+
+    // Snap assist
+
+    property var assistOutput: null
+    property int assistLayout: -1
+    // Zone indices still to fill, the one on offer first.
+    property var assistZones: []
+    // Windows on offer, most recently used first.
+    property var assistWindows: []
+    property int assistIndex: -1
+    property var pendingAssist: null
+
+    function onCurrentDesktop(window: var): bool {
+        const desktop = KWin.Workspace.currentDesktop;
+        const activity = KWin.Workspace.currentActivity;
+        return (window.onAllDesktops || window.desktops.includes(desktop))
+            && (window.activities.length === 0 || window.activities.includes(activity));
+    }
+
+    // Normal windows on the screen and desktop that could fill a zone,
+    // minimised ones included, as Windows offers them.
+    function assistCandidates(output: var, exclude: var): var {
+        return KWin.Workspace.stackingOrder.filter(w => !w.deleted
+            && w.normalWindow && !w.specialWindow && !w.skipTaskbar
+            && w.moveable && w.resizeable && !w.fullScreen
+            && w.output === output && onCurrentDesktop(w)
+            && !exclude.includes(w)).reverse();
+    }
+
+    // A zone another window already fills needs no suggestion: one that
+    // fills it exactly, or a tiled one that covers it, such as a half under
+    // the quarter just snapped beside it.
+    function zoneTaken(rect: rect, output: var, ignore: var): bool {
+        const covers = f => f.x <= rect.x + 2 && f.y <= rect.y + 2
+            && f.x + f.width >= rect.x + rect.width - 2 && f.y + f.height >= rect.y + rect.height - 2;
+        return KWin.Workspace.stackingOrder.some(w => w !== ignore && !w.deleted
+            && w.normalWindow && !w.minimized && w.output === output && onCurrentDesktop(w)
+            && (Layouts.sameRect(w.frameGeometry, rect) || (w.tile && covers(w.frameGeometry))));
+    }
+
+    function offerAssist(window: var, layoutIndex: int, zoneIndex: int, output: var): void {
+        if (!assistEnabled || visible) {
+            return;
+        }
+        pendingAssist = { window: window, layout: layoutIndex, zone: zoneIndex, output: output };
+        assistTimer.restart();
+    }
+
+    function startAssist(): void {
+        const p = pendingAssist;
+        pendingAssist = null;
+        if (p === null || visible || !assistEnabled || !eligible(p.window) || p.window.output !== p.output) {
+            return;
+        }
+        const area = areaFor(p.output);
+        const zones = Layouts.layouts[p.layout].zones;
+        const empty = [];
+        for (let z = 0; z < zones.length; ++z) {
+            if (z !== p.zone && !zoneTaken(Layouts.zoneRect(zones[z], area), p.output, p.window)) {
+                empty.push(z);
+            }
+        }
+        const windows = assistCandidates(p.output, [p.window]);
+        if (empty.length === 0 || windows.length === 0) {
+            return;
+        }
+        hideFlyout();
+        target = null;
+        assistOutput = p.output;
+        assistLayout = p.layout;
+        assistZones = empty;
+        assistWindows = windows;
+        assistIndex = 0;
+        mode = "assist";
+        visible = true;
+    }
+
+    function assistChoose(window: var): void {
+        if (mode !== "assist" || assistZones.length === 0 || !assistWindows.includes(window)) {
+            return;
+        }
+        const zone = assistZones[0];
+        quietTimer.restart();
+        if (window.minimized) {
+            window.minimized = false;
+        }
+        placeWindow(window, assistLayout, zone, assistOutput);
+        const rest = assistZones.slice(1);
+        const windows = assistWindows.filter(w => w !== window);
+        if (rest.length === 0 || windows.length === 0) {
+            close();
+            return;
+        }
+        assistZones = rest;
+        assistWindows = windows;
+        assistIndex = 0;
+        // The scene steps aside while the window takes its place, so the
+        // real desktop shows it landing, then comes back for the next zone.
+        // Kept up instead, the scene stopped redrawing cleanly once a window
+        // under it was resized.
+        visible = false;
+        resumeTimer.restart();
+    }
+
+    function assistMove(step: int): void {
+        const count = assistWindows.length;
+        if (count > 0) {
+            assistIndex = assistIndex < 0 ? 0 : (assistIndex + step + count) % count;
+        }
+    }
+
+    // KWin's own quick tiling (edge drag, Meta+arrow, the window menu) tells
+    // effects nothing but the window's new tile. A tile that matches a zone
+    // of one of the layouts counts as snapping into that zone.
+    function tileChangedFor(window: var): void {
+        if (quietTimer.running || visible || !assistEnabled) {
+            return;
+        }
+        const tile = window ? window.tile : null;
+        if (!tile || !eligible(window)) {
+            return;
+        }
+        const r = tile.relativeGeometry;
+        const near = (a, b) => Math.abs(a - b) < 0.01;
+        for (let l = 0; l < Layouts.layouts.length; ++l) {
+            const zones = Layouts.layouts[l].zones;
+            for (let z = 0; z < zones.length; ++z) {
+                const zone = zones[z];
+                if (near(r.x, zone[0]) && near(r.y, zone[1]) && near(r.width, zone[2]) && near(r.height, zone[3])) {
+                    offerAssist(window, l, z, window.output);
+                    return;
+                }
+            }
+        }
+    }
+
+    // Long enough for a drag's flyout and KWin's own snap outline to go and
+    // for a Wayland window to take its new size before the scene redraws it.
+    Timer {
+        id: assistTimer
+        interval: 200
+        onTriggered: effect.startAssist()
+    }
+
+    Timer {
+        id: quietTimer
+        interval: 800
+    }
+
+    Timer {
+        id: resumeTimer
+        interval: 250
+        onTriggered: {
+            if (effect.mode === "assist" && effect.assistZones.length > 0 && effect.assistWindows.length > 0) {
+                effect.visible = true;
+            }
+        }
+    }
+
+    Instantiator {
+        model: KWin.WindowModel {}
+
+        delegate: Connections {
+            id: watch
+            target: model.window
+
+            function onTileChanged(): void {
+                effect.tileChangedFor(watch.target);
+            }
+        }
     }
 
     // Hover and drag
@@ -285,7 +501,7 @@ KWin.SceneEffect {
         target: KWin.Workspace
 
         function onCursorPosChanged(): void {
-            if (effect.visible) {
+            if (effect.visible || !effect.showLayouts) {
                 return;
             }
             const p = KWin.Workspace.cursorPos;
@@ -315,11 +531,25 @@ KWin.SceneEffect {
             if (window === effect.target) {
                 effect.close();
             }
+            if (effect.mode === "assist" && effect.assistWindows.includes(window)) {
+                effect.assistWindows = effect.assistWindows.filter(w => w !== window);
+                effect.assistIndex = Math.min(effect.assistIndex, effect.assistWindows.length - 1);
+                if (effect.assistWindows.length === 0) {
+                    effect.close();
+                }
+            }
         }
 
         function onWindowActivated(): void {
             if (flyout.visible && flyout.mode === "hover") {
                 effect.hideFlyout();
+            }
+        }
+
+        // Assist offers the windows of one desktop; another desktop has others.
+        function onCurrentDesktopChanged(): void {
+            if (effect.mode === "assist") {
+                effect.close();
             }
         }
 

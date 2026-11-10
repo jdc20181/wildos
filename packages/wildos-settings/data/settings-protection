@@ -4,10 +4,11 @@
 # from wildos-protection.service to load the firewall again. Takes only the
 # requests below.
 #
-#   standard   What Wild OS ships: the hardened system with no extra limits.
-#   strict     Adds a firewall that turns away anything arriving unasked,
-#              and USB devices found at start-up wait for permission like
-#              ones plugged in later.
+#   standard   What Wild OS ships: the hardened system, with a firewall
+#              that turns away anything arriving unasked and lets
+#              everything this computer starts go out.
+#   strict     Standard, plus USB devices found at start-up wait for
+#              permission like ones plugged in later.
 #   maximum    Strict, plus the firewall blocks network discovery (finding
 #              printers and screens), Bluetooth is off and the camera's
 #              driver is blocked.
@@ -30,12 +31,14 @@ saved_level() {
 }
 
 # Incoming connections are refused unless they answer something this
-# computer asked for. The Windows mode bridge stays open, since Windows
-# reaches its shared folders and printers through it, and so does mDNS at
-# Strict, which is how printers and screens on the network are found.
+# computer asked for. The Windows mode bridge (virbr-wildos) stays open:
+# Windows gets its address and DNS from this computer through it, and
+# Windows mode's own table (wildos_win) already limits what may come in
+# there. A drop here would be final whatever that table allows. mDNS stays
+# open at Standard and Strict, which is how printers and screens on the
+# network are found. Nothing outgoing is limited at any level.
 firewall() {
     nft delete table inet "$TABLE" 2>/dev/null || true
-    [ "$1" = standard ] && return 0
     command -v nft >/dev/null || return 0
     discovery='udp dport 5353 accept'
     [ "$1" = maximum ] && discovery=''
@@ -46,7 +49,7 @@ table inet $TABLE {
         ct state established,related accept
         ct state invalid drop
         iif lo accept
-        iifname "wildos-win*" accept
+        iifname { "virbr-wildos", "wildos-win*" } accept
         meta l4proto ipv6-icmp accept
         icmp type { echo-reply, destination-unreachable, time-exceeded, parameter-problem } accept
         udp sport 67 udp dport 68 accept
@@ -110,6 +113,11 @@ case "${1:-}" in
         usb "$1"
         bluetooth "$1" "$previous"
         camera "$1"
+        # Strict and Maximum keep every CPU flaw protection on, so hyper-threading
+        # goes off from the next start-up. Standard leaves the person's choice.
+        if [ "$1" != standard ] && [ -x /usr/libexec/wildos/settings-cpu-threads ]; then
+            /usr/libexec/wildos/settings-cpu-threads off || true
+        fi
         if [ "$1" = standard ]; then
             rm -f "$LEVEL_FILE"
         else

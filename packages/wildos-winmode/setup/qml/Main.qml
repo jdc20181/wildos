@@ -133,6 +133,20 @@ UI.AppWindow {
         }
     }
 
+    // Closing is always possible until setup starts; from then on the
+    // setup and ready steps have their own buttons, since closing no longer
+    // stops what is under way.
+    UI.IconButton {
+        anchors.top: parent.top
+        anchors.right: parent.right
+        anchors.topMargin: 14
+        anchors.rightMargin: 14
+        visible: window.page === "check" || window.page === "licence" || window.page === "options"
+        iconName: "close"
+        tip: "Close"
+        onClicked: window.close()
+    }
+
     T.Popup {
         id: problemPopup
         parent: T.Overlay.overlay
@@ -154,6 +168,7 @@ UI.AppWindow {
             kind: window.problem
             received: (Setup.status.problem || {}).received || 0
             failure: window.startError.length > 0 ? window.startError : ((Setup.status.problem || {}).text || "")
+            detail: window.startError.length > 0 ? "" : ((Setup.status.problem || {}).detail || "")
             onDismissed: problemPopup.close()
             onRetry: {
                 if (window.startError.length > 0 || Setup.status.state === "failed") {

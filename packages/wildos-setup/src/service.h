@@ -4,6 +4,8 @@
 #include <QObject>
 #include <QTimer>
 
+struct passwd;
+
 /* org.wildos.Setup1, the root half of the first boot setup session.
  *
  * The setup pages run as the locked system user wildos-setup. Everything
@@ -11,7 +13,9 @@
  * naming the computer, and handing over to the new account at the end.
  * Each call is checked with polkit (actions in org.wildos.setup.policy,
  * granted only to the setup user in 10-wildos-setup.rules) and refused once
- * the first boot marker is gone, so nothing here works after setup.
+ * the first boot marker is gone, so nothing here works after setup. The
+ * one exception is TakeWalletKey, for the new account itself, while this
+ * process is still running from setup.
  */
 class SetupService : public QObject, protected QDBusContext
 {
@@ -45,13 +49,24 @@ public Q_SLOTS:
      * session. */
     void Finish(const QString &plan);
 
+    /* The wallet key made from the new account's password in CreateAccount,
+     * handed once to that account's first session (wildos-setup-wallet),
+     * which opens its KWallet with it. The automatic first sign-in has no
+     * password for pam_kwallet to make it from. Only the new account may
+     * take it, only after Finish, and it is forgotten once taken. */
+    QByteArray TakeWalletKey();
+
 private:
     bool authorised(const QString &action);
     bool refuse(const QString &name, const QString &sentence);
     void removeEarlierAccount();
+    void prepareWallet(const struct passwd *pw, const QString &password);
+    void forgetWalletKey();
     void handOver(const QString &userName, uint uid);
     void touch();
 
     QTimer m_idle;
     bool m_finishing = false;
+    QByteArray m_walletKey;
+    uint m_walletUid = 0;
 };

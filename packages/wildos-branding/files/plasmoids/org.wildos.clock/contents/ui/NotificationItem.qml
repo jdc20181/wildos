@@ -5,6 +5,7 @@ import QtQuick.Layouts
 import org.kde.kirigami as Kirigami
 import org.kde.notificationmanager as NotificationManager
 import WildOS.UI as UI
+import "Formats.js" as Formats
 
 // One notification as the design draws it: a 20 px icon, a 13 px semibold
 // title with the time on the right, a 12 px body, and any actions as a row of
@@ -91,7 +92,7 @@ CardButton {
         if (hours < 24) {
             return hours + " hr";
         }
-        return hours < 48 ? "Yesterday" : Qt.formatDate(time, "dd/MM");
+        return hours < 48 ? "Yesterday" : Formats.shortDate(time);
     }
 
     Rectangle {

@@ -17,10 +17,13 @@ UI.Dialog {
     title: p.title ?? ""
     text: p.text ?? ""
 
+    // Reads p itself: kind is a binding on p and may not have caught up when
+    // this handler runs, which left every question unasked and the queue
+    // behind it stuck (Empty Recycle Bin did nothing).
     onPChanged: {
         all = false;
         answered = false;
-        if (kind.length > 0 && mine) {
+        if ((p.kind ?? "").length > 0 && mine) {
             open();
         } else {
             close();

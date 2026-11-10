@@ -42,6 +42,12 @@ class SetupApp : public QObject
     Q_PROPERTY(QString whenIdle MEMBER m_whenIdle NOTIFY optionsChanged)
     Q_PROPERTY(int memoryGb MEMBER m_memoryGb NOTIFY optionsChanged)
     Q_PROPERTY(QStringList folders READ folders NOTIFY optionsChanged)
+    // Hyper-threading is off in Wild OS; choosing it here turns it on from the
+    // next start-up through Settings' helper, which asks for the password.
+    Q_PROPERTY(bool hyperThreading MEMBER m_hyperThreading NOTIFY optionsChanged)
+    Q_PROPERTY(bool hyperThreadingAvailable READ hyperThreadingAvailable CONSTANT)
+    // True once the helper has turned it on and only a restart is left.
+    Q_PROPERTY(bool hyperThreadingNeedsRestart READ hyperThreadingNeedsRestart NOTIFY optionsChanged)
 
     // The daemon's Status, or empty while it has not answered.
     Q_PROPERTY(QVariantMap status READ status NOTIFY statusChanged)
@@ -58,6 +64,8 @@ public:
     QString memoryState() const { return m_memoryState; }
     QString freeLabel() const { return m_freeLabel; }
     QString needLabel() const;
+    bool hyperThreadingAvailable() const;
+    bool hyperThreadingNeedsRestart() const;
     bool spaceOk() const;
     QString internet() const { return m_internet; }
     QString licence() const { return m_licence; }
@@ -127,6 +135,7 @@ private:
     QString m_whenIdle = QStringLiteral("automatic");
     int m_memoryGb = 4;
     QStringList m_folders;
+    bool m_hyperThreading = false;
 
     QVariantMap m_status;
     QDBusInterface *m_daemon = nullptr;

@@ -1,0 +1,5 @@
+<!DOCTYPE RCC><RCC version="1.0">
+<qresource prefix="/wildos/outline/">
+    <file alias="outline.frag">shaders/outline.frag</file>
+</qresource>
+</RCC>

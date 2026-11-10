@@ -11,6 +11,7 @@ system bus; polkit lets the active local user in (org.wildos.winmode.use).
 import json
 import os
 import pwd
+import re
 import secrets
 import socket
 import subprocess
@@ -79,6 +80,11 @@ XML = """
       <arg name="key" type="s" direction="in"/>
       <arg type="s" direction="out"/>
     </method>
+    <method name="EndProgram">
+      <arg name="pid" type="u" direction="in"/>
+      <arg name="image" type="s" direction="in"/>
+      <arg type="s" direction="out"/>
+    </method>
     <method name="GuestRequest">
       <arg name="message" type="s" direction="in"/>
       <arg type="s" direction="out"/>
@@ -90,6 +96,15 @@ XML = """
 """
 
 LAUNCH_HOLD = "launch"
+# A product key going in: Windows has to stay running until it is done.
+LICENCE_HOLD = "licence"
+# How long to wait before trying again to restart Windows for a new memory
+# limit when the last try didn't finish.
+MEMORY_RETRY = 600
+PRESTART_HOLD = "prestart"
+# How long Windows started ahead of time stays up for the agent to sign in
+# to it (measured: about 6 seconds just after a boot).
+PRESTART_SIGN_IN_SECONDS = 45
 # From the moment Windows runs until wild-guest's first window list, the
 # window count is unknown, not zero: an app may well be open.
 WINDOW_LIST_HOLD = "window list"
@@ -99,6 +114,24 @@ WINDOW_LIST_WAIT = 600
 
 def log(*parts):
     print(*parts, file=sys.stderr, flush=True)
+
+
+def end_program_script(pid, image):
+    """PowerShell that ends process `pid` if it is still `image` in a
+    person's session; None for anything that cannot be named safely."""
+    try:
+        pid = int(pid)
+    except (TypeError, ValueError):
+        return None
+    if pid <= 4 or not image or len(image) > 260 or any(ch < " " for ch in image):
+        return None
+    # PowerShell takes the curly single quotes as quotes too.
+    quoted = image
+    for q in ("'", "‘", "’", "‚", "‛"):
+        quoted = quoted.replace(q, q + q)
+    return (f"$p = Get-Process -Id {pid} -ErrorAction SilentlyContinue; "
+            f"if ($p -and $p.SessionId -ne 0 -and $p.Path -ieq '{quoted}') "
+            f"{{ Stop-Process -Id {pid} -Force; 'ended' }} else {{ 'not running' }}")
 
 
 def random_password():
@@ -116,6 +149,8 @@ def app_windows(windows):
 
 
 SAVE_TO_DISK = False
+# Windows' processor share while it boots ahead of time (the default is 100).
+BACKGROUND_CPU_WEIGHT = 20
 # Windows' share of memory follows what it uses (trim_memory), in KiB.
 TRIM_HEADROOM_KIB = 1536 * 1024
 TRIM_FLOOR_KIB = 3 * 1024 * 1024
@@ -137,8 +172,10 @@ class Service:
         self.windows = {}
         self.error = None
         self.busy_action = None
+        self.memory_tried = -MEMORY_RETRY
         self.idle_timer = None
         self.window_list_timer = None
+        self.upkeep_running = False
         self.auth_cache = {}
         # Taken from the main loop (claim) and from wake's worker thread.
         self.bind_lock = threading.Lock()
@@ -159,6 +196,7 @@ class Service:
             "Credentials": (self.m_credentials, "s", True),
             "InstallGuestHelper": (self.m_install_guest, "s", True),
             "GuestRequest": (self.m_guest_request, "s", True),
+            "EndProgram": (self.m_end_program, "s", True),
             "SetupStart": (self.m_setup_start, "s", True),
             "SetupControl": (self.m_setup_control, "s", True),
             "Firmware": (self.m_firmware, "s", True),
@@ -363,7 +401,19 @@ class Service:
         the window list, read afresh in case an update was lost (the guest
         drops what it cannot send while the channel reconnects)."""
         self.host_changed()
-        if virsh.state(self.domain) == "running":
+        st = virsh.state(self.domain)
+        if self.restart_wanted() and not self.busy_action:
+            if st == "shut off":
+                # Off already: the next start takes the new limit.
+                self.state["memory_pending"] = False
+                self.state["restart_pending"] = False
+                self.save_state()
+                self.changed()
+            elif st in ("paused", "saved") and time.monotonic() - self.memory_tried > MEMORY_RETRY:
+                # A shutdown that timed out (Windows busy updating, say) is
+                # tried again, as nothing else would bring it round.
+                self.restart_for_memory()
+        if st == "running":
             self.trim_memory()
             if not self.link.connected:
                 self.connect_guest()
@@ -374,19 +424,23 @@ class Service:
     def trim_memory(self):
         """Windows keeps the memory it was given even when it isn't using
         it (free page reporting only works with Linux guests), which left a
-        16 GB PC with 8 GB tied up and the desktop in swap. Every 30 s the
-        balloon is set to what Windows uses plus headroom; a launch gives it
-        everything back first (wake), so apps never start short."""
-        if self.busy_action or time.monotonic() - self.last_wake < TRIM_AFTER:
+        16 GB PC with 8 GB tied up and the desktop in swap. So while no
+        Windows app is open, every 30 s the balloon is set to what Windows
+        uses plus headroom, and Windows goes into its pause holding only
+        that. Never while an app is open: Windows only grows into what the
+        balloon hands back, a step every 30 s, so whatever the limit, a
+        trimmed Windows worked like a 4 GB PC. The first app window and
+        every launch (wake) give it everything back."""
+        if self.busy_action or self.life.busy() or time.monotonic() - self.last_wake < TRIM_AFTER:
             return
         try:
             stats = virsh.memory_stats(self.domain)
         except virsh.VirshError:
             return
         actual, usable = stats.get("actual"), stats.get("usable")
-        if not actual or usable is None or not self.memory:
+        ceiling = virsh.defined_memory(self.domain, inactive=False) // 1024
+        if not actual or usable is None or not ceiling:
             return
-        ceiling = self.memory // 1024
         used = actual - usable
         target = max(TRIM_FLOOR_KIB, min(ceiling, used + TRIM_HEADROOM_KIB))
         # Small moves cost more than they save; growing is never held back.
@@ -396,10 +450,37 @@ class Service:
             except virsh.VirshError as e:
                 log("memory:", e)
 
+    def match_cpus(self):
+        """Windows gets every processor thread, up to 8, when setup defines it
+        (setup.define). Turning hyper-threading on or off in Settings changes
+        how many the host has, so a cold start brings the guest in line. A
+        saved Windows keeps its count until it next starts from scratch."""
+        want = max(2, min(8, os.cpu_count() or 4))
+        try:
+            xml = virsh.dumpxml(self.domain, inactive=True)
+        except virsh.VirshError as e:
+            log("processor count:", e)
+            return
+        m = re.search(r"<vcpu\b[^>]*>(\d+)</vcpu>", xml)
+        if not m or int(m.group(1)) == want:
+            return
+        xml = re.sub(r"(<vcpu\b[^>]*>)\d+(</vcpu>)", rf"\g<1>{want}\g<2>", xml, count=1)
+        xml = re.sub(r"(<topology\b[^>]*\bcores=')\d+(')", rf"\g<1>{want}\g<2>", xml, count=1)
+        path = os.path.join(config.STATE_DIR, "domain.xml")
+        with open(path, "w") as f:
+            f.write(xml)
+        virsh.run("define", path)
+        log(f"Windows now gets {want} processor threads (was {m.group(1)})")
+
     def full_memory(self):
-        if self.memory:
+        """Everything Windows started with, back from the balloon. Not the
+        definition's limit: a new one waiting for Windows' next start is
+        more than libvirt lets the running Windows have, and asking for it
+        gave nothing back at all."""
+        limit = virsh.defined_memory(self.domain, inactive=False)
+        if limit:
             try:
-                virsh.set_memory(self.domain, self.memory // 1024)
+                virsh.set_memory(self.domain, limit // 1024)
             except virsh.VirshError as e:
                 log("memory:", e)
 
@@ -460,7 +541,58 @@ class Service:
             if warm:
                 self.link.send(dict(warm, type="warm"))
             self.link.request({"type": "windows"}, self.guest_event)
+            self.guest_upkeep()
         self.changed()
+
+    def guest_upkeep(self):
+        """A Windows set up before guest/opengl.ps1 existed (or whose setup
+        could not download Mesa) gets it the first time wild-guest connects,
+        in the background. Programs only see it from Windows' next sign-in:
+        GALLIUM_DRIVER reaches new sign-ins only, and apps start from the
+        session's own environment. Without it Mesa picks its Direct3D 12
+        driver, which crashes MagicaVoxel just like OpenGL 1.1 did. The PC's
+        next restart was meant to bring that sign-in, but this runs as
+        Windows starts, so the download often finished after the session
+        had signed in, and every app stayed on the old environment until
+        the restart after that. Windows now shuts down cleanly the next
+        time no Windows app is open, as for a new memory limit."""
+        if self.state.get("setting_up") or self.upkeep_running:
+            return
+        try:
+            with open(os.path.join(config.DATA, "guest", "opengl.ps1"), encoding="utf-8") as f:
+                script = f.read()
+        except OSError as e:
+            log("opengl:", e)
+            return
+        m = re.search(r"^\$version = '([^']+)'", script, re.M)
+        if not m or self.state.get("opengl") == m.group(1):
+            return
+        version = m.group(1)
+        self.upkeep_running = True
+        self.life.hold(time.monotonic(), "upkeep", True)
+
+        def work():
+            code, out, err = qga.powershell(self.domain, script, 600)
+            return code, (out + err).strip()
+
+        def finished(result):
+            self.upkeep_running = False
+            self.life.hold(time.monotonic(), "upkeep", False)
+            self.schedule_idle()
+            if isinstance(result, Exception) or result[0] != 0:
+                # Tried again when wild-guest next connects.
+                log("opengl: not installed:", result if isinstance(result, Exception) else result[1][-300:])
+                return
+            last = result[1].splitlines()[-1] if result[1] else "done"
+            log("opengl:", last, version)
+            self.state["opengl"] = version
+            if last.strip() == "installed":
+                self.state["restart_pending"] = True
+                if virsh.state(self.domain) in ("paused", "saved") and not self.busy_action:
+                    self.restart_for_memory()
+            self.save_state()
+
+        dbusutil.in_thread(work, done=finished)
 
     def guest_event(self, msg):
         t = msg.get("type")
@@ -489,6 +621,10 @@ class Service:
         self.windows = windows
         after = self.all_windows()
         self.life.update(time.monotonic(), windows=len(after))
+        if after and not before:
+            # An app opened from inside Windows (the Windows desktop, or a
+            # program starting another) never went through wake.
+            self.full_memory()
         self.schedule_idle()
         if before != after:
             self.export.emit("WindowsChanged", "(s)", json.dumps(after))
@@ -504,8 +640,54 @@ class Service:
         wait = max(0, d - time.monotonic())
         self.idle_timer = GLib.timeout_add(int(wait * 1000) + 50, self.idle_fired)
 
+    def restart_wanted(self):
+        """A new memory limit, or Windows' sign-in needing to start afresh
+        (opengl), both waiting for a clean shutdown while no app is open."""
+        return bool(self.state.get("memory_pending") or self.state.get("restart_pending"))
+
+    def restart_for_memory(self):
+        """Shuts Windows down cleanly so the next app starts it with the new
+        memory limit, or a fresh sign-in. Only when no Windows app is open."""
+        self.busy_action = "shutdown"
+        self.memory_tried = time.monotonic()
+
+        def work():
+            st = virsh.state(self.domain)
+            if st == "paused":
+                virsh.run("resume", self.domain)
+            elif st == "saved":
+                # Loaded back first, so Windows shuts down properly rather
+                # than losing the save as a power cut would.
+                self.wake()
+            elif st == "shut off":
+                return True
+            virsh.run("shutdown", self.domain)
+            deadline = time.monotonic() + 180
+            while time.monotonic() < deadline:
+                if virsh.state(self.domain) == "shut off":
+                    return True
+                time.sleep(2)
+            return False
+
+        def finished(result):
+            self.busy_action = None
+            if result is True:
+                self.state["memory_pending"] = False
+                self.state["restart_pending"] = False
+                log("Windows shut down for its new memory limit or a fresh sign-in")
+            else:
+                log("Windows didn't shut down for its new memory limit or a fresh sign-in:", result)
+            self.save_state()
+            self.refresh()
+
+        dbusutil.in_thread(work, done=finished)
+
     def idle_fired(self):
         self.idle_timer = None
+        if self.life.due(time.monotonic()) and not self.busy_action and self.restart_wanted():
+            log(f"no Windows app open for {self.cfg['idle_seconds']} s: shutting down for the new memory limit or a fresh sign-in")
+            self.restart_for_memory()
+            return False
         if self.life.due(time.monotonic()) and not self.busy_action:
             action = lifecycle.idle_action(self.state["when_idle"], self.power.on_battery, *hostinfo.meminfo(),
                                            hostinfo.under_pressure())
@@ -619,10 +801,17 @@ class Service:
                 time.sleep(0.2)
         return False
 
-    def wake(self):
+    def set_cpu_weight(self, weight):
+        """Windows' share of the processor when it competes with the desktop
+        (cgroup weight; 100 is everyone's default)."""
+        virsh.run("schedinfo", self.domain, "--live", f"cpu_shares={weight}", check=False, timeout=10)
+
+    def wake(self, background=False):
         """Gets the guest running and ready for a RemoteApp connection:
         resume, restore or boot, then the clock, the guest agent and
-        Remote Desktop (brief 5.6, Resume)."""
+        Remote Desktop (brief 5.6, Resume). In the background (started ahead
+        of time) it boots with a small share of the processor, so the
+        desktop that has just started is not slowed by it."""
         t0 = time.monotonic()
         self.last_wake = t0
         st = virsh.state(self.domain)
@@ -633,10 +822,14 @@ class Service:
             virsh.resume(self.domain)
         elif st in ("saved", "shut off"):
             firewall.apply(self.cfg, self.state.get("file_sharing", False))
+            if st == "shut off":
+                self.match_cpus()
             # virtiofsd starts with the guest and sees the binds made before it.
             self.bind_folders()
             try:
                 virsh.start(self.domain)
+                if background:
+                    self.set_cpu_weight(BACKGROUND_CPU_WEIGHT)
             except virsh.VirshError as e:
                 if st != "saved":
                     raise
@@ -651,14 +844,19 @@ class Service:
                 self.save_state()
         elif st != "running":
             raise RuntimeError(f"Windows is {st}")
-        # An app is about to start: all the memory first (trim_memory takes
-        # back what goes unused a minute later).
-        if st in ("running", "paused"):
+        # Where a wake's time goes, in seconds from its start, for
+        # launch-stats.
+        stages = {"started": round(time.monotonic() - t0, 2)}
+        # An app is about to start: all the memory first, which it keeps
+        # until no app is open (trim_memory). A restored Windows comes back
+        # with the balloon it was saved with.
+        if st in ("running", "paused", "saved"):
             self.full_memory()
         resumed = time.monotonic() - t0
         if st != "running":
             if not qga.wait(self.domain, 30 if st != "shut off" else 240):
                 raise RuntimeError("Windows didn't respond after starting")
+            stages["guest_agent"] = round(time.monotonic() - t0, 2)
             try:
                 qga.set_time(self.domain)
             except (virsh.VirshError, ValueError, KeyError) as e:
@@ -675,7 +873,9 @@ class Service:
                 self.reattach_share()
         if not self.wait_rdp(30 if st != "shut off" else 240):
             raise RuntimeError("Windows isn't accepting the connection")
-        return {"ok": True, "from": came_from, "seconds": round(time.monotonic() - t0, 2), "resume_seconds": round(resumed, 2)}
+        stages["remote_desktop"] = round(time.monotonic() - t0, 2)
+        return {"ok": True, "from": came_from, "seconds": round(time.monotonic() - t0, 2), "resume_seconds": round(resumed, 2),
+                "stages": stages}
 
     def qemu_usage(self):
         """QEMU's CPU time and memory, for Task Manager: a root process that
@@ -692,7 +892,17 @@ class Service:
                 for line in f:
                     if line.startswith("VmRSS:"):
                         rss = int(line.split()[1]) * 1024
-            return {"pid": pid, "cpu_seconds": round(cpu, 2), "rss_bytes": rss}
+            # QEMU names each virtual processor's thread "CPU n/KVM", so
+            # their count is the processors Windows has now, which a saved
+            # Windows can hold at an older number than match_cpus sets.
+            vcpus = 0
+            for task in os.listdir(f"/proc/{pid}/task"):
+                try:
+                    with open(f"/proc/{pid}/task/{task}/comm") as f:
+                        vcpus += f.read().startswith("CPU ")
+                except OSError:
+                    pass
+            return {"pid": pid, "cpu_seconds": round(cpu, 2), "rss_bytes": rss, "vcpus": vcpus}
         except (OSError, ValueError, IndexError):
             return None
 
@@ -717,6 +927,8 @@ class Service:
             "share_detached": self.state.get("share_detached", False),
             "last": self.state.get("last"),
             "action": self.busy_action,
+            "save_to_disk": SAVE_TO_DISK,
+            "memory_pending": bool(self.state.get("memory_pending")),
             "error": self.error,
             "computer_name": self.cfg["computer_name"] or self.state.get("computer_name", ""),
             "account": self.cfg["account"],
@@ -736,6 +948,11 @@ class Service:
         return json.dumps(self.status())
 
     def m_wake(self, sender, defer):
+        if self.state.get("setting_up"):
+            # Setup owns the virtual PC until it finishes; a Windows app
+            # opened meanwhile would otherwise get "couldn't start".
+            return json.dumps({"ok": False, "error": "setting up",
+                               "message": "Windows mode is still being set up. Windows apps open once it's finished."})
         why = self.claim(sender)
         if why:
             return json.dumps({"ok": False, "error": why, "message": why})
@@ -759,6 +976,10 @@ class Service:
             # A pause or save already under way finishes first.
             while self.busy_action:
                 time.sleep(0.1)
+            # Someone is waiting now: a boot started ahead of time gets the
+            # whole processor again.
+            if virsh.state(self.domain) == "running":
+                self.set_cpu_weight(100)
             return self.wake()
 
         dbusutil.in_thread(work, done=finished)
@@ -799,8 +1020,18 @@ class Service:
             log("not starting Windows ahead of time:", blocker)
             return json.dumps({"ok": False, "skipped": blocker})
         log("starting Windows ahead of time")
+        # Not idle while it boots, nor while the agent signs in to it after:
+        # paused halfway through signing in, Windows did not answer when it
+        # was woken next.
+        self.life.hold(time.monotonic(), PRESTART_HOLD, True)
+
+        def release():
+            self.life.hold(time.monotonic(), PRESTART_HOLD, False)
+            self.schedule_idle()
+            return False
 
         def finished(result):
+            GLib.timeout_add_seconds(PRESTART_SIGN_IN_SECONDS, release)
             self.refresh()
             self.schedule_idle()
             if isinstance(result, Exception):
@@ -808,7 +1039,13 @@ class Service:
             else:
                 defer.done(json.dumps(result))
 
-        dbusutil.in_thread(self.wake, done=finished)
+        def work():
+            try:
+                return self.wake(background=True)
+            finally:
+                self.set_cpu_weight(100)
+
+        dbusutil.in_thread(work, done=finished)
         return defer
 
     def release_launch(self):
@@ -816,10 +1053,13 @@ class Service:
         self.schedule_idle()
 
     def m_idle(self, sender, mode, defer):
-        """Pause or save now, for testing and for the command line."""
+        """Pause or save now: Pause now and Save to disk in the taskbar's
+        Windows mode panel, and the command line."""
         if mode not in (lifecycle.PAUSE, lifecycle.SAVE):
             return json.dumps({"ok": False, "error": "mode is pause or save"})
-        if virsh.state(self.domain) != "running":
+        st = virsh.state(self.domain)
+        # A paused Windows can still go to disk, which frees its memory.
+        if st != "running" and not (st == "paused" and mode == lifecycle.SAVE and SAVE_TO_DISK):
             return json.dumps({"ok": False, "error": "not running"})
         self.run_idle(mode, done=lambda r: defer.done(json.dumps(
             {"ok": False, "error": str(r)} if isinstance(r, Exception) else {"ok": True, "seconds": round(r, 2)})))
@@ -878,12 +1118,49 @@ class Service:
         return ""
 
     def m_set_option(self, sender, key, value):
+        if key == "memoryGb":
+            return self.set_memory(value)
         if key == "whenIdle":
             key = "when_idle"
         allowed = config.OPTION_KEYS.get(key)
         if not allowed or value not in allowed:
             return "That setting isn't available."
         self.state[key] = value
+        self.save_state()
+        self.changed()
+        return ""
+
+    def set_memory(self, value):
+        """Settings' memory limit. The virtual PC's definition changes now,
+        and Windows only gets it by starting from off: a paused Windows (no
+        app open) is shut down now, a running one when it next goes idle,
+        instead of being paused."""
+        try:
+            gb = int(value)
+        except ValueError:
+            return "That setting isn't available."
+        host = os.sysconf("SC_PAGE_SIZE") * os.sysconf("SC_PHYS_PAGES")
+        if gb < 4 or gb > 32 or (gb > 4 and gb * 1024 ** 3 > host * 0.75):
+            return "That's more memory than this PC can spare."
+        if virsh.state(self.domain) != "":
+            kib = str(gb * 1024 * 1024)
+            try:
+                virsh.run("setmaxmem", self.domain, kib, "--config")
+                virsh.run("setmem", self.domain, kib, "--config")
+            except virsh.VirshError as e:
+                log("memory:", e)
+                return "Windows mode couldn't change its memory. Try again."
+            self.memory = virsh.defined_memory(self.domain)
+            st = virsh.state(self.domain)
+            # A saved Windows loads back with the memory it was saved with,
+            # whatever the definition now says, so it needs the same clean
+            # restart as a running one.
+            if st in ("running", "paused", "saved"):
+                self.state["memory_pending"] = True
+                if st in ("paused", "saved") and not self.busy_action:
+                    self.restart_for_memory()
+        rec = self.state.get("setup") or {}
+        self.state["setup"] = dict(rec, options=dict(rec.get("options") or {}, memoryGb=gb))
         self.save_state()
         self.changed()
         return ""
@@ -964,9 +1241,32 @@ class Service:
     def m_set_product_key(self, sender, key, defer):
         """Settings' Add a key (board 9.8): installs a Windows product key,
         or this PC's own built-in one when the key is "firmware", and
-        activates. "" when Windows is activated, or why not."""
-        dbusutil.in_thread(lambda: self.setup.set_key(key),
-                           done=lambda r: defer.done(str(r) if isinstance(r, Exception) else r))
+        activates. "" when Windows is activated, or why not. Windows is
+        usually paused when nobody has an app open, and the key can only go
+        in while it runs, so it is woken first and kept awake until done."""
+        why = self.claim(sender)
+        if why:
+            return why
+        self.life.hold(time.monotonic(), LICENCE_HOLD, True)
+        self.schedule_idle()
+
+        def work():
+            while self.busy_action:
+                time.sleep(0.1)
+            try:
+                self.wake()
+            except (RuntimeError, virsh.VirshError) as e:
+                log("waking Windows for a product key:", e)
+                return "Windows mode couldn't start Windows to add the key. Try again, or restart the PC."
+            return self.setup.set_key(key)
+
+        def finished(result):
+            self.life.hold(time.monotonic(), LICENCE_HOLD, False)
+            self.schedule_idle()
+            self.refresh()
+            defer.done(str(result) if isinstance(result, Exception) else result)
+
+        dbusutil.in_thread(work, done=finished)
         return defer
 
     def m_firmware(self, sender, defer):
@@ -974,6 +1274,34 @@ class Service:
         Windows is still on its disks. The key itself never leaves here."""
         dbusutil.in_thread(setup.firmware, done=lambda r: defer.done(
             json.dumps({"error": str(r)} if isinstance(r, Exception) else r)))
+        return defer
+
+    def m_end_program(self, sender, pid, image, defer):
+        """Ends a Windows program that did not close when its window was
+        closed on the desktop. Only that process, only if it still runs the
+        program the window said it belonged to, and only in a person's
+        session, never one of Windows' own (session 0)."""
+        why = self.claim(sender)
+        if why:
+            defer.error(why)
+            return defer
+        script = end_program_script(pid, image)
+        if not script:
+            return "not a program that can be ended"
+
+        def work():
+            code, out, err = qga.powershell(self.domain, script, timeout=30)
+            return (out or err).strip()
+
+        def finished(result):
+            if isinstance(result, Exception):
+                log("ending a program that did not close:", result)
+                defer.done(f"couldn't end it: {result}")
+            else:
+                log(f"ending process {pid} ({image}) that did not close:", result)
+                defer.done(result)
+
+        dbusutil.in_thread(work, done=finished)
         return defer
 
     def m_guest_request(self, sender, message, defer):

@@ -11,6 +11,7 @@ PageScroll {
     id: page
 
     property var removing: null
+    readonly property var windowsModeApps: WindowsMode.state === "ready" ? (WindowsMode.status.apps || []) : []
 
     UI.Label {
         Layout.fillWidth: true
@@ -114,8 +115,24 @@ PageScroll {
                     }
                 }
 
+                // Apps installed inside Windows mode, as its Start menu lists
+                // them. They are removed inside Windows, like any program.
+                Repeater {
+                    model: page.windowsModeApps
+
+                    UI.SettingRow {
+                        required property var modelData
+                        minHeight: 68
+                        iconTile: true
+                        iconName: "windowsapps"
+                        themeIcon: modelData.icon
+                        title: modelData.name
+                        description: "Runs in Windows mode. To uninstall it, open the Windows desktop from the Windows mode page."
+                    }
+                }
+
                 UI.SettingRow {
-                    visible: WindowsApps.apps.length === 0
+                    visible: WindowsApps.apps.length === 0 && page.windowsModeApps.length === 0
                     title: "No Windows apps yet"
                     description: WindowsApps.installed
                         ? "Open a Windows installer, an .exe or .msi file, and Wild OS offers to set it up here."

@@ -69,6 +69,21 @@ Item {
 
     NightLightControl { id: nightLight }
 
+    // Keep awake holds powerdevil's manual block, the same one the stock
+    // Power applet's "Manually block sleep" sets, so the screen stays on and
+    // the computer does not sleep until it is released or the shell exits.
+    BatteryMonitor.InhibitionControl { id: inhibition }
+
+    readonly property bool keepingAwake: inhibition.isManuallyInhibited
+
+    function setKeepAwake(on: bool): void {
+        if (on && !inhibition.isManuallyInhibited) {
+            inhibition.inhibit("Keep awake is on in quick settings");
+        } else if (!on && inhibition.isManuallyInhibited) {
+            inhibition.uninhibit();
+        }
+    }
+
     // The flyout has one brightness slider, for the first display that can be
     // dimmed, which on a laptop is the built-in panel.
     Instantiator {

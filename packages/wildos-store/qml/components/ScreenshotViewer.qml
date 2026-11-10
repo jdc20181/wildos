@@ -1,5 +1,7 @@
 import QtQuick
 import QtQuick.Controls
+import QtQuick.Window
+import WildOS.Store
 import WildOS.UI as UI
 
 // Screenshots at full size over the window, with arrows between them.
@@ -35,20 +37,45 @@ Popup {
         Keys.onLeftPressed: viewer.index = Math.max(0, viewer.index - 1)
         Keys.onRightPressed: viewer.index = Math.min(viewer.shots.length - 1, viewer.index + 1)
 
+        // The size closest to the space it fills, rather than the original,
+        // which can be several times larger than any screen.
+        function sourceFor(i, w, h) {
+            if (i < 0 || i >= viewer.shots.length) {
+                return "";
+            }
+            const dpr = Screen.devicePixelRatio;
+            return Catalog.pickImage(viewer.shots[i].images, Math.round(w * dpr), Math.round(h * dpr));
+        }
+
         Image {
             id: big
             anchors.fill: parent
             anchors.margins: 56
             fillMode: Image.PreserveAspectFit
             asynchronous: true
-            source: viewer.shots.length > 0 ? viewer.shots[viewer.index].full : ""
+            source: viewer.opened ? parent.sourceFor(viewer.index, width, height) : ""
         }
 
+        // The page's own copy, already on screen, while the larger one loads.
         Image {
             anchors.fill: big
             fillMode: Image.PreserveAspectFit
+            asynchronous: true
             visible: big.status !== Image.Ready
-            source: viewer.shots.length > 0 ? viewer.shots[viewer.index].thumb : ""
+            source: viewer.opened ? parent.sourceFor(viewer.index, 391, 220) : ""
+        }
+
+        // The pictures either side, fetched while this one is looked at, so
+        // the arrows show them at once.
+        Repeater {
+            model: viewer.opened ? [viewer.index + 1, viewer.index - 1, viewer.index + 2] : []
+
+            Image {
+                required property int modelData
+                visible: false
+                asynchronous: true
+                source: parent.sourceFor(modelData, big.width, big.height)
+            }
         }
 
         UI.Label {
@@ -56,7 +83,7 @@ Popup {
             anchors.bottom: parent.bottom
             anchors.bottomMargin: 18
             text: viewer.shots.length > 0 ? viewer.shots[viewer.index].caption : ""
-            color: Metrics.inkSub
+            color: Metrics.inkSecondary
         }
 
         component ViewerButton: UI.IconButton {

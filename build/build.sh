@@ -21,7 +21,9 @@ set -euo pipefail
 # build changes the running build. Work from a snapshot instead.
 if [ -z "${WILDOS_SNAPSHOT:-}" ]; then
     rm -rf /tmp/src && mkdir -p /tmp/src
-    tar -C /src --exclude=./out --exclude=./.git -cf - . | tar -C /tmp/src -xf -
+    # site/ is the update repository publish-local.sh clones beside the
+    # checkout: hundreds of megabytes the build never reads.
+    tar -C /src --exclude=./out --exclude=./.git --exclude=./site -cf - . | tar -C /tmp/src -xf -
     WILDOS_SNAPSHOT=1 exec bash /tmp/src/build/build.sh "$@"
 fi
 
@@ -35,7 +37,7 @@ VERSION=$(sed -n '1s/.*(\(.*\)).*/\1/p' "$SRC/packages/wildos-base/debian/change
 ISO_NAME="wildos-${VERSION}-amd64.iso"
 KICKSECURE_KEY=/usr/share/keyrings/kicksecure-derivative.asc
 
-log() { printf '\n==> %s\n' "$*"; }
+log() { printf '\n==> [%s] %s\n' "$(date +%T)" "$*"; }
 
 ROOTFS=$WORK/rootfs
 SQUASH_LEVEL=19
@@ -58,6 +60,12 @@ cp -r "$SRC/packages/." "$WORK/pkgsrc/"
 # their sizes and formats from it.
 rm -rf "$WORK/pkgsrc/wildos-branding/branding"
 cp -r "$SRC/branding" "$WORK/pkgsrc/wildos-branding/branding"
+# Remote is built on Windows mode's Remote Desktop engine. Its own copy
+# makes its build stand alone and changes the package's hash whenever the
+# engine changes, so an incremental build rebuilds it too.
+rm -rf "$WORK/pkgsrc/wildos-remote/rdp-engine"
+mkdir -p "$WORK/pkgsrc/wildos-remote/rdp-engine"
+cp -r "$SRC/packages/wildos-rdp/engine.cmake" "$SRC/packages/wildos-rdp/src" "$WORK/pkgsrc/wildos-remote/rdp-engine/"
 # Windows bind mounts report every file as executable. debhelper treats an
 # executable debian/install as a script and installs its output instead of its
 # contents, which silently produces empty packages.
@@ -97,6 +105,16 @@ fi
 if [ "$INCREMENTAL" = 1 ]; then
     inc_build_packages
 else
+    # Several packages at once: much of a package build (debhelper, QML
+    # caches, compressing) uses one core, so one at a time leaves most of
+    # them idle. Each keeps its own log, shown if it fails.
+    # Counted here: `jobs` inside $(...) sees no jobs, which once let the
+    # build carry on before the packages were made.
+    max_jobs=$(( $(nproc) / 4 ))
+    [ "$max_jobs" -lt 2 ] && max_jobs=2
+    failed=0
+    running=0
+    built=()
     for pkg in "$WORK"/pkgsrc/*/; do
         # Work in progress is kept out of the image until it is ready.
         [ -e "$pkg/NOT-READY" ] && continue
@@ -105,10 +123,29 @@ else
         if [ -n "${WILDOS_ONLY+set}" ] && [[ " $WILDOS_ONLY " != *" $(basename "$pkg") "* ]]; then
             continue
         fi
-        (cd "$pkg" && DEB_BUILD_OPTIONS="parallel=$(nproc)" dpkg-buildpackage -us -uc -b -d -tc >/dev/null)
+        if [ "$running" -ge "$max_jobs" ]; then
+            wait -n || failed=1
+            running=$((running - 1))
+        fi
+        name=$(basename "$pkg")
+        built+=("$name")
+        (cd "$pkg" && DEB_BUILD_OPTIONS="parallel=$(nproc)" dpkg-buildpackage -us -uc -b -d -tc >"$WORK/build-$name.log" 2>&1 \
+            || { echo "ERROR: $name failed to build:" >&2; tail -40 "$WORK/build-$name.log" >&2; exit 1; }) &
+        running=$((running + 1))
     done
+    while [ "$running" -gt 0 ]; do
+        wait -n || failed=1
+        running=$((running - 1))
+    done
+    [ "$failed" = 0 ] || exit 1
+    rm -f "$WORK"/build-*.log
 fi
 find "$WORK/pkgsrc" -maxdepth 1 -name '*.deb' -exec mv {} "$WORK/repo/" \;
+# Every package asked for has to have come out of it.
+for name in "${built[@]:-}"; do
+    [ -z "$name" ] && continue
+    ls "$WORK/repo/${name}_"*.deb >/dev/null 2>&1 || { echo "ERROR: no package came out of $name" >&2; exit 1; }
+done
 
 # Debian's plymouth declares "Conflicts: console-common", which Kicksecure's
 # core layer depends on. The two share no files: the conflict dates from
@@ -289,6 +326,135 @@ find "$WORK/pkgsrc" -maxdepth 1 -name '*.deb' -exec mv {} "$WORK/repo/" \;
         cp ../*+wildos[0-9]*_*.deb "$cached/"
         rm -f "$cached"/*dbgsym*
         cd "$WORK" && rm -rf kxmlgui-src
+    fi
+    cp "$cached"/*.deb "$WORK/repo/"
+)
+# evolution-data-server with Camel's mail modules (IMAP, SMTP and the rest)
+# split into evolution-data-server-camel-providers, which needs only
+# libcamel, and its calendar and contacts services into
+# evolution-data-server-core. Wild OS Mail, Calendar and People use those
+# without the rest of EDS, whose package brings WebKitGTK, GTK and
+# gnome-keyring (a second Secret Service beside KWallet).
+# evolution-data-server itself depends on both, so Evolution works as
+# before. A packaging change, not a source patch, so it
+# is made here; republished +wildos1 like KIO, since its packages require
+# each other's exact version.
+(
+    cd "$WORK"
+    version=$(apt-cache policy libcamel-1.2-64t64 | sed -n 's/^  Candidate: //p')
+    if [ -z "$version" ] || [ "$version" = "(none)" ]; then
+        apt-get update -qq
+        version=$(apt-cache policy libcamel-1.2-64t64 | sed -n 's/^  Candidate: //p')
+    fi
+    stamp=$(sed -n '/^# evolution-data-server with Camel/,/^)$/p' "$SRC/build/build.sh" | sha256sum | cut -c1-12)
+    cached="/cache/eds/$version$(wildos_suffix eds)-$stamp"
+    if [ ! -d "$cached" ]; then
+        log "Building evolution-data-server $version with the Camel providers split out"
+        echo "deb-src http://deb.debian.org/debian $SUITE main" > /etc/apt/sources.list.d/wildos-src.list
+        echo "deb-src http://deb.debian.org/debian-security $SUITE-security main" >> /etc/apt/sources.list.d/wildos-src.list
+        apt-get update -qq
+        DEBIAN_FRONTEND=noninteractive apt-get build-dep -y -qq "evolution-data-server=$version" >/dev/null
+        rm -rf eds-src && mkdir eds-src && cd eds-src
+        apt-get source -qq "evolution-data-server=$version" >/dev/null
+        cd evolution-data-server-*/
+        # The lists below divide Debian's install list between three
+        # packages, so they are only right for the list they were written
+        # against. dh_missing catches a file left out.
+        echo "addacfaf2a60e9914c1baeaa549c9d1f6674edd8dc9d1e687b926c08255f3ee7  debian/evolution-data-server.install" | sha256sum -c --quiet \
+            || { echo "ERROR: evolution-data-server's install list changed; update the split" >&2; exit 1; }
+        printf '%s\n' 'usr/lib/evolution-data-server/camel-providers/*.urls' 'usr/lib/evolution-data-server/camel-providers/*.so' \
+            > debian/evolution-data-server-camel-providers.install
+        # The core: the source registry and the calendar and contacts
+        # services with their backends, none of which link GTK or WebKit.
+        # Wild OS Calendar and People run on it, with KWallet's Secret
+        # Service holding their passwords.
+        cat > debian/evolution-data-server-core.install <<'LIST'
+usr/libexec/evolution-addressbook-*
+usr/libexec/evolution-calendar-*
+usr/libexec/evolution-data-server/addressbook-export
+usr/libexec/evolution-data-server/csv2vcard
+usr/libexec/evolution-data-server/list-sources
+usr/libexec/evolution-scan-gconf-tree-xml
+usr/libexec/evolution-source-registry
+usr/lib/evolution-data-server/addressbook-backends/*.so
+usr/lib/evolution-data-server/calendar-backends/libecalbackendcaldav.so
+usr/lib/evolution-data-server/calendar-backends/libecalbackendcontacts.so
+usr/lib/evolution-data-server/calendar-backends/libecalbackendfile.so
+usr/lib/evolution-data-server/calendar-backends/libecalbackendgtasks.so
+usr/lib/evolution-data-server/calendar-backends/libecalbackendhttp.so
+usr/lib/evolution-data-server/calendar-backends/libecalbackendwebdavnotes.so
+usr/lib/evolution-data-server/registry-modules/module-cache-reaper.so
+usr/lib/evolution-data-server/registry-modules/module-google-backend.so
+usr/lib/evolution-data-server/registry-modules/module-oauth2-services.so
+usr/lib/evolution-data-server/registry-modules/module-outlook-backend.so
+usr/lib/evolution-data-server/registry-modules/module-secret-monitor.so
+usr/lib/evolution-data-server/registry-modules/module-webdav-backend.so
+usr/lib/evolution-data-server/registry-modules/module-yahoo-backend.so
+usr/lib/systemd/user/evolution-addressbook-factory.service
+usr/lib/systemd/user/evolution-calendar-factory.service
+usr/lib/systemd/user/evolution-source-registry.service
+LIST
+        # What stays: the GTK and WebKit programs (reminders, prompts, the
+        # OAuth window, the certificate prompt), weather, GNOME Online
+        # Accounts and Camel's helpers, with gnome-keyring as before.
+        cat > debian/evolution-data-server.install <<'LIST'
+etc
+usr/libexec/camel-*
+usr/libexec/evolution-data-server/evolution-alarm-notify
+usr/libexec/evolution-data-server/evolution-oauth2-handler
+usr/libexec/evolution-user-prompter
+usr/lib/evolution-data-server/calendar-backends/libecalbackendweather.so
+usr/lib/evolution-data-server/credential-modules/*.so
+usr/lib/evolution-data-server/registry-modules/module-gnome-online-accounts.so
+usr/lib/evolution-data-server/registry-modules/module-trust-prompt.so
+usr/lib/systemd/user/evolution-user-prompter.service
+usr/share/applications/org.gnome.Evolution-alarm-notify.desktop
+usr/share/applications/org.gnome.evolution-data-server.OAuth2-handler.desktop
+usr/share/icons/hicolor/scalable/apps/org.gnome.Evolution-alarm-notify.svg
+LIST
+        sed -i 's/^         libcamel-1.2-64t64 (= ${binary:Version}),$/&\n         evolution-data-server-camel-providers (= ${binary:Version}),\n         evolution-data-server-core (= ${binary:Version}),/' debian/control
+        grep -q 'evolution-data-server-core (= ' debian/control \
+            || { echo "ERROR: evolution-data-server's Depends changed shape; update the split" >&2; exit 1; }
+        cat >> debian/control <<'STANZA'
+
+Package: evolution-data-server-camel-providers
+Architecture: any
+Depends: ${shlibs:Depends},
+         ${misc:Depends},
+         libcamel-1.2-64t64 (= ${binary:Version}),
+Breaks: evolution-data-server (<< ${binary:Version})
+Replaces: evolution-data-server (<< ${binary:Version})
+Description: Camel mail providers (IMAP, SMTP, POP3 and local mail)
+ The modules Camel, Evolution Data Server's mail library, uses to reach
+ mail servers and mail stored on disk, split out of evolution-data-server
+ for programs that use Camel without the rest of it.
+
+Package: evolution-data-server-core
+Architecture: any
+Depends: ${shlibs:Depends},
+         ${misc:Depends},
+         evolution-data-server-common (>= ${source:Version}),
+         libcamel-1.2-64t64 (= ${binary:Version}),
+Breaks: evolution-data-server (<< ${binary:Version})
+Replaces: evolution-data-server (<< ${binary:Version})
+Description: Evolution Data Server's calendar and contacts services
+ The source registry and the calendar and address book services with
+ their backends (local, CalDAV, CardDAV, Google, LDAP), split out of
+ evolution-data-server for desktops that do not use GTK. Passwords go to
+ whichever Secret Service the desktop runs.
+STANZA
+        {
+            printf 'evolution-data-server (%s%s) %s; urgency=medium\n\n' "$version" "$(wildos_suffix eds)" "$SUITE"
+            printf '  * Wild OS: Camel providers in evolution-data-server-camel-providers,\n    the calendar and contacts services in evolution-data-server-core.\n\n'
+            printf ' -- Wild OS Developers <dev@wildos.io>  %s\n\n' "$(date -R)"
+            cat debian/changelog
+        } > debian/changelog.new
+        mv debian/changelog.new debian/changelog
+        DEB_BUILD_OPTIONS="nocheck nodoc parallel=$(nproc)" dpkg-buildpackage -us -uc -b >/dev/null
+        mkdir -p "$cached"
+        cp ../*+wildos[0-9]*_*.deb "$cached/"
+        rm -f "$cached"/*dbgsym* "$cached"/*-tests_* "$cached"/*-doc_*
+        cd "$WORK" && rm -rf eds-src
     fi
     cp "$cached"/*.deb "$WORK/repo/"
 )

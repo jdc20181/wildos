@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=Wild OS taskbar items
+Exec=/usr/libexec/wildos/taskbar-items
+OnlyShowIn=KDE;
+NoDisplay=true
+X-KDE-autostart-phase=2

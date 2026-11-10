@@ -15,8 +15,12 @@ member [System.ServiceProcess]System.ServiceProcess.SessionChangeDescription.get
 member [System.ServiceProcess]System.ServiceProcess.SessionChangeDescription.get_SessionId :: instance int32()
 member [System]System.ComponentModel.Win32Exception.get_NativeErrorCode :: instance int32()
 member [System]System.Diagnostics.Process.GetCurrentProcess :: class [System]System.Diagnostics.Process()
+member [System]System.Diagnostics.Process.GetProcessesByName :: class [System]System.Diagnostics.Process[](string)
 member [System]System.Diagnostics.Process.Start :: class [System]System.Diagnostics.Process(class [System]System.Diagnostics.ProcessStartInfo)
 member [System]System.Diagnostics.Process.get_Id :: instance int32()
+member [System]System.Diagnostics.Process.get_SessionId :: instance int32()
+member [System]System.Diagnostics.Process.get_StartTime :: instance valuetype [mscorlib]System.DateTime()
+member [System]System.Diagnostics.Process.set_PriorityClass :: instance void(valuetype [System]System.Diagnostics.ProcessPriorityClass)
 member [System]System.Diagnostics.ProcessStartInfo..ctor :: instance void(string, string)
 member [System]System.Diagnostics.ProcessStartInfo.set_UseShellExecute :: instance void(bool)
 member [System]System.Diagnostics.ProcessStartInfo.set_WorkingDirectory :: instance void(string)
@@ -49,10 +53,12 @@ member [mscorlib]System.Convert.ToDouble :: float64(object, class [mscorlib]Syst
 member [mscorlib]System.Convert.ToInt64 :: int64(object, class [mscorlib]System.IFormatProvider)
 member [mscorlib]System.Convert.ToString :: string(object)
 member [mscorlib]System.DateTime..ctor :: instance void(int32, int32, int32, int32, int32, int32, valuetype [mscorlib]System.DateTimeKind)
+member [mscorlib]System.DateTime..ctor :: instance void(int64, valuetype [mscorlib]System.DateTimeKind)
 member [mscorlib]System.DateTime.AddMilliseconds :: instance valuetype [mscorlib]System.DateTime(float64)
 member [mscorlib]System.DateTime.AddSeconds :: instance valuetype [mscorlib]System.DateTime(float64)
 member [mscorlib]System.DateTime.MinValue :: valuetype [mscorlib]System.DateTime
 member [mscorlib]System.DateTime.ToString :: instance string(string)
+member [mscorlib]System.DateTime.ToUniversalTime :: instance valuetype [mscorlib]System.DateTime()
 member [mscorlib]System.DateTime.get_Day :: instance int32()
 member [mscorlib]System.DateTime.get_DayOfWeek :: instance valuetype [mscorlib]System.DayOfWeek()
 member [mscorlib]System.DateTime.get_Hour :: instance int32()
@@ -61,6 +67,7 @@ member [mscorlib]System.DateTime.get_Minute :: instance int32()
 member [mscorlib]System.DateTime.get_Month :: instance int32()
 member [mscorlib]System.DateTime.get_Now :: valuetype [mscorlib]System.DateTime()
 member [mscorlib]System.DateTime.get_Second :: instance int32()
+member [mscorlib]System.DateTime.get_Ticks :: instance int64()
 member [mscorlib]System.DateTime.get_UtcNow :: valuetype [mscorlib]System.DateTime()
 member [mscorlib]System.DateTime.get_Year :: instance int32()
 member [mscorlib]System.DateTime.op_GreaterThan :: bool(valuetype [mscorlib]System.DateTime, valuetype [mscorlib]System.DateTime)
@@ -113,6 +120,7 @@ member [mscorlib]System.IO.Stream.Write :: instance void(unsigned int8[], int32,
 member [mscorlib]System.Int32.Parse :: int32(string, valuetype [mscorlib]System.Globalization.NumberStyles, class [mscorlib]System.IFormatProvider)
 member [mscorlib]System.Int32.ToString :: instance string(string, class [mscorlib]System.IFormatProvider)
 member [mscorlib]System.Int32.TryParse :: bool(string, valuetype [mscorlib]System.Globalization.NumberStyles, class [mscorlib]System.IFormatProvider, [out] int32&)
+member [mscorlib]System.Int64.Parse :: int64(string)
 member [mscorlib]System.Int64.ToString :: instance string(class [mscorlib]System.IFormatProvider)
 member [mscorlib]System.IntPtr..ctor :: instance void(int32)
 member [mscorlib]System.IntPtr..ctor :: instance void(int64)
@@ -341,6 +349,7 @@ type [System.ServiceProcess]System.ServiceProcess.SessionChangeDescription
 type [System.ServiceProcess]System.ServiceProcess.SessionChangeReason
 type [System]System.ComponentModel.Win32Exception
 type [System]System.Diagnostics.Process
+type [System]System.Diagnostics.ProcessPriorityClass
 type [System]System.Diagnostics.ProcessStartInfo
 type [System]System.Text.RegularExpressions.Regex
 type [System]System.Text.RegularExpressions.RegexOptions

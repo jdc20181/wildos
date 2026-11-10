@@ -24,6 +24,9 @@ class WindowsMode : public QObject
     Q_PROPERTY(QString state READ state NOTIFY statusChanged)
     // The memory limits this PC can offer: [{value, text}]
     Q_PROPERTY(QVariantList memoryChoices READ memoryChoices CONSTANT)
+    // A product key is going in; it can take minutes (Windows starting,
+    // then Microsoft's activation servers).
+    Q_PROPERTY(bool activating READ activating NOTIFY activatingChanged)
 
 public:
     explicit WindowsMode(QObject *parent = nullptr);
@@ -32,9 +35,11 @@ public:
     QVariantMap status() const { return m_status; }
     QString state() const { return m_status.value(QStringLiteral("state")).toString(); }
     QVariantList memoryChoices() const;
+    bool activating() const { return m_activating; }
 
     Q_INVOKABLE QString setOption(const QString &key, const QString &value);
-    Q_INVOKABLE QString setProductKey(const QString &key);
+    // Answers with productKeyDone: "" once activated, or why not.
+    Q_INVOKABLE void setProductKey(const QString &key);
     Q_INVOKABLE bool keyShapeValid(const QString &key) const;
     Q_INVOKABLE QString checkUpdates();
     Q_INVOKABLE QString openDesktop();
@@ -47,6 +52,8 @@ public:
 
 Q_SIGNALS:
     void statusChanged();
+    void activatingChanged();
+    void productKeyDone(const QString &result);
 
 private Q_SLOTS:
     void refresh();
@@ -56,4 +63,5 @@ private:
 
     QDBusInterface *m_service = nullptr;
     QVariantMap m_status;
+    bool m_activating = false;
 };

@@ -1,0 +1,7 @@
+wildos-remote (0.1.0) trixie; urgency=medium
+
+  * First release: saved desktop and SSH hosts, Remote Desktop sessions on
+    the Windows mode engine, an SSH terminal with snippets and suggestions,
+    SFTP file copying, a keychain for SSH keys and host identity checks.
+
+ -- Wild OS Developers <dev@wildos.io>  Mon, 09 Nov 2026 23:00:00 +0000

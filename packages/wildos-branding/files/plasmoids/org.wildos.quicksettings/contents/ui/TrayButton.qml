@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Layouts
 import QtQuick.Templates as T
 import WildOS.UI as UI
+import org.wildos.shell as WildOS
 
 // The tray button from the design's taskbar: network, volume and battery
 // glyphs together in one 44 px tall button with 12 px padding and gaps.
@@ -142,6 +143,15 @@ MouseArea {
             percent: button.quick.power ? button.quick.power.percent : 0
             charging: button.quick.power ? button.quick.power.charging : false
             low: button.quick.batteryLow
+        }
+
+        UI.Label {
+            visible: button.showBattery && WildOS.TaskbarStyle.batteryPercent
+            Layout.leftMargin: -4
+            text: (button.quick.power ? button.quick.power.percent : 0) + "%"
+            size: 12
+            font.features: { "tnum": 1 }
+            color: UI.Style.iconInk
         }
     }
 }

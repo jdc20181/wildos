@@ -12,3 +12,8 @@ files/apt/wildos-freerdp.pref etc/apt/preferences.d/
 files/grub/10_wildos usr/lib/wildos/grub.d/
 files/grub/31_wildos_firmware usr/lib/wildos/grub.d/
 files/systemd/* usr/lib/systemd/system/
+files/performance/zram-generator.conf usr/lib/systemd/
+files/performance/999-wildos-performance.conf usr/lib/sysctl.d/
+files/udev/60-wildos-io-scheduler.rules usr/lib/udev/rules.d/
+files/oomd/wildos.conf usr/lib/systemd/system/user@.service.d/
+files/oomd/oomd.conf usr/lib/systemd/oomd.conf.d/

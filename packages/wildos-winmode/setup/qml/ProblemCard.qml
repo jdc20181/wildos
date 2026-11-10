@@ -15,6 +15,8 @@ Item {
     property string kind
     property real received: 0
     property string failure
+    // An unexpected error's own words, for reporting it.
+    property string detail
     // Over the setup window there is no compositor blur behind a popup, so
     // the card is drawn solid there; on the wallpaper it is glass.
     property bool solid: false
@@ -27,7 +29,7 @@ Item {
     Accessible.name: title.text
 
     function gb(bytes) {
-        return (bytes / 1e9).toLocaleString(Qt.locale("en_GB"), "f", 1) + " GB";
+        return (bytes / 1e9).toLocaleString(Qt.locale(), "f", 1) + " GB";
     }
 
     Rectangle {
@@ -117,6 +119,16 @@ Item {
                         return (card.failure.length > 0 ? card.failure + " " : "") + "Nothing was left half installed.";
                     }
                 }
+            }
+
+            UI.Label {
+                Layout.fillWidth: true
+                visible: card.kind === "failed" && card.detail.length > 0
+                text: "Details: " + card.detail
+                size: 12
+                color: UI.Style.inkAlpha(0.66, 0.6)
+                wrapMode: Text.Wrap
+                elide: Text.ElideNone
             }
 
             UI.Label {

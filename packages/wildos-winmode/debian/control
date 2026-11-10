@@ -69,6 +69,7 @@ Depends:
  swtpm-tools,
  virtiofsd,
  freerdp3-x11,
+ wildos-rdp,
  xorriso,
 Description: Wild OS Windows mode, the virtual PC it runs on
  QEMU, libvirt and FreeRDP, which Windows mode needs only once it is set

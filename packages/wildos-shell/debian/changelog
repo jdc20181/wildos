@@ -1,3 +1,10 @@
+wildos-shell (0.1.1) trixie; urgency=medium
+
+  * Settings > Accessibility can outline every window, with a thick accent ring
+    round the one in use, and blur and dim every window but the one in use.
+
+ -- Wild OS Developers <dev@wildos.io>  Tue, 10 Nov 2026 08:10:42 +0000
+
 wildos-shell (0.1.0) trixie; urgency=medium
 
   * Initial release.

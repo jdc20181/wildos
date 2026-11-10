@@ -1,0 +1,30 @@
+#!/bin/sh
+# Brings a taskbar made before an update up to date, each change once per
+# account, from the session's autostart. It waits for the shell to be up
+# and its bar laid out, because changing a locked bar while Plasma is still
+# starting leaves it undrawn.
+
+set -u
+
+state=${XDG_STATE_HOME:-$HOME/.local/state}/wildos
+# Each change: its marker and its script.
+pending=""
+for change in winmode-added:taskbar-winmode.js winmode-left:taskbar-winmode-left.js; do
+    [ -e "$state/taskbar-${change%%:*}" ] || pending="$pending $change"
+done
+[ -n "$pending" ] || exit 0
+
+i=0
+until busctl --user status org.kde.plasmashell >/dev/null 2>&1; do
+    i=$((i + 1))
+    [ "$i" -ge 120 ] && exit 0
+    sleep 1
+done
+sleep 5
+
+mkdir -p "$state" || exit 0
+for change in $pending; do
+    script=$(cat "/usr/libexec/wildos/${change#*:}") || continue
+    busctl --user call org.kde.plasmashell /PlasmaShell org.kde.PlasmaShell evaluateScript s "$script" >/dev/null 2>&1 || continue
+    : > "$state/taskbar-${change%%:*}"
+done

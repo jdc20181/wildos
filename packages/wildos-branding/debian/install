@@ -2,6 +2,7 @@ files/look-and-feel/* usr/share/plasma/look-and-feel/org.wildos.desktop/
 files/*.colors usr/share/color-schemes/
 files/xdg/* etc/xdg/
 files/desktoptheme/* usr/share/plasma/desktoptheme/wildos/
+files/themes/*.json usr/share/wildos/themes/
 files/plasmoids/* usr/share/plasma/plasmoids/
 files/libexec/* usr/libexec/wildos/
 files/plymouth/wildos/* usr/share/plymouth/themes/wildos/
@@ -22,3 +23,4 @@ files/skel/.config etc/skel/
 files/polkit/* usr/share/polkit-1/actions/
 files/grub/45_wildos_theme.cfg etc/default/grub.d/
 files/pam-configs/* usr/share/pam-configs/
+files/sounds/wildos usr/share/sounds/

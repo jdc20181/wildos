@@ -333,6 +333,12 @@ Step 'startup-trim' $false {
     }
 }
 
+# OpenGL past 1.1 for the programs that need it (opengl.ps1 says why). Not
+# critical: without it Windows mode works and only those programs fail.
+Step 'opengl' $false {
+    & "$here\opengl.ps1"
+}
+
 # 8. Wild OS's light or dark look and accent colour (brief 5.4 step 8):
 # wild-guest applies theme.json in each session and keeps it up to date.
 Step 'theme' $false {

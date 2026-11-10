@@ -5,7 +5,7 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 include(GNUInstallDirs)
 
-find_package(Qt6 6.8 REQUIRED COMPONENTS Core Gui DBus Qml Quick QuickControls2)
+find_package(Qt6 6.8 REQUIRED COMPONENTS Core Gui DBus Network Qml Quick QuickControls2)
 find_package(KF6KIO REQUIRED)
 find_package(KF6Service REQUIRED)
 find_package(packagekitqt6 REQUIRED)
@@ -32,20 +32,28 @@ qt_add_qml_module(wildos-store
     RESOURCES
         data/curated.json
         data/flathub.flatpakrepo
-        data/hero.jpg
+        data/heroes/contours.jpg
+        data/photos/create-timeline.jpg
+        data/photos/make-krita.jpg
+        data/photos/play-controller.jpg
+        data/photos/swap-desk.jpg
+        data/heroes/dusk-hills.jpg
+        data/heroes/waves-green.jpg
         data/org.wildos.store.svg
     SOURCES
         src/catalog.cpp src/catalog.h
         src/storeapp.cpp src/storeapp.h
         src/packagekitbackend.cpp src/packagekitbackend.h
         src/flatpakbackend.cpp src/flatpakbackend.h
-        src/themeiconprovider.h
+        src/localpackage.cpp src/localpackage.h
+        src/network.cpp src/network.h
+        src/themeiconprovider.h src/timing.h
 )
 
 target_include_directories(wildos-store PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
 
 target_link_libraries(wildos-store PRIVATE
-    Qt6::Gui Qt6::DBus Qt6::Qml Qt6::Quick Qt6::QuickControls2
+    Qt6::Gui Qt6::DBus Qt6::Network Qt6::Qml Qt6::Quick Qt6::QuickControls2
     KF6::KIOGui KF6::Service
     PK::packagekitqt6
     AppStreamQt
@@ -57,3 +65,4 @@ install(FILES data/org.wildos.store.desktop DESTINATION ${CMAKE_INSTALL_DATADIR}
 install(FILES data/curated.json DESTINATION ${CMAKE_INSTALL_DATADIR}/wildos-store)
 install(FILES data/org.wildos.store.svg DESTINATION ${CMAKE_INSTALL_DATADIR}/icons/hicolor/scalable/apps)
 install(FILES data/60wildos-store-icons DESTINATION ${CMAKE_INSTALL_SYSCONFDIR}/apt/apt.conf.d)
+install(FILES data/wildos-store-update.service data/wildos-store-update.timer DESTINATION ${CMAKE_INSTALL_PREFIX}/lib/systemd/user)

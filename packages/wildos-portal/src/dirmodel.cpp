@@ -2,6 +2,7 @@
 
 #include "format.h"
 
+#include <QLocale>
 #include <KConfigGroup>
 #include <KCoreDirLister>
 #include <KIO/MkdirJob>
@@ -465,7 +466,7 @@ DirModel::Entry DirModel::makeEntry(const KFileItem &item) const
     e.hidden = item.isHidden();
     const QDateTime modified = item.time(KFileItem::ModificationTime);
     e.dateKey = modified.isValid() ? modified.toMSecsSinceEpoch() : 0;
-    e.date = modified.isValid() ? modified.toLocalTime().toString(QStringLiteral("dd/MM/yyyy HH:mm")) : QString();
+    e.date = modified.isValid() ? QLocale::system().toString(modified.toLocalTime(), QLocale::ShortFormat) : QString();
     e.type = Format::typeName(item.currentMimeType(), e.isDir);
     if (!e.isDir) {
         e.sizeKey = qint64(item.size());

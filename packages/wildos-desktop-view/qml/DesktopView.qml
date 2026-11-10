@@ -63,6 +63,20 @@ FocusScope {
         keyboardUsed = false;
     }
 
+    // A press anywhere on the desktop takes the keyboard back from whatever
+    // inside it holds it, so an open name editor loses focus and keeps the
+    // new name, as clicking away does on Windows. forceActiveFocus() alone
+    // is not enough: this item is a FocusScope, so it hands active focus
+    // straight back to the child that had it.
+    function takeFocus() {
+        const w = view.Window.window;
+        const item = w ? w.activeFocusItem : null;
+        if (item && item !== view) {
+            item.focus = false;
+        }
+        view.forceActiveFocus();
+    }
+
     // Commands shared by the menus and the keyboard.
 
     function selectedRowsOfKind(kind) {
@@ -590,7 +604,7 @@ FocusScope {
         property rect band
 
         onPressed: mouse => {
-            view.forceActiveFocus();
+            view.takeFocus();
             view.pointerUsed();
             start = Qt.point(mouse.x, mouse.y);
             banding = false;

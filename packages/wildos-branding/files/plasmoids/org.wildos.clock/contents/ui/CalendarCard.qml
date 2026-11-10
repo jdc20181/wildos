@@ -3,10 +3,12 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Layouts
 import WildOS.UI as UI
+import "Formats.js" as Formats
 
 // The design's calendar card: today's date as the heading, the month shown
-// beneath it with previous and next buttons, a Monday-first month grid with
-// today in the accent, and a line along the foot about the day chosen.
+// beneath it with previous and next buttons, a month grid that starts on the
+// regional format's first day of the week with today in the accent, and a
+// line along the foot about the day chosen.
 // Wild OS has no calendar of events, so choosing a day says how far away
 // it is, the question a calendar flyout mostly answers, rather than
 // claiming the day is free.
@@ -26,12 +28,13 @@ ColumnLayout {
     }
 
     readonly property var locale: Qt.locale("en_GB")
+    readonly property int firstDay: Formats.firstDayOfWeek()
 
-    // Six weeks from the Monday on or before the first, so the card keeps
-    // one height from month to month.
+    // Six weeks from the first day of the week on or before the 1st, so the
+    // card keeps one height from month to month.
     readonly property var days: {
         const first = new Date(year, month, 1);
-        const offset = (first.getDay() + 6) % 7;
+        const offset = (first.getDay() - firstDay + 7) % 7;
         const list = [];
         for (let i = 0; i < 42; i++) {
             const day = new Date(year, month, 1 - offset + i);
@@ -41,7 +44,7 @@ ColumnLayout {
                 inMonth: day.getMonth() === month,
                 isToday: day.getFullYear() === today.getFullYear() && day.getMonth() === today.getMonth()
                     && day.getDate() === today.getDate(),
-                label: locale.toString(day, "dddd d MMMM yyyy")
+                label: Formats.longDate(day)
             });
         }
         return list;
@@ -82,7 +85,7 @@ ColumnLayout {
         if (days === 0) {
             return "Today, week " + weekNumber(day);
         }
-        return locale.toString(day, "dddd d MMMM") + ", " + when.charAt(0).toLowerCase() + when.slice(1);
+        return Formats.dayAndMonth(day) + ", " + when.charAt(0).toLowerCase() + when.slice(1);
     }
 
     spacing: 12
@@ -97,7 +100,7 @@ ColumnLayout {
 
             UI.Label {
                 Layout.fillWidth: true
-                text: card.locale.toString(card.today, "dddd d MMMM")
+                text: Formats.dayAndMonth(card.today)
                 size: 14
                 font.weight: Font.DemiBold
                 Accessible.role: Accessible.Heading
@@ -192,7 +195,7 @@ ColumnLayout {
         Accessible.name: card.locale.toString(new Date(card.year, card.month, 1), "MMMM yyyy")
 
         Repeater {
-            model: ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"]
+            model: ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"].map((_, i, names) => names[(i + card.firstDay) % 7])
 
             UI.Label {
                 required property string modelData

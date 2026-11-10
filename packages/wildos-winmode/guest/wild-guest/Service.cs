@@ -238,6 +238,7 @@ namespace WildOS.Guest
                     break;
                 case "windows":
                 case "window":
+                case "running":
                 case "launch":
                 case "warm-list":
                     var target = Target(m);

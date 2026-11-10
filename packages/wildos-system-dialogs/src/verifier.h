@@ -18,7 +18,8 @@
 // shipped in the image (/usr/share/wildos/image-packages) or comes, by
 // apt, from Debian, Debian security, Kicksecure or the Wild OS repository.
 // Anything else is unverified: a script in a home folder, a Flatpak, a
-// package from another vendor or installed by hand.
+// package from another vendor or installed by hand. So is any install of a
+// package file through PackageKit, whoever asks for it.
 struct Verdict {
     QString appName;
     QString iconName;

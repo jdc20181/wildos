@@ -48,7 +48,7 @@ PageScroll {
                     Layout.fillWidth: true
                     text: {
                         const chosen = UI.Style.accents.find(a => Qt.colorEqual(a.colour, System.accent));
-                        return chosen ? chosen.name : "Your own colour";
+                        return chosen ? chosen.name : Themes.accentName(System.accent) || "Your own colour";
                     }
                     color: UI.Style.inkMuted
                 }

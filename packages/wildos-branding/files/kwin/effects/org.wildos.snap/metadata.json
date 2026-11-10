@@ -8,7 +8,7 @@
             }
         ],
         "Category": "Window Management",
-        "Description": "Pick a layout and a zone to snap a window into: hover the maximise button, drag a window to the top of the screen or press Meta+Z",
+        "Description": "Pick a layout and a zone to snap a window into: hover the maximise button, drag a window to the top of the screen or press Meta+Z. Once a window is snapped, other windows are offered for the rest of the layout",
         "EnabledByDefault": true,
         "Id": "org.wildos.snap",
         "License": "GPL-3.0-or-later",

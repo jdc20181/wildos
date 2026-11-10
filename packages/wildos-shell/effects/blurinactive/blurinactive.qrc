@@ -1,0 +1,7 @@
+<!DOCTYPE RCC><RCC version="1.0">
+<qresource prefix="/wildos/blurinactive/">
+    <file alias="downsample.frag">shaders/downsample.frag</file>
+    <file alias="upsample.frag">shaders/upsample.frag</file>
+    <file alias="composite.frag">shaders/composite.frag</file>
+</qresource>
+</RCC>

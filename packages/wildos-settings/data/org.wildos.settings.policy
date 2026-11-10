@@ -35,6 +35,30 @@
     <annotate key="org.freedesktop.policykit.exec.path">/usr/libexec/wildos/settings-protection</annotate>
   </action>
 
+  <action id="org.wildos.settings.cpu-threads">
+    <description>Turn hyper-threading on or off</description>
+    <message>Change whether this computer uses hyper-threading?</message>
+    <icon_name>cpu</icon_name>
+    <defaults>
+      <allow_any>no</allow_any>
+      <allow_inactive>no</allow_inactive>
+      <allow_active>auth_admin_keep</allow_active>
+    </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/libexec/wildos/settings-cpu-threads</annotate>
+  </action>
+
+  <action id="org.wildos.settings.graphics-driver">
+    <description>Change the graphics driver</description>
+    <message>Change which driver your NVIDIA graphics card uses?</message>
+    <icon_name>video-display</icon_name>
+    <defaults>
+      <allow_any>no</allow_any>
+      <allow_inactive>no</allow_inactive>
+      <allow_active>auth_admin_keep</allow_active>
+    </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/libexec/wildos/settings-graphics-driver</annotate>
+  </action>
+
   <action id="org.wildos.settings.network">
     <description>Turn the VPN kill switch on or off</description>
     <message>Change whether Wild OS blocks the internet when a VPN drops?</message>

@@ -3,9 +3,10 @@ pragma Singleton
 import QtQuick
 
 // Numbers the way Windows Task Manager writes them: one decimal for CPU and
-// rates, whole megabytes with thousands separators for memory.
+// rates, whole megabytes with thousands separators for memory, with the
+// separators of the regional format chosen in Settings (LC_NUMERIC).
 QtObject {
-    readonly property var locale: Qt.locale("en_GB")
+    readonly property var locale: Qt.locale()
 
     function cpu(value) {
         return Number(value || 0).toLocaleString(locale, "f", 1) + "%";
@@ -21,11 +22,11 @@ QtObject {
 
     function disk(bytesPerSecond) {
         const mb = (bytesPerSecond || 0) / 1048576;
-        return (mb === 0 ? "0" : mb < 0.05 ? "0.1" : Number(mb).toLocaleString(locale, "f", 1)) + " MB/s";
+        return (mb === 0 ? "0" : Number(Math.max(mb, 0.1)).toLocaleString(locale, "f", 1)) + " MB/s";
     }
 
     function network(bytesPerSecond) {
         const mbps = (bytesPerSecond || 0) * 8 / 1000000;
-        return (mbps === 0 ? "0" : mbps < 0.05 ? "0.1" : Number(mbps).toLocaleString(locale, "f", 1)) + " Mbps";
+        return (mbps === 0 ? "0" : Number(Math.max(mbps, 0.1)).toLocaleString(locale, "f", 1)) + " Mbps";
     }
 }

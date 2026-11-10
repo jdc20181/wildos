@@ -6,7 +6,6 @@ DefaultDependencies=no
 Before=network-pre.target
 Wants=network-pre.target
 After=local-fs.target
-ConditionPathExists=/etc/wildos/protection-level
 
 [Service]
 Type=oneshot

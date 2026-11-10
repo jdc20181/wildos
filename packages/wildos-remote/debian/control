@@ -1,0 +1,52 @@
+Source: wildos-remote
+Section: net
+Priority: optional
+Maintainer: Wild OS Developers <dev@wildos.io>
+Build-Depends:
+ debhelper-compat (= 13),
+ cmake,
+ pkgconf,
+ qt6-base-dev,
+ qt6-base-private-dev,
+ qt6-declarative-dev,
+ qtkeychain-qt6-dev,
+ libqtermwidget-dev,
+ libkf6windowsystem-dev,
+ libkf6config-dev,
+ libwayland-dev,
+ wayland-protocols,
+ freerdp3-dev (>= 3.32),
+ libwinpr3-dev (>= 3.32),
+Standards-Version: 4.7.0
+Rules-Requires-Root: no
+
+Package: wildos-remote
+Architecture: any
+Depends:
+ ${shlibs:Depends},
+ ${misc:Depends},
+ wildos-ui,
+ openssh-client,
+ libfreerdp3-3 (>= 3.32),
+ libfreerdp-client3-3 (>= 3.32),
+ qtermwidget-data,
+ qt6-wayland,
+ qml6-module-qtcore,
+ qml6-module-qtquick,
+ qml6-module-qtquick-controls,
+ qml6-module-qtquick-templates,
+ qml6-module-qtquick-layouts,
+ qml6-module-qtquick-shapes,
+ qml6-module-qtquick-effects,
+ qml6-module-qtquick-window,
+ qml6-module-qtquick-dialogs,
+ qml6-module-qtqml-workerscript,
+ fonts-jetbrains-mono,
+Description: Wild OS Remote
+ Remote connects to other computers: Windows PCs and servers with Remote
+ Desktop, and servers over SSH. Desktops are drawn by the same engine as
+ Windows mode, full screen or in a window. SSH hosts open in a terminal
+ with snippets and suggestions from your own history, a file view that
+ copies over SFTP, and a keychain for your keys. Host identities are
+ checked against known_hosts and a changed one is never accepted without
+ asking. Passwords are kept only in the keyring, and only when you tick it.

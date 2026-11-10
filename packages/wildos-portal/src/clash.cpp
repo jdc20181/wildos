@@ -47,7 +47,7 @@ QString suggestKeepBothName(const QUrl &dest, bool isDir)
 
 QString when(qint64 ms)
 {
-    return ms > 0 ? QDateTime::fromMSecsSinceEpoch(ms).toLocalTime().toString(QStringLiteral("dd/MM/yyyy")) : QString();
+    return ms > 0 ? QLocale::system().toString(QDateTime::fromMSecsSinceEpoch(ms).toLocalTime().date(), QLocale::ShortFormat) : QString();
 }
 
 QString facts(qint64 ms, qint64 size, bool isDir)
@@ -111,7 +111,7 @@ QString Clash::summary() const
     const QString verb = m_move ? QStringLiteral("Moving") : QStringLiteral("Copying");
     const QString thing = m_folders ? QStringLiteral("folder") : QStringLiteral("file");
     if (m_items > 1) {
-        const QString items = QStringLiteral("%1 %2 items.").arg(verb, QLocale(QLocale::English, QLocale::UnitedKingdom).toString(m_items));
+        const QString items = QStringLiteral("%1 %2 items.").arg(verb, QLocale::system().toString(m_items));
         if (m_clashes > 1) {
             return items + QStringLiteral(" %1 have the same name as items already there.").arg(m_clashes);
         }

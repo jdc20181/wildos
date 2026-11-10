@@ -36,8 +36,38 @@
 #                            people; for diagnostics and Settings.
 #   kernel=on|off            Kicksecure's kernel hardening is in force. Not
 #                            shown to people; for diagnostics and Settings.
+#   ignored=a,b              Warnings this person chose to ignore (see below).
+#
+# Some warnings describe a choice a person can reasonably make and live with:
+# Secure Boot off (turning it on after installing can stop some computers
+# starting), a disk installed without encryption, USB or app protection off.
+#
+#   security-status ignore KEY      stop warning about KEY for this person
+#   security-status unignore KEY    warn about it again
+#
+# Only encryption, apps, devices and secureboot can be ignored. Security
+# updates never can. The list lives in ~/.config/wildos/security-ignored.
 
 export LC_ALL=C
+
+ignored_file="${XDG_CONFIG_HOME:-$HOME/.config}/wildos/security-ignored"
+case "${1:-}" in
+    ignore | unignore)
+        case "${2:-}" in
+            encryption | apps | devices | secureboot) ;;
+            *) echo "security-status: $1 takes encryption, apps, devices or secureboot" >&2; exit 2 ;;
+        esac
+        mkdir -p "$(dirname "$ignored_file")"
+        touch "$ignored_file"
+        others=$(grep -vx "$2" "$ignored_file" || true)
+        {
+            [ -n "$others" ] && printf '%s\n' "$others"
+            [ "$1" = ignore ] && printf '%s\n' "$2"
+        } > "$ignored_file.new"
+        mv "$ignored_file.new" "$ignored_file"
+        exit 0
+        ;;
+esac
 
 # A service that is still starting counts as on: at login some are a few
 # seconds behind, and that is not a reason to warn anyone.
@@ -210,3 +240,6 @@ if [ "$(cat /proc/sys/kernel/kptr_restrict 2>/dev/null)" = "2" ]; then
 else
     echo "kernel=off"
 fi
+
+# Only known keys, so a hand-edited file can't hide anything else.
+echo "ignored=$(grep -xE 'encryption|apps|devices|secureboot' "$ignored_file" 2>/dev/null | sort -u | paste -sd, -)"

@@ -124,6 +124,13 @@ Page {
     }
 
     Banner {
+        visible: Setup.hyperThreadingNeedsRestart
+        iconName: "restart"
+        title: "Restart to use every processor thread"
+        text: "Windows apps get the extra speed after the PC restarts."
+    }
+
+    Banner {
         visible: page.options.office === true
         iconName: "account"
         title: "Sign in to Microsoft 365"

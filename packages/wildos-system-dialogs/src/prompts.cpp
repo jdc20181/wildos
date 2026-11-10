@@ -72,11 +72,11 @@ KConfigGroup restartConfig()
     return KSharedConfig::openConfig(Prompts::configFile())->group(QStringLiteral("Restart"));
 }
 
-// "Tonight at 23:00", "Tomorrow at 12:00", in the 24-hour clock Wild OS
-// uses everywhere.
+// "Tonight at 23:00", "Tomorrow at 12:00", in the clock of the regional
+// format chosen in Settings.
 QString describe(const QDateTime &when, const QDateTime &now)
 {
-    const QString time = QLocale(QLocale::English, QLocale::UnitedKingdom).toString(when.time(), QStringLiteral("HH:mm"));
+    const QString time = QLocale::system().toString(when.time(), QLocale::ShortFormat);
     const int days = now.date().daysTo(when.date());
     const bool night = when.time().hour() >= 18 || when.time().hour() < 5;
     if (days == 0) {

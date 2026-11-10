@@ -88,26 +88,15 @@ namespace WildOS.Guest
         // the moment it sees one, so taskbar grouping does not wait for it.
         static void Watch()
         {
-            MapDrive();
+            OnConnect(false);
             long connected = ConnectTime();
             while (true)
             {
-                // Windows does not send a reconnecting RemoteApp client the
-                // windows already on screen, so they arrive blank until they
-                // next change. Every window is redrawn whenever a client
-                // connects (the session's connect time moves, which also
-                // catches a connection taking over one Windows still thinks
-                // is open), and once more a moment later for apps that paint
-                // late.
                 long now = ConnectTime();
                 if (now != connected)
                 {
                     connected = now;
-                    MapDrive();
-                    Thread.Sleep(500);
-                    RedrawAll();
-                    Thread.Sleep(1500);
-                    RedrawAll();
+                    OnConnect(true);
                 }
                 try
                 {
@@ -125,6 +114,34 @@ namespace WildOS.Guest
                 }
                 Thread.Sleep(1000);
             }
+        }
+
+        static readonly object connecting = new object();
+
+        // Windows does not send a reconnecting RemoteApp client the windows
+        // already on screen, so they arrive blank until they next change.
+        // Every window is redrawn whenever a client connects (the session's
+        // connect time moves, which also catches a connection taking over one
+        // Windows still thinks is open), and once more a moment later for
+        // apps that paint late. Mapping the drive can take up to 15 seconds,
+        // so all of it runs beside the window list, which must keep going:
+        // Wild OS reads from it whether an app is still open.
+        static void OnConnect(bool redraw)
+        {
+            var t = new Thread(delegate ()
+            {
+                lock (connecting)
+                {
+                    MapDrive();
+                    if (!redraw) return;
+                    Thread.Sleep(500);
+                    RedrawAll();
+                    Thread.Sleep(1500);
+                    RedrawAll();
+                }
+            });
+            t.IsBackground = true;
+            t.Start();
         }
 
         // Z: is the folders Wild OS shares through the RemoteApp connection
@@ -222,6 +239,9 @@ namespace WildOS.Guest
                     case "window":
                         reply = Message("window", "window", Windows.Describe(new IntPtr(Json.Num(m, "hwnd", 0)), false));
                         break;
+                    case "running":
+                        reply = Running(m);
+                        break;
                     case "launch":
                         reply = LaunchWarm(m) ?? Launch(m);
                         break;
@@ -280,6 +300,51 @@ namespace WildOS.Guest
             }
         }
 
+        // When each program was last started, kept beside the session's log:
+        // a program started through Remote Desktop's own request (StartOnce,
+        // a process of its own) and one started here both leave it, so
+        // "running" can say a program started and has already ended.
+        static string StartedFile(string path)
+        {
+            return Path.Combine(Path.GetDirectoryName(SessionLog), "started-" + Path.GetFileNameWithoutExtension(path ?? "").ToLowerInvariant());
+        }
+
+        static void Started(string path)
+        {
+            try { File.WriteAllText(StartedFile(path), DateTime.UtcNow.Ticks.ToString()); }
+            catch (Exception) { }
+        }
+
+        static bool StartedSince(string path, DateTime since)
+        {
+            try { return new DateTime(long.Parse(File.ReadAllText(StartedFile(path))), DateTimeKind.Utc) >= since; }
+            catch (Exception) { return false; }
+        }
+
+        // Whether a program started since a moment (milliseconds since 1970,
+        // UTC) is still running in this session: by its file name, so a
+        // launcher that hands over to the real program of the same name
+        // (System32's notepad.exe, an app alias) still counts.
+        static Dictionary<string, object> Running(Dictionary<string, object> m)
+        {
+            string stem = Path.GetFileNameWithoutExtension(Json.Str(m, "path") ?? "");
+            DateTime since = new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc).AddMilliseconds(Json.Num(m, "since", 0)).AddSeconds(-2);
+            int session = Process.GetCurrentProcess().SessionId;
+            long count = 0;
+            if (stem.Length > 0)
+            {
+                foreach (var p in Process.GetProcessesByName(stem))
+                {
+                    try
+                    {
+                        if (p.SessionId == session && p.StartTime.ToUniversalTime() >= since) count++;
+                    }
+                    catch (Exception) { }
+                }
+            }
+            return Message("running", "running", count > 0, "count", count, "started", StartedSince(Json.Str(m, "path"), since));
+        }
+
         static Dictionary<string, object> Launch(Dictionary<string, object> m)
         {
             string path = Json.Str(m, "path");
@@ -304,6 +369,7 @@ namespace WildOS.Guest
             try
             {
                 var p = Process.Start(start);
+                Started(path);
                 return Message("launched", "pid", p == null ? 0L : (long)p.Id, "warm", false);
             }
             catch (Win32Exception e)

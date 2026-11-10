@@ -42,7 +42,7 @@ QString readLine(const QString &path)
 // One decimal under 10 and none above, as Windows Task Manager writes them.
 QString number(double value, int decimals = 1)
 {
-    return QLocale(QLocale::English, QLocale::UnitedKingdom).toString(value, 'f', decimals);
+    return QLocale::system().toString(value, 'f', decimals);
 }
 
 QString bytes(double value)
@@ -846,8 +846,8 @@ QVariantMap SystemStats::details(const QString &id) const
             pair(QStringLiteral("Utilisation"), percent(m_cpu)),
             pair(QStringLiteral("Speed"), m_speedMhz > 0 ? number(m_speedMhz / 1000, 1) + QStringLiteral(" GHz") : QStringLiteral("Unknown")),
             pair(QStringLiteral("Temperature"), m_temperature > 0 ? number(m_temperature, 0) + QStringLiteral("°C") : QStringLiteral("Unknown")),
-            pair(QStringLiteral("Processes"), QLocale(QLocale::English, QLocale::UnitedKingdom).toString(p->processCount())),
-            pair(QStringLiteral("Threads"), QLocale(QLocale::English, QLocale::UnitedKingdom).toString(p->threadCount())),
+            pair(QStringLiteral("Processes"), QLocale::system().toString(p->processCount())),
+            pair(QStringLiteral("Threads"), QLocale::system().toString(p->threadCount())),
             pair(QStringLiteral("Up time"), upTime()),
         };
         QVariantList specs;

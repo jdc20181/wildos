@@ -2,37 +2,43 @@ import QtQuick
 import QtQuick.Layouts
 import WildOS.UI as UI
 
-// A page heading with an optional line under it and actions at the right.
+// A page's 32px bold title, an optional line under it, and anything given
+// (a button, filter pills) at the right, level with the bottom of the text.
 Item {
     id: header
 
     property string title
     property string subtitle
     default property alias actions: actionRow.data
+    // Pills too wide to sit beside the title go under it instead.
+    readonly property bool stacked: actionRow.implicitWidth > 0 && textColumn.titleWidth + actionRow.implicitWidth + 32 > width
 
     Layout.fillWidth: true
-    implicitHeight: Math.max(textColumn.implicitHeight, actionRow.implicitHeight)
+    implicitHeight: stacked ? textColumn.implicitHeight + 16 + actionRow.implicitHeight : Math.max(textColumn.implicitHeight, actionRow.implicitHeight)
 
     Column {
         id: textColumn
-        width: parent.width - actionRow.implicitWidth - 24
-        spacing: 6
+        readonly property real titleWidth: Math.max(titleLabel.implicitWidth, subtitleLabel.visible ? subtitleLabel.implicitWidth : 0)
+        width: header.stacked || actionRow.implicitWidth === 0 ? parent.width : Math.min(titleWidth, parent.width - actionRow.implicitWidth - 32)
+        spacing: 4
 
         UI.Label {
+            id: titleLabel
             width: parent.width
             text: header.title
-            size: 28
-            font.weight: Font.DemiBold
-            font.letterSpacing: -0.28
+            size: 32
+            font.weight: Font.Bold
+            font.letterSpacing: -0.64
             Accessible.role: Accessible.Heading
         }
 
         UI.Label {
+            id: subtitleLabel
             visible: header.subtitle.length > 0
             width: parent.width
             text: header.subtitle
-            size: 14
-            color: Metrics.inkSub
+            size: 15
+            color: Metrics.inkSecondary
             wrapMode: Text.Wrap
             elide: Text.ElideNone
         }
@@ -40,8 +46,8 @@ Item {
 
     Row {
         id: actionRow
-        anchors.right: parent.right
-        anchors.verticalCenter: textColumn.verticalCenter
-        spacing: 10
+        x: header.stacked ? 0 : header.width - width
+        y: header.stacked ? textColumn.implicitHeight + 16 : textColumn.implicitHeight - height
+        spacing: 8
     }
 }

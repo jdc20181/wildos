@@ -3,7 +3,7 @@
   set follows the old builder's generator (packages/wildos-winmode/src/
   domain.cpp), moved to the brief's network, disk and firmware-key choices.
 -->
-<domain type='kvm' xmlns:qemu='http://libvirt.org/schemas/domain/qemu/1.0'>
+<domain type='kvm'>
   <name>@NAME@</name>
   <title>Windows mode</title>
   <memory unit='MiB'>@MEMORY_MB@</memory>
@@ -27,6 +27,7 @@
       <feature enabled='yes' name='enrolled-keys'/>
     </firmware>
     <smbios mode='sysinfo'/>
+    @ACPI_TABLES@
   </os>
   <features>
     <acpi/>
@@ -128,5 +129,4 @@
       <backend model='random'>/dev/urandom</backend>
     </rng>
   </devices>
-  @QEMU_COMMANDLINE@
 </domain>

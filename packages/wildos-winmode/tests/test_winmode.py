@@ -3,6 +3,7 @@ import io
 import json
 import os
 import tempfile
+import time
 import unittest
 
 from winmode import compat, firewall, guestlink, launchers, lifecycle, paths, rdp, theme, windows
@@ -143,6 +144,25 @@ class Launchers(unittest.TestCase):
         self.assertTrue(launchers.is_shell(r"C:\Windows\System32\rdpinit.exe"))
         self.assertFalse(launchers.is_shell(r"C:\X\WINWORD.EXE"))
 
+    def test_open_windows_for_the_taskbar_panel(self):
+        reg = {"word": {"name": "Word", "target": r"C:\O\WINWORD.EXE"}}
+        ws = [{"image": r"C:\O\WINWORD.EXE", "title": "Quarterly report.docx - Word", "owner": 0},
+              {"image": r"C:\O\WINWORD.EXE", "title": "Save As", "owner": 4242},
+              {"image": r"C:\Windows\System32\rdpinit.exe", "title": "", "owner": 0},
+              {"image": r"C:\Tools\notepad.exe", "title": "Notepad", "owner": 0}]
+        self.assertEqual(launchers.open_windows(ws, reg), [
+            {"id": "word", "name": "Word", "icon": "wildos-winmode-word", "title": "Quarterly report.docx", "installed": True},
+            {"id": "notepad", "name": "Notepad", "icon": "wildos-windows-app", "title": "", "installed": False}])
+        self.assertEqual(launchers.document_title("Budget 2027.xlsx - Excel", "Excel"), "Budget 2027.xlsx")
+        self.assertEqual(launchers.document_title("Report - Draft - Word", "Microsoft Word"), "Report - Draft")
+        self.assertEqual(launchers.document_title("Pay - Slip", "Invoices"), "Pay - Slip")
+
+    def test_last_app(self):
+        reg = {"word": {}, "excel": {}}
+        self.assertEqual(launchers.last_app(reg, "excel", {"word": 9}), "excel")
+        self.assertEqual(launchers.last_app(reg, "gone", {"word": 9, "excel": 2, "gone": 50}), "word")
+        self.assertIsNone(launchers.last_app(reg, None, {}))
+
     def test_write_all_makes_and_removes_entries(self):
         reg = launchers.write_all([{"name": "Word", "target": r"C:\O\WINWORD.EXE"}, {"name": "Old", "target": r"C:\O\old.exe"}])
         apps = os.path.join(self.dir, "data", "applications")
@@ -230,6 +250,230 @@ class RemoteApp(unittest.TestCase):
         self.assertFalse(any(a.startswith("/drive") for a in args))
         app = [a for a in args if a.startswith("/app:")][0]
         self.assertEqual(app.count(","), 2)
+
+
+NL = chr(10)
+
+
+class NativeClient(unittest.TestCase):
+    """wildos-rdp, Wild OS's own RemoteApp client, and its fallback."""
+
+    def setUp(self):
+        self.dir = tempfile.mkdtemp()
+        self.client = os.path.join(self.dir, "wildos-rdp")
+        # Stands in for the client: keeps its arguments and what it is given
+        # on standard input.
+        with open(self.client, "w") as f:
+            f.write('#!/bin/sh\nprintf "%s\\n" "$@" > "$0.argv"\ncat > "$0.stdin"\n')
+        os.chmod(self.client, 0o755)
+
+    def test_the_own_client_unless_missing_or_asked_not_to(self):
+        self.assertEqual(rdp.client_program("auto", native=self.client), self.client)
+        self.assertEqual(rdp.client_program("xfreerdp3", native=self.client), "xfreerdp3")
+        self.assertEqual(rdp.client_program("auto", native=os.path.join(self.dir, "missing")), "xfreerdp3")
+
+    def test_the_desktop_opens_in_xfreerdp3_unless_remote_is_asked_for(self):
+        remote = os.path.join(self.dir, "wildos-remote")
+        with open(remote, "w") as f:
+            f.write("#!/bin/sh\n")
+        os.chmod(remote, 0o755)
+        self.assertEqual(rdp.desktop_client("xfreerdp3", remote=remote), "xfreerdp3")
+        self.assertEqual(rdp.desktop_client("remote", remote=remote), remote)
+        self.assertEqual(rdp.desktop_client("remote", remote=os.path.join(self.dir, "missing")), "xfreerdp3")
+
+    def test_loading_arguments_are_one_line_each(self):
+        args = rdp.loading_arguments("wildos-winmode-word", "Word\n/drive:all,/", "wildos-winmode-word", "Slow, really",
+                                     r"C:\O\WINWORD.EXE")
+        self.assertEqual(args[:2], ["--app-id", "wildos-winmode-word"])
+        self.assertTrue(all("\n" not in a for a in args))
+        # The name is the value of --title, never an argument of its own.
+        self.assertEqual(args[args.index("--title") + 1], "Word /drive:all,/")
+        self.assertEqual(args[args.index("--reason") + 1], "Slow, really")
+        # The program its first window is matched by.
+        self.assertEqual(args[-2:], ["--program", r"C:\O\WINWORD.EXE"])
+
+    def wait(self, conn):
+        conn.proc.wait(5)
+
+    def test_preparing_a_session_signs_in_only(self):
+        args = rdp.prepare_arguments("192.168.207.10", 3389, "wild", "PC", drive="/srv/share")
+        # It must never take the session back from the connection an app
+        # opens with.
+        self.assertNotIn("+auto-reconnect", args)
+        self.assertIn("/drive:wildos,/srv/share", args)
+        self.assertFalse(any("secret" in a for a in args))
+        ended = []
+        proc = rdp.prepare_session(args, "secret", os.path.join(self.dir, "log", "p.log"), ended.append, native=self.client)
+        proc.wait(5)
+        argv = read(self.client + ".argv").split(NL)
+        self.assertEqual(argv[:2], ["--prepare-session", "/args-from:stdin"])
+        self.assertNotIn("secret", read(self.client + ".argv"))
+        self.assertEqual(read(self.client + ".stdin").splitlines()[-1], "/p:secret")
+
+    def test_spawned_early_then_given_the_connection(self):
+        changes = []
+        conn = rdp.Connection(changes.append, lambda: None, os.path.join(self.dir, "log", "c.log"))
+        conn.native_client = self.client
+        self.assertTrue(conn.spawn("wildos-winmode-word", "Word", "wildos-winmode-word"))
+        self.assertFalse(conn.open)
+        self.assertTrue(conn.running)
+        self.assertFalse(conn.spawn("x", "y", "z"))
+        conn.start(["/v:192.168.207.10:3389", "/u:wild"], "secret")
+        self.assertTrue(changes == [True])
+        self.wait(conn)
+        argv = read(self.client + ".argv").split("\n")
+        self.assertIn("--app-id", argv)
+        self.assertEqual(argv[-2], "/args-from:stdin")
+        self.assertNotIn("secret", read(self.client + ".argv"))
+        lines = read(self.client + ".stdin").splitlines()
+        self.assertEqual(lines, ["/v:192.168.207.10:3389", "/u:wild", "/p:secret"])
+
+    def test_the_connection_before_keeps_its_log(self):
+        path = os.path.join(self.dir, "log", "c.log")
+        conn = rdp.Connection(lambda o: None, lambda: None, path)
+        conn.native_client = self.client
+        conn.spawn("a", "A", "")
+        conn.abandon()
+        self.wait(conn)
+        with open(path, "a") as f:
+            f.write("why the first one ended\n")
+        conn.spawn("b", "B", "")
+        conn.abandon()
+        self.wait(conn)
+        self.assertIn("why the first one ended", read(path + ".1"))
+        self.assertNotIn("why the first one ended", read(path))
+
+    def test_abandoned_before_connecting(self):
+        conn = rdp.Connection(lambda o: None, lambda: None, os.path.join(self.dir, "log", "c.log"))
+        conn.native_client = self.client
+        conn.spawn("wildos-winmode-word", "Word", "")
+        conn.abandon()
+        self.wait(conn)
+        self.assertEqual(read(self.client + ".stdin"), "")
+        self.assertFalse(conn.open)
+
+    def test_xfreerdp_is_never_started_early(self):
+        conn = rdp.Connection(lambda o: None, lambda: None, os.path.join(self.dir, "c.log"), program="xfreerdp3")
+        self.assertFalse(conn.native)
+        self.assertFalse(conn.spawn("a", "b", "c"))
+        self.assertIsNone(conn.proc)
+
+    def test_slow_reasons_say_only_what_is_known(self):
+        from winmode import agent
+        self.assertIn("starting from the beginning", agent.slow_reason("Stopped", "Word"))
+        self.assertIn("Word will open", agent.slow_reason("Saved", "Word"))
+        self.assertEqual(agent.slow_reason("Running", "Word"), "")
+        for text in (agent.slow_reason("Stopped", "Word"), agent.slow_reason("Saved", "Word")):
+            # No technical words on screen, and no long dashes (the regex
+            # escapes for U+2014 and U+2013).
+            self.assertNotRegex(text, "VM|RDP|\\u2014|\\u2013")
+
+
+class Reliability(unittest.TestCase):
+    """Opening and closing that must never hang."""
+
+    def test_ending_a_stuck_program_names_only_that_process(self):
+        from winmode import system
+        script = system.end_program_script(4242, r"C:\Windows\System32\notepad.exe")
+        self.assertIn("Get-Process -Id 4242", script)
+        self.assertIn("SessionId -ne 0", script)
+        self.assertIn(r"-ieq 'C:\Windows\System32\notepad.exe'", script)
+        # A quote in the path cannot end the string early, curly ones too.
+        script = system.end_program_script(4242, "C:\\a'b\u2019c.exe")
+        self.assertIn("'C:\\a''b\u2019\u2019c.exe'", script)
+        for pid, image in ((0, "x.exe"), (4, "x.exe"), ("x", "x.exe"), (100, ""), (100, "a\nb.exe")):
+            self.assertIsNone(system.end_program_script(pid, image))
+
+    def test_refreshing_the_menus_never_holds_the_agent(self):
+        # kbuildsycoca6 can take seconds; the agent's main loop must go on
+        # answering meanwhile.
+        from unittest import mock
+        from winmode import launchers
+        slow = lambda *a, **k: time.sleep(2)
+        with mock.patch.object(launchers.subprocess, "run", slow):
+            t = time.monotonic()
+            launchers.refresh_menus()
+            self.assertLess(time.monotonic() - t, 0.5)
+
+    def test_a_program_that_ends_before_its_window_ends_the_wait(self):
+        from unittest import mock
+        from winmode import agent
+        a = self.bare_agent()
+        a.watched, a.ended_launches, a.windows = [], [], []
+        updates = []
+        a.remote = type("Remote", (), {"update": lambda self, token, stage="": updates.append((token, stage))})()
+        answers = []
+        a.call_json = lambda method, args=None, signature=None, done=None, timeout=600: done(answers.pop(0))
+        polls = []
+        with mock.patch.object(agent.GLib, "timeout_add", lambda ms, fn: polls.append(fn)):
+            a.watch_launch({"token": 7, "closed": False}, r"C:\Games\Voxel.exe", [], "MagicaVoxel", "voxel")
+        poll = polls[0]
+        # Not yet started: not running is no news.
+        answers.append({"type": "running", "running": False})
+        poll()
+        answers.append({"type": "running", "running": True})
+        poll()
+        for _ in range(agent.LAUNCH_GONE_POLLS):
+            answers.append({"type": "running", "running": False})
+            poll()
+        self.assertEqual(updates, [(7, "ended")])
+        self.assertEqual(a.ended_launches[0]["name"], "MagicaVoxel")
+
+    def test_try_again_opens_the_same_program_again(self):
+        a = self.bare_agent()
+        cancelled, launched = [], []
+        a.remote = type("Remote", (), {"cancel": lambda self, token: cancelled.append(token)})()
+        a.launch = lambda path, args, name, app_id, done: launched.append((path, args, name, app_id))
+        # The client's own loading window (token 0 here, 1 to the client).
+        a.ended_launches = [{"window": {"token": 0}, "path": "C:/Games/Voxel.exe", "args": ["-x"], "name": "MagicaVoxel",
+                             "app_id": "voxel"}]
+        a.remote_retry(1)
+        self.assertEqual(cancelled, [1])
+        self.assertEqual(launched, [("C:/Games/Voxel.exe", ["-x"], "MagicaVoxel", "voxel")])
+        self.assertEqual(a.ended_launches, [])
+
+    def test_a_new_window_anywhere_stops_the_watch(self):
+        from unittest import mock
+        from winmode import agent
+        a = self.bare_agent()
+        a.watched, a.ended_launches, a.windows = [], [], [{"hwnd": 1}]
+        a.remote = type("Remote", (), {"update": lambda self, token, stage="": self.fail("no update")})()
+        polls = []
+        with mock.patch.object(agent.GLib, "timeout_add", lambda ms, fn: polls.append(fn)):
+            a.watch_launch({"token": 7, "closed": False}, r"C:\Windows\notepad.exe", [], "Notepad", "notepad")
+        # A launcher handed over to a program of another name, whose window
+        # came: no longer watched.
+        a.windows.append({"hwnd": 2})
+        self.assertFalse(polls[0]())
+        self.assertEqual(a.watched, [])
+
+    def bare_agent(self):
+        from winmode import agent
+        a = agent.Agent.__new__(agent.Agent)
+        a.queue, a.waking, a.launches, a.windows, a.loading = [], False, {}, [], {}
+        a.calls = []
+        a.call_json = lambda method, args=None, signature=None, done=None, timeout=600: a.calls.append((method, done))
+        a.app_window_stage = lambda app_id, stage: None
+        return a
+
+    def test_a_launch_waiting_for_a_session_that_ended_reconnects(self):
+        # The last app closed just as this one opened: Windows signed the
+        # session out and the connection ended. The launch must open a new
+        # connection, not wait 90 s for a session nothing will bring.
+        a = self.bare_agent()
+        a.conn = type("Conn", (), {"running": False, "open": False})()
+        done = []
+        a.launch_in_session(r"C:\Windows\notepad.exe", [], "Notepad", "notepad", 0.0, done.append, {"from": "running"})
+        self.assertEqual([c[0] for c in a.calls], ["Wake"])
+        self.assertEqual(len(a.queue), 1)
+        self.assertEqual(a.queue[0][2], "Notepad")
+        self.assertEqual(done, [])
+
+    def test_a_launch_in_a_live_session_goes_to_wild_guest(self):
+        a = self.bare_agent()
+        a.conn = type("Conn", (), {"running": True, "open": True})()
+        a.launch_in_session(r"C:\Windows\notepad.exe", [], "Notepad", "notepad", 0.0, lambda m: None, {"from": "running"})
+        self.assertEqual([c[0] for c in a.calls], ["Launch"])
 
 
 class Theme(unittest.TestCase):

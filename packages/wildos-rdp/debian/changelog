@@ -1,0 +1,168 @@
+wildos-rdp (0.1.11) trixie; urgency=medium
+
+  * The engine is a library Remote shares, with a whole-desktop session
+    beside the app windows. It now links Qt Network, for the time a
+    desktop tab takes to reach its computer.
+  * App windows and desktops send the keyboard, mouse and wheel through
+    the same code, so a fix to one reaches both.
+
+ -- Wild OS Developers <dev@wildos.io>  Tue, 10 Nov 2026 07:45:00 +0000
+
+wildos-rdp (0.1.10) trixie; urgency=medium
+
+  * A loading window whose program ended before showing any window (it
+    crashed, or gave up) says so: "X closed before it opened", with Try
+    again and Close, instead of waiting as if it were still opening. The
+    agent tells it, from what wild-guest sees in Windows.
+
+ -- Wild OS Developers <dev@wildos.io>  Mon, 09 Nov 2026 23:30:00 +0000
+
+wildos-rdp (0.1.9) trixie; urgency=medium
+
+  * --prepare-session signs in to Windows and leaves the session ready and
+    disconnected, asking for no app, so the first app opened later takes
+    over a session that is already there: about 3 seconds less, measured.
+  * Every step of a connection is logged with its time (connected, app
+    channel ready, Windows' windows sent, app asked for and started, first
+    window), for working out where a slow open spends its time.
+
+ -- Wild OS Developers <dev@wildos.io>  Mon, 09 Nov 2026 23:00:00 +0000
+
+wildos-rdp (0.1.8) trixie; urgency=medium
+
+  * Programs with nothing to lose (Explorer, Character Map, Calculator,
+    Settings and a few more) leave the screen the moment they are closed.
+    Explorer redraws a folder window as it closes and can take seconds to
+    end it; that read as a question, so the window stayed up meanwhile.
+  * A window Windows disables after its close has a modal question up: it
+    stays, or comes back if it was already hidden.
+
+ -- Wild OS Developers <dev@wildos.io>  Mon, 09 Nov 2026 22:00:00 +0000
+
+wildos-rdp (0.1.7) trixie; urgency=medium
+
+  * Only the connection's own loading window ignores the windows Windows
+    sends first on connecting: an app opened in the session while the
+    connection was starting can be among them, and its loading window
+    takes it (it opened separately, with the generic W).
+  * A window's program, once Windows names it, always replaces the generic
+    W as its app id.
+  * An app that opens before its loading window was due (board 9.12) gets
+    its program's app id when the loading window did not know its app,
+    not the generic W.
+
+ -- Wild OS Developers <dev@wildos.io>  Mon, 09 Nov 2026 21:30:00 +0000
+
+wildos-rdp (0.1.6) trixie; urgency=medium
+
+  * Where each app was last placed is saved again: the KWin script's
+    numbers reached SavePlacement as doubles, which the method did not
+    take, so no place was ever kept.
+  * A window of a program Windows mode has no entry for, taken by a loading
+    window that did not know its app, gets its program's own app id
+    instead of keeping the generic W.
+  * Opening a program Windows mode has no entry for shows the loading
+    window too, named after the program.
+  * Closing the loading window means no: the app's window, if Windows
+    starts it anyway within two minutes, is closed as it comes instead of
+    appearing after the person said no. Closing it while it is handing
+    over to the app closes the app (it did nothing before).
+  * A reconnection no longer opens a second copy of the connection's first
+    app: FreeRDP asked Windows for it again every time it reconnected.
+  * Windows that were already open when a connection began never take a
+    loading window or end one: on connecting, Windows first sends every
+    window already open (an app the last connection left), and one of
+    those took the loading window of the app being opened, which then
+    opened on its own. Windows marks the end of that first list.
+  * A window closed while it was still taking over from its loading window
+    ends that loading window; it waited again and took the next launch's
+    window.
+
+ -- Wild OS Developers <dev@wildos.io>  Mon, 09 Nov 2026 20:50:00 +0000
+
+wildos-rdp (0.1.5) trixie; urgency=medium
+
+  * A loading window that takes its app's size (a fixed dialog, or an app
+    that kept its own size) changes size about its centre: KWin moves and
+    resizes it in one step. Without KWin it resizes from its corner as
+    before.
+  * A loading window that knows its program is never taken by a window
+    whose program Windows has not named (a window another app left open,
+    sent again on reconnecting); a window named too late to be taken makes
+    the loading window give way.
+
+ -- Wild OS Developers <dev@wildos.io>  Mon, 09 Nov 2026 20:30:00 +0000
+
+wildos-rdp (0.1.4) trixie; urgency=medium
+
+  * The loading window hands over as soon as the app has drawn, whether or
+    not the app takes the loading window's size. A window Windows will not
+    resize (Character Map) gives the loading window its own size as it
+    arrives, and is remembered at it for next time.
+  * A window that draws nothing is shown after 4 seconds anyway; a window
+    of the app's program the loading window did not take (a first-run
+    question) makes it give way; a window owned by another program whose
+    title names the app is taken. The slow state only ever means Windows
+    itself is slow.
+  * The light keeps running its laps in the slow state, so it never looks
+    hung. Reduced motion still shows a still frame.
+  * The fade from the loading window into the app is finished by the
+    clock as well as by the compositor's frames, so a lost frame can no
+    longer leave the app half faded in.
+
+ -- Wild OS Developers <dev@wildos.io>  Mon, 09 Nov 2026 19:30:00 +0000
+
+wildos-rdp (0.1.3) trixie; urgency=medium
+
+  * Closing without flicker: a closed window stays exactly as it is
+    while Windows deals with it. Gone within half a second: it simply
+    goes. Drawing again or opening a dialog: it is asking, and stays. No
+    word from Windows at all: it leaves the screen and the taskbar after
+    half a second, and is handled in the background as before.
+  * Alt+F4 no longer leaves Windows' key tips or menu open behind it.
+  * Popups Windows draws with transparency (rounded menus, key tips) keep
+    it instead of showing black corners.
+
+ -- Wild OS Developers <dev@wildos.io>  Mon, 09 Nov 2026 18:30:00 +0000
+
+wildos-rdp (0.1.2) trixie; urgency=medium
+
+  * Closing is ours to show at once: a window closed from the taskbar or
+    with Alt+F4 leaves the screen and the taskbar in the same frame, and
+    Windows is told in the background. A question it asks before closing
+    (Save changes?) is shown straight away, and the window comes back if
+    the answer is not to close; one that asks inside itself (Windows 11's
+    Paint and Notepad) keeps drawing, and comes back for the answer. A
+    window Windows does not close stays
+    hidden: with unsaved changes it is kept and a notification offers to
+    show it; with none, the agent ends its program after 10 seconds.
+  * Windows of a dropped connection leave the screen after 2 seconds of
+    trying to reconnect, and come back when it does.
+  * A loading window closes when the app was already open and Windows
+    only brought its window forward.
+  * Leaving never waits for a FreeRDP call that does not return.
+
+ -- Wild OS Developers <dev@wildos.io>  Mon, 09 Nov 2026 18:00:00 +0000
+
+wildos-rdp (0.1.1) trixie; urgency=medium
+
+  * The loading window goes to the first window of the app's own program,
+    asked of Windows, not to whichever window comes first; a window that is
+    hidden or cloaked before the app shows in it hands the loading window
+    back, so none is ever left on the taskbar.
+  * Windows' cloaked windows stay off screen.
+  * Every window of an app's program takes the app's id; a window nothing
+    is known about gets its program's own id and the icon Windows sends,
+    never Windows mode's W.
+  * One log line for every decision about a window, for testing on real
+    hardware.
+
+ -- Wild OS Developers <dev@wildos.io>  Mon, 09 Nov 2026 17:30:00 +0000
+
+wildos-rdp (0.1.0) trixie; urgency=medium
+
+  * First version: RemoteApp windows as native Wayland windows, the
+    loading window with the Wild OS mark, and org.wildos.RemoteApp for the
+    Windows mode agent.
+
+ -- Wild OS Developers <dev@wildos.io>  Mon, 09 Nov 2026 16:00:00 +0000

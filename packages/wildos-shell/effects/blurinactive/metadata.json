@@ -1,0 +1,10 @@
+{
+    "KPlugin": {
+        "Category": "Accessibility",
+        "Description": "Blurs and dims every window except the one in use",
+        "EnabledByDefault": false,
+        "License": "GPL",
+        "Name": "Blur windows in the background"
+    },
+    "X-KWin-Internal": true
+}

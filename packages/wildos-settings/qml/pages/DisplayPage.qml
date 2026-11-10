@@ -603,7 +603,7 @@ PageScroll {
     UI.Label {
         Layout.fillWidth: true
         visible: Displays.available
-        text: "Changes to resolution and refresh rate show a preview and switch back on their own after 15 seconds unless you choose Keep."
+        text: "Changes to resolution, refresh rate and HDR show a preview and switch back on their own after 15 seconds unless you choose Keep."
         size: 12
         color: UI.Style.inkMuted
         lineHeight: 1.5
@@ -705,6 +705,25 @@ PageScroll {
                     status: nightLight.enabled ? (nightLight.inhibited ? "Paused" : "On") : "Off"
                     chevron: true
                     onClicked: Navigator.open("nightlight")
+                }
+            }
+        }
+
+        // Only PCs with an NVIDIA card have a choice of driver.
+        UI.Card {
+            Layout.fillWidth: true
+            visible: Graphics.hasNvidia
+
+            Column {
+                width: parent.width
+
+                UI.SettingRow {
+                    iconName: "chip"
+                    title: "Graphics driver"
+                    description: Graphics.nvidiaName
+                    status: Graphics.restartNeeded ? "Restart needed" : Graphics.driverInUse === "nvidia" ? "NVIDIA" : "Open"
+                    chevron: true
+                    onClicked: Navigator.open("graphicsdriver")
                 }
             }
         }

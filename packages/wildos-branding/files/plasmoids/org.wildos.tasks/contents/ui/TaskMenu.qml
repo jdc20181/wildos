@@ -8,10 +8,11 @@
     Wild OS fork of the Plasma 6.3.6 task manager's ContextMenu.qml. The
     jump list a right click opens on an app (MenusShell.dc "Taskbar app"):
     its pinned places or recent files under small headings, the app's own
-    tasks, then the app itself in 600, pin or unpin and close, nearest the
-    taskbar as on Windows 11. A Windows app adds one quiet line saying it
-    runs in Windows mode and a way to its settings. It is the shared Wild
-    OS menu in a window of its own, as the taskbar is too short to hold it.
+    tasks, then the app itself in 600, pin or unpin, close and End task,
+    nearest the taskbar as on Windows 11. A Windows app adds one quiet line
+    saying it runs in Windows mode and a way to its settings. It is the
+    shared Wild OS menu in a window of its own, as the taskbar is too short
+    to hold it.
 */
 
 pragma ComponentBehavior: Bound
@@ -192,6 +193,10 @@ UI.Menu {
             }
         }
 
+        // Windows apps get their launchers from wildos-appbridge, which names
+        // every one wildos-winapp-<app>.desktop.
+        const windowsApp = /wildos-winapp-[^\/]*\.desktop$/.test(String(launcherUrl || ""));
+
         if (!isLauncher && !isStartup) {
             const group = get(atm.IsGroupParent) === true;
             list.push({
@@ -201,11 +206,16 @@ UI.Menu {
                 run: () => tasksModel.requestClose(menu.modelIndex),
                 enabled: get(atm.IsClosable) !== false
             });
+
+            // Every Windows app's window comes from the one Windows mode
+            // viewer, so ending it would close all of them at once.
+            const pids = appPids(group);
+            if (!windowsApp && pids.length > 0) {
+                list.push({ text: "End task", icon: "menu-task-manager", run: () => menu.endTask(pids) });
+            }
         }
 
-        // Windows apps get their launchers from wildos-appbridge, which names
-        // every one wildos-winapp-<app>.desktop.
-        if (/wildos-winapp-[^\/]*\.desktop$/.test(String(launcherUrl || ""))) {
+        if (windowsApp) {
             list.push({ separator: true },
                 { text: "Runs in Windows mode", icon: "menu-windows-mode", enabled: false },
                 { text: "Windows mode settings", icon: "menu-settings", run: () => menu.runner.connectSource(
@@ -213,6 +223,42 @@ UI.Menu {
         }
 
         entries = list;
+    }
+
+    // The processes behind the app's windows; a group's windows can come
+    // from more than one.
+    function appPids(group: bool): var {
+        const indexes = [];
+        if (group) {
+            for (let i = 0; i < tasksModel.rowCount(modelIndex); ++i) {
+                indexes.push(tasksModel.makeModelIndex(task.index, i));
+            }
+        } else {
+            indexes.push(modelIndex);
+        }
+        const pids = [];
+        for (const index of indexes) {
+            const pid = Math.floor(Number(tasksModel.data(index, atm.AppPid) ?? 0));
+            if (pid > 1 && !pids.includes(pid)) {
+                pids.push(pid);
+            }
+        }
+        return pids;
+    }
+
+    // End task, as on Windows 11, for an app that no longer answers: the app
+    // and everything it started are asked to quit, and whatever is still
+    // running three seconds later is killed. The desktop's own processes are
+    // left alone: their dialogs are tasks too, and ending them would end the
+    // session. setsid lets the wait outlive this menu, which is gone the
+    // moment the entry is chosen.
+    function endTask(pids: var): void {
+        const script = "all=; walk() { for p; do case $(cat /proc/$p/comm 2>/dev/null) in plasmashell|kwin_wayland|ksmserver|Xwayland|kded6|systemd) continue;; esac; all=\"$all $p\"; walk $(pgrep -P \"$p\"); done; }; "
+            + "walk " + pids.join(" ") + "; kill -TERM $all 2>/dev/null; "
+            + "for i in 1 2 3 4 5 6; do sleep 0.5; left=; "
+            + "for p in $all; do kill -0 $p 2>/dev/null && left=\"$left $p\"; done; "
+            + "[ -z \"$left\" ] && exit 0; done; kill -KILL $left 2>/dev/null";
+        runner.connectSource("setsid -f sh -c '" + script + "'");
     }
 
     // "Show all" in the places list asks for the menu again with every place.

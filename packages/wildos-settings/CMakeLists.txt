@@ -40,10 +40,13 @@ qt_add_qml_module(wildos-settings
     SOURCES
         src/kcmhost.cpp src/kcmhost.h
         src/system.cpp src/system.h
+        src/themes.cpp src/themes.h
         src/updates.cpp src/updates.h
         src/appsmodel.cpp src/appsmodel.h
         src/windowsapps.cpp src/windowsapps.h
         src/windowsmode.cpp src/windowsmode.h
+        src/processor.cpp src/processor.h
+        src/graphics.cpp src/graphics.h
         src/inputdevices.cpp src/inputdevices.h
         src/defaultapps.cpp src/defaultapps.h
         src/clock.cpp src/clock.h
@@ -66,6 +69,7 @@ qt_add_qml_module(wildos-settings
         src/activityhistory.cpp src/activityhistory.h
         src/olderapps.cpp src/olderapps.h
         src/network.cpp src/network.h src/netshared.h
+        src/soundtheme.cpp src/soundtheme.h
         src/accessibility.cpp src/accessibility.h
         src/accesscore.cpp src/accesscore.h
 )
@@ -88,7 +92,7 @@ install(TARGETS wildos-settings RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 install(FILES data/org.wildos.settings.desktop DESTINATION ${CMAKE_INSTALL_DATADIR}/applications)
 # The helpers are looked up by these exact paths (polkit pins the update
 # helper to it), so they do not follow the distribution's libexec layout.
-install(PROGRAMS data/settings-update-policy data/settings-users data/settings-locale data/settings-protection data/settings-network DESTINATION ${CMAKE_INSTALL_PREFIX}/libexec/wildos)
+install(PROGRAMS data/settings-update-policy data/settings-users data/settings-locale data/settings-protection data/settings-network data/settings-cpu-threads data/settings-graphics-driver DESTINATION ${CMAKE_INSTALL_PREFIX}/libexec/wildos)
 install(FILES data/org.wildos.settings.policy DESTINATION ${CMAKE_INSTALL_DATADIR}/polkit-1/actions)
 
 # The automatic theme runs in every session and must not pull in the

@@ -27,7 +27,7 @@ Page {
         tone: "warning"
         title: page.home ? "This PC came with Windows 11 Home" : page.kind === "inuse" ? "Windows is still installed on this PC" : "No Windows licence built into this PC"
         text: page.home ? "Windows mode needs Windows 11 Pro, so this licence can't activate it. Set it up without activating, or with a Pro key."
-            : page.kind === "inuse" ? "Its licence covers one copy of Windows at a time, and that copy is still on this PC. A key from another licence works for Windows mode."
+            : page.kind === "inuse" ? "Its licence is built into this PC. Windows mode can use it as well, or a key from another licence."
             : "Common on self-built PCs and older machines. A key from a previous PC often still works."
     }
 
@@ -73,6 +73,16 @@ Page {
             }
         }
 
+        // The built-in licence while Windows is still installed: the
+        // person's call. The installed Windows and its licence are left as
+        // they are; Windows mode activates with the same key.
+        RadioCard {
+            id: thisPc
+            visible: page.kind === "inuse" && Setup.edition !== "home"
+            title: "Use this PC's licence"
+            description: "Windows mode activates with the licence built into this PC. The Windows already installed isn't changed. Microsoft's terms count each copy of Windows, so you may want to remove the old one later."
+        }
+
         RadioCard {
             id: noKey
             title: "Continue without activating"
@@ -98,6 +108,8 @@ Page {
             onClicked: {
                 if (skipNone.checked) {
                     page.skipped();
+                } else if (thisPc.checked && thisPc.visible) {
+                    page.chosen("firmware", "", "");
                 } else if (noKey.checked) {
                     page.chosen("none", "", "");
                 } else {

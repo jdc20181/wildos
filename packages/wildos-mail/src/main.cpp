@@ -1,0 +1,331 @@
+#include <QCommandLineParser>
+#include <QDBusConnection>
+#include <QDBusConnectionInterface>
+#include <QDBusMessage>
+#include <QGuiApplication>
+#include <QIcon>
+#include <QQmlApplicationEngine>
+#include <QQuickWindow>
+#include <QUrl>
+#include <QUrlQuery>
+
+#include "googlesignin.h"
+#include "reminders.h"
+
+#include <QCoreApplication>
+#include <QDate>
+#include <QFileInfo>
+#include <QProcess>
+
+namespace
+{
+const QString serviceName = QStringLiteral("org.wildos.Mail");
+const QString objectPath = QStringLiteral("/Mail");
+const QString calendarService = QStringLiteral("org.wildos.Calendar");
+const QString calendarPath = QStringLiteral("/Calendar");
+const QString remindersService = QStringLiteral("org.wildos.CalendarReminders");
+
+bool registered(const QString &name)
+{
+    QDBusConnection bus = QDBusConnection::sessionBus();
+    return bus.isConnected() && bus.interface()->isServiceRegistered(name);
+}
+
+void callOpen(const QString &service, const QString &path, const QString &arg)
+{
+    auto message = QDBusMessage::createMethodCall(service, path, service, QStringLiteral("open"));
+    message << arg;
+    QDBusConnection::sessionBus().call(message);
+}
+
+void raise(QQmlApplicationEngine *engine)
+{
+    const auto roots = engine->rootObjects();
+    if (auto window = roots.isEmpty() ? nullptr : qobject_cast<QQuickWindow *>(roots.constFirst())) {
+        if (window->visibility() == QWindow::Minimized) {
+            window->showNormal();
+        }
+        window->show();
+        window->raise();
+        window->requestActivate();
+    }
+}
+
+// mailto:someone@example.com?subject=Hi&cc=...&body=... as composer fields.
+QVariantMap fromMailto(const QString &arg)
+{
+    QVariantMap data;
+    const QUrl url(arg);
+    if (url.scheme() != QLatin1String("mailto")) {
+        return data;
+    }
+    QStringList to = url.path().split(QLatin1Char(','), Qt::SkipEmptyParts);
+    const QUrlQuery query(url);
+    for (const auto &[key, value] : query.queryItems(QUrl::FullyDecoded)) {
+        const QString k = key.toLower();
+        if (k == QLatin1String("to")) {
+            to << value.split(QLatin1Char(','), Qt::SkipEmptyParts);
+        } else if (k == QLatin1String("cc")) {
+            data.insert(QStringLiteral("cc"), value.split(QLatin1Char(','), Qt::SkipEmptyParts));
+        } else if (k == QLatin1String("subject")) {
+            data.insert(QStringLiteral("subject"), value);
+        } else if (k == QLatin1String("body")) {
+            data.insert(QStringLiteral("body"), value);
+        }
+    }
+    data.insert(QStringLiteral("to"), to);
+    return data;
+}
+}
+
+// Opening Mail again (or a mailto: link) brings the open window forward
+// instead of starting a second one.
+class Remote : public QObject
+{
+    Q_OBJECT
+    Q_CLASSINFO("D-Bus Interface", "org.wildos.Mail")
+
+public:
+    explicit Remote(QQmlApplicationEngine *engine)
+        : QObject(engine)
+        , m_engine(engine)
+    {
+    }
+
+public Q_SLOTS:
+    Q_SCRIPTABLE void open(const QString &arg)
+    {
+        const auto roots = m_engine->rootObjects();
+        if (roots.isEmpty()) {
+            return;
+        }
+        QObject *root = roots.constFirst();
+        // Google sends the browser back here after "Sign in with Google";
+        // Mail comes forward only if the sign-in was its own.
+        if (GoogleSignIn::isRedirect(arg)) {
+            const bool mine = GoogleSignIn::instance()->waiting();
+            GoogleSignIn::instance()->handleRedirect(arg);
+            if (mine) {
+                raise(m_engine);
+            }
+            return;
+        }
+        const QVariantMap mailto = fromMailto(arg);
+        if (!mailto.isEmpty()) {
+            QMetaObject::invokeMethod(root, "compose", Q_ARG(QVariant, mailto));
+        }
+        raise(m_engine);
+    }
+    // Calendar's launcher, or a reminder's Open: the Calendar tab, at the
+    // event if one is named.
+    Q_SCRIPTABLE void showCalendar(const QString &key, const QString &day)
+    {
+        const auto roots = m_engine->rootObjects();
+        if (!roots.isEmpty()) {
+            QMetaObject::invokeMethod(roots.constFirst(), "showCalendar", Q_ARG(QVariant, key),
+                                      Q_ARG(QVariant, QVariant::fromValue(QDate::fromString(day, Qt::ISODate))));
+        }
+        raise(m_engine);
+    }
+
+private:
+    QQmlApplicationEngine *m_engine;
+};
+
+// The same for Calendar: opening it again, or a reminder's Open, which
+// names an event and its day.
+class CalendarRemote : public QObject
+{
+    Q_OBJECT
+    Q_CLASSINFO("D-Bus Interface", "org.wildos.Calendar")
+
+public:
+    explicit CalendarRemote(QQmlApplicationEngine *engine)
+        : QObject(engine)
+        , m_engine(engine)
+    {
+    }
+
+public Q_SLOTS:
+    Q_SCRIPTABLE void open(const QString &arg)
+    {
+        if (GoogleSignIn::isRedirect(arg)) {
+            if (!GoogleSignIn::instance()->waiting()) {
+                return;
+            }
+            GoogleSignIn::instance()->handleRedirect(arg);
+        }
+        raise(m_engine);
+    }
+    Q_SCRIPTABLE void showEvent(const QString &key, const QString &day)
+    {
+        const auto roots = m_engine->rootObjects();
+        if (!roots.isEmpty() && !key.isEmpty()) {
+            QMetaObject::invokeMethod(roots.constFirst(), "showEvent", Q_ARG(QVariant, key),
+                                      Q_ARG(QVariant, QVariant::fromValue(QDate::fromString(day, Qt::ISODate))));
+        }
+        raise(m_engine);
+    }
+
+private:
+    QQmlApplicationEngine *m_engine;
+};
+
+namespace
+{
+// wildos-calendar --reminders: no window, just the reminders, from sign-in.
+int runReminders(int argc, char *argv[])
+{
+    QCoreApplication app(argc, argv);
+    app.setApplicationName(QStringLiteral("wildos-mail"));
+    app.setOrganizationDomain(QStringLiteral("wildos.io"));
+    if (registered(remindersService)) {
+        return 0;
+    }
+    Reminders reminders;
+    if (!reminders.start()) {
+        return 1;
+    }
+    QDBusConnection::sessionBus().registerService(remindersService);
+    return app.exec();
+}
+
+int runCalendar(int argc, char *argv[])
+{
+    QGuiApplication app(argc, argv);
+    app.setApplicationName(QStringLiteral("wildos-mail"));
+    app.setOrganizationDomain(QStringLiteral("wildos.io"));
+    app.setApplicationDisplayName(QStringLiteral("Calendar"));
+    app.setApplicationVersion(QStringLiteral(WILDOS_MAIL_VERSION));
+    app.setDesktopFileName(QStringLiteral("org.wildos.calendar"));
+    app.setWindowIcon(QIcon::fromTheme(QStringLiteral("org.wildos.calendar")));
+
+    QCommandLineParser parser;
+    parser.setApplicationDescription(QStringLiteral("Wild OS Calendar"));
+    parser.addHelpOption();
+    parser.addVersionOption();
+    const QCommandLineOption event(QStringLiteral("event"), QStringLiteral("An event to open."), QStringLiteral("key"));
+    const QCommandLineOption day(QStringLiteral("day"), QStringLiteral("The day it is on, as YYYY-MM-DD."), QStringLiteral("date"));
+    parser.addOption(event);
+    parser.addOption(day);
+    parser.addOption(QCommandLineOption(QStringLiteral("calendar")));
+    parser.addOption(QCommandLineOption(QStringLiteral("new-window")));
+    parser.process(app);
+
+    if (registered(calendarService)) {
+        auto message = QDBusMessage::createMethodCall(calendarService, calendarPath, calendarService, QStringLiteral("showEvent"));
+        message << parser.value(event) << parser.value(day);
+        QDBusConnection::sessionBus().call(message);
+        return 0;
+    }
+
+    QQmlApplicationEngine engine;
+    QObject::connect(&engine, &QQmlApplicationEngine::objectCreationFailed, &app, []() {
+        QCoreApplication::exit(1);
+    }, Qt::QueuedConnection);
+    engine.loadFromModule("WildOS.Mail", "CalendarMain");
+
+    auto *remote = new CalendarRemote(&engine);
+    QDBusConnection bus = QDBusConnection::sessionBus();
+    if (bus.isConnected()) {
+        bus.registerObject(calendarPath, remote, QDBusConnection::ExportScriptableSlots);
+        bus.registerService(calendarService);
+    }
+    if (parser.isSet(event)) {
+        remote->showEvent(parser.value(event), parser.value(day));
+    }
+    // Reminders start at sign-in; started here too in case that was missed.
+    if (!registered(remindersService)) {
+        QProcess::startDetached(QCoreApplication::applicationFilePath(), {QStringLiteral("--reminders")});
+    }
+    return app.exec();
+}
+}
+
+int main(int argc, char *argv[])
+{
+    // One program: wildos-calendar is a link to it, and opens Mail's window
+    // on its Calendar tab; --new-window gives Calendar a window of its own
+    // (the rail's Open in new window), --reminders runs without a window.
+    bool calendar = QFileInfo(QString::fromLocal8Bit(argv[0])).fileName() == QLatin1String("wildos-calendar");
+    for (int i = 1; i < argc; ++i) {
+        if (qstrcmp(argv[i], "--reminders") == 0) {
+            return runReminders(argc, argv);
+        }
+        if (qstrcmp(argv[i], "--new-window") == 0) {
+            return runCalendar(argc, argv);
+        }
+        calendar = calendar || qstrcmp(argv[i], "--calendar") == 0;
+    }
+
+    QGuiApplication app(argc, argv);
+    app.setApplicationName(QStringLiteral("wildos-mail"));
+    app.setOrganizationDomain(QStringLiteral("wildos.io"));
+    app.setApplicationDisplayName(QStringLiteral("Mail"));
+    app.setApplicationVersion(QStringLiteral(WILDOS_MAIL_VERSION));
+    app.setDesktopFileName(QStringLiteral("org.wildos.mail"));
+    app.setWindowIcon(QIcon::fromTheme(QStringLiteral("org.wildos.mail")));
+
+    QCommandLineParser parser;
+    parser.setApplicationDescription(QStringLiteral("Wild OS Mail"));
+    parser.addHelpOption();
+    parser.addVersionOption();
+    parser.addPositionalArgument(QStringLiteral("mailto"), QStringLiteral("A mailto: link to start a message from."));
+    const QCommandLineOption calendarOption(QStringLiteral("calendar"), QStringLiteral("Open on the Calendar tab."));
+    const QCommandLineOption event(QStringLiteral("event"), QStringLiteral("An event to open in Calendar."), QStringLiteral("key"));
+    const QCommandLineOption day(QStringLiteral("day"), QStringLiteral("The day it is on, as YYYY-MM-DD."), QStringLiteral("date"));
+    parser.addOption(calendarOption);
+    parser.addOption(event);
+    parser.addOption(day);
+    parser.process(app);
+    const QString arg = parser.positionalArguments().value(0);
+    calendar = calendar || parser.isSet(calendarOption) || parser.isSet(event);
+
+    QDBusConnection bus = QDBusConnection::sessionBus();
+    // Google's answer to a sign-in goes to whichever of Mail and Calendar
+    // started it (each ignores one it didn't), and never opens a window.
+    if (GoogleSignIn::isRedirect(arg)) {
+        if (registered(serviceName)) {
+            callOpen(serviceName, objectPath, arg);
+        }
+        if (registered(calendarService)) {
+            callOpen(calendarService, calendarPath, arg);
+        }
+        return 0;
+    }
+    if (registered(serviceName)) {
+        if (calendar) {
+            auto message = QDBusMessage::createMethodCall(serviceName, objectPath, serviceName, QStringLiteral("showCalendar"));
+            message << parser.value(event) << parser.value(day);
+            bus.call(message);
+        } else {
+            callOpen(serviceName, objectPath, arg);
+        }
+        return 0;
+    }
+
+    QQmlApplicationEngine engine;
+    QObject::connect(&engine, &QQmlApplicationEngine::objectCreationFailed, &app, []() {
+        QCoreApplication::exit(1);
+    }, Qt::QueuedConnection);
+    engine.loadFromModule("WildOS.Mail", "Main");
+
+    auto *remote = new Remote(&engine);
+    if (bus.isConnected()) {
+        bus.registerObject(objectPath, remote, QDBusConnection::ExportScriptableSlots);
+        bus.registerService(serviceName);
+    }
+    if (!arg.isEmpty()) {
+        remote->open(arg);
+    }
+    if (calendar) {
+        remote->showCalendar(parser.value(event), parser.value(day));
+    }
+    // Reminders start at sign-in; started here too in case that was missed.
+    if (!registered(remindersService)) {
+        QProcess::startDetached(QCoreApplication::applicationFilePath(), {QStringLiteral("--reminders")});
+    }
+    return app.exec();
+}
+
+#include "main.moc"

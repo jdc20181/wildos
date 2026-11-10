@@ -1,0 +1,21 @@
+{
+    "id": "orchard",
+    "name": "Orchard",
+    "order": 2,
+    "default": false,
+    "description": "Bright, soft and clean. For daytime and creative work.",
+    "mode": "light",
+    "accent": {
+        "name": "Sky",
+        "colour": "#1f7aec"
+    },
+    "textOnAccent": "#0b1020",
+    "accentText": "#0f55ad",
+    "glass": {
+        "colour": "#fafbfe",
+        "alpha": 0.82
+    },
+    "wallpaper": "/usr/share/wallpapers/WildOS-golden-haze",
+    "underglow": false,
+    "desktopTheme": "wildos-light"
+}

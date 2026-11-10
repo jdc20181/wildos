@@ -99,7 +99,8 @@ ColumnLayout {
             unit++;
         }
         const decimals = value < 10 ? 1 : 0;
-        return Number(value.toFixed(decimals)).toString() + " " + units[unit];
+        const rounded = Number(value.toFixed(decimals));
+        return rounded.toLocaleString(Qt.locale(), "f", rounded % 1 === 0 ? 0 : decimals) + " " + units[unit];
     }
 
     function timeLeft(): string {
@@ -144,7 +145,7 @@ ColumnLayout {
         // KIO names the job with one word ("Copying", "Moving"); the count
         // makes it the design's "Copying 214 items".
         if (totalItems > 1 && verb.indexOf(" ") < 0) {
-            return verb + " " + totalItems.toLocaleString(Qt.locale("en_GB"), "f", 0) + " items";
+            return verb + " " + totalItems.toLocaleString(Qt.locale(), "f", 0) + " items";
         }
         return verb;
     }
@@ -339,7 +340,7 @@ ColumnLayout {
 
         UI.Label {
             visible: job.totalItems > 0
-            text: "Items left: " + Math.max(0, job.totalItems - job.processedItems).toLocaleString(Qt.locale("en_GB"), "f", 0)
+            text: "Items left: " + Math.max(0, job.totalItems - job.processedItems).toLocaleString(Qt.locale(), "f", 0)
                 + (job.bytesKnown ? " (" + job.size(Math.max(0, job.totalBytes - job.processedBytes)) + ")" : "")
             size: 12
             color: UI.Style.inkStatus

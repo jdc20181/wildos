@@ -71,9 +71,13 @@ QString date(const QDateTime &when)
     if (!when.isValid()) {
         return QString();
     }
+    // The regional format chosen in Settings decides the order and the
+    // clock; the words stay English, as the rest of Wild OS is.
+    const QLocale names(QLocale::English, QLocale::UnitedKingdom);
+    const QLocale format = QLocale::system();
     const QDateTime local = when.toLocalTime();
     const QDate today = QDate::currentDate();
-    const QString time = local.toString(QStringLiteral("HH:mm"));
+    const QString time = format.toString(local.time(), QLocale::ShortFormat);
     const qint64 days = local.date().daysTo(today);
     if (days == 0) {
         return QStringLiteral("Today ") + time;
@@ -82,9 +86,9 @@ QString date(const QDateTime &when)
         return QStringLiteral("Yesterday ") + time;
     }
     if (days > 1 && days < 7) {
-        return QLocale(QLocale::English, QLocale::UnitedKingdom).dayName(local.date().dayOfWeek()) + QLatin1Char(' ') + time;
+        return names.dayName(local.date().dayOfWeek()) + QLatin1Char(' ') + time;
     }
-    return local.toString(QStringLiteral("dd/MM/yyyy"));
+    return names.toString(local.date(), format.dateFormat(QLocale::ShortFormat));
 }
 
 QString longDate(const QDateTime &when)
@@ -93,8 +97,15 @@ QString longDate(const QDateTime &when)
         return QString();
     }
     const QDateTime local = when.toLocalTime();
-    const QLocale uk(QLocale::English, QLocale::UnitedKingdom);
-    return uk.toString(local, QStringLiteral("dddd d MMMM yyyy, HH:mm"));
+    const QLocale names(QLocale::English, QLocale::UnitedKingdom);
+    const QLocale format = QLocale::system();
+    // Qt writes UK dates as "Monday, 9 November"; Wild OS has no comma.
+    QString day = format.dateFormat(QLocale::LongFormat);
+    if (day.startsWith(QLatin1String("dddd, d MMMM"))) {
+        day.remove(4, 1);
+    }
+    return names.toString(local.date(), day) + QStringLiteral(", ")
+        + format.toString(local.time(), QLocale::ShortFormat);
 }
 
 QString size(qint64 bytes)
@@ -102,11 +113,12 @@ QString size(qint64 bytes)
     if (bytes < 0) {
         return QString();
     }
-    const QLocale uk(QLocale::English, QLocale::UnitedKingdom);
+    // Separators from the regional format chosen in Settings (LC_NUMERIC).
+    const QLocale numbers = QLocale::system();
     // Windows rounds small files up, so a 200 byte note is 1 KB, not 0.
     if (bytes < 1024 * 1024) {
         const qint64 kb = bytes == 0 ? 0 : (bytes + 1023) / 1024;
-        return uk.toString(kb) + QStringLiteral(" KB");
+        return numbers.toString(kb) + QStringLiteral(" KB");
     }
     static const char *units[] = {"MB", "GB", "TB", "PB"};
     double value = bytes / (1024.0 * 1024.0);
@@ -117,12 +129,12 @@ QString size(qint64 bytes)
     }
     // Three significant figures: 4.21 MB, 12.3 MB, 123 MB.
     const int decimals = value < 10 ? 2 : value < 100 ? 1 : 0;
-    QString text = uk.toString(value, 'f', decimals);
-    if (text.contains(QLatin1Char('.'))) {
+    QString text = numbers.toString(value, 'f', decimals);
+    if (text.contains(numbers.decimalPoint())) {
         while (text.endsWith(QLatin1Char('0'))) {
             text.chop(1);
         }
-        if (text.endsWith(QLatin1Char('.'))) {
+        if (text.endsWith(numbers.decimalPoint())) {
             text.chop(1);
         }
     }
@@ -131,14 +143,12 @@ QString size(qint64 bytes)
 
 QString exactSize(qint64 bytes)
 {
-    const QLocale uk(QLocale::English, QLocale::UnitedKingdom);
-    return size(bytes) + QStringLiteral(" (") + uk.toString(bytes) + (bytes == 1 ? QStringLiteral(" byte)") : QStringLiteral(" bytes)"));
+    return size(bytes) + QStringLiteral(" (") + QLocale::system().toString(bytes) + (bytes == 1 ? QStringLiteral(" byte)") : QStringLiteral(" bytes)"));
 }
 
 QString count(qint64 n, const QString &one, const QString &many)
 {
-    const QLocale uk(QLocale::English, QLocale::UnitedKingdom);
-    return uk.toString(n) + QLatin1Char(' ') + (n == 1 ? one : many);
+    return QLocale::system().toString(n) + QLatin1Char(' ') + (n == 1 ? one : many);
 }
 
 }

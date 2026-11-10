@@ -82,18 +82,21 @@ Item {
             }
             const p = child.mapToItem(root, 0, 0);
             if (!run) {
-                run = { left: p.x, right: p.x + child.width };
+                run = { left: p.x, right: p.x + child.width, first: plugin };
                 runs.push(run);
             } else {
                 run.right = p.x + child.width;
             }
         }
         // The status pill at the right end has 6 px inside its left edge and
-        // 8 px inside its right; the apps pill 9 px each side.
+        // 8 px inside its right; the apps pill 9 px each side. Windows mode's
+        // item at the left end mirrors the status pill: it carries its own
+        // 13 px and its pill starts 5 px in, 8 px before its button.
         pillRects = runs.map((r, i) => {
             const last = runs.length > 1 && i === runs.length - 1;
-            const left = Math.round(r.left - (last ? 6 : 9));
-            const right = Math.round(r.right + (last ? 8 : 9));
+            const winmode = i === 0 && runs.length > 2 && r.first === "org.wildos.winmode";
+            const left = Math.round(r.left - (last ? 6 : winmode ? -5 : 9));
+            const right = Math.round(r.right + (last ? 8 : winmode ? 6 : 9));
             return Qt.rect(left, 0, right - left, pillHeight);
         });
     }
@@ -159,7 +162,7 @@ Item {
                     verticalOffset: 16
                     radius: 40
                     samples: 81
-                    color: UI.Style.dark ? Qt.rgba(6 / 255, 10 / 255, 28 / 255, 0.35) : Qt.rgba(20 / 255, 30 / 255, 60 / 255, 0.14)
+                    color: UI.Style.taskbarShadow
                 }
             }
             Item {
@@ -187,7 +190,7 @@ Item {
                 visible: !root.docked
                 anchors.fill: parent
                 radius: root.pillRadius
-                color: UI.Style.dark ? Qt.rgba(12 / 255, 16 / 255, 32 / 255, 0.55) : Qt.rgba(250 / 255, 251 / 255, 254 / 255, 0.67)
+                color: UI.Style.taskbarFloating
                 border.width: 1
                 border.color: UI.Style.dark ? Qt.rgba(1, 1, 1, 0.12) : Qt.rgba(30 / 255, 40 / 255, 70 / 255, 0.09)
             }
@@ -206,7 +209,7 @@ Item {
             Rectangle {
                 visible: root.docked
                 anchors.fill: parent
-                color: UI.Style.dark ? Qt.rgba(14 / 255, 18 / 255, 34 / 255, 0.88) : Qt.rgba(246 / 255, 248 / 255, 252 / 255, 0.90)
+                color: UI.Style.taskbarDocked
             }
             Rectangle {
                 visible: root.docked
@@ -623,6 +626,87 @@ Item {
         acceptedButtons: Qt.RightButton
         onPressed: mouse => mouse.accepted = root.emptyAt(mouse.x, mouse.y)
         onClicked: mouse => root.openTaskbarMenu(mouse.x)
+    }
+
+    // Show desktop, as on Windows: the last 8 px of the bar, down to the
+    // screen's corner pixel, so a flick of the pointer into the corner finds
+    // it. Clicking shows the desktop and clicking again brings the windows
+    // back. With peek on, resting the pointer there shows the desktop until
+    // it moves away, and a click while peeking keeps it shown. Settings >
+    // Personalisation > Taskbar turns both on and off (wildosrc [Taskbar]).
+    MouseArea {
+        id: showDesktopCorner
+        visible: root.usePills && WildOS.TaskbarStyle.showDesktop
+        x: root.width - width
+        y: 0
+        width: 8
+        height: root.height
+        hoverEnabled: true
+        acceptedButtons: Qt.LeftButton
+        Accessible.role: Accessible.Button
+        Accessible.name: "Show the desktop"
+
+        // The desktop is showing because of a peek, so leaving undoes it.
+        property bool peeking: false
+
+        onContainsMouseChanged: {
+            if (containsMouse) {
+                if (WildOS.TaskbarStyle.peek && !KWindowSystem.showingDesktop) {
+                    peekTimer.restart();
+                }
+                return;
+            }
+            peekTimer.stop();
+            if (peeking) {
+                peeking = false;
+                KWindowSystem.showingDesktop = false;
+            }
+        }
+        onClicked: {
+            peekTimer.stop();
+            if (peeking) {
+                peeking = false;
+                return;
+            }
+            KWindowSystem.showingDesktop = !KWindowSystem.showingDesktop;
+        }
+        onVisibleChanged: {
+            if (!visible && peeking) {
+                peeking = false;
+                KWindowSystem.showingDesktop = false;
+            }
+        }
+
+        // Windows waits about half a second before peeking, so passing
+        // through the corner on the way somewhere does nothing.
+        Timer {
+            id: peekTimer
+            interval: 500
+            onTriggered: {
+                showDesktopCorner.peeking = true;
+                KWindowSystem.showingDesktop = true;
+            }
+        }
+        Connections {
+            target: root
+            function onShowingDesktopChanged() {
+                if (!root.showingDesktop) {
+                    showDesktopCorner.peeking = false;
+                }
+            }
+        }
+
+        // A hairline on its left edge while the pointer is on it, so it can
+        // be found, and nothing otherwise. Floating, the status pill's edge
+        // can reach into the sliver, so the line sits nearer the screen edge.
+        Rectangle {
+            visible: showDesktopCorner.containsMouse
+            x: root.docked ? 0 : 5
+            y: Math.round((root.pillHeight - height) / 2)
+            width: 1
+            height: 24
+            color: UI.Style.dark ? Qt.rgba(1, 1, 1, 0.35) : Qt.rgba(30 / 255, 40 / 255, 70 / 255, 0.35)
+        }
     }
 
     function openTaskbarMenu(x: real): void {

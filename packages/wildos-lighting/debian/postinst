@@ -1,0 +1,11 @@
+#!/bin/sh
+set -e
+
+# Apply the rules to devices already plugged in. Outside a running system
+# (the image build) there is no udev to ask, which is fine.
+if [ "$1" = "configure" ]; then
+    udevadm control --reload >/dev/null 2>&1 || true
+    udevadm trigger --subsystem-match=hidraw --action=change >/dev/null 2>&1 || true
+fi
+
+#DEBHELPER#

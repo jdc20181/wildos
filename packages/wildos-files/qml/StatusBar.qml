@@ -12,7 +12,7 @@ Item {
     height: Metrics.statusHeight
 
     function plural(n, one, many) {
-        return n.toLocaleString(Qt.locale("en_GB"), "f", 0) + " " + (n === 1 ? one : many);
+        return n.toLocaleString(Qt.locale(), "f", 0) + " " + (n === 1 ? one : many);
     }
 
     Rectangle {

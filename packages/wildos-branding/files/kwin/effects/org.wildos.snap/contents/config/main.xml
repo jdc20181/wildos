@@ -27,5 +27,11 @@
         <entry name="ButtonMarginTopMaximized" type="Int"><default>0</default></entry>
         <!-- Aurorae's ButtonSize factor (auroraerc), needed only below 1.0, where it does not change the title bar height. -->
         <entry name="ButtonSizeFactor" type="Double"><default>1.0</default></entry>
+        <!--
+          Written by Settings > System > Multitasking. The effect stays loaded
+          while either is on, so snap assist works without the layout picker.
+        -->
+        <entry name="ShowLayouts" type="Bool"><default>true</default></entry>
+        <entry name="SnapAssist" type="Bool"><default>true</default></entry>
     </group>
 </kcfg>

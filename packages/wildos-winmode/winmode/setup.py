@@ -56,7 +56,7 @@ BOOT_WAIT = 300
 BOOT_TRIES = 3
 # setup.ps1's steps, in order (guest/setup.ps1), for the "tune" stage.
 GUEST_STEPS = ["guest-tools", "shared-folder", "wild-guest", "remote-desktop", "account", "tuning", "updates",
-               "known-folders", "office-policies", "startup-trim", "theme", "ready-task"]
+               "known-folders", "office-policies", "startup-trim", "opengl", "theme", "ready-task"]
 
 TOOL_AGENT = "wildos-winmode (+https://wildos.io)"
 VIRTIO_BASE = "https://fedorapeople.org/groups/virt/virtio-win/direct-downloads"
@@ -119,6 +119,46 @@ def size_text(n):
 # The licence (brief 2.1).
 def key_shape_ok(key):
     return bool(re.fullmatch(rf"([{KEY_ALPHABET}N]{{5}}-){{4}}[{KEY_ALPHABET}N]{{5}}", key or "")) and key.count("N") <= 1
+
+
+# Why slmgr /ato failed, by the error code it prints (the text around it
+# follows Windows' language, the code does not). Only a missing connection
+# clears up by itself; every other answer needs something from the person.
+EDITION_ERRORS = {"C004F069", "C004F050", "C004F015", "C004F210"}
+ACTIVATION_ERRORS = [
+    ({"C004C008", "C004C770", "C004C771", "803FA071"},
+     "Microsoft says this key is already in use on another PC, or on an earlier Windows mode. Microsoft may let you move it: "
+     "open the Windows desktop, then Settings, Activation, and choose Troubleshoot."),
+    ({"C004C003", "C004C060", "C004C4A2", "C004E028"},
+     "Microsoft won't activate with this key. It may be blocked or not genuine. Check where it came from."),
+    ({"C004F074", "8007232B", "C004F039", "C004F038"},
+     "This is a volume licence key that activates through an organisation's own server, which Windows mode can't reach."),
+    ({"803FA067", "C004F213", "C004C020"},
+     "Microsoft found no licence for this PC with this key. Check the key is for Windows 11 Pro."),
+]
+OFFLINE_ERRORS = {"80072EE7", "80072EFD", "80072EE2", "80072F8F", "8007267C", "80072F78", "C004C001"}
+NOT_ONLINE = "The key is in, but Windows couldn't reach Microsoft to activate. It tries again by itself when it's online."
+
+
+def activation_reason(output, firmware=False):
+    """What to tell someone whose key went in but did not activate, from
+    slmgr /ato's output. None when it was only the connection, which Windows
+    retries by itself."""
+    codes = [c.upper() for c in re.findall(r"0x([0-9A-Fa-f]{8})", output or "")]
+    for code in codes:
+        if code in OFFLINE_ERRORS:
+            return None
+        if code in EDITION_ERRORS:
+            return ("This PC's licence is for another edition of Windows, usually Home, which Windows mode can't use."
+                    if firmware else
+                    "Microsoft says this key is for another edition of Windows, usually Home. Windows mode runs "
+                    "Windows 11 Pro, so it needs a Windows 11 Pro key.")
+        for known, text in ACTIVATION_ERRORS:
+            if code in known:
+                return text
+    if codes:
+        return f"Windows didn't activate. Microsoft's answer was 0x{codes[0]}; check the key, or try again later."
+    return None
 
 
 def parse_msdm(table):
@@ -408,7 +448,7 @@ class Setup:
             "paused": bool(rec.get("paused")),
             "problem": rec.get("problem"),
             "licence": {"source": licence.get("source"), "edition": licence.get("edition"),
-                        "activated": licence.get("activated")},
+                        "activated": licence.get("activated"), "keyEnd": licence.get("last5") if licence.get("source") == "key" else None},
             "options": rec.get("options") or {},
             "failed": rec.get("failed"),
         }
@@ -421,8 +461,16 @@ class Setup:
             return "Windows mode is already being set up."
         if self.rec.get("running"):
             # Trying again after a problem: carry on from the step it was on,
-            # keeping everything done so far.
-            self.save(failed=None, problem=None, paused=False)
+            # keeping everything done so far, with the options as chosen this
+            # time (the virtual PC is defined again from them).
+            o = request.get("options") if isinstance(request.get("options"), dict) else {}
+            options = dict(self.rec.get("options") or {})
+            if o.get("memoryGb"):
+                options["memoryGb"] = max(4, min(int(o.get("memoryGb") or 4), 32))
+            for k in ("office", "openFiles"):
+                if k in o:
+                    options[k] = bool(o[k])
+            self.save(failed=None, problem=None, paused=False, options=options)
             self.launch()
             return ""
         if virsh.state(self.cfg["domain"]) != "":
@@ -498,6 +546,10 @@ class Setup:
         self.svc.state.pop("setup", None)
         self.svc.state["setting_up"] = False
         self.svc.save_state()
+        # The service keeps the virtual PC's last state to answer status
+        # quickly, and an undefine sends nothing that clears it, so it still
+        # said "shut off" and the wizard showed Start over as set up.
+        self.svc.refresh()
         self.svc.notify()
 
     def choose_iso(self, path):
@@ -577,7 +629,10 @@ class Setup:
             stage = self.rec.get("stage") or "media"
             self.set_stage(stage, "failed")
             text = "Windows mode couldn't finish setting up. Try again, and if it happens twice, restart the PC first."
-            self.save(problem={"kind": "failed", "text": text}, failed=f"{text} ({e})")
+            # The unexpected error itself goes on the card too, small, so a
+            # failure can be reported without digging through the log.
+            self.save(problem={"kind": "failed", "text": text, "detail": f"{type(e).__name__}: {e}"[:300]},
+                      failed=f"{text} ({e})")
 
     def check(self):
         if self.stop.is_set():
@@ -656,7 +711,6 @@ class Setup:
                 os.chown(SECRETS, 0, _gid(group))
                 os.chmod(SECRETS, 0o710)
             os.chmod(msdm_copy, 0o640)
-            _apparmor_allow(msdm_copy)
         elif lic.get("source") == "key":
             with open(os.path.join(SECRETS, ACTIVATION_KEY)) as f:
                 key = f.read().strip()
@@ -801,6 +855,10 @@ class Setup:
             self.payload()
             self.network()
             self.define()
+        elif virsh.state(domain) == "shut off":
+            # Trying again: defined afresh, so a fix to the definition (the
+            # licence table) reaches a virtual PC an earlier try made.
+            self.define()
         self.check()
         started = self.rec.get("install_started")
         if virsh.state(domain) in ("shut off", "saved"):
@@ -882,6 +940,7 @@ class Setup:
                 "ACCOUNT": self.cfg["account"], "PASSWORD": xml_escape(pw), "PRODUCT_KEY": key, "FULL_NAME": "Wild OS"}))
         guest = os.path.join(config.DATA, "guest")
         shutil.copy(os.path.join(guest, "setup.ps1"), os.path.join(work, "wildos", "setup.ps1"))
+        shutil.copy(os.path.join(guest, "opengl.ps1"), os.path.join(work, "wildos", "opengl.ps1"))
         shutil.copy(self.cfg["guest_exe"], os.path.join(work, "wildos", "wild-guest.exe"))
         plan = (self.rec.get("options") or {}).get("officePlan", "personal")
         with open(os.path.join(work, "wildos", "office.xml"), "w", encoding="utf-8") as f:
@@ -931,8 +990,10 @@ class Setup:
         vendor = _read("/sys/class/dmi/id/sys_vendor") or "Wild OS"
         product = _read("/sys/class/dmi/id/product_name") or "Windows mode"
         msdm = os.path.join(SECRETS, "msdm.bin")
-        acpi = (f"<qemu:commandline><qemu:arg value='-acpitable'/><qemu:arg value='file={msdm}'/></qemu:commandline>"
-                if os.path.exists(msdm) else "")
+        # libvirt attaches the licence table itself, so it also lets QEMU read
+        # it (file ownership and AppArmor). Passed on QEMU's own command
+        # line, as it was, QEMU was refused the file.
+        acpi = f"<acpi><table type='msdm'>{xml_escape(msdm)}</table></acpi>" if os.path.exists(msdm) else ""
         memory_mb = 1024 * (self.rec.get("options") or {}).get("memoryGb", 4)
         os.makedirs(self.cfg["share_root"], exist_ok=True)
         xml = render("domain.xml.in", {
@@ -940,7 +1001,12 @@ class Setup:
             "WINDOWS_ISO": os.path.join(CACHE, "windows.iso"), "VIRTIO_ISO": os.path.join(CACHE, "virtio-win.iso"),
             "PAYLOAD_ISO": os.path.join(CACHE, "payload.iso"), "NET": self.cfg["network"], "GUEST_MAC": GUEST_MAC,
             "SHARE": self.cfg["share_root"], "VIRTIOFSD_BINARY": "", "SMBIOS_MANUFACTURER": xml_escape(vendor),
-            "SMBIOS_PRODUCT": xml_escape(product), "QEMU_COMMANDLINE": acpi})
+            "SMBIOS_PRODUCT": xml_escape(product), "ACPI_TABLES": acpi})
+        if virsh.state(self.cfg["domain"]) != "":
+            # Defining it again: libvirt only updates a domain whose UUID
+            # matches, and refuses a second one under the same name.
+            uuid = virsh.run("domuuid", self.cfg["domain"]).strip()
+            xml = xml.replace("</name>", f"</name>\n  <uuid>{uuid}</uuid>", 1)
         path = os.path.join(config.STATE_DIR, "domain.xml")
         with open(path, "w") as f:
             f.write(xml)
@@ -990,18 +1056,20 @@ class Setup:
             self.mark("activate")
             return
         code = None
+        answer = ""
         # The network may come up a moment after the agent does.
         for _ in range(6):
             self.check()
             try:
-                qga.powershell(domain, r"cscript //nologo $env:SystemRoot\System32\slmgr.vbs /ato 2>&1 | Out-String", 180)
+                _, answer, _ = qga.powershell(domain, r"cscript //nologo $env:SystemRoot\System32\slmgr.vbs /ato 2>&1 | Out-String", 180)
                 _, out, _ = qga.powershell(domain, (
                     "(Get-CimInstance SoftwareLicensingProduct -Filter \"ApplicationID='55c92734-d682-4d71-983e-d6ec3f16059f'"
                     " and PartialProductKey is not null\" | Select-Object -First 1).LicenseStatus"), 60)
                 code = int(out.strip().splitlines()[-1]) if out.strip() else None
             except (virsh.VirshError, ValueError, KeyError, TimeoutError, IndexError) as e:
                 log("activation:", e)
-            if code == 1:
+            if code == 1 or activation_reason(answer):
+                # Asking again won't change an answer other than "offline".
                 break
             time.sleep(30)
         lic["activated"] = code == 1
@@ -1010,8 +1078,13 @@ class Setup:
             self.forget_activation_key()
         # Not activating is not a failure: Windows works, and a key can be
         # added in Settings (board 9.8).
+        reason = None if code == 1 else activation_reason(answer, lic.get("source") == "firmware")
+        if code != 1:
+            log("activation:", " ".join((answer or "").split())[-300:])
         self.set_stage("activate", "done", 100,
-                       None if code == 1 else "Not activated yet. Windows works; add a key any time in Settings.")
+                       None if code == 1 else
+                       (reason + " " if reason else "Not activated yet. ")
+                       + "Windows works without activating; add a Windows 11 Pro key any time in Settings.")
         self.mark("activate")
 
     def activation_key(self, lic):
@@ -1057,19 +1130,21 @@ class Setup:
                 f"$s = Get-CimInstance SoftwareLicensingService; try {{ $s | Invoke-CimMethod -MethodName InstallProductKey "
                 f"-Arguments @{{ProductKey='{key}'}} -ErrorAction Stop | Out-Null }} catch {{ 'refused'; exit }}; "
                 "$s | Invoke-CimMethod -MethodName RefreshLicenseStatus | Out-Null; "
-                r"cscript //nologo $env:SystemRoot\System32\slmgr.vbs /ato | Out-Null; "
+                r"cscript //nologo $env:SystemRoot\System32\slmgr.vbs /ato 2>&1 | Out-String; "
                 "(Get-CimInstance SoftwareLicensingProduct -Filter \"ApplicationID='55c92734-d682-4d71-983e-d6ec3f16059f'"
                 " and PartialProductKey is not null\" | Select-Object -First 1).LicenseStatus"), 240)
             if out.strip().endswith("refused"):
                 return "Windows didn't accept that key. Check it, and that it's for Windows 11 Pro: Windows mode can't use a Home key."
             code = int(out.strip().splitlines()[-1]) if out.strip() else None
+            if code != 1:
+                log("activation:", " ".join(out.split())[-300:])
         except (virsh.VirshError, ValueError, KeyError, TimeoutError, IndexError) as e:
             log("product key:", e)
             return "Windows didn't take that key. Check it, and that this PC is online, then try again."
         lic = dict(self.rec.get("licence") or {})
         lic.update(source=source, last5=key[-5:], activated=code == 1)
         self.save(licence=lic)
-        return "" if code == 1 else "The key is in, but Windows couldn't activate yet. It tries again by itself when it's online."
+        return "" if code == 1 else activation_reason(out, source == "firmware") or NOT_ONLINE
 
     # tune
     def step_tune(self):
@@ -1170,22 +1245,6 @@ def _gid(group):
         return grp.getgrnam(group).gr_gid
     except KeyError:
         return None
-
-
-def _apparmor_allow(path):
-    """libvirt's AppArmor profile for QEMU only lists the files it knows
-    about; the MSDM copy goes on QEMU's raw command line."""
-    for target in ("/etc/apparmor.d/abstractions/libvirt-qemu.d/wildos-winmode",
-                   "/etc/apparmor.d/local/abstractions/libvirt-qemu"):
-        if os.path.isdir(os.path.dirname(target)):
-            try:
-                text = open(target).read() if os.path.exists(target) else ""
-                if path not in text:
-                    with open(target, "a") as f:
-                        f.write(f"  {path} r,\n")
-            except OSError as e:
-                log("apparmor:", e)
-            return
 
 
 def _redirect(url):

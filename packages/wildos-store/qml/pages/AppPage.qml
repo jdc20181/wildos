@@ -3,11 +3,14 @@ import QtQuick.Controls
 import QtQuick.Effects
 import QtQuick.Layouts
 import QtQuick.Templates as T
+import QtQuick.Window
 import WildOS.Store
 import WildOS.UI as UI
 
-// One app, as StoreApp.dc.html: icon, name and facts, the buttons that act on
-// it, what it does, and what it can reach on this computer.
+// One app, as StoreAppPage.dc.html and StoreDownloading.dc.html: the icon,
+// name and button, with the download's progress beside the button while it
+// installs; the facts strip; screenshots; what it can reach; then what it
+// does and the rest of its details.
 PageFlick {
     id: page
 
@@ -15,15 +18,16 @@ PageFlick {
     property string arg
     property string kind
     readonly property var app: Catalog.app(arg)
-    readonly property bool working: app && (app.busy || app.queued)
     readonly property bool sandboxed: app && app.source === "flatpak"
+    readonly property string step: button.shown
+    readonly property bool working: ["waiting", "preparing", "downloading", "installing", "removing", "paused"].indexOf(step) >= 0
     property bool expanded: false
     // Flathub answers within seconds; if nothing comes back (no network, no
     // metadata for this app) the page says so instead of checking for ever.
     property bool checkGaveUp: false
 
     Timer {
-        running: page.sandboxed && page.app && page.app.permissions.length === 0 && !page.app.permissionsUnknown
+        running: page.sandboxed && page.app && !page.app.reachKnown && !page.app.permissionsUnknown
         interval: 20000
         onTriggered: page.checkGaveUp = true
     }
@@ -37,474 +41,280 @@ PageFlick {
         }
     }
 
-    UI.Button {
-        id: backLink
-        kind: "text"
-        iconName: "chevron-left"
-        iconSize: 15
-        iconStroke: 2
-        implicitHeight: 32
-        leftPadding: 6
-        rightPadding: 10
-        text: page.store.backTitle()
-        Accessible.name: "Back to " + page.store.backTitle()
-        onClicked: page.store.back()
-    }
-
     RowLayout {
         Layout.fillWidth: true
         spacing: 24
 
-        Rectangle {
-            Layout.preferredWidth: 120
-            Layout.preferredHeight: 120
-            radius: 24
-            color: Metrics.iconTile
+        Item {
+            Layout.preferredWidth: 128
+            Layout.preferredHeight: 128
+            Layout.alignment: Qt.AlignTop
 
             AppIcon {
-                anchors.centerIn: parent
-                size: 88
+                id: bigIcon
+                anchors.fill: parent
+                size: 128
                 source: page.app ? page.app.iconSource : ""
+                layer.enabled: true
+                layer.effect: MultiEffect {
+                    shadowEnabled: true
+                    shadowColor: Qt.rgba(0, 0, 0, 0.35)
+                    shadowVerticalOffset: 14
+                    shadowBlur: 0.8
+                    blurMax: 40
+                }
+            }
+
+            // A small hop when the app has just arrived.
+            SequentialAnimation {
+                id: bounce
+                NumberAnimation { target: bigIcon; property: "scale"; to: 1.07; duration: 140; easing.type: Easing.OutQuad }
+                NumberAnimation { target: bigIcon; property: "scale"; to: 1; duration: 420; easing.type: Easing.OutBack; easing.overshoot: 2.6 }
             }
         }
 
         ColumnLayout {
             Layout.fillWidth: true
-            spacing: 8
+            Layout.alignment: Qt.AlignVCenter
+            spacing: 5
 
             UI.Label {
                 Layout.fillWidth: true
                 text: page.app ? page.app.name : ""
-                font.pixelSize: UI.Style.px(30)
-                font.weight: Font.DemiBold
-                font.letterSpacing: -0.3
+                size: 32
+                font.weight: Font.Bold
+                font.letterSpacing: -0.64
                 Accessible.role: Accessible.Heading
             }
 
             UI.Label {
                 Layout.fillWidth: true
-                text: page.app ? page.app.byline : ""
-                font.pixelSize: UI.Style.px(14)
-                color: Metrics.inkSub
+                visible: text.length > 0
+                text: page.app ? page.app.tagline || page.app.summary : ""
+                size: 17
+                color: Metrics.inkSecondary
             }
 
-            Flow {
+            StoreLink {
+                Layout.leftMargin: -4
+                visible: page.app && page.app.developer.length > 0
+                enabled: page.app && page.app.homepage.length > 0
+                text: page.app ? page.app.developer : ""
+                Accessible.description: "Opens the website"
+                onClicked: Qt.openUrlExternally(page.app.homepage)
+            }
+
+            RowLayout {
                 Layout.fillWidth: true
-                Layout.topMargin: 4
-                spacing: 8
+                Layout.topMargin: 10
+                spacing: 14
 
-                // Every app here is free to download, so the chip says what
-                // kind of free it is.
-                UI.Chip {
-                    granted: false
-                    text: page.app && page.app.openSource ? "Open source" : "Free to use"
+                StoreButton {
+                    id: button
+                    Layout.alignment: Qt.AlignVCenter
+                    big: true
+                    app: page.app
+                    onLanded: if (!UI.Style.reducedMotion) bounce.restart()
                 }
 
-                UI.Chip {
-                    visible: page.sandboxed
-                    iconName: "shield"
-                    text: "Checked and sandboxed"
-                }
+                // Beside the ring while it works: what is happening, how far
+                // it has got and how long is left (StoreDownloading).
+                Column {
+                    id: progress
+                    visible: page.working
+                    Layout.preferredWidth: 260
+                    Layout.alignment: Qt.AlignVCenter
+                    spacing: 6
 
-                UI.Chip {
-                    visible: page.app && page.app.chip.length > 0
-                    granted: false
-                    text: page.app ? page.app.chip : ""
-                }
-            }
-        }
-
-        Row {
-            Layout.alignment: Qt.AlignVCenter
-            spacing: 10
-
-            ProgressPill {
-                visible: page.working
-                height: Math.max(40, implicitHeight)
-                width: Math.max(180, implicitWidth)
-                fontSize: 13
-                app: page.app
-            }
-
-            UI.Button {
-                size: "large"
-                visible: !page.working && page.app && page.app.installed
-                text: "Uninstall"
-                onClicked: removeDialog.open()
-            }
-
-            UI.Button {
-                size: "large"
-                kind: !page.app.updateAvailable ? "primary" : "secondary"
-                visible: !page.working && page.app && page.app.installed && page.app.canOpen
-                text: "Open"
-                onClicked: page.app.open()
-            }
-
-            UI.Button {
-                size: "large"
-                kind: "primary"
-                visible: !page.working && page.app && page.app.installed && page.app.updateAvailable
-                text: "Update"
-                onClicked: page.app.update()
-            }
-
-            UI.Button {
-                size: "large"
-                kind: "primary"
-                visible: !page.working && page.app && !page.app.installed
-                enabled: page.app && page.app.source.length > 0
-                text: "Install"
-                onClicked: page.app.install()
-            }
-        }
-    }
-
-    RowLayout {
-        Layout.fillWidth: true
-        spacing: 24
-
-        ColumnLayout {
-            Layout.fillWidth: true
-            Layout.alignment: Qt.AlignTop
-            spacing: 18
-
-            ColumnLayout {
-                Layout.fillWidth: true
-                spacing: 8
-
-                UI.Label {
-                    text: "About"
-                    font.pixelSize: UI.Style.px(15)
-                    font.weight: Font.DemiBold
-                    Accessible.role: Accessible.Heading
-                }
-
-                Item {
-                    id: aboutClip
-                    Layout.fillWidth: true
-                    implicitHeight: page.expanded || !about.truncatedText ? about.implicitHeight : 6 * about.lineHeightPx
-                    clip: true
-                    // Fades the cut-off line instead of slicing it in half.
-                    layer.enabled: !page.expanded && about.truncatedText
-                    layer.effect: MultiEffect {
-                        maskEnabled: true
-                        maskSource: fadeMask
-                        maskSpreadAtMin: 1.0
-                    }
-
-                    Text {
-                        id: about
-                        readonly property real lineHeightPx: font.pixelSize * 1.6
-                        readonly property bool truncatedText: implicitHeight > 6 * lineHeightPx + 4
+                    Item {
                         width: parent.width
-                        text: page.app ? page.app.description : ""
-                        textFormat: Text.RichText
-                        wrapMode: Text.Wrap
-                        color: Metrics.inkBody
-                        font.family: UI.Style.fontFamily
-                        font.pixelSize: UI.Style.px(14)
-                        lineHeight: 1.6
-                        onLinkActivated: link => Qt.openUrlExternally(link)
-                    }
-                }
-
-                Item {
-                    id: fadeMask
-                    width: aboutClip.width
-                    height: aboutClip.height
-                    visible: false
-                    layer.enabled: true
-
-                    Rectangle {
-                        anchors.fill: parent
-                        gradient: Gradient {
-                            GradientStop { position: 0; color: "white" }
-                            GradientStop { position: 0.75; color: "white" }
-                            GradientStop { position: 1; color: "transparent" }
-                        }
-                    }
-                }
-
-                UI.LinkButton {
-                    visible: about.truncatedText
-                    Layout.leftMargin: -4
-                    text: page.expanded ? "Show less" : "Read more"
-                    onClicked: page.expanded = !page.expanded
-                }
-            }
-
-            Rectangle {
-                visible: page.app && page.app.swapTitle.length > 0
-                Layout.fillWidth: true
-                implicitHeight: swapRow.implicitHeight + 32
-                radius: UI.Style.radiusMd
-                color: UI.Style.accentTint
-                border.width: 1
-                border.color: UI.Style.accentBorder
-
-                Row {
-                    id: swapRow
-                    x: 18
-                    anchors.verticalCenter: parent.verticalCenter
-                    width: parent.width - 36
-                    spacing: 14
-
-                    UI.Icon {
-                        anchors.verticalCenter: parent.verticalCenter
-                        name: "swap"
-                        size: 20
-                        strokeWidth: 2
-                        color: UI.Style.accentText
-                    }
-
-                    Column {
-                        anchors.verticalCenter: parent.verticalCenter
-                        width: parent.width - 34
-                        spacing: 2
+                        height: stepLabel.implicitHeight
 
                         UI.Label {
-                            width: parent.width
-                            text: page.app ? page.app.swapTitle : ""
-                            font.pixelSize: UI.Style.px(14)
+                            id: stepLabel
+                            text: {
+                                switch (page.step) {
+                                case "waiting": return "Waiting";
+                                case "preparing": return "Getting ready";
+                                case "installing": return "Installing";
+                                case "removing": return "Uninstalling";
+                                case "paused": return "Paused";
+                                }
+                                return page.app && page.app.action === "update" ? "Downloading the update" : "Downloading";
+                            }
+                            size: 13
                             font.weight: Font.DemiBold
                         }
 
                         UI.Label {
-                            width: parent.width
-                            text: page.app ? page.app.swapText : ""
-                            font.pixelSize: UI.Style.px(12)
-                            color: UI.Style.inkMuted
-                            wrapMode: Text.Wrap
-                            elide: Text.ElideNone
+                            anchors.right: parent.right
+                            visible: page.step === "downloading" || page.step === "paused"
+                            text: page.app ? page.app.bytesText : ""
+                            size: 13
+                            font.features: { "tnum": 1 }
+                            color: Metrics.inkSecondary
                         }
                     }
-                }
-            }
 
-            ColumnLayout {
-                Layout.fillWidth: true
-                spacing: 8
+                    Rectangle {
+                        id: track
+                        width: parent.width
+                        height: 5
+                        radius: 3
+                        color: UI.Style.tone(0.12)
+                        clip: true
+
+                        readonly property bool known: page.step === "downloading" || page.step === "paused"
+                        property real shown: page.app ? Math.max(0, page.app.progress) : 0
+                        Behavior on shown {
+                            enabled: !UI.Style.reducedMotion
+                            NumberAnimation { duration: 600; easing.type: Easing.OutCubic }
+                        }
+
+                        Rectangle {
+                            visible: track.known
+                            width: track.width * Math.min(100, track.shown) / 100
+                            height: parent.height
+                            radius: 3
+                            color: page.step === "paused" ? Metrics.inkSecondary : UI.Style.accent
+                        }
+
+                        // While the amount of work is unknown a short band
+                        // drifts along the bar instead of it standing still.
+                        Rectangle {
+                            id: sweep
+                            visible: !track.known && page.step !== "waiting"
+                            height: parent.height
+                            width: parent.width * 0.3
+                            radius: 3
+                            color: UI.Style.accent
+                            NumberAnimation on x {
+                                running: sweep.visible
+                                loops: Animation.Infinite
+                                from: -sweep.width
+                                to: track.width
+                                duration: UI.Style.reducedMotion ? 4000 : 1400
+                                easing.type: Easing.InOutQuad
+                            }
+                        }
+                    }
+
+                    UI.Label {
+                        width: parent.width
+                        text: {
+                            if (page.step === "waiting") {
+                                return "It starts when the apps before it finish.";
+                            }
+                            if (page.step === "paused") {
+                                return "Press play to carry on.";
+                            }
+                            const left = page.app ? page.app.timeLeftText : "";
+                            return left.length > 0 ? left + ". You can keep browsing." : "You can keep browsing.";
+                        }
+                        size: 12
+                        color: Metrics.inkTertiary
+                    }
+
+                    UI.Label {
+                        width: parent.width
+                        visible: text.length > 0 && page.step !== "removing"
+                        text: page.app ? page.app.sharedNote : ""
+                        size: 12
+                        color: Metrics.inkTertiary
+                        wrapMode: Text.Wrap
+                        elide: Text.ElideNone
+                    }
+                }
 
                 UI.Label {
-                    text: "Status"
-                    font.pixelSize: UI.Style.px(15)
-                    font.weight: Font.DemiBold
-                    Accessible.role: Accessible.Heading
+                    visible: !page.working && text.length > 0
+                    Layout.fillWidth: true
+                    text: {
+                        if (!page.app) {
+                            return "";
+                        }
+                        if (page.app.error.length > 0) {
+                            return page.app.error;
+                        }
+                        if (page.step === "nospace") {
+                            return page.app.statusLine;
+                        }
+                        return page.step === "get" ? "Free" : "";
+                    }
+                    size: 12.5
+                    color: page.app && page.app.error.length > 0 ? Metrics.danger : Metrics.inkTertiary
                 }
 
-                RowGroup {
+                UI.IconButton {
+                    visible: !page.working && page.app && page.app.error.length > 0
+                    Layout.preferredWidth: 28
+                    Layout.preferredHeight: 28
+                    radius: 14
+                    iconName: "close"
+                    iconSize: 12
+                    tip: "Dismiss"
+                    onClicked: page.app.clearError()
+                }
+
+                Item {
                     Layout.fillWidth: true
-
-                    InfoRow {
-                        visible: page.app && page.app.error.length > 0
-                        warning: true
-                        title: page.app && page.app.action === "remove" ? "Couldn't uninstall" : page.app && page.app.action === "update" ? "Couldn't update" : "Couldn't install"
-                        subtitle: page.app ? page.app.error : ""
-
-                        UI.Button {
-                            size: "small"
-                            anchors.verticalCenter: parent.verticalCenter
-                            text: "Dismiss"
-                            onClicked: page.app.clearError()
-                        }
-                    }
-
-                    InfoRow {
-                        title: !page.app ? "" : page.working ? progressTitle.label
-                            : page.app.installed ? "Installed" : "Not installed"
-                        subtitle: {
-                            if (!page.app) {
-                                return "";
-                            }
-                            if (page.working) {
-                                return page.app.queued ? "It starts when the apps before it finish" : "You can keep using the Store while it works";
-                            }
-                            if (page.app.installed) {
-                                return page.app.updateAvailable ? "An update is ready" : "Up to date, updates arrive with your other apps";
-                            }
-                            return page.app.sizeText.length > 0 ? page.app.sizeText : "Free to install";
-                        }
-
-                        ProgressPill {
-                            id: progressTitle
-                            visible: false
-                            app: page.app
-                        }
-                    }
-
-                    InfoRow {
-                        visible: page.app && page.app.installed && page.app.inStart
-                        title: "Added to Start"
-                        subtitle: page.app ? "In All apps under " + page.app.categoryLabel : ""
-                    }
-
-                    InfoRow {
-                        visible: page.app && page.app.source.length > 0
-                        title: page.sandboxed ? "Sandboxed app" : "Wild OS app"
-                        subtitle: page.sandboxed ? "Runs in a sandbox, separate from your other apps" : "Updated along with the rest of Wild OS"
-
-                        UI.LinkButton {
-                            anchors.verticalCenter: parent.verticalCenter
-                            visible: page.app && !page.app.installed && !page.working && page.app.hasFlatpak && page.app.hasApt
-                            text: page.sandboxed ? "Use the Wild OS version" : "Use the sandboxed version"
-                            onClicked: page.app.useSource(page.sandboxed ? "apt" : "flatpak")
-                        }
-                    }
+                    visible: page.working
                 }
             }
         }
 
-        ColumnLayout {
-            Layout.preferredWidth: 380
-            Layout.maximumWidth: 380
-            Layout.alignment: Qt.AlignTop
-            spacing: 8
-
-            UI.Label {
-                text: page.sandboxed ? "What it can reach" : "Details"
-                font.pixelSize: UI.Style.px(15)
-                font.weight: Font.DemiBold
-                Accessible.role: Accessible.Heading
-            }
-
-            RowGroup {
-                visible: page.sandboxed
-                Layout.fillWidth: true
-
-                InfoRow {
-                    visible: page.app && page.app.permissions.length === 0
-                    minHeight: 54
-                    readonly property bool failed: page.app && (page.app.permissionsUnknown || page.checkGaveUp)
-                    title: failed ? "Couldn't check what it asks for" : "Checking what it asks for"
-                    subtitle: failed ? "The app library can't be reached right now. Try again when you're online." : ""
-                }
-
-                Repeater {
-                    model: page.sandboxed && page.app ? page.app.permissions : []
-
-                    InfoRow {
-                        id: permission
-                        required property var modelData
-                        minHeight: 54
-                        title: modelData.label
-                        last: false
-
-                        UI.Label {
-                            anchors.verticalCenter: parent.verticalCenter
-                            text: permission.modelData.fixed ? "Always" : permission.modelData.allowed ? "On" : "Off"
-                            font.pixelSize: UI.Style.px(12)
-                            color: UI.Style.inkMuted
-                        }
-
-                        UI.Toggle {
-                            visible: !permission.modelData.fixed
-                            anchors.verticalCenter: parent.verticalCenter
-                            checked: permission.modelData.allowed
-                            locked: !permission.modelData.editable
-                            lockedReason: "Change this once the app is installed"
-                            Accessible.name: permission.modelData.label
-                            onToggled: page.app.setPermission(permission.modelData.token, checked)
-                        }
-                    }
-                }
-            }
-
-            RowGroup {
-                visible: !page.sandboxed
-                Layout.fillWidth: true
-
-                InfoRow {
-                    minHeight: 54
-                    title: "Version"
-                    visible: page.app && page.app.version.length > 0
-
-                    UI.Label {
-                        anchors.verticalCenter: parent.verticalCenter
-                        text: page.app ? page.app.version : ""
-                        font.pixelSize: UI.Style.px(12)
-                        color: UI.Style.inkMuted
-                    }
-                }
-
-                InfoRow {
-                    minHeight: 54
-                    title: "Developer"
-                    visible: page.app && page.app.developer.length > 0
-
-                    UI.Label {
-                        anchors.verticalCenter: parent.verticalCenter
-                        width: Math.min(implicitWidth, 200)
-                        text: page.app ? page.app.developer : ""
-                        font.pixelSize: UI.Style.px(12)
-                        color: UI.Style.inkMuted
-                    }
-                }
-
-                InfoRow {
-                    minHeight: 54
-                    title: "Licence"
-                    subtitle: page.app ? page.app.licence : ""
-                    visible: page.app && page.app.licence.length > 0
-
-                    UI.Label {
-                        anchors.verticalCenter: parent.verticalCenter
-                        width: Math.min(implicitWidth, 200)
-                        text: !page.app ? "" : page.app.openSource ? "Open source" : "Free to use"
-                        font.pixelSize: UI.Style.px(12)
-                        color: UI.Style.inkMuted
-                    }
-                }
-
-                InfoRow {
-                    minHeight: 54
-                    title: "Website"
-                    visible: page.app && page.app.homepage.length > 0
-
-                    UI.LinkButton {
-                        anchors.verticalCenter: parent.verticalCenter
-                        size: 12
-                        text: page.app ? page.app.homepage.replace(/^https?:\/\//, "").replace(/\/$/, "") : ""
-                        onClicked: Qt.openUrlExternally(page.app.homepage)
-                    }
-                }
-            }
-
-            UI.Label {
-                Layout.fillWidth: true
-                Layout.topMargin: 4
-                Layout.leftMargin: 2
-                Layout.rightMargin: 2
-                font.pixelSize: UI.Style.px(12)
-                lineHeight: 1.5
-                color: UI.Style.inkMuted
-                wrapMode: Text.Wrap
-                elide: Text.ElideNone
-                text: !page.app ? ""
-                    : !page.sandboxed ? page.app.name + " runs like any program on your computer, without a sandbox, so it can open any of your files."
-                    : page.app.installed ? "Changes apply the next time " + page.app.name + " opens. " + page.app.name + " will ask if it ever needs something new."
-                    : "This is what " + page.app.name + " asks for. You can change it once it's installed."
-            }
+        UI.IconButton {
+            Layout.alignment: Qt.AlignVCenter
+            Layout.preferredWidth: 38
+            Layout.preferredHeight: 38
+            iconName: "share"
+            iconSize: 18
+            iconColor: Metrics.inkSecondary
+            enabled: page.app && page.app.appstreamId.length > 0
+            tip: "Copy link"
+            onClicked: page.store.copyLink(page.app)
         }
     }
 
-    UI.Label {
-        visible: shots.count > 0
-        text: "Screenshots"
-        font.pixelSize: UI.Style.px(15)
-        font.weight: Font.DemiBold
-        Accessible.role: Accessible.Heading
+    // Price, size, category, maker, licence and, for Flathub apps, safety.
+    FactStrip {
+        Layout.fillWidth: true
+        cells: {
+            const a = page.app;
+            if (!a) {
+                return [];
+            }
+            const out = [{ label: "Price", value: "Free", sub: "" }];
+            const size = a.installed ? a.sizeText : a.downloadText;
+            if (size.length > 0) {
+                out.push({ label: "Size", value: size, sub: a.installed ? "Installed" : "Download" });
+            }
+            if (a.categoryLabel.length > 0) {
+                out.push({ label: "Category", value: a.categoryLabel, sub: "" });
+            }
+            if (a.developer.length > 0) {
+                out.push({ label: "Made by", value: a.developer, sub: "" });
+            }
+            out.push(a.openSource ? { label: "Licence", value: "Open source", sub: a.licence } : { label: "Licence", value: "Free to use", sub: "" });
+            if (page.sandboxed) {
+                out.push({ label: "Safety", value: "", icon: "shield-check", sub: a.checked ? "Checked and sandboxed" : "Sandboxed" });
+            }
+            return out;
+        }
     }
 
     ListView {
         id: shots
         Layout.fillWidth: true
-        Layout.topMargin: -18
-        Layout.preferredHeight: 220
+        // The strip runs on to the window's edge, as the board's does.
+        Layout.rightMargin: -Metrics.sidePadding
+        Layout.preferredHeight: 262
         visible: count > 0
         orientation: ListView.Horizontal
-        spacing: 12
+        spacing: 18
         clip: true
+        // Only the pictures in view load, and the next two after them.
+        cacheBuffer: 2 * (440 + 18)
         boundsBehavior: Flickable.StopAtBounds
         model: page.app ? page.app.screenshots : []
         ScrollBar.horizontal: UI.ScrollBar {}
@@ -513,8 +323,12 @@ PageFlick {
             id: shot
             required property var modelData
             required property int index
-            height: 220
-            width: modelData.width > 0 ? Math.round(220 * modelData.width / modelData.height) : 391
+            height: 262
+            readonly property int naturalWidth: modelData.width > 0 && modelData.height > 0 ? Math.round(262 * modelData.width / modelData.height) : 466
+            width: failed ? 0 : naturalWidth
+            visible: !failed
+            // A picture the server no longer has takes no room at all.
+            readonly property bool failed: shotImage.status === Image.Error
             hoverEnabled: true
             focusPolicy: Qt.TabFocus
             Accessible.role: Accessible.Button
@@ -536,7 +350,11 @@ PageFlick {
                     id: shotImage
                     anchors.fill: parent
                     anchors.margins: 1
-                    source: shot.modelData.thumb
+                    // The catalogue's size closest to the card, never the
+                    // original, decoded at the size it is drawn.
+                    source: Catalog.pickImage(shot.modelData.images, Math.round(shot.naturalWidth * Screen.devicePixelRatio), Math.round(262 * Screen.devicePixelRatio))
+                    sourceSize.width: Math.round(shot.naturalWidth * Screen.devicePixelRatio)
+                    sourceSize.height: Math.round(262 * Screen.devicePixelRatio)
                     fillMode: Image.PreserveAspectCrop
                     asynchronous: true
                     smooth: true
@@ -555,29 +373,314 @@ PageFlick {
                     radius: UI.Style.radiusMd
                     color: shot.hovered ? UI.Style.tone(0.06) : "transparent"
                     border.width: 1
-                    border.color: UI.Style.borderSubtle
+                    border.color: Metrics.divider
                 }
             }
         }
     }
 
+    ColumnLayout {
+        Layout.fillWidth: true
+        spacing: 14
+
+        SectionHeader {
+            title: "What it can reach"
+            linkText: page.sandboxed && page.app && page.app.permissions.length > 0 ? "Details" : ""
+            onLinkClicked: permissionsDialog.open()
+        }
+
+        // Flathub apps: what the sandbox lets it reach and what it keeps
+        // it from, from the app's own metadata.
+        RowLayout {
+            visible: page.sandboxed && page.app && page.app.reachKnown
+            Layout.fillWidth: true
+            spacing: 16
+
+            ReachCard {
+                visible: page.app && page.app.canReach.length > 0
+                title: "Can reach"
+                iconName: "tick"
+                tint: Metrics.success
+                rows: page.app ? page.app.canReach : []
+            }
+
+            ReachCard {
+                visible: page.app && page.app.cantReach.length > 0
+                title: "Can't reach"
+                iconName: "close"
+                tint: Metrics.danger
+                rows: page.app ? page.app.cantReach : []
+            }
+
+            ReachCard {
+                visible: page.app && page.app.worksOffline
+                title: "Good to know"
+                iconName: "info"
+                tint: UI.Style.accent
+                rows: [{ tick: true, label: "Works fully offline" }]
+            }
+        }
+
+        ReachCard {
+            visible: page.sandboxed && page.app && !page.app.reachKnown
+            readonly property bool failed: page.app && (page.app.permissionsUnknown || page.checkGaveUp)
+            title: failed ? "Couldn't check what it asks for" : "Checking what it asks for"
+            iconName: "info"
+            tint: UI.Style.accent
+            text: failed ? "The app library can't be reached right now. Try again when you're online." : ""
+        }
+
+        ReachCard {
+            visible: page.app && !page.sandboxed && page.app.source.length > 0
+            title: "Runs without a sandbox"
+            iconName: "info"
+            tint: UI.Style.accent
+            text: page.app ? page.app.name + " runs like any program on your computer, so it can open any of your files. It is updated along with the rest of Wild OS." : ""
+        }
+    }
+
+    ColumnLayout {
+        Layout.fillWidth: true
+        spacing: 14
+        visible: page.app && page.app.description.length > 0
+
+        SectionHeader {
+            title: "About"
+        }
+
+        Item {
+            id: aboutClip
+            Layout.fillWidth: true
+            Layout.maximumWidth: 820
+            implicitHeight: page.expanded || !about.truncatedText ? about.implicitHeight : 6 * about.lineHeightPx
+            clip: true
+            // Fades the cut-off line instead of slicing it in half.
+            layer.enabled: !page.expanded && about.truncatedText
+            layer.effect: MultiEffect {
+                maskEnabled: true
+                maskSource: fadeMask
+                maskSpreadAtMin: 1.0
+            }
+
+            Text {
+                id: about
+                readonly property real lineHeightPx: font.pixelSize * 1.6
+                readonly property bool truncatedText: implicitHeight > 6 * lineHeightPx + 4
+                width: parent.width
+                text: page.app ? page.app.description : ""
+                textFormat: Text.RichText
+                wrapMode: Text.Wrap
+                color: Metrics.inkSecondary
+                linkColor: UI.Style.accent
+                font.family: UI.Style.fontFamily
+                font.pixelSize: UI.Style.px(14)
+                lineHeight: 1.6
+                onLinkActivated: link => Qt.openUrlExternally(link)
+            }
+        }
+
+        Item {
+            id: fadeMask
+            width: aboutClip.width
+            height: aboutClip.height
+            visible: false
+            layer.enabled: true
+
+            Rectangle {
+                anchors.fill: parent
+                gradient: Gradient {
+                    GradientStop { position: 0; color: "white" }
+                    GradientStop { position: 0.75; color: "white" }
+                    GradientStop { position: 1; color: "transparent" }
+                }
+            }
+        }
+
+        StoreLink {
+            visible: about.truncatedText
+            Layout.leftMargin: -4
+            Layout.topMargin: -8
+            text: page.expanded ? "Show less" : "Read more"
+            onClicked: page.expanded = !page.expanded
+        }
+    }
+
+    Rectangle {
+        visible: page.app && page.app.swapTitle.length > 0
+        Layout.fillWidth: true
+        implicitHeight: swapRow.implicitHeight + 36
+        radius: Metrics.radiusCard
+        gradient: Gradient {
+            orientation: Gradient.Horizontal
+            GradientStop { position: 0; color: UI.Style.accentAlpha(0.16, 0.12) }
+            GradientStop { position: 1; color: Qt.rgba(196 / 255, 122 / 255, 138 / 255, UI.Style.dark ? 0.12 : 0.09) }
+        }
+        border.width: 1
+        border.color: UI.Style.accentAlpha(0.22, 0.20)
+
+        Row {
+            id: swapRow
+            x: 22
+            anchors.verticalCenter: parent.verticalCenter
+            width: parent.width - 44
+            spacing: 18
+
+            Rectangle {
+                anchors.verticalCenter: parent.verticalCenter
+                width: 44
+                height: 44
+                radius: 12
+                color: UI.Style.accentAlpha(0.18, 0.14)
+
+                StoreIcon {
+                    anchors.centerIn: parent
+                    name: "swap-windows"
+                    size: 22
+                    color: UI.Style.accent
+                }
+            }
+
+            Column {
+                anchors.verticalCenter: parent.verticalCenter
+                width: parent.width - 62
+                spacing: 4
+
+                UI.Label {
+                    width: parent.width
+                    text: page.app ? page.app.swapTitle : ""
+                    size: 16
+                    font.weight: Font.Bold
+                }
+
+                UI.Label {
+                    width: parent.width
+                    text: page.app ? page.app.swapText : ""
+                    size: 13.5
+                    lineHeight: 1.45
+                    color: Metrics.inkSecondary
+                    wrapMode: Text.Wrap
+                    elide: Text.ElideNone
+                }
+            }
+        }
+    }
+
+    Flow {
+        Layout.fillWidth: true
+        Layout.topMargin: -10
+        spacing: 18
+
+        StoreLink {
+            visible: page.app && page.app.homepage.length > 0
+            text: "Website"
+            onClicked: Qt.openUrlExternally(page.app.homepage)
+        }
+
+        StoreLink {
+            visible: page.app && page.app.installed && !page.working
+            text: "Uninstall"
+            onClicked: page.store.askRemove(page.app)
+        }
+
+        UI.Label {
+            visible: page.app && page.app.version.length > 0
+            height: 26
+            text: page.app ? "Version " + page.app.version : ""
+            size: 13
+            color: Metrics.inkTertiary
+        }
+    }
+
+    // Some apps come both from Flathub and from Wild OS's own (Debian)
+    // packages. Which one is about to install, and what that means for the
+    // person, in plain words, with the switch to the other.
+    Column {
+        Layout.fillWidth: true
+        visible: page.app && !page.app.installed && !page.working && page.app.hasFlatpak && page.app.hasApt
+        spacing: 4
+
+        UI.Label {
+            width: parent.width
+            text: page.sandboxed ? "Installing the sandboxed version, from Flathub" : "Installing the Wild OS version, from Debian"
+            size: 13.5
+            font.weight: Font.DemiBold
+        }
+
+        UI.Label {
+            width: parent.width
+            text: page.sandboxed
+                ? "Usually the newest release. It runs in a sandbox, so it only reaches what you allow. It updates on its own, separately from Wild OS."
+                : "Tested with Wild OS and updated with the rest of your system. It isn't sandboxed, so it can reach everything your account can. Often an older release."
+            size: 13
+            lineHeight: 1.45
+            color: Metrics.inkSecondary
+            wrapMode: Text.Wrap
+            elide: Text.ElideNone
+        }
+
+        StoreLink {
+            text: page.sandboxed ? "Install the Wild OS version instead" : "Install the sandboxed version instead"
+            onClicked: page.app.useSource(page.sandboxed ? "apt" : "flatpak")
+        }
+    }
+
     UI.Dialog {
-        id: removeDialog
-        title: page.app ? "Uninstall " + page.app.name + "?" : ""
-        text: page.sandboxed ? "Your files stay where they are. Its settings stay too, in case you install it again."
-                             : "Your files stay where they are. Wild OS will ask for the administrator password."
+        id: permissionsDialog
+        title: page.app ? "What " + page.app.name + " can reach" : ""
+        text: !page.app ? ""
+            : page.app.installed ? "Changes apply the next time " + page.app.name + " opens. " + page.app.name + " will ask if it ever needs something new."
+            : "This is what " + page.app.name + " asks for. You can change it once it's installed."
+
+        Repeater {
+            model: page.sandboxed && page.app ? page.app.permissions : []
+
+            Item {
+                id: permission
+                required property var modelData
+                Layout.fillWidth: true
+                implicitHeight: Math.max(36, permissionLabel.implicitHeight + 12)
+
+                UI.Label {
+                    id: permissionLabel
+                    anchors.left: parent.left
+                    anchors.right: permissionState.left
+                    anchors.rightMargin: 12
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: permission.modelData.label
+                    size: 14
+                }
+
+                Row {
+                    id: permissionState
+                    anchors.right: parent.right
+                    anchors.verticalCenter: parent.verticalCenter
+                    spacing: 10
+
+                    UI.Label {
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: permission.modelData.fixed ? "Always" : permission.modelData.allowed ? "On" : "Off"
+                        size: 12
+                        color: Metrics.inkSecondary
+                    }
+
+                    UI.Toggle {
+                        visible: !permission.modelData.fixed
+                        anchors.verticalCenter: parent.verticalCenter
+                        checked: permission.modelData.allowed
+                        locked: !permission.modelData.editable
+                        lockedReason: "Change this once the app is installed"
+                        Accessible.name: permission.modelData.label
+                        onToggled: page.app.setPermission(permission.modelData.token, checked)
+                    }
+                }
+            }
+        }
+
         buttons: [
             UI.Button {
-                text: "Cancel"
-                onClicked: removeDialog.close()
-            },
-            UI.Button {
                 kind: "primary"
-                text: "Uninstall"
-                onClicked: {
-                    removeDialog.close();
-                    page.app.remove();
-                }
+                text: "Done"
+                onClicked: permissionsDialog.close()
             }
         ]
     }

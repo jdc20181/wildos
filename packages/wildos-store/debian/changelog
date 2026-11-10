@@ -1,3 +1,16 @@
+wildos-store (0.1.1) trixie; urgency=medium
+
+  * Opening a .deb, .flatpakref or .flatpak file shows its own install
+    page: what the file says it is, its version against the installed one
+    (Already installed, Newer version installed, Update), what it needs
+    and what it would remove, and plainly that nothing has checked it. A
+    .deb installs through PackageKit, which fetches what it depends on from
+    the Wild OS repositories and asks for the password; a package made for
+    another system or another kind of computer says so before anything is
+    installed. Flatpak files install for the signed-in user.
+
+ -- Wild OS Developers <dev@wildos.io>  Tue, 10 Nov 2026 07:50:00 +0000
+
 wildos-store (0.1.0) trixie; urgency=medium
 
   * Initial release.

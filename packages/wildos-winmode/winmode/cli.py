@@ -8,10 +8,13 @@ agent itself.
   wildos-winmode run-installer <file>      run a Windows installer in Windows mode
   wildos-winmode open <file>              open a Windows shortcut (.lnk) in Windows mode
   wildos-winmode agent                     the per-user agent (user unit)
-  wildos-winmode status                    the agent's and the system service's status
+  wildos-winmode status [--if-set-up]      the agent's and the system service's status; with
+                                           --if-set-up, starts neither on a PC where this
+                                           account hasn't set up Windows mode, and never
+                                           notifies (the taskbar asks every few seconds)
   wildos-winmode refresh-apps              make Start entries for Windows' apps again
   wildos-winmode windows                   the Windows windows open now
-  wildos-winmode idle pause|save           apply the idle policy now (testing)
+  wildos-winmode idle pause|save           pause or save Windows now (the taskbar panel's buttons)
   wildos-winmode launch-stats [--check]    launch times by state, 50th and 95th percentile;
                                            --check fails when a 95th percentile misses its target
   wildos-winmode install-guest             put this package's wild-guest into Windows
@@ -27,7 +30,7 @@ from urllib.parse import unquote, urlparse
 
 from gi.repository import Gio, GLib
 
-from . import config
+from . import config, launchers
 
 
 def call(bus_type, interface, method, args=None, signature=None, timeout=600):
@@ -136,6 +139,32 @@ def launch_stats(check, path=None):
     return 1 if check and failed else 0
 
 
+def agent_running():
+    bus = Gio.bus_get_sync(Gio.BusType.SESSION, None)
+    reply = bus.call_sync("org.freedesktop.DBus", "/org/freedesktop/DBus", "org.freedesktop.DBus", "NameHasOwner",
+                          GLib.Variant("(s)", (config.BUS_NAME,)), GLib.VariantType("(b)"),
+                          Gio.DBusCallFlags.NONE, 2000, None)
+    return reply.unpack()[0]
+
+
+def taskbar_status():
+    """The taskbar's Windows mode item asks this every few seconds. Asking
+    starts the agent and the system service, which a PC without Windows
+    mode must never pay for, so they are only asked once this account has
+    Windows apps or the agent is up anyway. "answering" false means Windows
+    mode is set up but its services didn't reply."""
+    try:
+        if not os.path.exists(launchers.registry_file()) and not agent_running():
+            print(json.dumps({"agent": None, "system": None}))
+            return 0
+        print(json.dumps({"agent": json.loads(agent("Status", timeout=10)),
+                          "system": json.loads(host("Status", timeout=10))}))
+    except (GLib.Error, ValueError) as e:
+        print(json.dumps({"agent": None, "system": None, "answering": False}))
+        print(getattr(e, "message", str(e)), file=sys.stderr)
+    return 0
+
+
 SETUP_APP = "/usr/libexec/wildos/wildos-winmode-setup"
 
 
@@ -179,6 +208,8 @@ def main(argv):
             if sentence:
                 tell(sentence)
             return 1 if sentence else 0
+        if cmd == "status" and "--if-set-up" in rest:
+            return taskbar_status()
         if cmd == "status":
             print(json.dumps({"agent": json.loads(agent("Status", timeout=10)),
                               "system": json.loads(host("Status", timeout=10))}, indent=1))

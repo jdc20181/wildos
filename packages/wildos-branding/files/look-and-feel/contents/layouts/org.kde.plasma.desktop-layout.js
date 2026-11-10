@@ -1,6 +1,7 @@
-// The Wild OS desktop: the taskbar docked along the bottom, Start and the
-// apps centred on the screen, and the security chip, a divider, quick
-// settings and the clock at the right end. Sizes follow the Taskbar artboard
+// The Wild OS desktop: the taskbar docked along the bottom, Windows mode's
+// status at the left end (it takes no room until Windows mode is set up),
+// Start and the apps centred on the screen, and the security chip, a
+// divider, quick settings and the clock at the right end. Sizes follow the Taskbar artboard
 // in the design. Settings > Personalisation can switch it to floating glass
 // pills instead.
 //
@@ -35,6 +36,11 @@ bar.hiding = "none";
 // edge) make it 76.
 bar.height = 52;
 
+// Where Windows 11 puts its weather. It keeps 8 px from the screen edge
+// itself, so no spacer goes before it: Settings takes the leftmost spacer to
+// be the one that centres the apps.
+bar.addWidget("org.wildos.winmode");
+
 // Two expanding spacers either side of the centre group let Plasma centre it
 // on the screen rather than in the space left of the tray.
 var leftSpacer = bar.addWidget("org.kde.plasma.panelspacer");
@@ -57,6 +63,7 @@ tasks.currentConfigGroup = ["General"];
 tasks.writeConfig("launchers", [
     "applications:org.wildos.files.desktop",
     "applications:brave-browser.desktop",
+    "applications:org.wildos.mail.desktop",
     "applications:org.wildos.store.desktop",
     "applications:org.wildos.settings.desktop"
 ]);

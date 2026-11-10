@@ -3,8 +3,8 @@ import QtQuick.Controls
 import QtQuick.Layouts
 import WildOS.UI as UI
 
-// The scrolling body of a page, with the design's content padding (6px top,
-// 12px left, 32px right) and 26px between sections.
+// The scrolling body of a page, with the boards' padding (4px top, 44px
+// each side) and 26px between sections.
 Flickable {
     id: flick
 
@@ -12,16 +12,16 @@ Flickable {
     property alias spacing: column.spacing
 
     contentWidth: width
-    contentHeight: column.implicitHeight + Metrics.contentTop + 28
+    contentHeight: column.implicitHeight + Metrics.pageTop + 32
     clip: true
     boundsBehavior: Flickable.StopAtBounds
     ScrollBar.vertical: UI.ScrollBar {}
 
     ColumnLayout {
         id: column
-        x: Metrics.contentLeft
-        y: Metrics.contentTop
-        width: flick.width - Metrics.contentLeft - Metrics.contentRight
+        x: Metrics.sidePadding
+        y: Metrics.pageTop
+        width: flick.width - 2 * Metrics.sidePadding
         spacing: Metrics.sectionGap
     }
 }

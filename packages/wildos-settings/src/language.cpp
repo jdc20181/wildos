@@ -22,12 +22,13 @@ const QString helper = QStringLiteral("/usr/libexec/wildos/settings-locale");
 const QString fallbackFormat = QStringLiteral("en_GB.UTF-8");
 const QString fallbackLanguage = QStringLiteral("en_GB");
 
-// The separate formats KDE's region module can set; choosing a regional
-// format here sets them all, as Windows does.
+// Every format variable the installer writes to /etc/default/locale and
+// startplasma reads from plasma-localerc; choosing a regional format here
+// sets them all, as Windows does.
 const QStringList categories = {QStringLiteral("LC_NUMERIC"), QStringLiteral("LC_TIME"), QStringLiteral("LC_MONETARY"),
                                 QStringLiteral("LC_MEASUREMENT"), QStringLiteral("LC_COLLATE"), QStringLiteral("LC_CTYPE"),
                                 QStringLiteral("LC_PAPER"), QStringLiteral("LC_ADDRESS"), QStringLiteral("LC_NAME"),
-                                QStringLiteral("LC_TELEPHONE")};
+                                QStringLiteral("LC_TELEPHONE"), QStringLiteral("LC_IDENTIFICATION")};
 
 // The parts More format options offers on their own, under the keys
 // kcm_regionandlang writes (regionandlangsettingsbase.kcfg). Addresses,
@@ -126,7 +127,7 @@ void Language::read()
 {
     auto config = KSharedConfig::openConfig(QStringLiteral("plasma-localerc"), KConfig::NoGlobals);
     config->reparseConfiguration();
-    const KConfigGroup formats(config, QStringLiteral("Formats"));
+    KConfigGroup formats(config, QStringLiteral("Formats"));
     const KConfigGroup translations(config, QStringLiteral("Translations"));
     m_language = firstLanguage(translations.readEntry("LANGUAGE", QString()));
     if (m_language.isEmpty()) {
@@ -136,17 +137,58 @@ void Language::read()
     if (m_format.isEmpty()) {
         m_format = m_sessionFormat;
     }
+
+    // The installer writes every LC_ variable into /etc/default/locale, and
+    // the sign-in passes them to the session, where each one outranks LANG.
+    // startplasma only replaces the ones written here, so a part missing
+    // here is not "the regional format" but whatever the installer chose.
+    // Earlier versions of this page removed the parts that followed the
+    // regional format; a page that wrote LC_TIME is one of those, and its
+    // missing parts are written out now as the format they were meant to
+    // follow, so the next sign-in finally applies it.
+    if (formats.hasKey("LANG") && formats.hasKey("LC_TIME")) {
+        bool wrote = false;
+        for (const QString &key : categories) {
+            if (!formats.hasKey(key)) {
+                formats.writeEntry(key, m_format, KConfig::Notify);
+                wrote = true;
+            }
+        }
+        if (wrote) {
+            config->sync();
+        }
+    }
+
+    // What each part really is: the value written here, or else the one
+    // this session was given at sign-in.
+    const auto resolved = [this, &formats](const QString &key) {
+        const QString value = canonical(formats.readEntry(key, QString()));
+        if (!value.isEmpty()) {
+            return value;
+        }
+        const QString session = m_sessionCategories.value(key).toString();
+        return session.isEmpty() ? m_format : session;
+    };
+    m_complete = true;
+    for (const QString &key : categories) {
+        if (canonical(formats.readEntry(key, QString())) != m_format) {
+            m_complete = false;
+        }
+    }
     m_detailed = false;
+    m_overrides.clear();
+    for (const QString &key : shownCategories) {
+        const QString value = resolved(key);
+        m_overrides.insert(key, value == m_format ? QString() : value);
+        if (value != m_format) {
+            m_detailed = true;
+        }
+    }
     for (const QString &key : categories) {
         const QString value = canonical(formats.readEntry(key, QString()));
         if (!value.isEmpty() && value != m_format) {
             m_detailed = true;
         }
-    }
-    m_overrides.clear();
-    for (const QString &key : shownCategories) {
-        const QString value = canonical(formats.readEntry(key, QString()));
-        m_overrides.insert(key, value == m_format ? QString() : value);
     }
     auto globals = KSharedConfig::openConfig(QStringLiteral("kdeglobals"));
     globals->reparseConfiguration();
@@ -168,9 +210,7 @@ bool Language::needsSignOut() const
         if (!chosen.isEmpty() && chosen != (session.isEmpty() ? m_sessionFormat : session)) {
             return true;
         }
-        // wildos.sh sets LC_TIME itself for some sessions, so a session
-        // value there says nothing about what was chosen.
-        if (chosen.isEmpty() && !session.isEmpty() && session != m_format && key != QLatin1String("LC_TIME")) {
+        if (chosen.isEmpty() && !session.isEmpty() && session != m_format) {
             return true;
         }
     }
@@ -180,7 +220,11 @@ bool Language::needsSignOut() const
 QVariantList Language::languages() const
 {
     // A language counts when the desktop shell itself is translated into it.
-    QSet<QString> codes = {fallbackLanguage};
+    // US English has no translation because it is the language KDE is
+    // written in, so it is added by hand. Its list still falls back to UK
+    // English (see setLanguage), which keeps Wild OS's own wording, while
+    // apps with a US English translation, such as the browser, use it.
+    QSet<QString> codes = {fallbackLanguage, QStringLiteral("en_US")};
     const auto dirs = QDir(QStringLiteral("/usr/share/locale")).entryList(QDir::Dirs | QDir::NoDotAndDotDot);
     for (const QString &code : dirs) {
         if (!code.contains(QLatin1Char('@')) && code != QLatin1String("en")
@@ -329,19 +373,21 @@ void Language::setLanguage(const QString &code)
 void Language::setFormat(const QString &locale)
 {
     const QString chosen = canonical(locale);
-    if (chosen.isEmpty() || chosen == m_format || m_busy) {
+    // Choosing the same format again is how the page puts every part back
+    // to it, so it only does nothing when they all follow it already.
+    if (chosen.isEmpty() || (chosen == m_format && m_complete) || m_busy) {
         return;
     }
     ensure({chosen}, [this, chosen] {
         auto config = KSharedConfig::openConfig(QStringLiteral("plasma-localerc"), KConfig::NoGlobals);
         KConfigGroup formats(config, QStringLiteral("Formats"));
         formats.writeEntry("LANG", chosen, KConfig::Notify);
+        // Every part is written out, not left to follow LANG: the LC_
+        // variables the installer set (and wildos.sh's LC_TIME for US
+        // English) outrank LANG, so only a value written here replaces them.
         for (const QString &key : categories) {
-            formats.deleteEntry(key, KConfig::Notify);
+            formats.writeEntry(key, chosen, KConfig::Notify);
         }
-        // Written out so Wild OS's day-first, 24-hour default for US English
-        // sessions (wildos.sh) gives way to a format chosen here.
-        formats.writeEntry("LC_TIME", chosen, KConfig::Notify);
         config->sync();
         read();
     });
@@ -401,14 +447,9 @@ void Language::setCategory(const QString &category, const QString &locale)
     const auto write = [this, category, chosen] {
         auto config = KSharedConfig::openConfig(QStringLiteral("plasma-localerc"), KConfig::NoGlobals);
         KConfigGroup formats(config, QStringLiteral("Formats"));
-        if (!chosen.isEmpty()) {
-            formats.writeEntry(category, chosen, KConfig::Notify);
-        } else if (category == QLatin1String("LC_TIME")) {
-            // Kept written out for the reason setFormat writes it.
-            formats.writeEntry(category, m_format, KConfig::Notify);
-        } else {
-            formats.deleteEntry(category, KConfig::Notify);
-        }
+        // Following the regional format is written out as that format, for
+        // the reason setFormat writes every part.
+        formats.writeEntry(category, chosen.isEmpty() ? m_format : chosen, KConfig::Notify);
         config->sync();
         read();
     };

@@ -52,6 +52,45 @@ class StoreApp : public QObject
     Q_PROPERTY(bool inStart READ inStart NOTIFY stateChanged)
     Q_PROPERTY(QVariantList permissions READ permissions NOTIFY stateChanged)
     Q_PROPERTY(bool permissionsUnknown READ permissionsUnknown NOTIFY stateChanged)
+    // The quiet line under an app's button: "Downloading 214 MB of 480 MB",
+    // then "Installing", then nothing.
+    Q_PROPERTY(QString progressText READ progressText NOTIFY stateChanged)
+    // "Includes the KDE base, shared with other apps", when installing this
+    // app would also bring the base its kind of app runs on.
+    Q_PROPERTY(QString sharedNote READ sharedNote NOTIFY stateChanged)
+    // Whether the step running now can be stopped part way.
+    Q_PROPERTY(bool cancellable READ cancellable NOTIFY stateChanged)
+
+    // The Store button's state, as StoreStates.dc.html draws them: get,
+    // waiting, preparing, downloading, installing, removing, open,
+    // installed, update, paused, retry or nospace.
+    Q_PROPERTY(QString buttonState READ buttonState NOTIFY stateChanged)
+    // The short line under a button in lists ("Needs 720 MB free",
+    // "Download failed"), empty when there is nothing to say.
+    Q_PROPERTY(QString statusLine READ statusLine NOTIFY stateChanged)
+    // "412 of 1,080 MB" and "About a minute left", while downloading.
+    Q_PROPERTY(QString bytesText READ bytesText NOTIFY stateChanged)
+    Q_PROPERTY(QString timeLeftText READ timeLeftText NOTIFY stateChanged)
+    // What installing downloads ("312 MB"), or what an update downloads.
+    Q_PROPERTY(QString downloadText READ downloadText NOTIFY stateChanged)
+    Q_PROPERTY(QString updateSizeText READ updateSizeText NOTIFY stateChanged)
+    // The newest release's notes, as one plain line.
+    Q_PROPERTY(QString releaseNote READ releaseNote NOTIFY dataChanged)
+    Q_PROPERTY(QString newVersion READ newVersion NOTIFY dataChanged)
+    Q_PROPERTY(QString updatedText READ updatedText NOTIFY stateChanged)
+    // Sandboxed is true of every Flathub app. Checked only when Flathub
+    // has verified who publishes it, or Wild OS picked it.
+    Q_PROPERTY(bool sandboxed READ sandboxed NOTIFY stateChanged)
+    Q_PROPERTY(bool checked READ isChecked NOTIFY dataChanged)
+    // From the permissions in the app's Flatpak metadata, each entry an
+    // {icon, label} map. Empty until the metadata is in.
+    Q_PROPERTY(QVariantList canReach READ canReach NOTIFY stateChanged)
+    Q_PROPERTY(QVariantList cantReach READ cantReach NOTIFY stateChanged)
+    Q_PROPERTY(bool worksOffline READ worksOffline NOTIFY stateChanged)
+    Q_PROPERTY(bool reachKnown READ reachKnown NOTIFY stateChanged)
+    // The choices before installing: only what the app asks for, each
+    // {token, icon, label, detail, allowed, required}.
+    Q_PROPERTY(QVariantList consentItems READ consentItems NOTIFY stateChanged)
 
 public:
     StoreApp(Catalog *catalog, const QString &key);
@@ -94,8 +133,39 @@ public:
     bool inStart() const;
     QVariantList permissions() const;
     bool permissionsUnknown() const;
+    QString progressText() const;
+    QString sharedNote() const;
+    bool cancellable() const;
+    QString buttonState() const;
+    QString statusLine() const;
+    QString bytesText() const;
+    QString timeLeftText() const;
+    QString downloadText() const;
+    QString updateSizeText() const;
+    QString releaseNote() const;
+    QString newVersion() const;
+    QString updatedText() const;
+    bool sandboxed() const;
+    bool isChecked() const;
+    QVariantList canReach() const;
+    QVariantList cantReach() const;
+    bool worksOffline() const;
+    bool reachKnown() const;
+    QVariantList consentItems() const;
+    // Bytes short of what installing needs, or 0.
+    qint64 spaceShort() const;
+
+    // Launchers are looked up once each, until something is installed or
+    // removed or KDE's service cache is rebuilt.
+    static void forgetServices();
 
     Q_INVOKABLE void install();
+    Q_INVOKABLE void cancel();
+    // The stop square: stops the download, keeping what it fetched.
+    Q_INVOKABLE void pause();
+    // Writes the choices made before installing as the app's Flatpak
+    // overrides, then installs. choices maps a consent token to on or off.
+    Q_INVOKABLE void installWith(const QVariantMap &choices);
     Q_INVOKABLE void remove();
     Q_INVOKABLE void update();
     Q_INVOKABLE bool open();

@@ -59,3 +59,7 @@ ghns=false
 # nothing and has no such setting.
 [KDE Control Module Restrictions]
 kcm_feedback=false
+
+# Wild OS's own sounds (/usr/share/sounds/wildos), in place of KDE's Ocean.
+[Sounds]
+Theme=wildos

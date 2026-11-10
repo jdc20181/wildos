@@ -1,0 +1,27 @@
+# Device access for OpenRGB, in place of the rules OpenRGB ships.
+#
+# wildos-lighting moves OpenRGB's own 60-openrgb.rules aside (to
+# 60-openrgb.rules.stock, which udev does not read) because they give more
+# than keyboard and mouse lighting needs:
+#
+#  - every I2C/SMBus bus to whoever is at the screen: memory modules and
+#    motherboard and graphics card controllers sit on them, where a bad
+#    write can damage hardware; /dev/port likewise;
+#  - write access for every account on the computer to some laptops'
+#    keyboard backlight controls (chmod a+w);
+#  - each listed USB device whole, raw USB node included, through which
+#    firmware can be replaced, and its keyboard interface, through which
+#    every key typed can be read, passwords included.
+#
+# Here the person at the screen (the uaccess tag: logind grants the active
+# session's user, and takes it back when another account comes to the
+# front) gets the hidraw nodes of USB devices in OpenRGB's table, except
+# nodes that report key presses. No other account gets anything. OpenRGB
+# then drives USB keyboards, mice and other HID lighting; it cannot reach
+# memory, motherboard or graphics card lighting, controllers it drives
+# through raw USB, or keyboards whose lighting shares the interface that
+# carries the keys.
+ACTION=="remove", GOTO="wildos_openrgb_end"
+SUBSYSTEM!="hidraw", GOTO="wildos_openrgb_end"
+PROGRAM="/usr/libexec/wildos/rgb-devices access %p", TAG+="uaccess"
+LABEL="wildos_openrgb_end"

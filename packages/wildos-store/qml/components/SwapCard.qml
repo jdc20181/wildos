@@ -25,10 +25,8 @@ T.AbstractButton {
     }
 
     background: Rectangle {
-        radius: UI.Style.radiusLg
-        color: card.down ? UI.Style.surfacePressed : card.hovered ? Metrics.tileHover : UI.Style.surfaceRaised
-        border.width: 1
-        border.color: UI.Style.borderSubtle
+        radius: Metrics.radiusCard
+        color: card.down ? Metrics.buttonFill : card.hovered ? Metrics.pill : Metrics.card
         Behavior on color {
             ColorAnimation { duration: UI.Style.hoverDuration }
         }
@@ -54,7 +52,7 @@ T.AbstractButton {
                     anchors.verticalCenter: parent.verticalCenter
                     text: card.app ? "Instead of " + card.app.insteadOf : ""
                     size: 12
-                    color: Metrics.inkCard
+                    color: Metrics.inkSecondary
                     width: Math.min(implicitWidth, column.width - 20)
                 }
 
@@ -63,7 +61,7 @@ T.AbstractButton {
                     name: "arrow"
                     size: 12
                     strokeWidth: 2.2
-                    color: Metrics.inkCard
+                    color: Metrics.inkSecondary
                 }
             }
 
@@ -73,7 +71,7 @@ T.AbstractButton {
 
                 AppIcon {
                     id: icon
-                    size: 48
+                    size: 56
                     source: card.app ? card.app.iconSource : ""
                 }
 
@@ -85,15 +83,15 @@ T.AbstractButton {
                     UI.Label {
                         width: parent.width
                         text: card.app ? card.app.name : ""
-                        size: 15
+                        size: 14.5
                         font.weight: Font.DemiBold
                     }
 
                     UI.Label {
                         width: parent.width
                         text: card.app ? card.app.tagline : ""
-                        size: 12
-                        color: Metrics.inkCard
+                        size: 13
+                        color: Metrics.inkSecondary
                     }
                 }
             }
@@ -124,7 +122,7 @@ T.AbstractButton {
                     }
                 }
 
-                InstallButton {
+                StoreButton {
                     id: action
                     anchors.right: parent.right
                     width: implicitWidth

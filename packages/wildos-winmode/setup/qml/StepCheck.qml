@@ -40,7 +40,7 @@ Page {
                 return Setup.edition === "pro" ? "Windows 11 Pro is built into this PC, so Windows mode uses it. There is nothing to buy."
                      : Setup.edition === "home" ? "Windows 11 Home is built into this PC, so Windows mode uses it. There is nothing to buy."
                      : "A Windows licence is built into this PC, so Windows mode uses it. Windows confirms whether it's Home or Pro while it sets itself up.";
-            case "inuse": return "Its licence covers one copy of Windows at a time, so Windows mode needs a product key of its own.";
+            case "inuse": return "Its licence is built into this PC. On the next step, choose to use it for Windows mode as well or add a product key.";
             case "error": return "You can still carry on and enter a product key.";
             default: return "You can enter a product key on the next step.";
             }

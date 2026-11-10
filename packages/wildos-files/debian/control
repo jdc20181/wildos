@@ -17,6 +17,8 @@ Build-Depends:
  libkf6purpose-dev,
  libkf6archive-dev,
  libkf6filemetadata-dev,
+ qml6-module-qtmultimedia,
+ qml6-module-qtquick-pdf,
 Standards-Version: 4.7.0
 Rules-Requires-Root: no
 
@@ -25,15 +27,19 @@ Architecture: any
 Depends:
  ${shlibs:Depends},
  ${misc:Depends},
+ fonts-jetbrains-mono,
  kio6,
  qml6-module-qtcore,
+ qml6-module-qtmultimedia,
  qml6-module-qtquick,
  qml6-module-qtquick-controls,
  qml6-module-qtquick-effects,
  qml6-module-qtquick-layouts,
+ qml6-module-qtquick-pdf,
  qml6-module-qtquick-shapes,
  qml6-module-qtquick-templates,
  qml6-module-qtquick-window,
+ qt6-image-formats-plugins,
  qt6-svg-plugins,
  wildos-ui,
 Recommends:

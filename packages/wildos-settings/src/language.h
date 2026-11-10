@@ -79,5 +79,7 @@ private:
     QVariantMap m_overrides;
     int m_fileSizeUnits = 0;
     bool m_detailed = false;
+    // Every part is written out as the regional format.
+    bool m_complete = false;
     bool m_busy = false;
 };

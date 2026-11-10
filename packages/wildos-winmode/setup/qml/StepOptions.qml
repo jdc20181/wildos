@@ -12,10 +12,13 @@ Page {
     signal back()
     signal setUp()
 
+    // Windows' own licence page is skipped by the answer file, so this is
+    // where the terms are accepted, and nothing starts until they are.
+    property bool termsAccepted: false
+
     title: "Choose options"
     text: "These suit most people. You can change any of them later in Settings, under Windows apps."
-    note: (Setup.office ? "About 30 GB in total, including Microsoft 365." : "About 26 GB in total.")
-        + " Setting up accepts Microsoft's licence terms."
+    note: Setup.office ? "About 30 GB in total, including Microsoft 365." : "About 26 GB in total."
 
     UI.Card {
         Layout.fillWidth: true
@@ -125,6 +128,20 @@ Page {
                         onActivated: Setup.memoryGb = currentValue
                     }
                 }
+
+                UI.ListRow {
+                    visible: Setup.hyperThreadingAvailable
+                    title: "Use every processor thread"
+                    description: "Faster heavy apps, one less CPU-flaw protection for the whole PC. Needs a restart."
+                    interactive: true
+                    onClicked: Setup.hyperThreading = !Setup.hyperThreading
+
+                    leading: UI.CheckBox {
+                        checked: Setup.hyperThreading
+                        Accessible.name: "Use every processor thread"
+                        onToggled: Setup.hyperThreading = checked
+                    }
+                }
             }
         }
     }
@@ -168,6 +185,28 @@ Page {
         }
     }
 
+    UI.Card {
+        Layout.fillWidth: true
+
+        Column {
+            width: parent.width
+
+            UI.ListRow {
+                title: "I accept Microsoft's licence terms"
+                description: Setup.office
+                    ? "Windows and Microsoft 365 are installed under Microsoft's licence terms."
+                    : "Windows is installed under Microsoft's licence terms."
+                interactive: true
+                onClicked: page.termsAccepted = !page.termsAccepted
+                leading: UI.CheckBox {
+                    checked: page.termsAccepted
+                    Accessible.name: "I accept Microsoft's licence terms"
+                    onToggled: page.termsAccepted = checked
+                }
+            }
+        }
+    }
+
     buttons: [
         UI.LinkButton {
             text: "Read the terms"
@@ -181,7 +220,7 @@ Page {
         UI.Button {
             kind: "primary"
             text: "Set up"
-            enabled: Setup.spaceOk
+            enabled: Setup.spaceOk && page.termsAccepted
             onClicked: page.setUp()
         }
     ]

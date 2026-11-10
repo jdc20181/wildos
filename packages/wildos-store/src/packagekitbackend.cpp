@@ -1,4 +1,5 @@
 #include "packagekitbackend.h"
+#include "flatpakbackend.h"
 
 #include <PackageKit/Daemon>
 #include <PackageKit/Details>
@@ -143,8 +144,13 @@ void PackageKitBackend::resolveThen(const QStringList &packages, Transaction::Fi
 void PackageKitBackend::watch(int job, Transaction *transaction, bool removing)
 {
     auto error = std::make_shared<QString>();
-    Q_EMIT progress(job, -1, QStringLiteral("prepare"));
-    connect(transaction, &Transaction::percentageChanged, this, [this, job, transaction, removing] {
+    auto total = std::make_shared<qint64>(0);
+    m_running.insert(job, transaction);
+    if (m_cancelSoon.remove(job)) {
+        transaction->cancel();
+    }
+    Q_EMIT progress(job, -1, QStringLiteral("prepare"), {}, -1, -1);
+    connect(transaction, &Transaction::percentageChanged, this, [this, job, transaction, removing, total] {
         // 101 is PackageKit's "not known yet".
         const uint pct = transaction->percentage();
         QString status;
@@ -168,28 +174,51 @@ void PackageKitBackend::watch(int job, Transaction *transaction, bool removing)
             status = removing ? QStringLiteral("remove") : QStringLiteral("prepare");
             break;
         }
-        Q_EMIT progress(job, pct > 100 ? -1 : int(pct), status);
+        // The first figure PackageKit gives for what is left to download is
+        // the whole download.
+        const qint64 remaining = qint64(transaction->downloadSizeRemaining());
+        *total = qMax(*total, remaining);
+        const qint64 done = *total > 0 ? *total - remaining : -1;
+        Q_EMIT progress(job, pct > 100 ? -1 : int(pct), status, {}, done, *total > 0 ? *total : -1);
     });
     connect(transaction, &Transaction::statusChanged, transaction, &Transaction::percentageChanged);
     connect(transaction, &Transaction::errorCode, this, [error, removing](Transaction::Error code, const QString &) {
         *error = errorText(code, removing);
     });
     connect(transaction, &Transaction::finished, this, [this, job, error](Transaction::Exit status, uint) {
+        m_running.remove(job);
         listInstalled();
         listUpdates();
         if (status == Transaction::ExitSuccess) {
             Q_EMIT finished(job, true, {});
         } else if (status == Transaction::ExitCancelled) {
-            Q_EMIT finished(job, false, QStringLiteral("Cancelled."));
+            Q_EMIT finished(job, false, QString::fromLatin1(cancelledMarker));
         } else {
             Q_EMIT finished(job, false, error->isEmpty() ? QStringLiteral("Something went wrong. Try again in a few minutes.") : *error);
         }
     });
 }
 
+void PackageKitBackend::cancel(int job)
+{
+    if (QPointer<Transaction> t = m_running.value(job)) {
+        t->cancel();
+        return;
+    }
+    // Still resolving the package names; cancelled as soon as it starts.
+    m_cancelSoon.insert(job);
+}
+
+void PackageKitBackend::seedInstalled(const QSet<QString> &packages)
+{
+    if (!m_ready) {
+        m_installed = packages;
+    }
+}
+
 void PackageKitBackend::install(int job, const QStringList &packages)
 {
-    Q_EMIT progress(job, -1, QStringLiteral("prepare"));
+    Q_EMIT progress(job, -1, QStringLiteral("prepare"), {}, -1, -1);
     resolveThen(packages, Transaction::FilterNotInstalled | Transaction::FilterArch | Transaction::FilterNewest, job, [this, job](const QStringList &ids) {
         Transaction *t = Daemon::installPackages(ids);
         watch(job, t, false);
@@ -199,7 +228,7 @@ void PackageKitBackend::install(int job, const QStringList &packages)
 
 void PackageKitBackend::remove(int job, const QStringList &packages)
 {
-    Q_EMIT progress(job, -1, QStringLiteral("remove"));
+    Q_EMIT progress(job, -1, QStringLiteral("remove"), {}, -1, -1);
     resolveThen(packages, Transaction::FilterInstalled, job, [this, job](const QStringList &ids) {
         // Never take anything else with it: if another part of Wild OS
         // depends on this app, PackageKit refuses and we say so.

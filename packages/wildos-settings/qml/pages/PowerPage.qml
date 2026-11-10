@@ -128,6 +128,68 @@ PageScroll {
         }
     }
 
+    // Hyper-threading, for the whole PC: Linux apps and games as well as
+    // Windows mode. A boot option, so a change offers a restart.
+    UI.Card {
+        id: threadsCard
+        Layout.fillWidth: true
+        visible: Processor.threadsAvailable
+        readonly property bool pending: Processor.everyThread !== Processor.everyThreadActive
+
+        Column {
+            width: parent.width
+
+            UI.SettingRow {
+                iconName: "chip"
+                title: "Use every processor thread"
+                description: Processor.everyThreadLocked
+                    ? "Off at Strict and Maximum protection, which keep every CPU flaw protection on."
+                    : threadsCard.pending
+                    ? "Restart to finish turning it " + (Processor.everyThread ? "on." : "off.")
+                    : "Faster heavy apps, one less CPU-flaw protection for the whole PC. Needs a restart."
+
+                UI.Toggle {
+                    id: threadsToggle
+                    anchors.verticalCenter: parent.verticalCenter
+                    checked: Processor.everyThread && !Processor.everyThreadLocked
+                    enabled: !Processor.busy && !Processor.everyThreadLocked
+                    locked: Processor.everyThreadLocked
+                    lockedReason: "Strict and Maximum protection keep this off"
+                    Accessible.name: "Use every processor thread"
+                    onToggled: Processor.setEveryThread(checked)
+                }
+            }
+
+            UI.SettingRow {
+                visible: threadsCard.pending && !Processor.everyThreadLocked
+                title: "Restart to apply"
+                description: "Open apps are asked to save first."
+
+                UI.Button {
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: "Restart now"
+                    onClicked: Updates.restart()
+                }
+            }
+        }
+
+        Connections {
+            target: Processor
+            // A cancelled password leaves the choice as it was, so the switch goes back to it.
+            function onChanged() { threadsToggle.checked = Processor.everyThread && !Processor.everyThreadLocked }
+            function onFailed(message) { threadsError.text = message }
+        }
+    }
+
+    UI.Label {
+        id: threadsError
+        visible: text.length > 0 && Processor.threadsAvailable
+        Layout.fillWidth: true
+        wrapMode: Text.WordWrap
+        size: 13
+        color: UI.Style.warning
+    }
+
     ColumnLayout {
         Layout.fillWidth: true
         spacing: 10

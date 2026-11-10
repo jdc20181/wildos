@@ -19,6 +19,7 @@ Depends:
  libkwin6 (= ${kwin:Version}),
  qml6-module-qt5compat-graphicaleffects,
  qml6-module-qt-labs-folderlistmodel,
+ qml6-module-qtqml-models,
  qml6-module-qtquick-templates,
  wildos-ui,
 Description: Wild OS changes to Plasma and KWin
@@ -37,6 +38,12 @@ Description: Wild OS changes to Plasma and KWin
   * a KWin effect that rounds the bottom corners of decorated windows to
     the title bar's 14 px radius, with the edge and shadow carried round,
     and squares the corners of maximised, full screen and snapped windows;
+  * two KWin effects for Settings > Accessibility, off until turned on
+    there: an outline round every window with a thick accent ring round
+    the one in use, and a blur that softens and dims every window but the
+    one in use;
+  * a KWin script that draws the taskbar underglow chosen in Settings, a
+    glowing line along the top edge of the docked taskbar;
   * a "Wild OS" sign-in session in place of Plasma's own entries.
  .
  The patched files are taken from the Plasma and KWin versions named in the

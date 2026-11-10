@@ -49,6 +49,30 @@ PageScroll {
         now = Date.now();
     }
 
+    // Quiet hours live in wildosrc; the taskbar's quick settings checks them
+    // once a minute and turns do not disturb on until the end time, so it
+    // still ends on time if Settings is closed.
+    property int quietRevision: 0
+    readonly property bool quietHours: { quietRevision; return System.config("wildosrc", "QuietHours", "Enabled", false); }
+    readonly property string quietFrom: { quietRevision; return System.config("wildosrc", "QuietHours", "From", "2200"); }
+    readonly property string quietTo: { quietRevision; return System.config("wildosrc", "QuietHours", "To", "0700"); }
+
+    function setQuiet(key, value) {
+        System.setConfig("wildosrc", "QuietHours", key, value);
+        quietRevision++;
+    }
+
+    function hours() {
+        const list = [];
+        for (let h = 0; h < 24; ++h) {
+            for (const m of [0, 30]) {
+                const text = (h < 10 ? "0" : "") + h + ":" + (m === 0 ? "00" : "30");
+                list.push({ value: text.replace(":", ""), text: text });
+            }
+        }
+        return list;
+    }
+
     UI.Card {
         Layout.fillWidth: true
 
@@ -66,6 +90,47 @@ PageScroll {
                     checked: page.doNotDisturb
                     Accessible.name: "Do not disturb"
                     onToggled: page.setDoNotDisturb(checked)
+                }
+            }
+
+            UI.SettingRow {
+                title: "Turn on do not disturb automatically at set times"
+                description: "Quiet hours, for example overnight. You can still turn it off early"
+                status: (page.quietHours) ? "On" : "Off"
+
+                UI.Toggle {
+                    anchors.verticalCenter: parent.verticalCenter
+                    checked: page.quietHours
+                    Accessible.name: "Turn on do not disturb automatically at set times"
+                    onToggled: page.setQuiet("Enabled", checked)
+                }
+            }
+
+            UI.SettingRow {
+                visible: page.quietHours
+                title: "From"
+
+                UI.ComboBox {
+                    anchors.verticalCenter: parent.verticalCenter
+                    Accessible.name: "Quiet hours start"
+                    model: page.hours()
+                    readonly property var choice: page.quietFrom
+                    currentIndex: model ? model.findIndex(o => o.value === choice) : -1
+                    onActivated: index => page.setQuiet("From", model[index].value)
+                }
+            }
+
+            UI.SettingRow {
+                visible: page.quietHours
+                title: "To"
+
+                UI.ComboBox {
+                    anchors.verticalCenter: parent.verticalCenter
+                    Accessible.name: "Quiet hours end"
+                    model: page.hours()
+                    readonly property var choice: page.quietTo
+                    currentIndex: model ? model.findIndex(o => o.value === choice) : -1
+                    onActivated: index => page.setQuiet("To", model[index].value)
                 }
             }
 

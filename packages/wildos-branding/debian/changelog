@@ -1,3 +1,15 @@
+wildos-branding (0.1.2) trixie; urgency=medium
+
+  * Every Plasma style has a solid twin for stronger text on glass.
+
+ -- Wild OS Developers <dev@wildos.io>  Tue, 10 Nov 2026 08:10:42 +0000
+
+wildos-branding (0.1.1) trixie; urgency=medium
+
+  * .deb, .flatpakref and .flatpak files open in the Store by default.
+
+ -- Wild OS Developers <dev@wildos.io>  Tue, 10 Nov 2026 07:50:00 +0000
+
 wildos-branding (0.1.0) trixie; urgency=medium
 
   * Initial release.

@@ -4,11 +4,12 @@ import WildOS.UI as UI
 
 import "layouts.js" as Layouts
 
-// What one screen shows while Meta+Z is open. A KWin scene effect draws
-// instead of the desktop, so the desktop is redrawn here from live window
-// previews (the way KWin's own tile editor does it), lightly dimmed, with the
-// picker's panel under the target window's maximise button. Running as an
-// effect is what gives the picker the keyboard; KWin scripts cannot have it.
+// What one screen shows while Meta+Z or snap assist is open. A KWin scene
+// effect draws instead of the desktop, so the desktop is redrawn here from
+// live window previews (the way KWin's own tile editor does it), lightly
+// dimmed, with the picker's panel under the target window's maximise button,
+// or snap assist's window choice over the empty zones. Running as an effect
+// is what gives them the keyboard; KWin scripts cannot have it.
 FocusScope {
     id: scene
 
@@ -16,6 +17,7 @@ FocusScope {
     readonly property var screen: KWin.SceneView.screen
     readonly property var target: owner.target
     readonly property bool hasTarget: target !== null && target.output === screen
+    readonly property bool assisting: owner.mode === "assist"
     // Worked out once: the window cannot move while the overlay is up, and
     // the title bar geometry it is derived from has no change signal.
     property rect anchorRect: Qt.rect(0, 0, 0, 0)
@@ -23,6 +25,36 @@ FocusScope {
     focus: true
 
     Keys.onPressed: event => {
+        // Keys reach the scene on the screen KWin gives them to, which need
+        // not be the one showing assist, so its state lives in the effect.
+        if (scene.assisting) {
+            switch (event.key) {
+            case Qt.Key_Escape:
+                scene.owner.close();
+                break;
+            case Qt.Key_Left:
+            case Qt.Key_Up:
+            case Qt.Key_Backtab:
+                scene.owner.assistMove(-1);
+                break;
+            case Qt.Key_Right:
+            case Qt.Key_Down:
+            case Qt.Key_Tab:
+                scene.owner.assistMove(1);
+                break;
+            case Qt.Key_Return:
+            case Qt.Key_Enter:
+            case Qt.Key_Space:
+                if (scene.owner.assistIndex >= 0) {
+                    scene.owner.assistChoose(scene.owner.assistWindows[scene.owner.assistIndex]);
+                }
+                break;
+            default:
+                return;
+            }
+            event.accepted = true;
+            return;
+        }
         if (!scene.hasTarget) {
             if (event.key === Qt.Key_Escape) {
                 scene.owner.close();
@@ -133,7 +165,7 @@ FocusScope {
 
         readonly property rect area: scene.owner.areaFor(scene.screen)
 
-        visible: scene.hasTarget
+        visible: scene.hasTarget && !scene.assisting
         hint: "Use the arrow keys to pick a zone, then press Enter."
 
         // Centred under the maximise button when there is one, otherwise
@@ -167,6 +199,13 @@ FocusScope {
         Behavior on scale {
             NumberAnimation { duration: 140; easing.type: Easing.OutCubic }
         }
+    }
+
+    AssistLayer {
+        anchors.fill: parent
+        visible: scene.assisting && scene.owner.assistOutput === scene.screen
+        owner: scene.owner
+        screen: scene.screen
     }
 
     Connections {

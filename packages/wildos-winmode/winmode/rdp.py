@@ -6,6 +6,14 @@ opened with the first app; every later app is started inside the session
 by wild-guest. Its first program is wild-guest's "--start", which starts
 the app and ends, because FreeRDP's /app option splits on commas and
 cannot carry a file name that has one.
+
+The client is Wild OS's own, wildos-rdp, when it is installed: native
+Wayland windows at the screen's own scale, and the app's window on screen
+with the loading W the moment the app is opened (boards 9.11 to 9.13).
+xfreerdp3, under XWayland, is the fallback, and is what "rdp_client":
+"xfreerdp3" in /etc/wildos/winmode.json, or WILDOS_RDP_CLIENT=xfreerdp3 in
+the agent's environment, asks for. Both take the same arguments the same
+way.
 """
 
 import base64
@@ -14,8 +22,13 @@ import os
 import signal
 import subprocess
 
-from gi.repository import GLib
+from gi.repository import Gio, GLib
 
+from . import config
+
+NATIVE_CLIENT = "/usr/libexec/wildos/wildos-rdp"
+REMOTE_CLIENT = "/usr/bin/wildos-remote"
+REMOTE_APP_BUS = ("org.wildos.RemoteApp", "/org/wildos/RemoteApp", "org.wildos.RemoteApp")
 GUEST_EXE = r"C:\Program Files\Wild OS\wild-guest.exe"
 AUTH_FAILED = ("LOGON_FAILURE", "AUTHENTICATION_FAILED", "ERRCONNECT_LOGON_FAILURE", "STATUS_LOGON_FAILURE",
                "ERRCONNECT_PASSWORD")
@@ -83,6 +96,28 @@ def arguments(host, port, account, domain, name, path, args, cwd=None, drive=Non
     return out
 
 
+def prepare_arguments(host, port, account, domain, drive=None):
+    """A connection that only signs in (wildos-rdp's --prepare-session): the
+    session starts, then is left disconnected for the first app to take
+    over. It asks Windows for no app, and never reconnects on its own, so it
+    cannot take the session back from the connection that opens an app."""
+    out = arguments(host, port, account, domain, "Windows mode", GUEST_EXE, [], drive=drive)
+    return [a for a in out if a != "+auto-reconnect"]
+
+
+def prepare_session(args, password, log_path, done, native=NATIVE_CLIENT):
+    """Runs the sign-in-only connection; done(ok) when it ends. Returns the
+    process, so a launch that comes first can end it."""
+    os.makedirs(os.path.dirname(log_path), exist_ok=True)
+    with open(log_path, "wb") as log:
+        proc = subprocess.Popen([native, "--prepare-session", "/args-from:stdin"], stdin=subprocess.PIPE, stdout=log,
+                                stderr=subprocess.STDOUT, start_new_session=True)
+    proc.stdin.write(("\n".join(args + [f"/p:{password}"]) + "\n").encode())
+    proc.stdin.close()
+    GLib.child_watch_add(GLib.PRIORITY_DEFAULT, proc.pid, lambda pid, status: done(status == 0))
+    return proc
+
+
 def drive_arguments(drive):
     """The shared folders, as the redirected drive wild-guest maps to Z:."""
     return [f"/drive:wildos,{drive}"] if drive else []
@@ -109,37 +144,128 @@ def desktop_arguments(host, port, account, domain, drive=None):
     ]
 
 
-class Connection:
-    """One xfreerdp3 process. on_change(open) runs when it opens or ends;
-    on_auth_failed runs when Windows refused the password."""
+def client_program(choice=None, native=NATIVE_CLIENT):
+    """The RemoteApp client to run: wildos-rdp unless it is missing or the
+    installation asks for xfreerdp3."""
+    choice = choice or os.environ.get("WILDOS_RDP_CLIENT") or config.load().get("rdp_client", "auto")
+    if choice != "xfreerdp3" and os.access(native, os.X_OK):
+        return native
+    return "xfreerdp3"
 
-    def __init__(self, on_change, on_auth_failed, log_path):
+
+def desktop_client(choice=None, remote=REMOTE_CLIENT):
+    """The client for the whole Windows desktop: xfreerdp3 unless the
+    installation asks for Remote ("desktop_client": "remote" in
+    /etc/wildos/winmode.json, or WILDOS_DESKTOP_CLIENT=remote) and it is
+    installed. Remote reads the same arguments from standard input."""
+    choice = choice or os.environ.get("WILDOS_DESKTOP_CLIENT") or config.load().get("desktop_client", "xfreerdp3")
+    if choice == "remote" and os.access(remote, os.X_OK):
+        return remote
+    return "xfreerdp3"
+
+
+def loading_arguments(app_id, title, icon, reason="", program=""):
+    """wildos-rdp's window for the app being opened, before the connection's
+    own arguments arrive on standard input. Nothing here is secret: an app
+    id, the app's name, its icon's name, why it may take a while and the
+    program in Windows whose first window becomes the app's window. Each
+    is one argument (no shell), kept to one line."""
+    def line(text):
+        return "".join(" " if ch < " " or ord(ch) == 127 else ch for ch in str(text))
+    out = []
+    for option, value in (("--app-id", app_id), ("--title", title), ("--icon", icon), ("--reason", reason),
+                          ("--program", program)):
+        if value:
+            out += [option, line(value)]
+    return out
+
+
+class Connection:
+    """One RemoteApp client process. on_change(open) runs when it opens or
+    ends; on_auth_failed runs when Windows refused the password.
+
+    wildos-rdp can start before Windows is awake (spawn()), with the app's
+    window already on screen, and take the connection's arguments when they
+    are known (start()). Until then the connection does not count as open."""
+
+    # Where wildos-rdp is; tests point it elsewhere.
+    native_client = NATIVE_CLIENT
+
+    def __init__(self, on_change, on_auth_failed, log_path, program=None):
         self.proc = None
         self.on_change = on_change
         self.on_auth_failed = on_auth_failed
         self.log_path = log_path
         self.started = None
+        self.program = program
+        self.waiting = False
+
+    @property
+    def native(self):
+        return (self.program or client_program(native=self.native_client)) == self.native_client
+
+    @property
+    def running(self):
+        return self.proc is not None and self.proc.poll() is None
 
     @property
     def open(self):
-        return self.proc is not None and self.proc.poll() is None
+        return self.running and not self.waiting
+
+    def _popen(self, cmd, env):
+        os.makedirs(os.path.dirname(self.log_path), exist_ok=True)
+        # The connection before this one is kept beside it: when a launch
+        # fails, the client that ended is usually the one that says why.
+        if os.path.exists(self.log_path):
+            os.replace(self.log_path, self.log_path + ".1")
+        log = open(self.log_path, "wb")
+        self.proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=log, stderr=subprocess.STDOUT, env=env,
+                                     start_new_session=True)
+        log.close()
+        GLib.child_watch_add(GLib.PRIORITY_DEFAULT, self.proc.pid, self._ended, self.proc)
+
+    def spawn(self, app_id="", title="", icon="", reason="", program="", env=None):
+        """Starts wildos-rdp now, the app's window up at once, the
+        connection's arguments to follow. False with xfreerdp3, or when a
+        client is already running."""
+        if self.running or not self.native:
+            return False
+        self.program = self.native_client
+        self.waiting = True
+        self._popen([self.native_client, *loading_arguments(app_id, title, icon, reason, program), "/args-from:stdin"], env)
+        return True
+
+    def abandon(self):
+        """The launch that spawned the client failed before it connected:
+        its input closes with nothing on it, and it closes its window and
+        ends."""
+        if self.waiting and self.proc is not None:
+            self.waiting = False
+            try:
+                self.proc.stdin.close()
+            except OSError:
+                pass
 
     def start(self, args, password, env=None):
-        os.makedirs(os.path.dirname(self.log_path), exist_ok=True)
-        log = open(self.log_path, "wb")
-        self.proc = subprocess.Popen(["xfreerdp3", "/args-from:stdin"], stdin=subprocess.PIPE, stdout=log,
-                                     stderr=subprocess.STDOUT, env=env, start_new_session=True)
-        log.close()
+        if not (self.waiting and self.running):
+            self.waiting = False
+            self.program = self.program or client_program(native=self.native_client)
+            self._popen([self.program, "/args-from:stdin"], env)
+        self.waiting = False
         self.proc.stdin.write(("\n".join(args + [f"/p:{password}"]) + "\n").encode())
         self.proc.stdin.close()
         self.started = GLib.get_monotonic_time()
-        GLib.child_watch_add(GLib.PRIORITY_DEFAULT, self.proc.pid, self._ended, self.proc)
         self.on_change(True)
 
     def _ended(self, pid, status, proc):
         if proc is not self.proc:
             return
+        was_open = not self.waiting
         self.proc = None
+        self.waiting = False
+        self.program = None
+        if not was_open:
+            return
         failed = False
         try:
             with open(self.log_path, "rb") as f:
@@ -155,7 +281,7 @@ class Connection:
     def stop_now(self):
         """For the agent's own exit, when no main loop is left to finish
         close()'s work."""
-        if self.open:
+        if self.running:
             proc = self.proc
             for sig, wait in ((signal.SIGTERM, 3), (signal.SIGKILL, 2)):
                 try:
@@ -168,7 +294,7 @@ class Connection:
                     return
 
     def close(self):
-        if self.open:
+        if self.running:
             proc = self.proc
             try:
                 os.killpg(proc.pid, signal.SIGTERM)
@@ -185,3 +311,53 @@ class Connection:
                         pass
                 return False
             GLib.timeout_add_seconds(3, kill)
+
+
+class RemoteApp:
+    """wildos-rdp's org.wildos.RemoteApp while a connection is open: the
+    app's window for later launches, news for it, and each window's taskbar
+    group. Calls never wait, and do nothing when no wildos-rdp is on the
+    bus."""
+
+    def __init__(self, bus, on_window=None, on_window_gone=None, on_loading=None, on_details=None, on_close_stalled=None,
+                 on_retry=None):
+        self.bus = bus
+        name, path, iface = REMOTE_APP_BUS
+        handlers = {"WindowAdded": on_window, "WindowRemoved": on_window_gone, "LoadingFinished": on_loading,
+                    "DetailsRequested": on_details, "CloseStalled": on_close_stalled, "RetryRequested": on_retry}
+
+        def signal(conn, sender, obj, interface, member, params):
+            handler = handlers.get(member)
+            if handler:
+                handler(*params.unpack())
+
+        self.subscription = bus.signal_subscribe(name, iface, None, path, None, Gio.DBusSignalFlags.NONE, signal)
+
+    def call(self, method, signature, args, done=None):
+        name, path, iface = REMOTE_APP_BUS
+
+        def finished(conn, res):
+            try:
+                value = conn.call_finish(res).unpack()
+            except GLib.Error:
+                value = None
+            if done:
+                done(value[0] if value else None)
+
+        self.bus.call(name, path, iface, method, GLib.Variant(signature, args) if signature else None, None,
+                      Gio.DBusCallFlags.NO_AUTO_START, 2000, None, finished)
+
+    def prepare(self, app_id, title, icon, program="", delay_ms=0, done=None):
+        self.call("Prepare", "(ssssu)", (app_id or "", title or "", icon or "", program or "", delay_ms), done)
+
+    def update(self, token, stage="", reason="", percent=-1, progress=""):
+        """Token 0 is the loading window the client was started with (spawn),
+        which the agent has no token for."""
+        self.call("Update", "(ussis)", (token, stage, reason, percent, progress))
+
+    def cancel(self, token):
+        if token:
+            self.call("Cancel", "(u)", (token,))
+
+    def set_window_app(self, window_id, app_id):
+        self.call("SetWindowApp", "(ts)", (window_id, app_id))

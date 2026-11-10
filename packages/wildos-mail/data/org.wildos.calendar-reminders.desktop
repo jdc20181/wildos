@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Calendar reminders
+Comment=Shows reminders for your events
+Exec=wildos-calendar --reminders
+Icon=org.wildos.calendar
+Terminal=false
+NoDisplay=true
+X-KDE-autostart-phase=2
+X-GNOME-Autostart-Delay=5

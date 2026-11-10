@@ -30,8 +30,16 @@ QtObject {
     readonly property var items: known.filter(item => status[item.key] !== undefined)
     readonly property bool checked: items.length > 0
 
-    // True when the item is fine or simply does not apply here.
+    // Warnings the person chose to ignore from the taskbar's security chip
+    // (security-status ignore): shown as they are, but not raised.
+    readonly property var ignored: String(status.ignored || "").split(",").filter(k => k.length > 0)
+
+    // True when the item is fine, simply does not apply here, or is a
+    // warning the person chose to ignore.
     function good(item) {
+        if (ignored.includes(item.key)) {
+            return true;
+        }
         const v = status[item.key];
         switch (item.key) {
         case "updates":
@@ -60,6 +68,11 @@ QtObject {
     readonly property bool allOn: checked && attention.length === 0
 
     function value(item) {
+        const base = rawValue(item);
+        return ignored.includes(item.key) && rawValue(item) !== "On" ? base + ", warning ignored" : base;
+    }
+
+    function rawValue(item) {
         const v = status[item.key];
         switch (item.key) {
         case "encryption":
@@ -205,9 +218,9 @@ QtObject {
             if (v === "on") {
                 return { text: count("devices_blocked") > 0
                     ? Format.plural(count("devices_blocked"), "device is", "devices are") + " held back. Allow the ones you trust from the shield on the taskbar."
-                    : "New USB devices stay switched off until you allow them from the shield on the taskbar. Devices you have allowed keep working.", action: "" };
+                    : "Memory sticks, drives, a keyboard, a mouse, webcams and audio devices work straight away. Other new USB devices stay switched off until you allow them from the shield on the taskbar.", action: "" };
             }
-            return { text: "Anything plugged into a USB port works straight away, including devices made to attack a computer. Turn this on to hold new devices back until you allow them.", action: "usb" };
+            return { text: "Anything plugged into a USB port works straight away, including devices made to attack a computer. Turn this on to hold back new devices that are not ordinary drives, keyboards, mice, webcams or audio devices until you allow them.", action: "usb" };
         case "secureboot":
             if (v === "on") {
                 return { text: "The computer checks that nothing has tampered with Wild OS before it starts.", action: "" };

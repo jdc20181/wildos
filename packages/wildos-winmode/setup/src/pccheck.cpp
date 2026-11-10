@@ -106,7 +106,7 @@ qint64 freeBytes(const QString &path)
 
 QString sizeLabel(qint64 bytes)
 {
-    const QLocale locale(QLocale::English, QLocale::UnitedKingdom);
+    const QLocale locale = QLocale::system();
     const double gb = double(bytes) / 1e9;
     if (gb >= 10) {
         return QStringLiteral("%1 GB").arg(qRound64(gb));

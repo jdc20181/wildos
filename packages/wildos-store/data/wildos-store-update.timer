@@ -1,0 +1,9 @@
+[Unit]
+Description=Update Flathub apps overnight
+
+[Timer]
+OnCalendar=*-*-* 03:00
+RandomizedDelaySec=90min
+
+[Install]
+WantedBy=timers.target

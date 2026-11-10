@@ -209,13 +209,26 @@ FocusScope {
                             chevron: modelData.action.length === 0
                             onClicked: flyout.open(modelData.run)
 
-                            UI.Button {
-                                visible: area.modelData.action.length > 0
+                            Row {
                                 anchors.verticalCenter: parent.verticalCenter
-                                size: "small"
-                                text: area.modelData.action
-                                focusPolicy: Qt.NoFocus
-                                onClicked: flyout.open(area.modelData.run)
+                                spacing: 6
+
+                                UI.Button {
+                                    visible: area.modelData.ignorable === true
+                                    size: "small"
+                                    kind: "text"
+                                    text: "Ignore"
+                                    focusPolicy: Qt.NoFocus
+                                    onClicked: flyout.open("ignore:" + area.modelData.id)
+                                }
+
+                                UI.Button {
+                                    visible: area.modelData.action.length > 0
+                                    size: "small"
+                                    text: area.modelData.action
+                                    focusPolicy: Qt.NoFocus
+                                    onClicked: flyout.open(area.modelData.run)
+                                }
                             }
                         }
                     }

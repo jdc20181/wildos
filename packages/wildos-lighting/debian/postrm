@@ -1,0 +1,11 @@
+#!/bin/sh
+set -e
+
+if [ "$1" = "remove" ] || [ "$1" = "purge" ] || [ "$1" = "abort-install" ]; then
+    dpkg-divert --package wildos-lighting --remove --rename \
+        --divert /usr/lib/udev/rules.d/60-openrgb.rules.stock \
+        /usr/lib/udev/rules.d/60-openrgb.rules >/dev/null || true
+    udevadm control --reload >/dev/null 2>&1 || true
+fi
+
+#DEBHELPER#

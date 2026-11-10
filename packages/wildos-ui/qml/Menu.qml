@@ -58,6 +58,19 @@ T.Menu {
     }
 
     onOpened: updateBackdrop()
+
+    // A menu drawn inside its window never sees a click on another window
+    // or the desktop, so it closes when its window stops being the active
+    // one, as menus on Windows do. Menus in a window of their own are
+    // closed by the compositor.
+    Connections {
+        target: control.popupType === T.Popup.Item && control.parent ? control.parent.Window.window : null
+        function onActiveChanged() {
+            if (control.visible && !control.parent.Window.window.active) {
+                control.dismiss();
+            }
+        }
+    }
     onXChanged: updateBackdrop()
     onYChanged: updateBackdrop()
     onWidthChanged: updateBackdrop()

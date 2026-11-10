@@ -1,3 +1,11 @@
+wildos-system-dialogs (0.1.1) trixie; urgency=medium
+
+  * Installing a package from a file is never shown as verified, nor as
+    coming from Debian or Wild OS: the permission prompt says nothing has
+    checked it.
+
+ -- Wild OS Developers <dev@wildos.io>  Tue, 10 Nov 2026 07:50:00 +0000
+
 wildos-system-dialogs (0.1.0) trixie; urgency=medium
 
   * Initial release.

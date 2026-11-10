@@ -1,0 +1,26 @@
+{
+    "id": "dawn",
+    "name": "Dawn",
+    "order": 1,
+    "default": true,
+    "description": "The Wild OS look. Calm and easy on the eyes, day or night.",
+    "mode": "dark",
+    "accent": {
+        "name": "Glacier",
+        "colour": "#8fb4ff"
+    },
+    "textOnAccent": "#0f1530",
+    "accentText": "#b9cfff",
+    "glass": {
+        "colour": "#121628",
+        "alpha": 0.86
+    },
+    "wallpaper": "/usr/share/wallpapers/WildOS",
+    "moreWallpapers": [
+        "/usr/share/wallpapers/WildOS-fog-ridges",
+        "/usr/share/wallpapers/WildOS-fog-ridges-evening",
+        "/usr/share/wallpapers/WildOS-misty-lake-sunrise"
+    ],
+    "underglow": false,
+    "desktopTheme": "wildos"
+}

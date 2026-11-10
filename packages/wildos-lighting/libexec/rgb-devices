@@ -1,0 +1,140 @@
+#!/bin/sh
+# OpenRGB devices for Settings and for udev.
+#
+#   rgb-devices                 How many plugged-in devices OpenRGB can light
+#                               for this user: 0 when there are none or
+#                               OpenRGB is not installed. Settings shows the
+#                               lighting row only when this is above 0.
+#   rgb-devices access DEVPATH  For 60-openrgb.rules: succeeds when the
+#                               hidraw node at DEVPATH may be given to the
+#                               person at the screen.
+#
+# Both only read sysfs and OpenRGB's own udev rules, which carry its table of
+# supported USB devices; they start no server and open no device. The count
+# needs no privileges and takes a few milliseconds.
+#
+# A device counts when OpenRGB lists it and this user may open one of its
+# hidraw nodes, so devices USBGuard blocks, and devices whose only hidraw
+# nodes are the keyboard ones held back below, are not counted.
+#
+# A trailing ROOT argument reads a fake sysfs and rules file under ROOT
+# instead, for the tests.
+
+export LC_ALL=C
+
+if [ "${1:-}" = access ]; then
+    devpath=${2:-}
+    root=${3:-}
+else
+    root=${1:-}
+fi
+# Installing OpenRGB puts its rules here: Wild OS moves them aside (see
+# wildos-lighting's preinst) and reads only its device table.
+stock=$root/usr/lib/udev/rules.d/60-openrgb.rules.stock
+
+# The USB device a sysfs device belongs to, by walking up to the first
+# parent with vendor and product IDs.
+usb_parent() {
+    d=$1
+    while [ -n "$d" ] && [ "$d" != "$root/sys" ] && [ "$d" != / ]; do
+        if [ -r "$d/idVendor" ] && [ -r "$d/idProduct" ]; then
+            echo "$d"
+            return 0
+        fi
+        up=${d%/*}
+        [ "$up" = "$d" ] && break
+        d=$up
+    done
+    return 1
+}
+
+# Whether OpenRGB's rules give access to this vendor and product, in the
+# exact form OpenRGB writes them.
+listed() {
+    vid=$(cat "$1/idVendor" 2>/dev/null)
+    pid=$(cat "$1/idProduct" 2>/dev/null)
+    case "$vid$pid" in
+        *[!0-9a-f]* | "") return 1 ;;
+    esac
+    [ ${#vid} -eq 4 ] && [ ${#pid} -eq 4 ] || return 1
+    grep -qF "ATTRS{idVendor}==\"$vid\", ATTRS{idProduct}==\"$pid\", TAG+=\"uaccess\"" "$stock" \
+        || grep -qF "ATTRS{idVendor}==\"$vid\", TAG+=\"uaccess\"" "$stock"
+}
+
+# Whether a HID interface reports key presses: its report descriptor has a
+# keyboard or keypad application collection, or an input on the keyboard
+# usage page. Anyone who can read such a node can read what is typed,
+# passwords included, so these stay root's alone. The descriptor comes from
+# the device, so it is read as numbers and never trusted to be well formed.
+carries_keys() {
+    [ -r "$1" ] || return 0
+    od -An -v -tu1 "$1" | awk '
+        { for (i = 1; i <= NF; i++) b[n++] = $i }
+        END {
+            page = 0; usage = -1; upage = -1; keys = 0; i = 0
+            while (i < n) {
+                p = b[i]
+                if (p == 254) {
+                    if (i + 1 >= n) break
+                    i += 3 + b[i + 1]
+                    continue
+                }
+                size = p % 4
+                if (size == 3) size = 4
+                type = int(p / 4) % 4
+                tag = int(p / 16)
+                v = 0
+                for (k = size; k >= 1; k--) v = v * 256 + b[i + k]
+                if (type == 1 && tag == 0) {
+                    page = v
+                } else if (type == 2 && tag == 0 && usage < 0) {
+                    if (size == 4) { upage = int(v / 65536); usage = v % 65536 }
+                    else { upage = page; usage = v }
+                } else if (type == 0) {
+                    if (tag == 10 && v == 1 && upage == 1 && (usage == 6 || usage == 7)) keys = 1
+                    if (tag == 8 && page == 7) keys = 1
+                    usage = -1
+                    upage = -1
+                }
+                i += 1 + size
+            }
+            exit keys ? 0 : 1
+        }'
+}
+
+[ -x "$root/usr/bin/openrgb" ] && [ -r "$stock" ] || {
+    [ "${1:-}" = access ] && exit 1
+    echo 0
+    exit 0
+}
+
+if [ "${1:-}" = access ]; then
+    case "$devpath" in
+        */../* | */..) exit 1 ;;
+        /devices/*/hidraw/hidraw[0-9]*) ;;
+        *) exit 1 ;;
+    esac
+    node=$root/sys$devpath
+    hid=${node%/hidraw/*}
+    usb=$(usb_parent "$hid") || exit 1
+    listed "$usb" || exit 1
+    carries_keys "$hid/report_descriptor" && exit 1
+    exit 0
+fi
+
+seen=
+count=0
+for link in "$root"/sys/class/hidraw/hidraw*; do
+    [ -e "$link" ] || continue
+    name=${link##*/}
+    [ -r "$root/dev/$name" ] && [ -w "$root/dev/$name" ] || continue
+    hid=$(readlink -f "$link/device") || continue
+    usb=$(usb_parent "$hid") || continue
+    case " $seen " in
+        *" $usb "*) continue ;;
+    esac
+    listed "$usb" || continue
+    seen="$seen $usb"
+    count=$((count + 1))
+done
+echo "$count"

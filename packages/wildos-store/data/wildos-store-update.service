@@ -1,0 +1,13 @@
+[Unit]
+Description=Update Flathub apps
+# Overnight on mains power only, as the Store's Updates page promises.
+ConditionACPower=true
+After=network-online.target
+
+[Service]
+Type=oneshot
+# A running app keeps its version until it is closed; flatpak puts the new
+# one in place beside it.
+ExecStart=/usr/bin/flatpak update --user --noninteractive --assumeyes
+Nice=10
+IOSchedulingClass=idle

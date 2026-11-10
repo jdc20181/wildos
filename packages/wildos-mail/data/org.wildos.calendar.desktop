@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Calendar
+GenericName=Calendar
+Comment=Your events, with Google, iCloud and CalDAV calendars
+Exec=wildos-calendar
+Icon=org.wildos.calendar
+Terminal=false
+StartupNotify=true
+Categories=Qt;Office;Calendar;
+Keywords=calendar;events;meetings;reminders;diary;agenda;schedule;

@@ -30,6 +30,43 @@ T.Dialog {
 
     readonly property bool large: size === "large"
 
+    function holdsFocus(item) {
+        for (let i = item; i; i = i.parent) {
+            if (i === control.contentItem) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // Enter presses the button that has the keyboard, otherwise the main
+    // action, as Windows dialogs do. Fields that use Enter themselves accept
+    // it first and never get here.
+    function pressDefault(event) {
+        const w = control.contentItem.Window.window;
+        const f = w ? w.activeFocusItem : null;
+        const shown = Array.from(buttonRow.children).filter(b => b.visible && b.enabled && b.clicked !== undefined);
+        let target = shown.find(b => b === f);
+        if (!target) {
+            const primaries = shown.filter(b => b.primary === true);
+            target = primaries[primaries.length - 1];
+        }
+        if (target) {
+            target.clicked();
+        } else {
+            event.accepted = false;
+        }
+    }
+
+    // Without this the keyboard can stay on whatever opened the dialog
+    // behind it, and Enter never reaches the dialog.
+    onOpened: {
+        const w = contentItem.Window.window;
+        if (!holdsFocus(w ? w.activeFocusItem : null)) {
+            contentItem.forceActiveFocus(Qt.PopupFocusReason);
+        }
+    }
+
     parent: T.Overlay.overlay
     anchors.centerIn: parent
     width: Math.min(large ? 640 : 440, parent ? parent.width - 48 : 640)
@@ -68,6 +105,9 @@ T.Dialog {
 
     contentItem: ColumnLayout {
         spacing: control.large ? 18 : 12
+        focus: true
+        Keys.onReturnPressed: event => control.pressDefault(event)
+        Keys.onEnterPressed: event => control.pressDefault(event)
 
         RowLayout {
             Layout.fillWidth: true
@@ -153,8 +193,14 @@ T.Dialog {
                         ordering = true;
                         const kids = Array.from(children);
                         const primaries = kids.filter(c => c.primary === true);
-                        const last = kids[kids.length - 1];
-                        if (primaries.length > 0 && !(primaries.length === 1 && last === primaries[0])) {
+                        // Only moves them when they are not already the last
+                        // ones. Moving changes children and runs this again,
+                        // so a dialog with two primaries (Files' questions)
+                        // used to move them for ever, and every move took the
+                        // keyboard off the button being clicked and cancelled
+                        // the click.
+                        const tail = kids.slice(kids.length - primaries.length);
+                        if (primaries.some((b, i) => tail[i] !== b)) {
                             // Re-adding an item appends it, so this moves the
                             // primary buttons to the end in their own order.
                             for (const b of primaries) {

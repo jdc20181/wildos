@@ -5,6 +5,8 @@ import org.kde.plasma.plasmoid
 import org.kde.plasma.core as PlasmaCore
 import org.kde.plasma.plasma5support as P5Support
 import org.kde.notificationmanager as NotificationManager
+import org.wildos.shell as WildOS
+import "Formats.js" as Formats
 
 // The clock at the end of the taskbar: 24-hour time over the date, opening
 // the design's notifications and calendar cards. With "showPopups" on it also
@@ -19,8 +21,8 @@ PlasmoidItem {
         id: timeSource
         engine: "time"
         connectedSources: ["Local"]
-        interval: 60000
-        intervalAlignment: P5Support.Types.AlignToMinute
+        interval: WildOS.TaskbarStyle.clockSeconds ? 1000 : 60000
+        intervalAlignment: WildOS.TaskbarStyle.clockSeconds ? P5Support.Types.NoAlignment : P5Support.Types.AlignToMinute
     }
 
     readonly property date now: timeSource.data.Local ? timeSource.data.Local.DateTime : new Date()
@@ -160,7 +162,7 @@ PlasmoidItem {
     Plasmoid.backgroundHints: PlasmaCore.Types.NoBackground
     Plasmoid.icon: "preferences-system-time"
     Plasmoid.title: "Date, time and notifications"
-    toolTipMainText: Qt.locale("en_GB").toString(now, "dddd d MMMM yyyy")
+    toolTipMainText: Formats.longDate(now)
     toolTipSubText: {
         const unread = history.unreadNotificationsCount;
         const lines = [];

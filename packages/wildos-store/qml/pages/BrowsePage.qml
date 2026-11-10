@@ -3,7 +3,8 @@ import QtQuick.Layouts
 import WildOS.Store
 import WildOS.UI as UI
 
-// Apps and Games: every app in the catalogue, narrowed by category.
+// Every app or every game in the catalogue, narrowed by category, from
+// Categories.
 AppGrid {
     id: page
 
@@ -13,52 +14,47 @@ AppGrid {
     readonly property bool games: kind === "games"
     readonly property string categoryId: arg.length > 0 ? arg : (games ? "games" : "all")
 
-    keys: Catalog.revision >= 0 ? Catalog.category(categoryId) : []
+    keys: Catalog.catalogRevision >= 0 ? Catalog.category(categoryId) : []
     onActivated: key => store.openApp(key)
 
-    header: Item {
-        width: page.width - page.leftMargin - page.rightMargin - 12
-        height: headerColumn.implicitHeight + 22
+    header: Column {
+        width: page.innerWidth
+        spacing: 18
+        bottomPadding: 4
 
-        Column {
-            id: headerColumn
+        PageTitle {
             width: parent.width
-            spacing: 16
+            title: page.arg.length > 0 ? Catalog.categoryLabel(page.arg) : page.games ? "Games" : "All apps"
+            subtitle: !Catalog.ready ? "Getting the list of apps"
+                : page.keys.length === 1 ? (page.games ? "1 game" : "1 app") :page.keys.length + (page.games ? " games" : " apps")
+        }
 
-            PageTitle {
-                width: parent.width
-                title: page.games ? "Games" : "Apps"
-                subtitle: page.games ? "Free games, and Steam for the ones you bought on Windows."
-                                     : "Free apps for everything you did on Windows."
+        Flow {
+            width: parent.width
+            spacing: 8
+
+            FilterPill {
+                text: page.games ? "All games" : "All apps"
+                selected: page.arg.length === 0
+                onClicked: page.store.open(page.kind, "")
             }
 
-            Flow {
-                width: parent.width
-                spacing: 8
+            Repeater {
+                model: page.games ? Catalog.gameCategories : Catalog.appCategories
 
                 FilterPill {
-                    text: page.games ? "All games" : "All apps"
-                    selected: page.arg.length === 0
-                    onClicked: page.store.open(page.kind, "")
-                }
-
-                Repeater {
-                    model: page.games ? Catalog.gameCategories : Catalog.appCategories
-
-                    FilterPill {
-                        required property var modelData
-                        text: modelData.label
-                        selected: page.arg === modelData.id
-                        onClicked: page.store.open(page.kind, modelData.id)
-                    }
+                    required property var modelData
+                    text: modelData.label
+                    selected: page.arg === modelData.id
+                    onClicked: page.store.open(page.kind, modelData.id)
                 }
             }
+        }
 
-            UI.Label {
-                visible: !Catalog.ready
-                text: "Getting the list of apps"
-                color: UI.Style.inkMuted
-            }
+        Rectangle {
+            width: parent.width
+            height: 1
+            color: Metrics.divider
         }
     }
 }

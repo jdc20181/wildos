@@ -1,0 +1,104 @@
+#!/bin/sh
+# Switches an NVIDIA graphics card between the open driver Wild OS ships
+# (nouveau) and NVIDIA's own driver from Debian, for Settings > System >
+# Display > Graphics driver. Runs as root through pkexec
+# (org.wildos.settings.graphics-driver).
+#
+#   nvidia   install NVIDIA's driver. Stops with exit 4 when Debian's driver
+#            doesn't support this card (nvidia-detect decides). With Secure
+#            Boot on, the module is built here, so it is signed with this PC's
+#            own key (dkms makes one), and that key is queued for enrolment:
+#            the firmware asks for the code printed here at the next restart.
+#   open     remove NVIDIA's driver; nouveau is back from the next start-up.
+#
+# Settings reads the lines this prints: "step <what is happening>" while it
+# works, and "code <digits>" when the key needs enrolling.
+
+set -eu
+export DEBIAN_FRONTEND=noninteractive
+MOK_KEY=/var/lib/dkms/mok.key
+MOK_PUB=/var/lib/dkms/mok.pub
+APT="apt-get -y -q -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold"
+
+step() { echo "step $*"; }
+
+secure_boot() {
+    mokutil --sb-state 2>/dev/null | grep -q "SecureBoot enabled"
+}
+
+rebuild_initramfs() {
+    # The nouveau blacklist and the modules must be in the start-up image.
+    step "Updating the start-up files"
+    if command -v dracut >/dev/null 2>&1; then
+        dracut --force --regenerate-all >/dev/null 2>&1
+    else
+        update-initramfs -u -k all >/dev/null 2>&1
+    fi
+}
+
+case "${1:-}" in
+nvidia)
+    step "Checking for updates"
+    apt-get -q update >/dev/null 2>&1 || true
+
+    step "Checking this graphics card"
+    $APT install nvidia-detect >/dev/null 2>&1
+    # It recommends a package per card; only the current one, nvidia-driver,
+    # is what this installs (legacy cards are told to use older ones).
+    if ! nvidia-detect 2>/dev/null | grep -qx '[[:space:]]*nvidia-driver'; then
+        echo "Debian's NVIDIA driver doesn't support this graphics card." >&2
+        exit 4
+    fi
+
+    step "Downloading NVIDIA's driver"
+    # Headers for every installed kernel, so dkms can build the module for
+    # the one running now and the one that starts next.
+    headers="linux-headers-amd64"
+    if apt-cache show "linux-headers-$(uname -r)" >/dev/null 2>&1; then
+        headers="$headers linux-headers-$(uname -r)"
+    fi
+    # shellcheck disable=SC2086
+    $APT install $headers dkms mokutil >/dev/null 2>&1
+
+    step "Installing NVIDIA's driver"
+    $APT install nvidia-driver firmware-misc-nonfree nvidia-suspend-common >/dev/null 2>&1
+
+    # Wayland needs the kernel's mode setting from NVIDIA's module.
+    mkdir -p /etc/modprobe.d
+    printf '%s\n' '# Written by Wild OS Settings: NVIDIA driver for the desktop (Wayland).' \
+        'options nvidia-drm modeset=1 fbdev=1' > /etc/modprobe.d/60-wildos-nvidia.conf
+
+    rebuild_initramfs
+
+    # Store apps from Flathub need NVIDIA's graphics libraries in their own runtime.
+    if command -v flatpak >/dev/null 2>&1; then
+        step "Updating Store apps for the new driver"
+        flatpak update --system --noninteractive >/dev/null 2>&1 || true
+    fi
+
+    if secure_boot && [ -f "$MOK_PUB" ] && ! mokutil --test-key "$MOK_PUB" 2>/dev/null | grep -q "already enrolled"; then
+        step "Preparing Secure Boot"
+        # Eight digits: typed once into the firmware's own screen, which
+        # shows nothing as you type.
+        code=$(od -An -N4 -tu4 /dev/urandom | tr -d ' ' | cut -c1-8)
+        while [ "${#code}" -lt 8 ]; do code="${code}0"; done
+        printf '%s\n%s\n' "$code" "$code" | mokutil --import "$MOK_PUB" >/dev/null 2>&1
+        echo "code $code"
+    fi
+    step "Done"
+    ;;
+open)
+    step "Removing NVIDIA's driver"
+    # shellcheck disable=SC2046
+    $APT purge $(dpkg-query -W -f='${Package}\n' 'nvidia-*' 'libnvidia-*' 'xserver-xorg-video-nvidia*' 2>/dev/null \
+        | grep -v -E '^(nvidia-detect)$' || true) >/dev/null 2>&1 || true
+    $APT autoremove >/dev/null 2>&1 || true
+    rm -f /etc/modprobe.d/60-wildos-nvidia.conf
+    rebuild_initramfs
+    step "Done"
+    ;;
+*)
+    echo "usage: $0 nvidia|open" >&2
+    exit 2
+    ;;
+esac

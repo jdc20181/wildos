@@ -1,0 +1,21 @@
+{
+    "id": "ember",
+    "name": "Ember",
+    "order": 5,
+    "default": false,
+    "description": "Warm, low-blue tones for evenings. Pairs with Night light.",
+    "mode": "dark",
+    "accent": {
+        "name": "Ember",
+        "colour": "#ff8a5c"
+    },
+    "textOnAccent": "#0f1530",
+    "accentText": "#ffb99d",
+    "glass": {
+        "colour": "#1c121a",
+        "alpha": 0.86
+    },
+    "wallpaper": "/usr/share/wallpapers/WildOS-white-dunes",
+    "underglow": false,
+    "desktopTheme": "wildos-ember"
+}

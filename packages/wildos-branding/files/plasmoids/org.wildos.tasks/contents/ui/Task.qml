@@ -210,10 +210,15 @@ Item {
     // so it never waits on the app or the model: down to 0.86, a spring past
     // full size to 1.04, and back, 100 ms in all.
     onPressedChanged: {
-        if (pressed && !reducedMotion) {
-            dip.restart();
+        if (pressed) {
+            tasksRoot.mutePreview(task);
+            if (!reducedMotion) {
+                dip.restart();
+            }
         }
     }
+
+    onHoveredChanged: tasksRoot.taskHovered(task, hovered)
 
     SequentialAnimation {
         id: dip

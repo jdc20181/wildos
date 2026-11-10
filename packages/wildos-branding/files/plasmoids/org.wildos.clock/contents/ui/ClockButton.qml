@@ -1,6 +1,8 @@
 import QtQuick
 import QtQuick.Layouts
 import WildOS.UI as UI
+import org.wildos.shell as WildOS
+import "Formats.js" as Formats
 
 // The clock button from the design's taskbar: the time over the date, right
 // aligned, in a 44 px tall button with 12 px padding. A small moon shows when
@@ -58,14 +60,14 @@ MouseArea {
             UI.Label {
                 id: time
                 Layout.alignment: Qt.AlignRight
-                text: Qt.formatTime(button.clock.now, "HH:mm")
+                text: Formats.time(button.clock.now, WildOS.TaskbarStyle.clockSeconds)
                 font.weight: Font.Medium
                 font.features: { "tnum": 1 }
             }
 
             UI.Label {
                 Layout.alignment: Qt.AlignRight
-                text: Qt.formatDate(button.clock.now, "dd/MM/yyyy")
+                text: WildOS.TaskbarStyle.clockLongDate ? Formats.longDate(button.clock.now) : Formats.shortDate(button.clock.now)
                 size: 12
                 font.features: { "tnum": 1 }
                 color: UI.Style.inkStatus

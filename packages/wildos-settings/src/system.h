@@ -51,6 +51,14 @@ class System : public QObject
     // The taskbar shows windows from every desktop, not only the one in
     // use. Read on demand, as it costs a call to plasmashell.
     Q_PROPERTY(bool taskbarAllDesktops READ taskbarAllDesktops NOTIFY taskbarAllDesktopsChanged)
+    // Windows mode's status at the taskbar's left end (org.wildos.winmode),
+    // which only shows once Windows mode is set up. Read on demand too.
+    Q_PROPERTY(bool taskbarWinModeStatus READ taskbarWinModeStatus NOTIFY taskbarWinModeStatusChanged)
+    // The sliver at the taskbar's far right end that shows the desktop, and
+    // whether resting the pointer on it shows the desktop until it moves
+    // away (wildosrc [Taskbar], which the panel in wildos-shell follows).
+    Q_PROPERTY(bool taskbarShowDesktop READ taskbarShowDesktop WRITE setTaskbarShowDesktop NOTIFY taskbarShowDesktopChanged)
+    Q_PROPERTY(bool taskbarPeek READ taskbarPeek WRITE setTaskbarPeek NOTIFY taskbarShowDesktopChanged)
     Q_PROPERTY(QString wallpaperName READ wallpaperName NOTIFY wallpaperChanged)
     Q_PROPERTY(bool slideshow READ slideshow NOTIFY wallpaperChanged)
     Q_PROPERTY(QString slideshowFolder READ slideshowFolder NOTIFY wallpaperChanged)
@@ -68,7 +76,12 @@ class System : public QObject
 
     Q_PROPERTY(bool snapEdges READ snapEdges WRITE setSnapEdges NOTIFY kwinChanged)
     Q_PROPERTY(bool snapLayouts READ snapLayouts WRITE setSnapLayouts NOTIFY kwinChanged)
+    Q_PROPERTY(bool snapAssist READ snapAssist WRITE setSnapAssist NOTIFY kwinChanged)
     Q_PROPERTY(bool altTabAllDesktops READ altTabAllDesktops WRITE setAltTabAllDesktops NOTIFY kwinChanged)
+    // What each screen corner does, keyed by KWin's corner number (1 top
+    // right, 3 bottom right, 5 bottom left, 7 top left): "taskview",
+    // "desktop", "lock" or "none".
+    Q_PROPERTY(QVariantMap screenCorners READ screenCorners NOTIFY kwinChanged)
 
     Q_PROPERTY(QString timeZone READ timeZone CONSTANT)
     Q_PROPERTY(QString region READ region CONSTANT)
@@ -105,6 +118,11 @@ public:
     bool taskbarCentred() const { return m_taskbarCentred; }
     bool taskbarFloating() const { return m_taskbarFloating; }
     bool taskbarAllDesktops() const { return m_taskbarAllDesktops; }
+    bool taskbarWinModeStatus() const { return m_taskbarWinModeStatus; }
+    bool taskbarShowDesktop() const;
+    void setTaskbarShowDesktop(bool on);
+    bool taskbarPeek() const;
+    void setTaskbarPeek(bool on);
     QString wallpaperName() const;
     bool slideshow() const { return m_slideshow; }
     QString slideshowFolder() const { return m_slideshowFolder; }
@@ -122,8 +140,12 @@ public:
     void setSnapEdges(bool on);
     bool snapLayouts() const;
     void setSnapLayouts(bool on);
+    bool snapAssist() const;
+    void setSnapAssist(bool on);
     bool altTabAllDesktops() const;
     void setAltTabAllDesktops(bool on);
+    QVariantMap screenCorners() const;
+    Q_INVOKABLE void setScreenCorner(int corner, const QString &action);
 
     QString timeZone() const;
     QString region() const;
@@ -143,12 +165,17 @@ public:
     // Light or dark: WildOS or WildOSLight, once that scheme is installed.
     Q_INVOKABLE bool hasColourScheme(const QString &name) const;
     Q_INVOKABLE void setColourScheme(const QString &name);
+    // A scheme and an accent together (a theme), applied one after the
+    // other so neither undoes the other.
+    Q_INVOKABLE void setColours(const QString &name, const QColor &accent);
     Q_INVOKABLE void setAutomaticTheme();
     Q_INVOKABLE void setTaskbarHiding(int mode);
     Q_INVOKABLE void setTaskbarCentred(bool centred);
     Q_INVOKABLE void setTaskbarFloating(bool floating);
     Q_INVOKABLE void readTaskbarDesktops();
     Q_INVOKABLE void setTaskbarAllDesktops(bool all);
+    Q_INVOKABLE void readTaskbarWinModeStatus();
+    Q_INVOKABLE void setTaskbarWinModeStatus(bool shown);
     Q_INVOKABLE void setSlideshow(bool on, const QString &folder = {});
     Q_INVOKABLE void setTransparency(bool on);
     Q_INVOKABLE void setTextScale(int percent);
@@ -187,6 +214,8 @@ Q_SIGNALS:
     void taskbarCentredChanged();
     void taskbarFloatingChanged();
     void taskbarAllDesktopsChanged();
+    void taskbarWinModeStatusChanged();
+    void taskbarShowDesktopChanged();
     void transparencyChanged();
     void textScaleChanged();
     void updatePolicyChanged();
@@ -212,6 +241,7 @@ private:
     void readTextScale();
     void readTaskbarLayout();
     void reconfigureKWin();
+    void applySnapEffect(bool layouts, bool assist);
     QString evaluatePlasmaScript(const QString &script) const;
 
     QString m_osName;
@@ -234,6 +264,7 @@ private:
     bool m_taskbarCentred = true;
     bool m_taskbarFloating = false;
     bool m_taskbarAllDesktops = false;
+    bool m_taskbarWinModeStatus = true;
     bool m_slideshow = false;
     QString m_slideshowFolder;
     int m_textScale = 100;

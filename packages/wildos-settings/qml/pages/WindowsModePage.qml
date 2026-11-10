@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Layouts
+import QtQuick.Templates as T
 import WildOS.Settings
 import WildOS.UI as UI
 
@@ -178,7 +179,11 @@ PageScroll {
             UI.ListRow {
                 minHeight: 54
                 title: "Memory Windows mode can use"
-                description: "Unused memory is handed back to Wild OS. A change applies the next time Windows starts."
+                // Windows only takes a new limit when it starts from off, so
+                // until then the row says plainly that the change is waiting.
+                description: page.status.memoryPending
+                    ? "Windows gets " + (page.options.memoryGb || 4) + " GB when it next starts. Wild OS restarts it by itself once no Windows app is open."
+                    : "Unused memory is handed back to Wild OS. A change applies once no Windows app is open, when Windows restarts."
 
                 UI.ComboBox {
                     anchors.verticalCenter: parent.verticalCenter
@@ -186,6 +191,24 @@ PageScroll {
                     model: WindowsMode.memoryChoices
                     currentIndex: model.findIndex(o => o.value === (page.options.memoryGb || 4))
                     onActivated: index => page.show(WindowsMode.setOption("memoryGb", String(model[index].value)))
+                }
+            }
+
+            // A shortcut: the switch lives in System > Power and battery, because
+            // it speeds up the whole PC, not only Windows mode.
+            UI.ListRow {
+                minHeight: 54
+                visible: Processor.threadsAvailable
+                title: "Use every processor thread"
+                description: Processor.everyThreadLocked
+                    ? "Off at Strict and Maximum protection."
+                    : "Faster Windows apps and games. Set in Power and battery."
+                status: Processor.everyThread && !Processor.everyThreadLocked ? "On" : "Off"
+
+                UI.Button {
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: "Change"
+                    onClicked: Navigator.open("power")
                 }
             }
 
@@ -277,40 +300,76 @@ PageScroll {
         elide: Text.ElideNone
     }
 
+    // The dialog stays open while the key goes in, which can take a few
+    // minutes when Windows has to start first, and says how it went.
     UI.Dialog {
         id: keyDialog
         title: "Change the Windows product key"
         text: "Windows checks the key with Microsoft and activates with it. The key from this PC's firmware stays where it is."
-        onOpened: keyField.text = ""
+        closePolicy: WindowsMode.activating ? T.Popup.NoAutoClose : T.Popup.CloseOnEscape
+
+        property string keyProblem
+
+        onOpened: {
+            keyField.text = "";
+            keyProblem = "";
+        }
+
+        Connections {
+            target: WindowsMode
+            function onProductKeyDone(answer) {
+                if (answer === "") {
+                    keyDialog.close();
+                    page.show("");
+                } else {
+                    keyDialog.keyProblem = answer;
+                }
+            }
+        }
 
         UI.TextField {
             id: keyField
             Layout.fillWidth: true
+            enabled: !WindowsMode.activating
             placeholderText: "XXXXX-XXXXX-XXXXX-XXXXX-XXXXX"
             error: text.length >= 25 && !WindowsMode.keyShapeValid(text)
             Accessible.name: "Windows product key"
         }
 
+        UI.Label {
+            Layout.fillWidth: true
+            visible: text.length > 0
+            text: WindowsMode.activating ? "Activating Windows. If Windows was asleep it starts first, which can take a few minutes."
+                                         : keyDialog.keyProblem
+            size: 13
+            color: WindowsMode.activating ? UI.Style.inkStatus : UI.Style.warning
+            wrapMode: Text.Wrap
+            elide: Text.ElideNone
+            Accessible.role: Accessible.AlertMessage
+        }
+
         buttons: [
             UI.Button {
                 text: "Cancel"
+                enabled: !WindowsMode.activating
                 onClicked: keyDialog.close()
             },
             UI.Button {
                 text: "Use this PC's licence"
                 visible: page.licence.source !== "firmware"
+                enabled: !WindowsMode.activating
                 onClicked: {
-                    keyDialog.close();
-                    page.show(WindowsMode.setProductKey("firmware"));
+                    keyDialog.keyProblem = "";
+                    WindowsMode.setProductKey("firmware");
                 }
             },
             UI.Button {
                 kind: "primary"
-                text: "Use this key"
-                enabled: WindowsMode.keyShapeValid(keyField.text)
+                text: WindowsMode.activating ? "Activating" : "Use this key"
+                enabled: !WindowsMode.activating && WindowsMode.keyShapeValid(keyField.text)
                 onClicked: {
-                    page.show(WindowsMode.setProductKey(keyField.text));
-                    keyDialog.close();
+                    keyDialog.keyProblem = "";
+                    WindowsMode.setProductKey(keyField.text);
                 }
             }
         ]

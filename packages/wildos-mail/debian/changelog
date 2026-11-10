@@ -1,0 +1,40 @@
+wildos-mail (0.2.1) trixie; urgency=medium
+
+  * Calendar is a tab of Mail's window; Open in new window on the rail.
+  * Gmail accounts bring their calendar.
+
+ -- Wild OS Developers <dev@wildos.io>  Mon, 09 Nov 2026 23:10:00 +0000
+
+wildos-mail (0.2.0) trixie; urgency=medium
+
+  * Calendar (wildos-calendar), on evolution-data-server's calendar service:
+    day, work week, week and month, events with people, repeats, reminders
+    and notes, Google, iCloud, CalDAV and web calendars, and reminders shown
+    as notifications from sign-in.
+  * Mail answers invitations: Accept, Maybe and Decline, with the day the
+    event is on beside them.
+  * Mail and Calendar share the app rail.
+
+ -- Wild OS Developers <dev@wildos.io>  Mon, 09 Nov 2026 22:20:00 +0000
+
+wildos-mail (0.1.2) trixie; urgency=medium
+
+  * Camel's IMAP and SMTP modules come from evolution-data-server-camel-providers,
+    split out of Wild OS's rebuild of evolution-data-server, instead of copies
+    carried by Mail, so they get Debian's fixes.
+
+ -- Wild OS Developers <dev@wildos.io>  Mon, 09 Nov 2026 21:10:00 +0000
+
+wildos-mail (0.1.1) trixie; urgency=medium
+
+  * Carry Camel's IMAP and SMTP modules, copied at build time from
+    evolution-data-server, which Wild OS doesn't install. Temporary until a
+    split evolution-data-server-camel-providers package exists.
+
+ -- Wild OS Developers <dev@wildos.io>  Mon, 09 Nov 2026 20:40:00 +0000
+
+wildos-mail (0.1.0) trixie; urgency=medium
+
+  * Initial release.
+
+ -- Wild OS Developers <dev@wildos.io>  Mon, 09 Nov 2026 18:00:00 +0000

@@ -66,10 +66,21 @@ Item {
         focusContent();
     }
 
+    // Takes the keyboard from whatever inside the view holds it first, so a
+    // click anywhere closes an open name editor and keeps the new name, as
+    // clicking away does on Windows. forceActiveFocus() alone hands focus
+    // straight back to the editor: each view is a FocusScope.
     function focusContent() {
-        if (content.item) {
-            content.item.forceActiveFocus();
+        const view = content.item;
+        if (!view) {
+            return;
         }
+        const w = root.Window.window;
+        const held = w ? w.activeFocusItem : null;
+        if (held && held !== view) {
+            held.focus = false;
+        }
+        view.forceActiveFocus();
     }
 
     function showError(message) {
@@ -631,12 +642,19 @@ Item {
             f.clearSelection();
             break;
         case Qt.Key_Space:
+            // Ctrl+Space toggles the item, as in Explorer; a space in the
+            // middle of typing a name is part of the name; otherwise Space
+            // is Quick Look.
             if (ctrl && cur >= 0) {
                 f.select(cur, Qt.ControlModifier);
-            } else if (cur >= 0 && !f.isSelected(cur)) {
-                f.select(cur, 0);
             } else if (root.typed.length > 0) {
                 typeAhead(" ");
+            } else if (f.kind === "computer") {
+                if (cur >= 0 && !f.isSelected(cur)) {
+                    f.select(cur, 0);
+                }
+            } else {
+                quickLook();
             }
             break;
         case Qt.Key_Menu:
@@ -702,6 +720,43 @@ Item {
             keyboardUsed = true;
             f.select(row, 0);
         }
+    }
+
+    // Quick Look shows the item with the keyboard focus when it is selected,
+    // the first selected item otherwise. With nothing selected, Space picks
+    // the focused item first, as it did before Quick Look.
+    property var quickLookWindow: null
+
+    function quickLook() {
+        const f = folder;
+        let row = f.currentIndex;
+        if (row < 0 || !f.isSelected(row)) {
+            if (f.selectedCount > 0) {
+                row = f.rowForUrl(selection()[0]);
+            } else if (row >= 0) {
+                f.select(row, 0);
+            }
+        }
+        if (row < 0) {
+            return;
+        }
+        if (!quickLookWindow) {
+            quickLookWindow = quickLookComponent.createObject(root, { transientParent: root.Window.window });
+        }
+        quickLookWindow.show(f.urlAt(row));
+    }
+
+    // The arrow keys while Quick Look is open: Left and Right step through
+    // the items in order whatever the layout, Up and Down by a row.
+    function quickLookStep(delta, vertical) {
+        const f = folder;
+        if (!f || f.count === 0) {
+            return;
+        }
+        const rowSize = vertical && content.item ? content.item.columns() : 1;
+        const cur = f.currentIndex < 0 ? 0 : f.currentIndex;
+        keyboardUsed = true;
+        f.moveCurrent(Math.max(0, Math.min(f.count - 1, cur + delta * rowSize)), 0);
     }
 
     function openContextAtCurrent(view) {
@@ -1000,6 +1055,13 @@ Item {
     Component {
         id: propertiesComponent
         PropertiesWindow {}
+    }
+
+    Component {
+        id: quickLookComponent
+        QuickLook {
+            view: root
+        }
     }
 
     ShortcutDialog {

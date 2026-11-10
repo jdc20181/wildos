@@ -322,10 +322,46 @@ QString SetupApp::normaliseKey(const QString &typed) const
     return Licence::normaliseKey(typed);
 }
 
+namespace
+{
+const QString cpuThreadsHelper = QStringLiteral("/usr/libexec/wildos/settings-cpu-threads");
+
+QByteArray readSmt(const char *name)
+{
+    QFile file(QStringLiteral("/sys/devices/system/cpu/smt/") + QLatin1String(name));
+    return file.open(QIODevice::ReadOnly) ? file.readAll().trimmed() : QByteArray();
+}
+}
+
+// Offered only on a processor with two threads per core, while it is off, and
+// not at Strict or Maximum protection, which keep it off.
+bool SetupApp::hyperThreadingAvailable() const
+{
+    const QByteArray control = readSmt("control");
+    QFile levelFile(QStringLiteral("/etc/wildos/protection-level"));
+    const QByteArray level = levelFile.open(QIODevice::ReadOnly) ? levelFile.readAll().trimmed() : QByteArray();
+    return QFile::exists(cpuThreadsHelper) && !control.isEmpty() && control != "notsupported" && control != "notimplemented"
+        && !QFile::exists(QStringLiteral("/etc/wildos/cpu-threads")) && level != "strict" && level != "maximum";
+}
+
+bool SetupApp::hyperThreadingNeedsRestart() const
+{
+    return QFile::exists(QStringLiteral("/etc/wildos/cpu-threads")) && readSmt("active") != "1";
+}
+
 QString SetupApp::startSetup(const QString &licence, const QString &key, const QString &homeChoice)
 {
     if (preview()) {
         return {};
+    }
+    // A boot option, so it needs the administrator; setup goes ahead either way.
+    if (m_hyperThreading && hyperThreadingAvailable()) {
+        auto process = new QProcess(this);
+        connect(process, &QProcess::finished, this, [this, process] {
+            process->deleteLater();
+            Q_EMIT optionsChanged();
+        });
+        process->start(QStringLiteral("pkexec"), {cpuThreadsHelper, QStringLiteral("on")});
     }
     Options o = Options::load();
     o.office = m_office;

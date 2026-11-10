@@ -252,7 +252,7 @@ PageScroll {
             width: parent.width
 
             Repeater {
-                model: ["background", "lockscreen", "taskbar", "fonts"]
+                model: ["themes", "background", "lockscreen", "taskbar", "fonts"]
 
                 UI.SettingRow {
                     required property string modelData

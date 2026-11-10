@@ -134,7 +134,11 @@ PageScroll {
         if (!kbits) {
             return "";
         }
-        return kbits >= 1000000 ? (kbits / 1000000).toFixed(1).replace(/\.0$/, "") + " Gbps" : Math.round(kbits / 1000) + " Mbps";
+        if (kbits < 1000000) {
+            return Math.round(kbits / 1000) + " Mbps";
+        }
+        const gbps = Number((kbits / 1000000).toFixed(1));
+        return gbps.toLocaleString(Qt.locale(), "f", gbps % 1 === 0 ? 0 : 1) + " Gbps";
     }
 
     function frequencyText(mhz) {

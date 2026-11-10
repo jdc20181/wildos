@@ -101,9 +101,11 @@ def memory_stats(domain):
     return stats
 
 
-def defined_memory(domain):
+def defined_memory(domain, inactive=True):
+    """The memory limit in bytes: the definition's, which the next start
+    takes, or with inactive=False the one the running Windows started with."""
     try:
-        root = ET.fromstring(dumpxml(domain, inactive=True))
+        root = ET.fromstring(dumpxml(domain, inactive=inactive))
     except (VirshError, ET.ParseError):
         return 0
     mem = root.find("memory")

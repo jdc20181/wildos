@@ -155,10 +155,14 @@ namespace WildOS.Guest
         }
 
         // Not while the session has just started or someone has just opened
-        // something: a warm app must never slow down a real launch.
+        // something: a warm app must never slow down a real launch. Nor in a
+        // session nobody has used yet (Wild OS signs in ahead of time, and
+        // the first app the person asks for must have Windows to itself):
+        // only once one of their apps is on screen.
         void Refill()
         {
             if ((DateTime.UtcNow - created).TotalSeconds < 20 || (DateTime.UtcNow - lastLaunch).TotalSeconds < 15) return;
+            if (!AnyAppOnScreen()) return;
             warm.RemoveAll(e => !Alive(e));
             int count = 0;
             foreach (var app in wanted)
@@ -201,7 +205,11 @@ namespace WildOS.Guest
             if (!officeProgIds.TryGetValue(Stem(path), out progId)) return null;
             Type t = Type.GetTypeFromProgID(progId);
             if (t == null) return null;
-            return new Entry { Path = path, Id = id ?? Stem(path), Office = Activator.CreateInstance(t) };
+            var entry = new Entry { Path = path, Id = id ?? Stem(path), Office = Activator.CreateInstance(t) };
+            // It loads in the background: whatever the person opens next
+            // comes first. Taken, it gets its normal share back.
+            SetPriority(Stem(path), System.Diagnostics.ProcessPriorityClass.BelowNormal);
+            return entry;
         }
 
         bool Alive(Entry e)
@@ -215,6 +223,28 @@ namespace WildOS.Guest
             {
                 return false;
             }
+        }
+
+        static void SetPriority(string stem, System.Diagnostics.ProcessPriorityClass priority)
+        {
+            int session = System.Diagnostics.Process.GetCurrentProcess().SessionId;
+            foreach (var p in System.Diagnostics.Process.GetProcessesByName(stem))
+            {
+                try
+                {
+                    if (p.SessionId == session) p.PriorityClass = priority;
+                }
+                catch (Exception) { }
+            }
+        }
+
+        static bool AnyAppOnScreen()
+        {
+            foreach (Dictionary<string, object> w in Windows.List())
+            {
+                if (!(bool)w["tool"] && (long)w["owner"] == 0) return true;
+            }
+            return false;
         }
 
         static bool VisiblyRunning(string path)
@@ -235,6 +265,7 @@ namespace WildOS.Guest
             var reply = new Dictionary<string, object>();
             reply["type"] = "launched";
             reply["warm"] = true;
+            SetPriority(Stem(path), System.Diagnostics.ProcessPriorityClass.Normal);
             ShowOffice(entry.Office, Stem(path), args);
             reply["pid"] = 0L;
             return reply;

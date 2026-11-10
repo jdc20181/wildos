@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Layouts
+import QtQuick.Templates as T
 import WildOS.UI as UI
 
 // One step of setup: 36 / 40 padding, a 28px title over a 14px line, the
@@ -63,15 +64,26 @@ Item {
             }
         }
 
-        ColumnLayout {
-            id: body
+        // The step's content scrolls when it is taller than the room above
+        // the footer, so a longer step never pushes its buttons out of the
+        // window.
+        Flickable {
+            id: scroller
             Layout.fillWidth: true
-            Layout.topMargin: page.spacing
-            spacing: page.spacing
-        }
-
-        Item {
             Layout.fillHeight: true
+            Layout.topMargin: page.spacing
+            Layout.rightMargin: -14
+            contentWidth: width
+            contentHeight: body.implicitHeight + 16
+            clip: true
+            boundsBehavior: Flickable.StopAtBounds
+            T.ScrollBar.vertical: UI.ScrollBar {}
+
+            ColumnLayout {
+                id: body
+                width: scroller.width - 14
+                spacing: page.spacing
+            }
         }
 
         Item {

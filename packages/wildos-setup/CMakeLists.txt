@@ -5,17 +5,22 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 include(GNUInstallDirs)
 
-find_package(Qt6 6.8 REQUIRED COMPONENTS Core DBus)
+find_package(Qt6 6.8 REQUIRED COMPONENTS Core DBus Network)
 qt_standard_project_setup(REQUIRES 6.8)
 
 qt_add_executable(wildos-setup-helper src/main.cpp src/service.cpp src/service.h)
-target_link_libraries(wildos-setup-helper PRIVATE Qt6::Core Qt6::DBus)
+target_link_libraries(wildos-setup-helper PRIVATE Qt6::Core Qt6::DBus Qt6::Network)
+
+# Runs as the new account, in its first session.
+qt_add_executable(wildos-setup-wallet src/wallet.cpp)
+target_link_libraries(wildos-setup-wallet PRIVATE Qt6::Core Qt6::DBus)
 
 set(LIBEXEC ${CMAKE_INSTALL_PREFIX}/libexec/wildos)
-install(TARGETS wildos-setup-helper RUNTIME DESTINATION ${LIBEXEC})
+install(TARGETS wildos-setup-helper wildos-setup-wallet RUNTIME DESTINATION ${LIBEXEC})
 install(PROGRAMS data/wildos-setup-boot data/wildos-setup-session DESTINATION ${LIBEXEC})
 install(FILES data/wildos-setup-boot.service data/wildos-setup-helper.service
         DESTINATION ${CMAKE_INSTALL_PREFIX}/lib/systemd/system)
+install(FILES data/wildos-setup-wallet.service DESTINATION ${CMAKE_INSTALL_PREFIX}/lib/systemd/user)
 install(FILES data/org.wildos.Setup1.service DESTINATION ${CMAKE_INSTALL_DATADIR}/dbus-1/system-services)
 install(FILES data/org.wildos.Setup1.conf DESTINATION ${CMAKE_INSTALL_DATADIR}/dbus-1/system.d)
 install(FILES data/org.wildos.setup.policy DESTINATION ${CMAKE_INSTALL_DATADIR}/polkit-1/actions)

@@ -1,0 +1,25 @@
+{
+    "id": "graphite",
+    "name": "Graphite",
+    "order": 3,
+    "default": false,
+    "description": "Minimal and quiet, so nothing competes with your work.",
+    "mode": "dark",
+    "accent": {
+        "name": "Silver",
+        "colour": "#c9ced8"
+    },
+    "textOnAccent": "#06120a",
+    "accentText": "#dfe2e8",
+    "glass": {
+        "colour": "#0e1016",
+        "alpha": 0.86
+    },
+    "wallpaper": "/usr/share/wallpapers/WildOS-black-curve",
+    "moreWallpapers": [
+        "/usr/share/wallpapers/WildOS-dark-waves",
+        "/usr/share/wallpapers/WildOS-storm-lake"
+    ],
+    "underglow": false,
+    "desktopTheme": "wildos-graphite"
+}

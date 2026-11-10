@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Name=Mail
+GenericName=Email
+Comment=Read and write email, with trackers blocked
+Exec=wildos-mail %u
+Icon=org.wildos.mail
+Terminal=false
+StartupNotify=true
+StartupWMClass=wildos-mail
+Categories=Qt;Network;Email;
+MimeType=x-scheme-handler/mailto;x-scheme-handler/com.googleusercontent.apps.590402290962-2i0b7rqma8b9nmtfrcp7fa06g6cf7g74;
+Keywords=email;mail;inbox;imap;smtp;gmail;outlook;

@@ -1,0 +1,10 @@
+[Sound Theme]
+Name=Wild OS
+Comment=Deep, warm and restrained, made for Wild OS
+# Anything an app asks for that Wild OS has no sound of its own for comes
+# from the freedesktop set, never KDE's Ocean, so the two styles don't mix.
+Inherits=freedesktop
+Directories=stereo
+
+[stereo]
+OutputProfile=stereo

@@ -1,0 +1,32 @@
+Source: wildos-rdp
+Section: x11
+Priority: optional
+Maintainer: Wild OS Developers <dev@wildos.io>
+Build-Depends:
+ debhelper-compat (= 13),
+ cmake,
+ pkgconf,
+ qt6-base-dev,
+ qt6-base-private-dev,
+ libwayland-dev,
+ wayland-protocols,
+ libkf6config-dev,
+ libkf6windowsystem-dev,
+ freerdp3-dev (>= 3.32),
+ libwinpr3-dev (>= 3.32),
+Standards-Version: 4.7.0
+Rules-Requires-Root: no
+
+Package: wildos-rdp
+Architecture: any
+Depends:
+ ${shlibs:Depends},
+ ${misc:Depends},
+ libfreerdp3-3 (>= 3.32),
+ libfreerdp-client3-3 (>= 3.32),
+ qt6-wayland,
+Description: Wild OS window client for Windows mode
+ Shows each Windows app from Windows mode as a window of its own on the
+ Wild OS desktop, drawn at the screen's own scale, with copy and paste,
+ sound and the shared folders. While Windows wakes, the window is already
+ there with the Wild OS mark in it.

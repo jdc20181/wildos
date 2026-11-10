@@ -121,6 +121,26 @@ PlasmoidItem {
         if (s.secureboot === "off") {
             row("secureboot", "chip", "Startup protection", "Secure Boot is off", "warn", "How to turn it on", "help:secure-boot");
         }
+
+        // A warning the person chose to ignore stays listed but quiet, with
+        // the way back; one they could ignore gets an Ignore button. Security
+        // updates are never in either set.
+        const ignored = String(s.ignored || "").split(",").filter(k => k.length > 0);
+        const ignorable = ["encryption", "apps", "devices", "secureboot"];
+        for (const area of list) {
+            area.ignorable = false;
+            if (area.tone !== "warn" || !ignorable.includes(area.id)) {
+                continue;
+            }
+            if (ignored.includes(area.id)) {
+                area.tone = "quiet";
+                area.status += ". Ignored";
+                area.action = "Show again";
+                area.run = "unignore:" + area.id;
+            } else {
+                area.ignorable = true;
+            }
+        }
         return list;
     }
 
@@ -132,14 +152,19 @@ PlasmoidItem {
         if (minutes < 60) {
             return "Checked " + minutes + " min ago";
         }
-        return "Checked at " + Qt.formatTime(new Date(lastChecked), "HH:mm");
+        return "Checked at " + new Date(lastChecked).toLocaleTimeString(Qt.locale(), Locale.ShortFormat);
     }
 
     P5Support.DataSource {
         id: checker
         engine: "executable"
         readonly property string command: security.libexec + "security-status"
-        connectedSources: [command]
+        // Each refresh is its own source (a numbered comment), as with run():
+        // the engine hands a source it already has its last output, so the
+        // same command reconnected could report the state from before an
+        // Ignore.
+        property string current: command
+        connectedSources: [current]
         // Most of this rarely changes, but a minute keeps the chip honest
         // after a service stops or updates arrive.
         interval: 60000
@@ -171,9 +196,21 @@ PlasmoidItem {
         maybeNotifyUpdates();
     }
 
+    property int checkCount: 0
+
     function refreshStatus(): void {
-        checker.disconnectSource(checker.command);
-        checker.connectSource(checker.command);
+        checker.disconnectSource(checker.current);
+        checkCount += 1;
+        checker.current = checker.command + " #" + checkCount;
+        checker.connectSource(checker.current);
+    }
+
+    // The status is read again just after an Ignore or Show again, once the
+    // command has written the list.
+    Timer {
+        id: ignoreRefresh
+        interval: 400
+        onTriggered: security.refreshStatus()
     }
 
     Timer {
@@ -360,6 +397,13 @@ PlasmoidItem {
             openPrivacy();
         } else if (what === "updates") {
             openUpdates();
+        } else if (what.indexOf("ignore:") === 0 || what.indexOf("unignore:") === 0) {
+            const at = what.indexOf(":");
+            const key = what.slice(at + 1);
+            if (["encryption", "apps", "devices", "secureboot"].includes(key)) {
+                run(libexec + "security-status " + what.slice(0, at) + " " + key);
+                ignoreRefresh.restart();
+            }
         } else if (what.indexOf("help:") === 0) {
             Qt.openUrlExternally(helpBase + (helpArticles[what.slice(5)] || ""));
             expanded = false;

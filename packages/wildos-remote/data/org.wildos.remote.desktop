@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Name=Remote
+GenericName=Remote desktop and SSH
+Comment=Connect to other PCs and servers
+Exec=wildos-remote %u
+Icon=org.wildos.remote
+Terminal=false
+StartupNotify=true
+StartupWMClass=wildos-remote
+Categories=Qt;Network;RemoteAccess;
+MimeType=x-scheme-handler/rdp;x-scheme-handler/ssh;application/x-rdp;
+Keywords=remote desktop;rdp;ssh;sftp;terminal;server;mstsc;putty;

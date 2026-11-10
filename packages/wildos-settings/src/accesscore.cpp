@@ -14,10 +14,13 @@
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QLibraryInfo>
 #include <QPointer>
 #include <QProcess>
 #include <QStandardPaths>
 #include <QTimer>
+
+#include <algorithm>
 
 #include <signal.h>
 #include <sys/stat.h>
@@ -190,6 +193,42 @@ const PointerColour pointerList[] = {
     {"yellow", "Yellow", "#f2d34a", "WildOS-Yellow"},
     {"seaglass", "Sea glass", "#7fd6c8", "WildOS-SeaGlass"},
 };
+
+// wildos-shell's effects, by their KWin plugin ids.
+const QString outlineEffect = QStringLiteral("wildos_outline");
+const QString blurEffect = QStringLiteral("wildos_blurinactive");
+const QString blurGroup = QStringLiteral("Effect-wildos_blurinactive");
+
+void callEffects(const QString &method, const QString &effect)
+{
+    QDBusMessage message = QDBusMessage::createMethodCall(kwinService, QStringLiteral("/Effects"), QStringLiteral("org.kde.kwin.Effects"), method);
+    message << effect;
+    QDBusConnection::sessionBus().asyncCall(message);
+}
+
+bool effectEnabled(const QString &effect)
+{
+    return fresh(QStringLiteral("kwinrc"))->group(QStringLiteral("Plugins")).readEntry(effect + QStringLiteral("Enabled"), false);
+}
+
+// What System Settings' effects page does: the Plugins key is what KWin
+// reads at the next sign-in, the D-Bus call changes the running session.
+void setEffectEnabled(const QString &effect, bool on)
+{
+    KSharedConfigPtr kwin = fresh(QStringLiteral("kwinrc"));
+    kwin->group(QStringLiteral("Plugins")).writeEntry(effect + QStringLiteral("Enabled"), on, KConfig::Notify);
+    kwin->sync();
+    callEffects(on ? QStringLiteral("loadEffect") : QStringLiteral("unloadEffect"), effect);
+}
+
+template<typename T>
+void writeBlurSetting(const char *key, const T &value)
+{
+    KSharedConfigPtr kwin = fresh(QStringLiteral("kwinrc"));
+    kwin->group(blurGroup).writeEntry(key, value, KConfig::Notify);
+    kwin->sync();
+    callEffects(QStringLiteral("reconfigureEffect"), blurEffect);
+}
 
 QString cursorTheme()
 {
@@ -621,5 +660,72 @@ void setMonoAudio(bool on)
         disable << QStringList{monoUnit} << false;
         bus.call(disable, QDBus::Block, 5000);
     }
+}
+
+bool windowEffectsInstalled()
+{
+    const QString dir = QLibraryInfo::path(QLibraryInfo::PluginsPath) + QStringLiteral("/kwin/effects/plugins/");
+    return QFile::exists(dir + outlineEffect + QStringLiteral(".so")) && QFile::exists(dir + blurEffect + QStringLiteral(".so"));
+}
+
+bool windowEffectsSupported()
+{
+    QDBusMessage message = QDBusMessage::createMethodCall(kwinService, QStringLiteral("/Effects"), QStringLiteral("org.kde.kwin.Effects"),
+                                                          QStringLiteral("isEffectSupported"));
+    message << outlineEffect;
+    const QDBusReply<bool> reply = QDBusConnection::sessionBus().call(message, QDBus::Block, 2000);
+    // No answer (KWin busy or not running) is not a reason to lock the
+    // switches; KWin refuses to load an effect it cannot run anyway.
+    return !reply.isValid() || reply.value();
+}
+
+bool outlineWindows()
+{
+    return effectEnabled(outlineEffect);
+}
+
+void setOutlineWindows(bool on)
+{
+    setEffectEnabled(outlineEffect, on);
+}
+
+bool blurBackground()
+{
+    return effectEnabled(blurEffect);
+}
+
+void setBlurBackground(bool on)
+{
+    setEffectEnabled(blurEffect, on);
+}
+
+int blurStrength()
+{
+    return std::clamp(fresh(QStringLiteral("kwinrc"))->group(blurGroup).readEntry("Strength", 3), 1, 5);
+}
+
+void setBlurStrength(int step)
+{
+    writeBlurSetting("Strength", std::clamp(step, 1, 5));
+}
+
+bool blurDesktop()
+{
+    return fresh(QStringLiteral("kwinrc"))->group(blurGroup).readEntry("Desktop", true);
+}
+
+void setBlurDesktop(bool on)
+{
+    writeBlurSetting("Desktop", on);
+}
+
+bool strongerText()
+{
+    return fresh(QStringLiteral("wildosrc"))->group(QStringLiteral("Accessibility")).readEntry("StrongerText", false);
+}
+
+void setStrongerText(bool on)
+{
+    writeWildos("Accessibility", "StrongerText", on);
 }
 }

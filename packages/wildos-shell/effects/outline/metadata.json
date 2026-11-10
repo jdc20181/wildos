@@ -1,0 +1,10 @@
+{
+    "KPlugin": {
+        "Category": "Accessibility",
+        "Description": "Draws a clear edge round every window and a thick accent ring round the one in use",
+        "EnabledByDefault": false,
+        "License": "GPL",
+        "Name": "Outline windows"
+    },
+    "X-KWin-Internal": true
+}

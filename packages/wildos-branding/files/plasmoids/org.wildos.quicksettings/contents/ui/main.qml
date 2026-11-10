@@ -156,6 +156,44 @@ PlasmoidItem {
         shell.connectSource(command);
     }
 
+    // Keep awake: until a set time, or until turned off when keepAwakeUntil
+    // is 0. The block itself lives in powerdevil, so if something else
+    // releases it the timer here is dropped too.
+    readonly property bool keepingAwake: power !== null && power.keepingAwake
+    property real keepAwakeUntil: 0
+
+    function keepAwake(minutes: int): void {
+        if (!power) {
+            return;
+        }
+        if (minutes < 0) {
+            keepAwakeUntil = 0;
+            keepAwakeTimer.stop();
+            power.setKeepAwake(false);
+            return;
+        }
+        power.setKeepAwake(true);
+        keepAwakeUntil = minutes > 0 ? Date.now() + minutes * 60000 : 0;
+        if (minutes > 0) {
+            keepAwakeTimer.interval = minutes * 60000;
+            keepAwakeTimer.restart();
+        } else {
+            keepAwakeTimer.stop();
+        }
+    }
+
+    onKeepingAwakeChanged: {
+        if (!keepingAwake) {
+            keepAwakeUntil = 0;
+            keepAwakeTimer.stop();
+        }
+    }
+
+    Timer {
+        id: keepAwakeTimer
+        onTriggered: quick.keepAwake(-1)
+    }
+
     readonly property string reconfigureKWin: "dbus-send --session --type=method_call --dest=org.kde.KWin /KWin org.kde.KWin.reconfigure"
 
     // On means warmer colours on the screen right now, which is what the tile

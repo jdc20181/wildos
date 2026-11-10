@@ -251,6 +251,9 @@ PageScroll {
 
     readonly property var output: PreferredDevice.sink && PreferredDevice.sink.name !== "auto_null" ? PreferredDevice.sink : null
     readonly property var input: PreferredDevice.source
+    // The microphone is only opened while someone tests it, never just
+    // because the page is open.
+    property bool testingMic: false
 
     // Windows mode's apps all play through its one FreeRDP connection,
     // whose PulseAudio backend names itself "freerdp" (rdpsnd_pulse.c) and
@@ -382,21 +385,28 @@ PageScroll {
 
                 UI.SettingRow {
                     title: "Microphone"
-                    description: page.input ? page.inputInfo(page.input).phrase + ". Speak to test it." : "No microphone found"
+                    description: !page.input ? "No microphone found"
+                        : page.testingMic ? page.inputInfo(page.input).phrase + ". Listening, speak to test it."
+                        : page.inputInfo(page.input).phrase
                     minHeight: 54
 
-                    // The level of whatever the microphone hears. It lives
-                    // in the row, so it starts with the page and stops when
-                    // the page goes; plasma-pa keeps its own stream out of
-                    // the taskbar's "microphone in use" mark.
+                    // The level of whatever the microphone hears, only while
+                    // a test runs: with no target the monitor opens no
+                    // stream. Leaving the page ends it too.
                     VolumeMonitor {
                         id: micLevel
-                        target: page.input
+                        target: page.testingMic ? page.input : null
+                    }
+
+                    Timer {
+                        running: page.testingMic
+                        interval: 15000
+                        onTriggered: page.testingMic = false
                     }
 
                     Row {
                         anchors.verticalCenter: parent.verticalCenter
-                        visible: page.input !== null
+                        visible: page.input !== null && page.testingMic
                         spacing: 3
                         Accessible.role: Accessible.Indicator
                         Accessible.name: "Microphone level"
@@ -418,6 +428,14 @@ PageScroll {
                                 color: index < parent.lit ? UI.Style.accent : UI.Style.tone(0.14)
                             }
                         }
+                    }
+
+                    UI.Button {
+                        anchors.verticalCenter: parent.verticalCenter
+                        visible: page.input !== null
+                        text: page.testingMic ? "Stop" : "Test"
+                        Accessible.name: page.testingMic ? "Stop testing the microphone" : "Test the microphone"
+                        onClicked: page.testingMic = !page.testingMic
                     }
 
                     UI.ComboBox {
@@ -475,6 +493,61 @@ PageScroll {
                 SystemSoundsRow {
                     visible: page.eventSounds !== null
                     entry: page.eventSounds
+                }
+            }
+        }
+    }
+
+    ColumnLayout {
+        Layout.fillWidth: true
+        spacing: 10
+
+        SectionTitle {
+            text: "Sounds"
+        }
+
+        UI.Card {
+            Layout.fillWidth: true
+
+            Column {
+                width: parent.width
+
+                UI.SettingRow {
+                    iconName: "sound"
+                    title: "Sound scheme"
+                    description: "The sounds for notifications, warnings, devices and more"
+
+                    UI.ComboBox {
+                        anchors.verticalCenter: parent.verticalCenter
+                        Accessible.name: "Sound scheme"
+                        model: [
+                            { value: "wildos", text: "Wild OS" },
+                            { value: "ocean", text: "Ocean (KDE)" },
+                            { value: "none", text: "No sounds" }
+                        ]
+                        currentIndex: model.findIndex(o => o.value === SoundTheme.scheme)
+                        onActivated: index => SoundTheme.setScheme(model[index].value)
+                    }
+                }
+
+                UI.SettingRow {
+                    iconName: "power"
+                    title: "Play a sound when Wild OS starts"
+                    description: "When the desktop appears after you sign in"
+                    status: SoundTheme.startupSound ? "On" : "Off"
+                    enabled: SoundTheme.scheme !== "none"
+
+                    UI.Toggle {
+                        anchors.verticalCenter: parent.verticalCenter
+                        checked: SoundTheme.startupSound
+                        Accessible.name: "Play a sound when Wild OS starts"
+                        onToggled: {
+                            SoundTheme.setStartupSound(checked);
+                            if (checked) {
+                                SoundTheme.preview("desktop-login");
+                            }
+                        }
+                    }
                 }
             }
         }

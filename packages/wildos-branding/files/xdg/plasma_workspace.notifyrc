@@ -1,0 +1,5 @@
+# A sound when the desktop starts, as Windows plays one; signing out stays
+# silent, as it does on Windows. Settings > Sound turns the start-up sound
+# off. The sound itself is desktop-login in the Wild OS sound theme.
+[Event/startkde]
+Action=Sound

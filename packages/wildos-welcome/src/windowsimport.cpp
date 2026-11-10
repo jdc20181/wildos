@@ -666,7 +666,7 @@ void WindowsImport::release()
 QString WindowsImport::formatBytes(qint64 bytes, bool whole) const
 {
     // Decimal units, the way drives are sold and Windows shows them.
-    const QLocale locale(QLocale::English, QLocale::UnitedKingdom);
+    const QLocale locale = QLocale::system();
     const double value = double(bytes);
     if (value >= 1e12) {
         return QStringLiteral("%1 TB").arg(locale.toString(value / 1e12, 'f', 1));

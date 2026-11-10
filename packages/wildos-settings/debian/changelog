@@ -1,3 +1,13 @@
+wildos-settings (0.1.1) trixie; urgency=medium
+
+  * Accessibility has Outline windows, Stronger text on glass and Blur windows
+    in the background, with a blur strength and a choice to blur the desktop
+    too.
+  * wildos-auto-theme puts on the solid Plasma style while stronger text on
+    glass is on.
+
+ -- Wild OS Developers <dev@wildos.io>  Tue, 10 Nov 2026 08:10:42 +0000
+
 wildos-settings (0.1.0) trixie; urgency=medium
 
   * Initial release.

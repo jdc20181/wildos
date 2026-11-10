@@ -1,0 +1,29 @@
+Source: wildos-lighting
+Section: x11
+Priority: optional
+Maintainer: Wild OS Developers <dev@wildos.io>
+Build-Depends:
+ debhelper-compat (= 13),
+ cmake,
+ qt6-base-dev,
+ libkf6config-dev,
+Standards-Version: 4.7.0
+Rules-Requires-Root: no
+
+Package: wildos-lighting
+Architecture: any
+Depends:
+ ${shlibs:Depends},
+ ${misc:Depends},
+ udev,
+Suggests:
+ openrgb (>= 1.0),
+Description: Wild OS keyboard and mouse lighting
+ Sets RGB keyboards, mice and other USB lighting to the colour and effect
+ of the taskbar underglow, through OpenRGB, when Settings has it turned on.
+ .
+ OpenRGB's server runs only while the lighting is on and the session is in
+ front, and listens on the loopback only. OpenRGB's own udev rules are
+ replaced with narrower ones: the person at the screen gets the hidraw
+ nodes of supported USB devices, except those that report key presses, and
+ nothing else.

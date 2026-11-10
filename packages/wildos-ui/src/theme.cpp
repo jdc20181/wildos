@@ -4,8 +4,12 @@
 #include <KSharedConfig>
 
 #include <QEvent>
+#include <QFile>
 #include <QFont>
 #include <QGuiApplication>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QStandardPaths>
 
 namespace
 {
@@ -22,6 +26,26 @@ QColor parseColour(const QString &value)
     }
     return value.isEmpty() ? QColor() : QColor(value);
 }
+
+// Dawn's window glass and the light glass of the theme cards. A theme's
+// glass is given as this one surface; every other surface keeps its
+// relation to it (see Style.tinted).
+const QColor darkReference = QColor::fromRgbF(18 / 255.0, 22 / 255.0, 40 / 255.0, 0.86);
+const QColor lightReference = QColor::fromRgbF(250 / 255.0, 251 / 255.0, 254 / 255.0, 0.82);
+
+// {"colour": "#rrggbb", "alpha": 0.86}, or a bare "#rrggbb".
+QColor jsonColour(const QJsonValue &value)
+{
+    if (value.isString()) {
+        return QColor(value.toString());
+    }
+    const QJsonObject object = value.toObject();
+    QColor colour(object.value(QStringLiteral("colour")).toString());
+    if (colour.isValid()) {
+        colour.setAlphaF(object.value(QStringLiteral("alpha")).toDouble(1.0));
+    }
+    return colour;
+}
 }
 
 Theme::Theme(QObject *parent)
@@ -36,6 +60,22 @@ Theme::Theme(QObject *parent)
     m_settle.setSingleShot(true);
     m_settle.setInterval(150);
     connect(&m_settle, &QTimer::timeout, this, &Theme::read);
+    // Whether the theme's glass and text colours apply depends on the mode
+    // and the accent, so either change can change them.
+    connect(this, &Theme::darkChanged, this, &Theme::themeChanged);
+    connect(this, &Theme::accentChanged, this, &Theme::themeChanged);
+    readTheme();
+    readAccessibility();
+    m_wildosWatcher = KConfigWatcher::create(KSharedConfig::openConfig(QStringLiteral("wildosrc")));
+    if (m_wildosWatcher) {
+        connect(m_wildosWatcher.data(), &KConfigWatcher::configChanged, this, [this](const KConfigGroup &group) {
+            if (group.name() == QLatin1String("Theme")) {
+                readTheme();
+            } else if (group.name() == QLatin1String("Accessibility")) {
+                readAccessibility();
+            }
+        });
+    }
     m_watcher = KConfigWatcher::create(KSharedConfig::openConfig(QStringLiteral("kdeglobals")));
     if (m_watcher) {
         connect(m_watcher.data(), &KConfigWatcher::configChanged, this, [this](const KConfigGroup &group) {
@@ -91,6 +131,64 @@ void Theme::read()
         m_reducedMotion = reduced;
         Q_EMIT reducedMotionChanged();
     }
+}
+
+void Theme::readTheme()
+{
+    KSharedConfigPtr config = KSharedConfig::openConfig(QStringLiteral("wildosrc"));
+    config->reparseConfiguration();
+    const QString id = config->group(QStringLiteral("Theme")).readEntry("Id", QStringLiteral("dawn"));
+
+    QJsonObject theme;
+    const QString path = QStandardPaths::locate(QStandardPaths::GenericDataLocation, QStringLiteral("wildos/themes/%1.json").arg(id));
+    QFile file(path);
+    if (!path.isEmpty() && file.open(QIODevice::ReadOnly)) {
+        theme = QJsonDocument::fromJson(file.readAll()).object();
+    }
+
+    m_themeId = id;
+    m_themeMode = theme.value(QStringLiteral("mode")).toString();
+    m_themeAccent = jsonColour(theme.value(QStringLiteral("accent")).toObject().value(QStringLiteral("colour")));
+    m_glass = jsonColour(theme.value(QStringLiteral("glass")));
+    m_taskbarTint = jsonColour(theme.value(QStringLiteral("taskbarGlass")));
+    m_textOnAccent = jsonColour(theme.value(QStringLiteral("textOnAccent")));
+    m_accentText = jsonColour(theme.value(QStringLiteral("accentText")));
+    Q_EMIT themeChanged();
+}
+
+void Theme::readAccessibility()
+{
+    KSharedConfigPtr config = KSharedConfig::openConfig(QStringLiteral("wildosrc"));
+    config->reparseConfiguration();
+    const bool stronger = config->group(QStringLiteral("Accessibility")).readEntry("StrongerText", false);
+    if (stronger != m_strongerText) {
+        m_strongerText = stronger;
+        Q_EMIT strongerTextChanged();
+    }
+}
+
+bool Theme::themeMode() const
+{
+    if (highContrast() || m_themeMode.isEmpty()) {
+        return false;
+    }
+    return (m_themeMode == QLatin1String("dark")) == m_dark;
+}
+
+QColor Theme::glassReference() const
+{
+    return m_dark ? darkReference : lightReference;
+}
+
+QColor Theme::glassTint() const
+{
+    return themeMode() && m_glass.isValid() ? m_glass : glassReference();
+}
+
+bool Theme::themeAccent() const
+{
+    return themeMode() && m_themeAccent.isValid() && m_themeAccent.rgb() == m_accent.rgb() && m_textOnAccent.isValid()
+        && m_accentText.isValid();
 }
 
 qreal Theme::fontPointSize() const

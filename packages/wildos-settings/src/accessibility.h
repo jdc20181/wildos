@@ -38,6 +38,13 @@ class Accessibility : public QObject
     Q_PROPERTY(int slowKeysDelay READ slowKeysDelay NOTIFY changed)
     Q_PROPERTY(bool bounceKeys READ bounceKeys NOTIFY changed)
     Q_PROPERTY(int bounceKeysDelay READ bounceKeysDelay NOTIFY changed)
+    Q_PROPERTY(bool windowEffectsInstalled READ windowEffectsInstalled CONSTANT)
+    Q_PROPERTY(bool windowEffectsSupported READ windowEffectsSupported CONSTANT)
+    Q_PROPERTY(bool outlineWindows READ outlineWindows NOTIFY changed)
+    Q_PROPERTY(bool blurBackground READ blurBackground NOTIFY changed)
+    Q_PROPERTY(int blurStrength READ blurStrength NOTIFY changed)
+    Q_PROPERTY(bool blurDesktop READ blurDesktop NOTIFY changed)
+    Q_PROPERTY(bool strongerText READ strongerText NOTIFY changed)
 
 public:
     explicit Accessibility(QObject *parent = nullptr);
@@ -62,6 +69,13 @@ public:
     int slowKeysDelay() const { return m_slowKeysDelay; }
     bool bounceKeys() const { return m_bounceKeys; }
     int bounceKeysDelay() const { return m_bounceKeysDelay; }
+    bool windowEffectsInstalled() const { return m_windowEffectsInstalled; }
+    bool windowEffectsSupported() const { return m_windowEffectsSupported; }
+    bool outlineWindows() const { return m_outlineWindows; }
+    bool blurBackground() const { return m_blurBackground; }
+    int blurStrength() const { return m_blurStrength; }
+    bool blurDesktop() const { return m_blurDesktop; }
+    bool strongerText() const { return m_strongerText; }
 
     Q_INVOKABLE void setPointerColour(const QString &id);
     Q_INVOKABLE void setPointerSize(int size);
@@ -76,6 +90,11 @@ public:
     Q_INVOKABLE void setSlowKeysDelay(int ms);
     Q_INVOKABLE void setBounceKeys(bool on);
     Q_INVOKABLE void setBounceKeysDelay(int ms);
+    Q_INVOKABLE void setOutlineWindows(bool on);
+    Q_INVOKABLE void setBlurBackground(bool on);
+    Q_INVOKABLE void setBlurStrength(int step);
+    Q_INVOKABLE void setBlurDesktop(bool on);
+    Q_INVOKABLE void setStrongerText(bool on);
 
 public Q_SLOTS:
     // Rereads everything. KWin has no signal for zoom, so the page also
@@ -109,6 +128,13 @@ private:
     int m_slowKeysDelay = 500;
     bool m_bounceKeys = false;
     int m_bounceKeysDelay = 500;
+    bool m_windowEffectsInstalled = false;
+    bool m_windowEffectsSupported = true;
+    bool m_outlineWindows = false;
+    bool m_blurBackground = false;
+    int m_blurStrength = 3;
+    bool m_blurDesktop = true;
+    bool m_strongerText = false;
 
     QList<KConfigWatcher::Ptr> m_watchers;
 };

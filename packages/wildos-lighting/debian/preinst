@@ -1,0 +1,14 @@
+#!/bin/sh
+set -e
+
+# OpenRGB's udev rules give more than lighting needs (see 60-openrgb.rules
+# in this package). Divert them under a name udev does not read, so ours
+# take their place and their device table stays readable. The diversion
+# also catches an OpenRGB installed later.
+if [ "$1" = "install" ] || [ "$1" = "upgrade" ]; then
+    dpkg-divert --package wildos-lighting --add --rename \
+        --divert /usr/lib/udev/rules.d/60-openrgb.rules.stock \
+        /usr/lib/udev/rules.d/60-openrgb.rules >/dev/null
+fi
+
+#DEBHELPER#

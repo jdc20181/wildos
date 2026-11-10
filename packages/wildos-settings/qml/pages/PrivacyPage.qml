@@ -97,8 +97,8 @@ PageScroll {
         }
     }
 
-    // Standard is what Wild OS ships. Strict adds a firewall and holds back
-    // unknown USB devices found at start-up; Maximum also blocks network
+    // Standard is what Wild OS ships, firewall included. Strict also holds
+    // back unknown USB devices found at start-up; Maximum also blocks network
     // discovery, Bluetooth and the camera (settings-protection). Both
     // shorten the screen lock.
     ColumnLayout {
@@ -293,7 +293,7 @@ PageScroll {
                 minHeight: 64
                 title: "Block new USB devices"
                 description: page.usbError.length > 0 ? page.usbError
-                    : "Stops anything plugged in from working until you allow it from the shield on the taskbar."
+                    : "Memory sticks, drives, a keyboard, a mouse, webcams and audio devices work straight away. Anything else waits until you allow it from the shield on the taskbar."
                 status: (Protection.status.devices === "on") ? "On" : "Off"
 
                 UI.Toggle {

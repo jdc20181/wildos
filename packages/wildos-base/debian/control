@@ -16,6 +16,8 @@ Depends:
  sudo,
  polkitd,
  locales,
+ systemd-zram-generator,
+ systemd-oomd,
 Description: Wild OS base system
  Identity and security layer of Wild OS. Pulls in the Kicksecure hardening
  packages (kernel and sysctl hardening, AppArmor profiles, secure time sync,

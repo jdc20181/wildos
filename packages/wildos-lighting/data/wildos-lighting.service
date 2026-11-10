@@ -1,0 +1,16 @@
+[Unit]
+Description=Keep keyboard and mouse lighting in step with the taskbar underglow
+PartOf=graphical-session.target
+After=graphical-session.target
+# Debian trixie has no OpenRGB package; without one installed there is
+# nothing to light.
+ConditionFileIsExecutable=/usr/bin/openrgb
+
+[Service]
+Type=exec
+ExecStart=/usr/libexec/wildos/wildos-lighting
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=graphical-session.target

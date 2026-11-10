@@ -6,10 +6,10 @@
 
     Wild OS fork of the Plasma 6.3.6 task manager (org.kde.plasma.taskmanager).
     The task models and backend are Plasma's own C++ (org.kde.taskmanager and
-    org.kde.plasma.private.taskmanager); the buttons, launch feedback and the
-    right-click menu are redrawn to the Wild OS Taskbar design, and the
-    options Wild OS never shows (text labels, stripes, tooltips, window
-    previews, activities) are gone.
+    org.kde.plasma.private.taskmanager); the buttons, launch feedback, the
+    right-click menu and the window previews are redrawn to the Wild OS
+    Taskbar design, and the options Wild OS never shows (text labels,
+    stripes, tooltips, activities) are gone.
 */
 
 pragma ComponentBehavior: Bound
@@ -114,6 +114,93 @@ PlasmoidItem {
     onDragSourceChanged: {
         if (dragSource === null) {
             tasksModel.syncLaunchers();
+        } else {
+            hidePreview();
+        }
+    }
+
+    // Window previews: they open after a short rest on a running app, follow
+    // the pointer from app to app while up, and close a moment after it has
+    // left both the buttons and the preview, so crossing the gap between
+    // them does not close it.
+    WindowPreview {
+        id: windowPreview
+        tasksRoot: tasks
+
+        onHoveredChanged: {
+            if (hovered) {
+                previewCloseTimer.stop();
+            } else {
+                previewCloseTimer.restart();
+            }
+        }
+    }
+
+    property Item previewPending: null
+    // A button just clicked keeps its preview away until the pointer leaves
+    // it, as on Windows.
+    property Item previewMuted: null
+
+    function taskHovered(task: Item, hovered: bool): void {
+        if (!hovered) {
+            if (previewMuted === task) {
+                previewMuted = null;
+            }
+            if (previewPending === task) {
+                previewPending = null;
+                previewOpenTimer.stop();
+            }
+            previewCloseTimer.restart();
+            return;
+        }
+        const wanted = (task as Task).isWindow && previewMuted !== task && menuTask === null && dragSource === null;
+        if (!wanted) {
+            previewOpenTimer.stop();
+            previewCloseTimer.restart();
+            return;
+        }
+        previewCloseTimer.stop();
+        if (windowPreview.visible) {
+            windowPreview.task = task;
+            return;
+        }
+        previewPending = task;
+        previewOpenTimer.restart();
+    }
+
+    function hidePreview(): void {
+        previewOpenTimer.stop();
+        previewCloseTimer.stop();
+        previewPending = null;
+        windowPreview.shown = false;
+    }
+
+    function mutePreview(task: Item): void {
+        previewMuted = task;
+        hidePreview();
+    }
+
+    Timer {
+        id: previewOpenTimer
+        interval: 400
+        onTriggered: {
+            const task = tasks.previewPending as Task;
+            tasks.previewPending = null;
+            if (task && task.hovered && task.isWindow) {
+                windowPreview.task = task;
+                windowPreview.shown = true;
+            }
+        }
+    }
+
+    Timer {
+        id: previewCloseTimer
+        interval: 300
+        onTriggered: {
+            const task = windowPreview.task as Task;
+            if (!windowPreview.hovered && !(task && task.hovered)) {
+                tasks.hidePreview();
+            }
         }
     }
 
@@ -162,7 +249,9 @@ PlasmoidItem {
 
     readonly property TaskManagerApplet.Backend backend: TaskManagerApplet.Backend {
         id: backend
-        highlightWindows: false
+        // Only the window previews ask for it: pointing at one shows that
+        // window full size and fades the others.
+        highlightWindows: true
 
         onAddLauncher: url => tasks.addLauncher(url)
     }
@@ -390,6 +479,7 @@ PlasmoidItem {
             tasksRoot: tasks,
             keyboard: fromKeyboard
         });
+        hidePreview();
         menuTask = task;
         menu.closed.connect(() => {
             if (tasks.menuTask === task) {

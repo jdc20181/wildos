@@ -89,10 +89,28 @@ QString WindowsMode::setOption(const QString &key, const QString &value)
     return call(QStringLiteral("SetOption"), {key, value});
 }
 
-QString WindowsMode::setProductKey(const QString &key)
+void WindowsMode::setProductKey(const QString &key)
 {
-    // Activation waits on Microsoft's servers.
-    return call(QStringLiteral("SetProductKey"), {key}, 300000);
+    if (!m_service) {
+        Q_EMIT productKeyDone(QStringLiteral("Windows mode isn't installed on this PC."));
+        return;
+    }
+    if (m_activating) {
+        return;
+    }
+    m_activating = true;
+    Q_EMIT activatingChanged();
+    // Windows may have to start first, and activation then waits on
+    // Microsoft's servers, so Settings carries on meanwhile.
+    m_service->setTimeout(900000);
+    auto *watcher = new QDBusPendingCallWatcher(m_service->asyncCall(QStringLiteral("SetProductKey"), key), this);
+    connect(watcher, &QDBusPendingCallWatcher::finished, this, [this, watcher] {
+        watcher->deleteLater();
+        const QDBusPendingReply<QString> reply = *watcher;
+        m_activating = false;
+        Q_EMIT activatingChanged();
+        Q_EMIT productKeyDone(reply.isError() ? QStringLiteral("Windows mode didn't answer. Restart the PC, then try again.") : reply.value());
+    });
 }
 
 bool WindowsMode::keyShapeValid(const QString &key) const
@@ -132,7 +150,7 @@ QString WindowsMode::size(double bytes) const
     if (!(bytes > 0)) {
         return {};
     }
-    const QLocale locale(QLocale::English, QLocale::UnitedKingdom);
+    const QLocale locale = QLocale::system();
     const double gb = bytes / 1e9;
     return gb >= 1 ? QStringLiteral("%1 GB").arg(locale.toString(gb, 'f', 1)) : QStringLiteral("%1 MB").arg(qRound(bytes / 1e6));
 }

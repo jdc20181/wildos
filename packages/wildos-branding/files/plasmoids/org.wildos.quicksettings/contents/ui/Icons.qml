@@ -22,6 +22,7 @@ QtObject {
     readonly property string bluetooth: "M7 7l10 10-5 5V2l5 5L7 17"
     readonly property string flight: "M12 3v6M8.5 9h7M12 9l-9 6v2l9-3 9 3v-2zM12 14v5M9 21h6"
     readonly property string moon: "M20 14.5A8.5 8.5 0 0 1 9.5 4 8.5 8.5 0 1 0 20 14.5z"
+    readonly property string coffee: "M5 9.5h11V14a5 5 0 0 1-5 5h-1a5 5 0 0 1-5-5V9.5zM16 11h1.5a2.5 2.5 0 0 1 0 5H16M8 3.5v3M10.5 3.5v3M13 3.5v3"
     readonly property string sun: "M16 12a4 4 0 1 1-8 0a4 4 0 1 1 8 0zM12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"
     readonly property string vpn: "M12 3l7 3v6c0 4.4-3 7.6-7 9-4-1.4-7-4.6-7-9V6zM9.5 12h5"
     readonly property string speaker: "M4 9.5h4l5-4v13l-5-4H4z"

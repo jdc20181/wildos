@@ -16,10 +16,13 @@
 //               screen reader, as kcm_access writes them; KWin's plugins
 //               watch the file, so every write carries KConfig::Notify
 //   kdeglobals  the high contrast colour scheme
-//   kwinrc      the zoom effect and the on-screen keyboard
+//   kwinrc      the zoom effect, the on-screen keyboard, and the window
+//               outline and background blur effects with the blur's
+//               settings
 //   kcminputrc  the pointer theme and size
-//   wildosrc    what the lock and sign-in screens need to know, and the
-//               theme to go back to when high contrast is turned off
+//   wildosrc    what the lock and sign-in screens need to know, the theme
+//               to go back to when high contrast is turned off, and
+//               stronger text on glass
 namespace AccessCore
 {
 // Wild OS's high contrast scheme (wildos-branding).
@@ -73,4 +76,24 @@ void setPointer(const QString &colourId, int size);
 
 bool monoAudio();
 void setMonoAudio(bool on);
+
+// wildos-shell's KWin effects, loaded and unloaded at once and kept for
+// the next sign-in. Supported is false where KWin draws without OpenGL.
+bool windowEffectsInstalled();
+bool windowEffectsSupported();
+bool outlineWindows();
+void setOutlineWindows(bool on);
+bool blurBackground();
+void setBlurBackground(bool on);
+// 1 (lightest) to 5.
+int blurStrength();
+void setBlurStrength(int step);
+bool blurDesktop();
+void setBlurDesktop(bool on);
+
+// Glass behind text (the taskbar, Start, the flyouts, Wild OS apps) made
+// nearly solid and muted text brighter. WildOS.UI follows the key, and
+// wildos-auto-theme puts on the solid Plasma style that matches the theme.
+bool strongerText();
+void setStrongerText(bool on);
 }

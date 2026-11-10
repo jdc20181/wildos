@@ -1,0 +1,6 @@
+wildos-lighting (0.1.0) trixie; urgency=medium
+
+  * Keyboard and mouse lighting that follows the taskbar underglow, through
+    an OpenRGB server on the loopback that runs only while it is turned on.
+
+ -- Wild OS Developers <dev@wildos.io>  Mon, 09 Nov 2026 12:00:00 +0000

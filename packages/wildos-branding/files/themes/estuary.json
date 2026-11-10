@@ -1,0 +1,26 @@
+{
+    "id": "estuary",
+    "name": "Estuary",
+    "order": 6,
+    "default": false,
+    "description": "Fresh and airy, like a walk along the coast.",
+    "mode": "light",
+    "accent": {
+        "name": "Sea",
+        "colour": "#1b9a8f"
+    },
+    "textOnAccent": "#0f1530",
+    "accentText": "#11625b",
+    "glass": {
+        "colour": "#fafbfe",
+        "alpha": 0.82
+    },
+    "wallpaper": "/usr/share/wallpapers/WildOS-snowdonia",
+    "moreWallpapers": [
+        "/usr/share/wallpapers/WildOS-llandudno",
+        "/usr/share/wallpapers/WildOS-penmaenpool",
+        "/usr/share/wallpapers/WildOS-ogmore-by-sea"
+    ],
+    "underglow": false,
+    "desktopTheme": "wildos-light"
+}

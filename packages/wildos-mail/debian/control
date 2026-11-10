@@ -1,0 +1,44 @@
+Source: wildos-mail
+Section: mail
+Priority: optional
+Maintainer: Wild OS Developers <dev@wildos.io>
+Build-Depends:
+ debhelper-compat (= 13),
+ cmake,
+ pkg-config,
+ qt6-base-dev,
+ qt6-declarative-dev,
+ qtkeychain-qt6-dev,
+ libcamel1.2-dev,
+ libedataserver1.2-dev,
+ libecal2.0-dev,
+ liblitehtml-dev,
+Standards-Version: 4.7.0
+Rules-Requires-Root: no
+
+Package: wildos-mail
+Architecture: any
+Depends:
+ ${shlibs:Depends},
+ ${misc:Depends},
+ evolution-data-server-camel-providers,
+ evolution-data-server-core,
+ wildos-ui,
+ evolution-data-server-common,
+ qml6-module-qtcore,
+ qml6-module-qtquick,
+ qml6-module-qtquick-controls,
+ qml6-module-qtquick-layouts,
+ qml6-module-qtquick-shapes,
+ qml6-module-qtquick-dialogs,
+ qml6-module-qtqml-workerscript,
+ fonts-noto-core,
+Description: Wild OS Mail
+ Email for Wild OS on evolution-data-server's mail engine: IMAP and SMTP
+ accounts kept on the PC for offline reading, messages drawn without
+ scripts and with web pictures blocked until asked for, trackers blocked
+ even then, and photo locations removed from attachments.
+ .
+ Also Wild OS Calendar, on evolution-data-server's calendar service: day,
+ week and month views, Google, iCloud, CalDAV and web calendars,
+ invitations answered from Mail, and reminders as notifications.

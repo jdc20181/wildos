@@ -156,7 +156,7 @@ Item {
         property bool deferSelect: false
 
         onPressed: mouse => {
-            tile.view.forceActiveFocus();
+            tile.view.takeFocus();
             tile.view.pointerUsed();
             pressPoint = Qt.point(mouse.x, mouse.y);
             deferSelect = false;

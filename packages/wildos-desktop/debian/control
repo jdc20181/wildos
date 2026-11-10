@@ -24,9 +24,12 @@ Depends:
  wildos-winmode,
  wildos-terminal,
  wildos-launch,
+ wildos-lighting,
  wildos-setup,
  wildos-portal,
  wildos-taskmanager,
+ wildos-mail,
+ wildos-remote,
  wildos-overlays,
  kde-plasma-desktop,
  plasma-workspace,
@@ -52,6 +55,11 @@ Depends:
  usbguard-notifier,
  python3,
  xdg-user-dirs,
+# kwalletd's Secret Service (secret-tool, Brave, Windows mode's keyring)
+# needs QCA's OpenSSL plugin for its encrypted sessions, and without it
+# every libsecret call fails. QCA only recommends it, and recommends are
+# not installed.
+ libqca-qt6-plugins,
 # KDE Connect opens network ports for phone pairing, which a security-focused
 # system should not do unasked; Konqueror would be a second browser; Kup is a
 # backup tray app that sits in the bar. desktop-base is Debian's artwork

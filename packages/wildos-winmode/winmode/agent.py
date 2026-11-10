@@ -15,6 +15,7 @@ a sentence to show, or nothing.
 import json
 import os
 import shutil
+import signal
 import subprocess
 import sys
 import time
@@ -85,7 +86,13 @@ NOT_YET = "This isn't available yet."
 # How long a launch waits for a new connection's session to be up.
 SESSION_WAIT = 90
 # Seconds after sign-in before Windows is started ahead of time.
-PRESTART_DELAY = 120
+PRESTART_DELAY = 45
+# A launch is watched every 1.5 s for up to two minutes; its program gone
+# on three polls in a row (4.5 s, longer than any launcher takes to hand
+# over) with no new window means it ended before it opened.
+LAUNCH_WATCH_MS = 1500
+LAUNCH_WATCH_POLLS = 80
+LAUNCH_GONE_POLLS = 3
 SECRET_ATTRS = ["service", "org.wildos.WindowsMode1", "account"]
 
 
@@ -126,6 +133,18 @@ DEFAULT_WAKE = {
 }
 
 
+def slow_reason(lifecycle, name):
+    """Why opening an app is taking longer (board 9.13), from what the agent
+    knows: how Windows was when the app was opened. Empty when nothing is
+    known, and wildos-rdp says it plainly in its own words."""
+    if lifecycle in ("Stopped", "NotInstalled", None):
+        return (f"Windows mode is starting from the beginning, which takes longer than waking it. "
+                f"{name} will open as soon as it's ready.")
+    if lifecycle == "Saved":
+        return f"Windows mode is being brought back from where it was saved. {name} will open as soon as it's ready."
+    return ""
+
+
 def launch_state(rec):
     """The target a launch is held to (brief 5.5a): warm or cold when Windows
     was paused or running, saved or stopped otherwise."""
@@ -145,10 +164,21 @@ class Keyring:
         self.memory = {}
         self.tool = shutil.which("secret-tool")
 
+    def usable(self):
+        """Only a keyring that already exists. Asking KWallet for one that
+        doesn't makes it ask the person to create one (the Blowfish or GPG
+        dialog), which happens after an automatic first sign-in, when
+        pam_kwallet had no password to make it with. Without one the
+        password stays in memory and a new one is set next time."""
+        if not self.tool:
+            return False
+        data = os.environ.get("XDG_DATA_HOME") or os.path.join(os.path.expanduser("~"), ".local", "share")
+        return os.path.exists(os.path.join(data, "kwalletd", "kdewallet.kwl"))
+
     def get(self, account):
         if account in self.memory:
             return self.memory[account]
-        if self.tool:
+        if self.usable():
             try:
                 p = subprocess.run([self.tool, "lookup", *SECRET_ATTRS, account], capture_output=True, text=True, timeout=10)
                 if p.returncode == 0 and p.stdout:
@@ -160,7 +190,7 @@ class Keyring:
 
     def put(self, account, password):
         self.memory[account] = password
-        if self.tool:
+        if self.usable():
             try:
                 subprocess.run([self.tool, "store", "--label", "Windows mode", *SECRET_ATTRS, account],
                                input=password, text=True, capture_output=True, timeout=10)
@@ -169,7 +199,7 @@ class Keyring:
 
     def forget(self, account):
         self.memory.pop(account, None)
-        if self.tool:
+        if self.usable():
             try:
                 subprocess.run([self.tool, "clear", *SECRET_ATTRS, account], capture_output=True, timeout=10)
             except (OSError, subprocess.TimeoutExpired):
@@ -187,14 +217,21 @@ class Agent:
         self.host = {}
         self.windows = []
         self.queue = []
+        # The sign-in-only connection after Windows starts ahead of time.
+        self.preparing = None
         self.waking = False
         self.launches = {}
         self.last_launch = None
+        self.last_app = None
         self.refreshed = False
         # Installers handed over by RunInstaller, by program name: once their
         # windows have all closed, Windows' Start menu is read again so the
         # new app gets its Start entry.
         self.installers = {}
+        # An installer was run since the Start menu was last read. Some hand
+        # over to a second program and close, so their own windows never
+        # show; the menu is then read once every Windows app has closed.
+        self.installed_since_refresh = False
         self.history = config.read_json(os.path.join(config.user_data_dir(), "history.json"), {}) or {}
         self.wake_times = config.read_json(os.path.join(config.user_data_dir(), "wake-times.json"), {}) or {}
         # The windows already open when the "Starting Windows" card went up.
@@ -202,8 +239,21 @@ class Agent:
         self.starting_timer = None
         self.conn = rdp.Connection(self.connection_changed, self.auth_failed,
                                    os.path.join(config.user_data_dir(), "connection.log"))
-        self.desktop = rdp.Connection(lambda is_open: None, self.auth_failed,
-                                      os.path.join(config.user_data_dir(), "desktop.log"))
+        # Anything installed from the whole Windows desktop gets its Start
+        # entry once the desktop closes.
+        self.desktop = rdp.Connection(self.desktop_changed, self.auth_failed,
+                                      os.path.join(config.user_data_dir(), "desktop.log"), program=rdp.desktop_client())
+        # wildos-rdp's windows for apps being opened, by token, and its
+        # interface on the session bus.
+        self.loading = {}
+        self.remote = rdp.RemoteApp(session, on_window=self.remote_window, on_loading=self.remote_loading,
+                                    on_details=self.remote_details, on_close_stalled=self.remote_close_stalled,
+                                    on_retry=self.remote_retry)
+        # Launches still waiting for their first window, watched for a
+        # program that ends before it shows one.
+        self.watched = []
+        # Those whose program ended, for Try again.
+        self.ended_launches = []
         self.export = dbusutil.Exported(session, config.OBJECT_PATH, XML, config.AGENT_INTERFACE, {
             "Status": (self.m_status, "s", False),
             "Launch": (self.m_launch, "s", False),
@@ -241,9 +291,10 @@ class Agent:
         self.refresh_host_now()
         self.watch_theme()
         GLib.timeout_add_seconds(5, lambda: (self.push_warm(), False)[1])
-        # Two minutes after sign-in, once the desktop and its startup apps
-        # have settled, Windows is started ahead of time so the first
-        # Windows app opens from memory. The service declines on battery,
+        # Shortly after sign-in, once the desktop and its startup apps have
+        # settled, Windows is started ahead of time (with a small share of the
+        # processor) and signed in to, so the first Windows app opens from
+        # memory into a session that is ready. The service declines on battery,
         # without enough free memory, or when Windows is already up.
         GLib.timeout_add_seconds(PRESTART_DELAY, lambda: (self.prestart(), False)[1])
 
@@ -251,7 +302,51 @@ class Agent:
         def done(reply):
             if isinstance(reply, GLib.Error):
                 log("starting Windows ahead of time:", reply.message)
+                return
+            try:
+                result = json.loads(reply or "{}")
+            except ValueError:
+                return
+            if result.get("ok"):
+                self.prepare_session()
         self.call("Prestart", done=done, timeout=600)
+
+    def prepare_session(self):
+        """Windows was started ahead of time: it is signed in to as well, and
+        the session left disconnected, so the first app takes it over in a
+        couple of seconds instead of waiting for Windows to sign in and start
+        its shell (about three seconds more, measured). Only with wildos-rdp,
+        and only while no connection is open or opening."""
+        if not self.conn.native or self.conn.running or self.preparing is not None:
+            return
+
+        def go(creds):
+            if not creds.get("password") or self.conn.running:
+                return
+            args = rdp.prepare_arguments(self.host.get("guest_address"), self.host.get("rdp_port", 3389), creds["account"],
+                                         creds.get("domain", ""), drive=self.drive_folder())
+
+            def ended(ok):
+                self.preparing = None
+                log("session prepared" if ok else "preparing the session didn't finish")
+            try:
+                self.preparing = rdp.prepare_session(args, creds["password"], os.path.join(config.user_data_dir(), "prepare.log"),
+                                                     ended, native=self.conn.native_client)
+            except OSError as e:
+                log("couldn't prepare the session:", e)
+        if self.host.get("guest_address"):
+            self.credentials(go)
+        else:
+            self.refresh_host(lambda: self.credentials(go) if self.host.get("guest_address") else None)
+
+    def end_preparing(self):
+        """A launch needs the session now: the sign-in-only connection ends
+        (the session stays, disconnected) so it cannot hold it."""
+        if self.preparing is not None and self.preparing.poll() is None:
+            try:
+                os.killpg(self.preparing.pid, signal.SIGTERM)
+            except OSError:
+                pass
 
     # The system service.
     def call(self, method, args=None, signature=None, done=None, timeout=600):
@@ -302,7 +397,7 @@ class Agent:
             if isinstance(st.get("windows"), list):
                 self.windows = st["windows"]
 
-    def refresh_host(self):
+    def refresh_host(self, then=None):
         def got(st):
             if isinstance(st, dict) and "state" in st:
                 was = (self.host.get("setup") or {}).get("running")
@@ -312,6 +407,8 @@ class Agent:
                 if isinstance(st.get("windows"), list):
                     self.set_windows(st["windows"])
             self.changed()
+            if then:
+                then()
         self.call_json("Status", done=got, timeout=10)
 
     def changed(self):
@@ -334,6 +431,9 @@ class Agent:
             elif seen:
                 del self.installers[stem]
                 GLib.timeout_add_seconds(5, lambda: (self.m_refresh(None), False)[1])
+        if self.installed_since_refresh and not any(self.app_for(w) != "" for w in ws):
+            self.installed_since_refresh = False
+            GLib.timeout_add_seconds(5, lambda: (self.m_refresh(None), False)[1])
         # The guest lists windows once a second, so a window it lists may
         # well be on screen already: the screen's own time is used when the
         # window has been seen there.
@@ -371,6 +471,7 @@ class Agent:
 
     def count_launch(self, app_id):
         if app_id and app_id in self.registry:
+            self.last_app = app_id
             self.history[app_id] = self.history.get(app_id, 0) + 1
             try:
                 config.write_json(os.path.join(config.user_data_dir(), "history.json"), self.history)
@@ -435,6 +536,10 @@ class Agent:
     def window_tagged(self, xid, handle, app_id, seen_at):
         self.window_appeared(app_id, handle, seen_at or time.monotonic(), "window on screen")
 
+    def desktop_changed(self, is_open):
+        if not is_open:
+            GLib.timeout_add_seconds(5, lambda: (self.m_refresh(None), False)[1])
+
     def connection_changed(self, is_open):
         log("connection", "open" if is_open else "closed")
         self.call("ConnectionChanged", (is_open,), "(b)")
@@ -442,7 +547,7 @@ class Agent:
 
     def auth_failed(self):
         log("Windows refused the stored password; a new one is set next time")
-        self.keyring.forget(self.host.get("account", "wild"))
+        dbusutil.in_thread(self.keyring.forget, self.host.get("account", "wild"))
 
     def guest_paths(self, files):
         mapping = paths.folder_map(self.host.get("folders", []), self.host.get("share_root", ""))
@@ -453,17 +558,85 @@ class Agent:
         """Starts a Windows program. Windows is woken first (resumed,
         restored or started; immediate when it is running). With the
         connection open the program starts inside the session through
-        wild-guest; otherwise the connection opens with it."""
+        wild-guest; otherwise the connection opens with it.
+
+        With wildos-rdp the app's window is on screen at once, with the
+        loading W, and becomes the app when Windows shows it (boards 9.11 to
+        9.13); the "Starting Windows" card is then not needed."""
         started = time.monotonic()
-        self.show_starting(name, app_id)
+        self.end_preparing()
+        window = self.open_app_window(app_id, name, path)
+        if not window:
+            self.show_starting(name, app_id)
         finish = done
 
         def done(message):
             if message:
                 self.hide_starting()
+                self.close_app_window(window)
             finish(message)
 
         self.queue.append((path, args, name, app_id, started, done))
+        self.wake_then_launch()
+        if window:
+            self.watch_launch(window, path, args, name, app_id)
+
+    def watch_launch(self, window, path, args, name, app_id):
+        """A program that ends before it shows a window (it crashed, or gave
+        up) would leave its loading window saying it is still opening. Once
+        the program has been seen running in Windows (or wild-guest says it
+        started it), its being gone for a few seconds with no new window
+        anywhere ends the wait: the loading window says it closed before it
+        opened, and offers Try again."""
+        w = {"window": window, "path": path, "args": args, "name": name, "app_id": app_id,
+             "since_ms": int(time.time() * 1000), "seen": False, "gone": 0, "polls": 0,
+             "windows": {x.get("hwnd") for x in self.windows}}
+        self.watched.append(w)
+
+        def poll():
+            if w not in self.watched:
+                return False
+            w["polls"] += 1
+            new_window = any(x.get("hwnd") not in w["windows"] for x in self.windows)
+            if window["closed"] or new_window or w["polls"] > LAUNCH_WATCH_POLLS:
+                self.watched.remove(w)
+                return False
+
+            def answered(reply):
+                if w not in self.watched or not isinstance(reply, dict) or reply.get("type") != "running":
+                    return
+                if reply.get("running"):
+                    w["seen"], w["gone"] = True, 0
+                    return
+                # Started and already gone before it was ever seen running
+                # (wild-guest notes every start).
+                if reply.get("started"):
+                    w["seen"] = True
+                if w["seen"]:
+                    w["gone"] += 1
+                if w["gone"] >= LAUNCH_GONE_POLLS:
+                    self.watched.remove(w)
+                    self.ended_launches = self.ended_launches[-4:] + [w]
+                    log(name, "ended before it showed a window")
+                    self.remote.update(window["token"], "ended")
+            self.call_json("GuestRequest", (json.dumps({"type": "running", "path": path, "since": w["since_ms"]}),), "(s)",
+                           answered, timeout=10)
+            return True
+        GLib.timeout_add(LAUNCH_WATCH_MS, poll)
+
+    def remote_retry(self, token):
+        """Try again on a loading window whose program ended: the same launch,
+        in a new loading window."""
+        for w in list(self.ended_launches):
+            if w["window"]["token"] == token or (token and not w["window"]["token"]):
+                self.ended_launches.remove(w)
+                self.remote.cancel(token)
+                self.launch(w["path"], w["args"], w["name"], w["app_id"], lambda message: None)
+                return
+
+    def wake_then_launch(self):
+        """Wakes Windows, then starts every queued launch: inside the
+        session when the connection is open, or with a new connection."""
         if self.waking:
             return
         self.waking = True
@@ -481,9 +654,93 @@ class Agent:
                     self.launch_in_session(*item, wake=reply)
                 return
             self.queue = pending
-            self.credentials(lambda creds: self.open_connection(creds, reply))
+            # Where Windows is comes from the service; an agent that started
+            # before it could answer asks again first, rather than connect
+            # to nowhere.
+            def connect():
+                self.credentials(lambda creds: self.open_connection(creds, reply))
+            if self.host.get("guest_address"):
+                connect()
+            else:
+                self.refresh_host(connect)
 
         self.call_json("Wake", done=woke)
+
+    def open_app_window(self, app_id, name, program=""):
+        """wildos-rdp's window for an app being opened: through the running
+        client when the connection is open, or by starting the client now
+        when it is not, so the window is there while Windows wakes. Returns
+        what close_app_window() needs, or None with xfreerdp3."""
+        if not self.conn.native:
+            return None
+        known = app_id in self.registry
+        desktop_id = launchers.PREFIX + app_id if known else ""
+        icon = launchers.PREFIX + app_id if known else ""
+        window = {"token": 0, "spawned": False, "closed": False, "app": app_id}
+        if self.conn.open:
+            # Board 9.12: an app that opens within half a second of the click
+            # (Windows awake, the app warm) opens without the loader.
+            warm = self.host.get("state") == "Running"
+
+            def got(token):
+                window["token"] = token or 0
+                if window["closed"]:
+                    self.remote.cancel(window["token"])
+                elif window["token"]:
+                    self.loading[window["token"]] = window
+            self.remote.prepare(desktop_id, name, icon, program, 500 if warm else 0, got)
+        elif not self.conn.running:
+            reason = slow_reason(self.host.get("state"), name)
+            window["spawned"] = self.conn.spawn(desktop_id, name, icon, reason, program)
+        return window
+
+    def close_app_window(self, window):
+        if not window or window["closed"]:
+            return
+        window["closed"] = True
+        if window["spawned"]:
+            self.conn.abandon()
+        self.remote.cancel(window["token"])
+
+    def app_window_stage(self, app_id, stage):
+        """News for the app's window: "almost" once its process is up."""
+        for token, window in list(self.loading.items()):
+            if window["app"] == app_id and not window["closed"]:
+                self.remote.update(token, stage)
+
+    def remote_window(self, window_id, title):
+        """A window from wildos-rdp: which app it is decides its taskbar
+        group, and its arrival is the launch's time to window."""
+        now = time.monotonic()
+        self.connection_seen(now)
+
+        def found(app_id):
+            if app_id:
+                self.remote.set_window_app(window_id, launchers.PREFIX + app_id)
+                self.window_appeared(app_id, window_id, now, "window on screen")
+        self.lookup_window(window_id, found)
+
+    def remote_loading(self, token, reason, window_id):
+        window = self.loading.pop(token, None)
+        if window and reason == "cancelled":
+            # Cancel on board 9.13: the person stopped waiting. Windows keeps
+            # going; the app simply opens without its loader if it still comes.
+            window["closed"] = True
+            log("launch cancelled from its window:", window["app"])
+
+    def remote_close_stalled(self, window_id, pid, program):
+        """A window closed on the desktop that Windows did not close, with
+        nothing unsaved in it (wildos-rdp only asks then): its program is
+        ended in the background, so nothing frozen is left behind."""
+        log("window", hex(window_id), "did not close; ending", program, pid)
+        self.call("EndProgram", (pid, program), "(us)", lambda r: log("end program:", r), timeout=60)
+
+    def remote_details(self, token):
+        try:
+            subprocess.Popen(["wildos-settings", "--page", "windowsmode"], start_new_session=True,
+                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except OSError as e:
+            log("Settings couldn't open:", e)
 
     def show_starting(self, name, app_id):
         """The card that says Windows is starting (wildos-system-dialogs),
@@ -525,9 +782,20 @@ class Agent:
         deadline = time.monotonic() + SESSION_WAIT
 
         def attempt():
+            if not self.conn.running:
+                # The connection ended while this launch waited for its session
+                # (the last app was closed just as this one was opened, and
+                # Windows signed the session out): it opens again, with this
+                # app, rather than wait for a session nothing will bring.
+                log("the connection ended before", name, "could open; opening it again")
+                self.queue.append((path, args, name, app_id, started, done))
+                self.wake_then_launch()
+                return
+
             def got(reply):
                 if reply.get("type") == "launched":
                     self.mark(app_id, "process_started")
+                    self.app_window_stage(app_id, "almost")
                     self.mark(app_id, "warm", bool(reply.get("warm")))
                     done("")
                 elif reply.get("error") in ("no-session", "not-connected", "timeout") and time.monotonic() < deadline:
@@ -549,7 +817,8 @@ class Agent:
         def done(reply):
             self.refresh_host()
             defer.done(reply if isinstance(reply, str) else "Windows mode's background service didn't answer.")
-        self.call("SetProductKey", (key,), "(s)", done, timeout=300)
+        # Windows may have to start from off before the key can go in.
+        self.call("SetProductKey", (key,), "(s)", done, timeout=840)
         return defer
 
     def m_open_desktop(self, sender, defer):
@@ -582,17 +851,25 @@ class Agent:
         return defer
 
     def credentials(self, done):
+        """The account and its password: from the keyring (secret-tool, which
+        KWallet can keep waiting for seconds, so off the main loop) or else
+        from the service."""
         account = self.host.get("account", "wild")
-        pw = self.keyring.get(account)
-        if pw:
-            done({"account": account, "password": pw, "domain": self.host.get("computer_name", "")})
-            return
 
-        def got(reply):
-            if reply.get("password"):
-                self.keyring.put(reply["account"], reply["password"])
-            done(reply)
-        self.call_json("Credentials", done=got, timeout=120)
+        def looked_up(pw):
+            if isinstance(pw, str) and pw:
+                done({"account": account, "password": pw, "domain": self.host.get("computer_name", "")})
+                return
+
+            def got(reply):
+                if reply.get("password"):
+                    dbusutil.in_thread(self.keyring.put, reply["account"], reply["password"])
+                done(reply)
+            self.call_json("Credentials", done=got, timeout=120)
+        if account in self.keyring.memory:
+            looked_up(self.keyring.memory[account])
+        else:
+            dbusutil.in_thread(self.keyring.get, account, done=looked_up)
 
     def open_connection(self, creds, wake):
         pending, self.queue = self.queue, []
@@ -605,7 +882,10 @@ class Agent:
             return
         path, args, name, app_id, started, done = pending[0]
         info = {"from": wake.get("from"), "wake_seconds": wake.get("seconds"), "via": "new connection"}
+        if isinstance(wake.get("stages"), dict):
+            info["wake_stages"] = wake["stages"]
         self.start_timing(app_id, started, info)
+        self.mark(app_id, "connection_started")
         rdp_args = rdp.arguments(self.host.get("guest_address"), self.host.get("rdp_port", 3389), creds["account"], creds.get("domain", ""),
                                  name, path, args, drive=self.drive_folder())
         try:
@@ -650,6 +930,7 @@ class Agent:
                         for i, a in sorted(self.registry.items(), key=lambda kv: kv[1]["name"].lower())],
             "lifecycle": h.get("state"),
             "diskBytes": h.get("disk_bytes") or 0,
+            "memoryPending": bool(h.get("memory_pending")),
             "vm": h.get("vm"),
             "connection": self.conn.open,
             "windows": len(self.windows),
@@ -657,7 +938,15 @@ class Agent:
             "idleIn": h.get("idle_in"),
             "lastLaunch": self.last_launch,
             "lastHostAction": h.get("last"),
+            # For the taskbar's Windows mode panel.
+            "starting": self.waking or self.starting is not None,
+            "openApps": launchers.open_windows(self.windows, self.registry),
+            "lastApp": self.app_summary(launchers.last_app(self.registry, self.last_app, self.history)),
         }
+
+    def app_summary(self, app_id):
+        app = self.registry.get(app_id)
+        return {"id": app_id, "name": app["name"]} if app else None
 
     def m_status(self, sender):
         return json.dumps(self.status())
@@ -697,6 +986,7 @@ class Agent:
             guest = [paths.to_guest(copy, mapping, self.host.get("drive", "Z"))]
         name = os.path.basename(host_path)
         self.installers["msiexec" if name.lower().endswith(".msi") else launchers.exe_stem(name)] = False
+        self.installed_since_refresh = True
         if name.lower().endswith(".msi"):
             self.launch(r"C:\Windows\System32\msiexec.exe", ["/i", guest[0]], name, "installer", defer.done)
         else:
@@ -752,9 +1042,11 @@ class Agent:
     def setup_control(self, action, argument, defer):
         def done(reply):
             # Read again before answering, so whatever asks next (the wizard
-            # after Start over) sees the state the action left.
-            self.refresh_host_now()
-            defer.done(reply if isinstance(reply, str) else "Windows mode's background service didn't answer.")
+            # after Start over) sees the state the action left. Asked without
+            # waiting, like every call to the service: the agent never stops
+            # answering while the service is busy.
+            self.refresh_host(lambda: defer.done(reply if isinstance(reply, str)
+                                                 else "Windows mode's background service didn't answer."))
         self.call("SetupControl", (action, argument), "(ss)", done, timeout=900)
         return defer
 
@@ -790,6 +1082,11 @@ class Agent:
         if key == "whenIdle":
             mapped = {"memory": "keep", "disk": "save"}.get(value, value)
             self.call("SetOption", ("when_idle", mapped), "(ss)",
+                      lambda r: defer.done(r if isinstance(r, str) else "That setting couldn't be changed."))
+            return defer
+        if key == "memoryGb":
+            # The system service changes the virtual PC itself.
+            self.call("SetOption", ("memoryGb", value), "(ss)",
                       lambda r: defer.done(r if isinstance(r, str) else "That setting couldn't be changed."))
             return defer
         return "That setting isn't available."

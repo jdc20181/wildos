@@ -1,0 +1,22 @@
+#!/bin/sh
+# Runs as root each time USBGuard stops (usbguard.service.d/wildos-release.conf).
+# While USBGuard runs it holds every new device back by setting each USB
+# controller's authorized_default to 0. USBGuard 1.1 leaves it at 0 when it
+# stops, even with RestoreControllerDeviceState, so turning USB protection off
+# in Settings blocked every device plugged in afterwards, with nothing left
+# running to allow it. This gives the decision back to the kernel and lets
+# the devices USBGuard was holding back work. On a restart USBGuard decides
+# again for every device present as soon as it is back up.
+
+export LC_ALL=C
+
+for controller in /sys/bus/usb/devices/usb*; do
+    [ -e "$controller/authorized_default" ] && echo 1 > "$controller/authorized_default"
+done
+
+# Interfaces (with a colon) follow their device.
+for dev in /sys/bus/usb/devices/*; do
+    case ${dev##*/} in *:*) continue ;; esac
+    [ "$(cat "$dev/authorized" 2>/dev/null)" = "0" ] && echo 1 > "$dev/authorized"
+done
+exit 0

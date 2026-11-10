@@ -2,13 +2,17 @@ import QtQuick
 import QtQuick.Effects
 import WildOS.UI as UI
 
-// Day-first date over a large 24-hour time, as on the lock screen. The time
+// The date over a large time, as on the lock screen, both in the regional
+// format; the time leaves out AM and PM, as Windows does here. The time
 // box is exactly 136px tall like the design's line-height: 1, so the glyphs
 // are shifted up by half the font's extra leading.
 Item {
     id: clock
 
     property date now: new Date()
+
+    readonly property string dateFormat: Qt.locale().dateFormat(Locale.LongFormat).replace(/[,.\s]*y+[.年]?/, "").trim()
+        .replace(/^dddd, d MMMM$/, "dddd d MMMM")
 
     implicitWidth: Math.max(dateLabel.implicitWidth, timeLabel.implicitWidth)
     implicitHeight: dateLabel.height + 6 + timeBox.height
@@ -35,7 +39,7 @@ Item {
         Text {
             id: dateLabel
             anchors.horizontalCenter: parent.horizontalCenter
-            text: Qt.locale().toString(clock.now, "dddd d MMMM")
+            text: Qt.locale("en_GB").toString(clock.now, clock.dateFormat)
             font.family: UI.Style.fontFamily
             font.pixelSize: UI.Style.px(22)
             font.weight: Font.Normal
@@ -54,7 +58,7 @@ Item {
                 id: timeLabel
                 anchors.horizontalCenter: parent.horizontalCenter
                 y: (136 - timeMetrics.height) / 2
-                text: Qt.formatTime(clock.now, "HH:mm")
+                text: Qt.locale().toString(clock.now, Qt.locale().timeFormat(Locale.ShortFormat)).replace(Qt.locale().amText, "").replace(Qt.locale().pmText, "").trim()
                 font.family: "Inter Display"
                 renderType: Text.CurveRendering
                 font.pixelSize: 136

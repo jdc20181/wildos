@@ -67,4 +67,17 @@ if [ "$1" = "configure" ] && getent group privleap >/dev/null && getent group co
     done
 fi
 
+# The memory and disk tuning reaches a running PC with this update, not only
+# after the next restart. The image build has no running systemd, so there
+# it only enables oomd and the rest starts on first boot.
+if [ "$1" = "configure" ] && [ -d /run/systemd/system ]; then
+    sysctl -q --load=/usr/lib/sysctl.d/999-wildos-performance.conf || true
+    udevadm trigger --subsystem-match=block --action=change || true
+    systemctl daemon-reload || true
+    systemctl start systemd-zram-setup@zram0.service || true
+    systemctl enable --now systemd-oomd.service || true
+elif [ "$1" = "configure" ]; then
+    systemctl enable systemd-oomd.service || true
+fi
+
 #DEBHELPER#

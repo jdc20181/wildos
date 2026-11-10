@@ -1,5 +1,6 @@
 #include "drives.h"
 
+#include <QLocale>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
@@ -74,9 +75,10 @@ QString sizeName(qint64 bytes)
         value /= 1000;
         unit = QStringLiteral("TB");
     }
-    QString number = QString::number(value, 'f', value < 10 ? 1 : 0);
-    if (number.endsWith(QStringLiteral(".0"))) {
-        number.chop(2);
+    const QLocale numbers = QLocale::system();
+    QString number = numbers.toString(value, 'f', value < 10 ? 1 : 0);
+    if (number.endsWith(numbers.decimalPoint() + QLatin1Char('0'))) {
+        number.chop(numbers.decimalPoint().size() + 1);
     }
     return number + QLatin1Char(' ') + unit + QStringLiteral(" drive");
 }

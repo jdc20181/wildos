@@ -66,6 +66,14 @@ Item {
         page.items = out;
     }
 
+    // "9 Nov" or "Nov 9" as the regional format in Settings orders them,
+    // from its long date with the weekday and year taken out.
+    function dayAndMonth(when: var): string {
+        const format = Qt.locale().dateFormat(Locale.LongFormat)
+            .replace(/d{4}[,.\s]*/, "").replace(/[,.\s]*y+[.年]?/, "").replace("MMMM", "MMM").trim();
+        return Qt.locale("en_GB").toString(when, format);
+    }
+
     function ago(time: real): string {
         const minutes = Math.floor((now - time) / 60000);
         if (minutes < 1) {
@@ -78,7 +86,7 @@ Item {
         if (hours < 24) {
             return hours + " hr ago";
         }
-        return hours < 48 ? "Yesterday" : Qt.formatDate(new Date(time), "d MMM");
+        return hours < 48 ? "Yesterday" : dayAndMonth(new Date(time));
     }
 
     // A file path as people read it: ~ for home, and how many more.

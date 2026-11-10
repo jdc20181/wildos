@@ -1,0 +1,15 @@
+{
+    "KPlugin": {
+        "Authors": [{ "Email": "dev@wildos.io", "Name": "Wild OS" }],
+        "Category": "System Information",
+        "Description": "Shows what Windows mode is doing, the memory it holds and the Windows apps open",
+        "Icon": "wildos-windows-app",
+        "Id": "org.wildos.winmode",
+        "License": "GPL-3.0-or-later",
+        "Name": "Windows mode",
+        "Version": "0.1.0",
+        "Website": "https://wildos.io"
+    },
+    "KPackageStructure": "Plasma/Applet",
+    "X-Plasma-API-Minimum-Version": "6.0"
+}

@@ -18,6 +18,16 @@ namespace WildOS.Guest
             "shellexperiencehost", "startmenuexperiencehost", "searchhost", "lockapp", "applicationframehost", "shellappruntime",
         };
 
+        // Except these windows of theirs, which the person did open: a folder
+        // window, a copy in progress and Explorer's dialogs, and a packaged
+        // app's frame (Calculator, Settings; a suspended one is cloaked and
+        // left out already). Counted as apps, Windows is never paused under
+        // them.
+        static readonly List<string> openedClasses = new List<string>
+        {
+            "CabinetWClass", "OperationStatusWindow", "#32770", "ApplicationFrameWindow",
+        };
+
         public static List<object> List()
         {
             var result = new List<object>();
@@ -49,13 +59,14 @@ namespace WildOS.Guest
             Native.GetWindowThreadProcessId(hwnd, out pid);
             string image = ImagePath(pid);
             string app = image == null ? "" : Path.GetFileNameWithoutExtension(image).ToLowerInvariant();
-            if (filter && shell.Contains(app)) return null;
+            var cls = new StringBuilder(256);
+            Native.GetClassName(hwnd, cls, cls.Capacity);
+            if (filter && shell.Contains(app)
+                && !((app == "explorer" || app == "applicationframehost") && openedClasses.Contains(cls.ToString()))) return null;
 
             int length = Native.GetWindowTextLength(hwnd);
             var title = new StringBuilder(Math.Max(length + 1, 1));
             Native.GetWindowText(hwnd, title, title.Capacity);
-            var cls = new StringBuilder(256);
-            Native.GetClassName(hwnd, cls, cls.Capacity);
 
             var w = new Dictionary<string, object>();
             w["hwnd"] = hwnd.ToInt64();

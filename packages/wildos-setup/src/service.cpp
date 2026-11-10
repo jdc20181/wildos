@@ -13,6 +13,7 @@
 #include <QFileInfo>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QPasswordDigestor>
 #include <QProcess>
 #include <QRegularExpression>
 
@@ -20,6 +21,7 @@
 #include <fcntl.h>
 #include <grp.h>
 #include <pwd.h>
+#include <sys/random.h>
 #include <sys/stat.h>
 #include <unistd.h>
 
@@ -41,6 +43,13 @@ const QString setupUser = QStringLiteral("wildos-setup");
 const QStringList baseGroups = {QStringLiteral("console"), QStringLiteral("audio"), QStringLiteral("video"), QStringLiteral("plugdev"),
                                 QStringLiteral("netdev"), QStringLiteral("bluetooth"), QStringLiteral("scanner"), QStringLiteral("privleap")};
 const QStringList adminGroups = {QStringLiteral("sudo"), QStringLiteral("lpadmin")};
+
+// pam_kwallet's own numbers (KWALLET_PAM_* in kwallet-pam's pam_kwallet.c).
+// The key made here has to be the one it makes from the same password at
+// every later sign-in, or the wallet stops opening.
+constexpr int walletSaltSize = 56;
+constexpr int walletKeySize = 56;
+constexpr int walletIterations = 50000;
 
 struct Result {
     int code = -1;
@@ -289,25 +298,33 @@ void setHint(const QString &userName, const QString &hint)
     bus.call(set, QDBus::Block, 10000);
 }
 
+// Folders under the account's home, made and owned by it; empty when one
+// could not be made, or is not a plain folder.
+QString accountFolder(const struct passwd *pw, const QStringList &parts)
+{
+    QString dir = QFile::decodeName(pw->pw_dir);
+    for (const QString &part : parts) {
+        dir += QLatin1Char('/') + part;
+        const QByteArray path = QFile::encodeName(dir);
+        if (::mkdir(path.constData(), 0700) != 0 && errno != EEXIST) {
+            return {};
+        }
+        struct stat st;
+        if (::lstat(path.constData(), &st) != 0 || !S_ISDIR(st.st_mode) || ::chown(path.constData(), pw->pw_uid, pw->pw_gid) != 0) {
+            return {};
+        }
+    }
+    return dir;
+}
+
 // ~/.local/state/wildos-welcome/first-run.json, owned by the account.
 bool writePlan(const struct passwd *pw, const QByteArray &plan)
 {
     if (plan.size() > 1024 * 1024 || !QJsonDocument::fromJson(plan).isObject()) {
         return false;
     }
-    QString dir = QFile::decodeName(pw->pw_dir);
-    for (const QString &part : {QStringLiteral(".local"), QStringLiteral("state"), QStringLiteral("wildos-welcome")}) {
-        dir += QLatin1Char('/') + part;
-        const QByteArray path = QFile::encodeName(dir);
-        if (::mkdir(path.constData(), 0700) != 0 && errno != EEXIST) {
-            return false;
-        }
-        struct stat st;
-        if (::lstat(path.constData(), &st) != 0 || !S_ISDIR(st.st_mode) || ::chown(path.constData(), pw->pw_uid, pw->pw_gid) != 0) {
-            return false;
-        }
-    }
-    return writeAtomically(dir + QStringLiteral("/first-run.json"), plan, 0600, pw->pw_uid, pw->pw_gid);
+    const QString dir = accountFolder(pw, {QStringLiteral(".local"), QStringLiteral("state"), QStringLiteral("wildos-welcome")});
+    return !dir.isEmpty() && writeAtomically(dir + QStringLiteral("/first-run.json"), plan, 0600, pw->pw_uid, pw->pw_gid);
 }
 
 // The locales Debian can make, from the locales package's list.
@@ -376,7 +393,9 @@ SetupService::SetupService(QObject *parent)
     m_idle.setInterval(20 * 60 * 1000);
     m_idle.setSingleShot(true);
     connect(&m_idle, &QTimer::timeout, this, [this] {
-        if (!m_finishing) {
+        // The wallet key exists only in this process, so it stays up until
+        // Finish hands over to the account that needs it.
+        if (!m_finishing && m_walletKey.isEmpty()) {
             QCoreApplication::quit();
         }
     });
@@ -422,6 +441,7 @@ bool SetupService::authorised(const QString &action)
 
 void SetupService::removeEarlierAccount()
 {
+    forgetWalletKey();
     const QString earlier = readText(stateFile).trimmed();
     if (earlier.isEmpty()) {
         return;
@@ -527,6 +547,7 @@ QString SetupService::CreateAccount(const QString &realName, const QString &pass
     const struct passwd *pw = ::getpwnam(QFile::encodeName(userName).constData());
     if (pw) {
         writeKeyboard(pw);
+        prepareWallet(pw, password);
     }
     setAvatar(userName, avatar);
     if (!hint.isEmpty()) {
@@ -548,6 +569,43 @@ QString SetupService::CreateAccount(const QString &realName, const QString &pass
     }
     ::sync();
     return userName;
+}
+
+// The salt pam_kwallet would otherwise make at the first sign-in with a
+// password, and the key it would derive from that password with it. Only
+// the key is kept, in this process, never on disk.
+void SetupService::prepareWallet(const struct passwd *pw, const QString &password)
+{
+    forgetWalletKey();
+    const QString dir = accountFolder(pw, {QStringLiteral(".local"), QStringLiteral("share"), QStringLiteral("kwalletd")});
+    QByteArray salt(walletSaltSize, '\0');
+    if (dir.isEmpty() || ::getrandom(salt.data(), salt.size(), 0) != salt.size()
+        || !writeAtomically(dir + QStringLiteral("/kdewallet.salt"), salt, 0600, pw->pw_uid, pw->pw_gid)) {
+        // pam_kwallet makes its own salt at the first sign-in with the
+        // password, so only the first session goes without a wallet.
+        qWarning("could not prepare the wallet's salt");
+        return;
+    }
+    m_walletKey = QPasswordDigestor::deriveKeyPbkdf2(QCryptographicHash::Sha512, password.toUtf8(), salt, walletIterations, walletKeySize);
+    m_walletUid = pw->pw_uid;
+}
+
+void SetupService::forgetWalletKey()
+{
+    m_walletKey.clear();
+    m_walletUid = 0;
+}
+
+QByteArray SetupService::TakeWalletKey()
+{
+    const QDBusReply<uint> caller = connection().interface()->serviceUid(message().service());
+    if (!m_finishing || m_walletKey.isEmpty() || !caller.isValid() || caller.value() != m_walletUid) {
+        refuse(QStringLiteral("NoKey"), QStringLiteral("There is no wallet key for this account."));
+        return {};
+    }
+    const QByteArray key = m_walletKey;
+    forgetWalletKey();
+    return key;
 }
 
 void SetupService::Finish(const QString &plan)
@@ -613,13 +671,19 @@ void SetupService::handOver(const QString &userName, uint uid)
     // removes it at the next start, whatever happens here.
     auto *poll = new QTimer(this);
     auto *waited = new int(0);
-    connect(poll, &QTimer::timeout, this, [poll, waited, uid, userName] {
+    connect(poll, &QTimer::timeout, this, [this, poll, waited, uid, userName] {
         ++*waited;
-        if (QFile::exists(QStringLiteral("/run/systemd/users/%1").arg(uid)) || *waited >= 180) {
+        if (!QFile::exists(QStringLiteral("/run/systemd/users/%1").arg(uid)) && *waited < 180) {
+            return;
+        }
+        if (namesUser(firstSignIn, userName)) {
+            removeDurably(firstSignIn);
+        }
+        // The session takes the wallet key in its first seconds; one that
+        // has not after ten minutes is not going to.
+        if (m_walletKey.isEmpty() || *waited >= 600) {
             poll->stop();
-            if (namesUser(firstSignIn, userName)) {
-                removeDurably(firstSignIn);
-            }
+            forgetWalletKey();
             delete waited;
             QCoreApplication::quit();
         }

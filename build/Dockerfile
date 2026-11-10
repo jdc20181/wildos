@@ -50,6 +50,10 @@ RUN apt-get update \
         kwin-dev \
         libcups2-dev \
         libglib2.0-dev \
+        libcamel1.2-dev \
+        libedataserver1.2-dev \
+        liblitehtml-dev \
+        qtkeychain-qt6-dev \
         libksysguard-dev \
         python3 \
         python3-pil \
@@ -81,4 +85,30 @@ RUN apt-get update \
         mono-utils \
         python3-gi \
         gir1.2-glib-2.0 \
+    && rm -rf /var/lib/apt/lists/*
+
+# wildos-rdp, Windows mode's window client, builds against FreeRDP 3.32
+# from trixie-backports, the version the image pins (wildos-base's
+# wildos-freerdp.pref); trixie's own 3.15 drew RemoteApp windows wrongly.
+# wayland-protocols has the window icon protocol it speaks to KWin.
+RUN echo "deb http://deb.debian.org/debian trixie-backports main" > /etc/apt/sources.list.d/backports.list \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends -t trixie-backports \
+        freerdp3-dev \
+        libwinpr3-dev \
+    && apt-get install -y --no-install-recommends \
+        wayland-protocols \
+    && rm -rf /var/lib/apt/lists/*
+
+# Calendar (wildos-mail) builds against evolution-data-server's calendar
+# library. New build dependencies go in layers of their own like this one:
+# adding one to the big list above makes Docker reinstall all of it.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends libecal2.0-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Quick Look in Files (wildos-files) previews PDFs through QtQuick.Pdf; its
+# QML is compiled against the module's types.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends qml6-module-qtquick-pdf qml6-module-qtmultimedia \
     && rm -rf /var/lib/apt/lists/*

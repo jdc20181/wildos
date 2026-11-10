@@ -2,6 +2,8 @@
 # Builds the Wild OS ISO into ./out using the builder container.
 # --incremental reuses the last build (see build/incremental.sh).
 # WILDOS_CACHE names the volume or directory kept between builds.
+# WILDOS_WORK names the scratch volume: one per worktree lets several builds
+# run at once without wiping each other's work.
 set -euo pipefail
 cd "$(dirname "$0")"
 
@@ -22,6 +24,6 @@ docker run --rm --privileged \
     -e WILDOS_ONLY \
     -v "$PWD":/src:ro \
     -v "$PWD/out":/out \
-    -v wildos-work:/work \
+    -v "${WILDOS_WORK:-wildos-work}":/work \
     -v "${WILDOS_CACHE:-wildos-cache}":/cache \
     wildos-builder bash /src/build/build.sh "$@"

@@ -165,7 +165,7 @@ qint64 folderSize(const QString &path)
 
 QString formatBytes(qint64 bytes)
 {
-    const QLocale locale(QLocale::English, QLocale::UnitedKingdom);
+    const QLocale locale = QLocale::system();
     if (bytes >= 1000000000) {
         return QStringLiteral("%1 GB").arg(locale.toString(bytes / 1e9, 'f', 1));
     }

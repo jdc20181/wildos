@@ -1,3 +1,20 @@
+wildos-winmode (0.3.1) trixie; urgency=medium
+
+  * Windows has all the memory it is set to while any Windows app is open.
+    Unused memory went back to Wild OS every 30 seconds whatever Windows
+    was doing, and Windows only grew back into it a step at a time, so
+    with 8 GB set it worked like a 4 GB PC: a program asking for 5 GB
+    took 94 seconds to get it. Memory now goes back only while no Windows
+    app is open, and the first app to open gets all of it at once,
+    including one opened from inside Windows.
+  * After a change of memory in Settings, an app opening before Windows
+    had restarted got none of Windows' memory back: the service asked for
+    the new amount, which a running Windows can't take, and libvirt
+    refused the lot. It now gives back everything Windows started with,
+    and the new amount comes with the restart as before.
+
+ -- Wild OS Developers <dev@wildos.io>  Tue, 10 Nov 2026 09:30:00 +0000
+
 wildos-winmode (0.3.0) trixie; urgency=medium
 
   * Setting up Windows mode: the wizard (boards 9.1 to 9.7) and the setup

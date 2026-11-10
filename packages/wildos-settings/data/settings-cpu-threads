@@ -1,0 +1,56 @@
+#!/bin/sh
+# Turns hyper-threading on or off from the next start-up: "Use every processor
+# thread" in Settings > System > Power and battery, also offered by Windows
+# mode setup. Runs as root through pkexec (org.wildos.settings.cpu-threads),
+# and from settings-protection, which turns it off at Strict and Maximum.
+#
+# Wild OS ships with it off. Kicksecure's boot options (nosmt=force, ",nosmt"
+# on several CPU flaw mitigations, and l1tf=full,force) keep the second thread
+# of every core offline, so a program can't read what another one leaves in a
+# core they share. Turning it on keeps every mitigation and only lets those
+# threads run: ",nosmt" and "nosmt=force" go, and l1tf drops to "flush", which
+# still clears the cache each time a virtual machine runs. The kernel decides
+# this at boot, so it takes a restart.
+#
+#   on | off   save the choice and rebuild the boot menu
+
+set -eu
+
+CHOICE=/etc/wildos/cpu-threads
+DROPIN=/etc/default/grub.d/41_wildos_cpu_threads.cfg
+LEVEL_FILE=/etc/wildos/protection-level
+
+case "${1:-}" in
+on)
+    # Strict and Maximum keep every CPU flaw protection on; Settings greys the
+    # switch out there, and this refuses in case anything else asks.
+    case "$(cat "$LEVEL_FILE" 2>/dev/null || true)" in
+    strict | maximum)
+        echo "Strict and Maximum protection keep hyper-threading off." >&2
+        exit 3
+        ;;
+    esac
+    mkdir -p /etc/wildos
+    echo on > "$CHOICE"
+    # Sorts after 40_cpu_mitigations.cfg, so it edits what that file added.
+    cat > "$DROPIN" <<'EOF'
+# Written by Wild OS Settings: hyper-threading is on. Every CPU flaw mitigation
+# stays; only the options that keep the second thread of each core offline go.
+GRUB_CMDLINE_LINUX="$(printf '%s' "$GRUB_CMDLINE_LINUX" | sed -e 's/ nosmt=force//g' -e 's/,nosmt//g' -e 's/l1tf=full,force/l1tf=flush/g')"
+EOF
+    ;;
+off)
+    [ -e "$CHOICE" ] || [ -e "$DROPIN" ] || exit 0
+    rm -f "$CHOICE" "$DROPIN"
+    ;;
+*)
+    echo "usage: $0 on|off" >&2
+    exit 2
+    ;;
+esac
+
+if command -v update-grub >/dev/null 2>&1; then
+    update-grub >/dev/null 2>&1
+else
+    grub-mkconfig -o /boot/grub/grub.cfg >/dev/null 2>&1
+fi

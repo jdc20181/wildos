@@ -38,6 +38,12 @@ if [ "$1" = "configure" ]; then
             echo 'RestoreControllerDeviceState=true' >> "$conf"
         fi
     fi
+    # That setting did not do it (see usb-release). A computer where USB
+    # protection was turned off before this fix is still holding every new
+    # device back, so it is let go now rather than at the next restart.
+    if [ -d /run/systemd/system ] && ! systemctl is-active --quiet usbguard.service; then
+        /usr/libexec/wildos/usb-release || true
+    fi
 
     # The sign-in screen picks up the last person's accessibility choices
     # through a PAM session step (see /usr/libexec/wildos/greeter-access);

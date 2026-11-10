@@ -17,6 +17,8 @@ Accessibility::Accessibility(QObject *parent)
         !QStandardPaths::locate(QStandardPaths::GenericDataLocation, QStringLiteral("color-schemes/%1.colors").arg(AccessCore::highContrastScheme())).isEmpty();
     m_monoAudioInstalled = QFile::exists(QStringLiteral("/usr/lib/systemd/user/wildos-mono-audio.service"));
     m_keyboardInstalled = !AccessCore::keyboardDesktopFile().isEmpty();
+    m_windowEffectsInstalled = AccessCore::windowEffectsInstalled();
+    m_windowEffectsSupported = m_windowEffectsInstalled && AccessCore::windowEffectsSupported();
 
     // Shortcuts, kcm_access, the Plasma keyboard indicator or another
     // Settings window can change any of these while the page is open.
@@ -24,6 +26,7 @@ Accessibility::Accessibility(QObject *parent)
     watch(QStringLiteral("kdeglobals"));
     watch(QStringLiteral("kcminputrc"));
     watch(QStringLiteral("kwinrc"));
+    watch(QStringLiteral("wildosrc"));
     QDBusConnection::sessionBus().connect(QStringLiteral("org.kde.KWin"), QStringLiteral("/VirtualKeyboard"), QStringLiteral("org.kde.kwin.VirtualKeyboard"),
                                           QStringLiteral("enabledChanged"), this, SLOT(refresh()));
 
@@ -61,6 +64,11 @@ void Accessibility::refresh()
     m_slowKeysDelay = AccessCore::slowKeysDelay();
     m_bounceKeys = AccessCore::bounceKeys();
     m_bounceKeysDelay = AccessCore::bounceKeysDelay();
+    m_outlineWindows = AccessCore::outlineWindows();
+    m_blurBackground = AccessCore::blurBackground();
+    m_blurStrength = AccessCore::blurStrength();
+    m_blurDesktop = AccessCore::blurDesktop();
+    m_strongerText = AccessCore::strongerText();
     Q_EMIT changed();
 }
 
@@ -170,5 +178,40 @@ void Accessibility::setBounceKeysDelay(int ms)
 {
     AccessCore::setBounceKeysDelay(ms);
     m_bounceKeysDelay = ms;
+    Q_EMIT changed();
+}
+
+void Accessibility::setOutlineWindows(bool on)
+{
+    AccessCore::setOutlineWindows(on);
+    m_outlineWindows = on;
+    Q_EMIT changed();
+}
+
+void Accessibility::setBlurBackground(bool on)
+{
+    AccessCore::setBlurBackground(on);
+    m_blurBackground = on;
+    Q_EMIT changed();
+}
+
+void Accessibility::setBlurStrength(int step)
+{
+    AccessCore::setBlurStrength(step);
+    m_blurStrength = AccessCore::blurStrength();
+    Q_EMIT changed();
+}
+
+void Accessibility::setBlurDesktop(bool on)
+{
+    AccessCore::setBlurDesktop(on);
+    m_blurDesktop = on;
+    Q_EMIT changed();
+}
+
+void Accessibility::setStrongerText(bool on)
+{
+    AccessCore::setStrongerText(on);
+    m_strongerText = on;
     Q_EMIT changed();
 }

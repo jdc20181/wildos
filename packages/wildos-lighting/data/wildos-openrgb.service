@@ -1,0 +1,21 @@
+[Unit]
+Description=OpenRGB server for Wild OS keyboard and mouse lighting
+Documentation=man:openrgb(1)
+# Started and stopped by wildos-lighting only, while Settings has the
+# lighting on and this account's session is in front; it goes when that does.
+PartOf=wildos-lighting.service
+ConditionFileIsExecutable=/usr/bin/openrgb
+
+[Service]
+Type=exec
+# OpenRGB's SDK has no authentication, so it listens on the loopback only,
+# set here rather than left to OpenRGB's default. Its settings and profiles
+# live in a directory of their own.
+ExecStart=/usr/bin/openrgb --server --server-host 127.0.0.1 --server-port 6742 --config %S/wildos/openrgb
+StateDirectory=wildos/openrgb
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=yes
+# Local sockets, the loopback and udev's device events; no IPv6, no raw or
+# packet sockets, no Bluetooth.
+RestrictAddressFamilies=AF_UNIX AF_INET AF_NETLINK

@@ -394,7 +394,7 @@ const QHash<QString, Wording> &wordings()
         {QStringLiteral("org.freedesktop.packagekit.trigger-offline-upgrade"), {"Wants to upgrade Wild OS the next time the computer restarts.", "Updates", "wildos-updates"}},
         {QStringLiteral("org.freedesktop.packagekit.upgrade-system"), {"Wants to upgrade Wild OS to a new version.", "Updates", "wildos-updates"}},
         {QStringLiteral("org.freedesktop.packagekit.package-install"), {"Wants to install an app for everyone on this computer."}},
-        {QStringLiteral("org.freedesktop.packagekit.package-install-untrusted"), {"Wants to install an app that isn't signed by its maker."}},
+        {QStringLiteral("org.freedesktop.packagekit.package-install-untrusted"), {"Wants to install a package from a file. Its setup runs with full access to this computer."}},
         {QStringLiteral("org.freedesktop.packagekit.package-reinstall"), {"Wants to repair an app by installing it again."}},
         {QStringLiteral("org.freedesktop.packagekit.package-downgrade"), {"Wants to replace an app with an older version."}},
         {QStringLiteral("org.freedesktop.packagekit.package-remove"), {"Wants to remove an app from this computer."}},
@@ -638,10 +638,24 @@ Verdict Verifier::check(const QString &actionId, const QString &message, const Q
             reasons << callerCheck.why;
         }
     }
+    // A package installed from a file (the Store's install page, or any
+    // PackageKit client's InstallFiles). The request and the app asking
+    // check out, both being PackageKit's and Wild OS's own, but what gets
+    // installed is the file, which nothing has vouched for: whatever name
+    // or maker it gives is only what its builder typed (see sourceOf). So
+    // it is never verified, and the Package line does not name PackageKit
+    // as if it were the thing coming from Debian.
+    const bool fromFile = actionId == QLatin1String("org.freedesktop.packagekit.package-install-untrusted")
+        || details.value(QStringLiteral("role")) == QLatin1String("install-files");
+    if (fromFile) {
+        reasons.prepend(QStringLiteral("It installs a package from a file, from outside Wild OS, and nothing has checked it."));
+    }
     verdict.verified = reasons.isEmpty();
     verdict.why = reasons.isEmpty() ? QString() : reasons.constFirst();
-    verdict.package = !programCheck.package.isEmpty() ? programCheck.package : policyCheck.package;
-    verdict.origin = !programCheck.origin.isEmpty() ? programCheck.origin : policyCheck.origin;
+    if (!fromFile) {
+        verdict.package = !programCheck.package.isEmpty() ? programCheck.package : policyCheck.package;
+        verdict.origin = !programCheck.origin.isEmpty() ? programCheck.origin : policyCheck.origin;
+    }
 
     // The name and icon people know the asker by.
     const auto &map = wordings();
