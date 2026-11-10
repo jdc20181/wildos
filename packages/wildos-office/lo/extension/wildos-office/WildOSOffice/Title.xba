@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE script:module PUBLIC "-//OpenOffice.org//DTD OfficeDocument 1.0//EN" "module.dtd">
+<script:module xmlns:script="http://openoffice.org/2000/script" script:name="Title" script:language="StarBasic">REM Window titles read &quot;Spring newsletter.docx - Write&quot;, as Wild OS apps do,
+REM instead of LibreOffice&apos;s &quot;Spring newsletter.docx - LibreOffice Writer&quot;.
+REM LibreOffice builds its title from the product name, which also fills
+REM every dialog, so only the frame title is set, from the document events
+REM bound in wildos.xcd.
+
+Sub Update(oEvent As Object)
+	On Error Resume Next
+	Dim oDoc As Object
+	oDoc = oEvent.Source
+	If IsNull(oDoc) Then Exit Sub
+	If Not HasUnoInterfaces(oDoc, &quot;com.sun.star.frame.XModel&quot;, &quot;com.sun.star.frame.XTitle&quot;) Then Exit Sub
+
+	Dim sApp As String
+	If oDoc.supportsService(&quot;com.sun.star.sheet.SpreadsheetDocument&quot;) Then
+		sApp = &quot;Tables&quot;
+	ElseIf oDoc.supportsService(&quot;com.sun.star.text.TextDocument&quot;) Then
+		sApp = &quot;Write&quot;
+	Else
+		Exit Sub
+	End If
+
+	Dim oControllers As Object, oFrame As Object
+	oControllers = oDoc.getControllers()
+	Do While oControllers.hasMoreElements()
+		oFrame = oControllers.nextElement().getFrame()
+		If Not IsNull(oFrame) Then oFrame.setTitle(oDoc.getTitle() &amp; &quot; - &quot; &amp; sApp)
+	Loop
+End Sub
+</script:module>

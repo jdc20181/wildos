@@ -39,6 +39,9 @@ UI.AppWindow {
     }
 
     function openPage(id, fromHistory) {
+        if (id === "signin-wallet") {
+            Navigator.request = "wallet";
+        }
         id = Pages.resolve(id);
         let p = Pages.page(id);
         if (!p || !Pages.exists(id)) {

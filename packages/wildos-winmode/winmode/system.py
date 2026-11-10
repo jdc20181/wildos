@@ -21,7 +21,7 @@ import time
 
 from gi.repository import Gio, GLib
 
-from . import config, dbusutil, firewall, guestlink, hostinfo, lifecycle, paths, qga, setup, virsh
+from . import config, dbusutil, documents, firewall, guestlink, hostinfo, lifecycle, paths, qga, setup, virsh
 
 XML = """
 <node>
@@ -33,6 +33,11 @@ XML = """
       <arg name="mode" type="s" direction="in"/>
       <arg type="s" direction="out"/>
     </method>
+    <method name="Power">
+      <arg name="action" type="s" direction="in"/>
+      <arg type="s" direction="out"/>
+    </method>
+    <method name="Documents"><arg type="s" direction="out"/></method>
     <method name="Launch">
       <arg name="path" type="s" direction="in"/>
       <arg name="args" type="as" direction="in"/>
@@ -110,6 +115,16 @@ PRESTART_SIGN_IN_SECONDS = 45
 WINDOW_LIST_HOLD = "window list"
 # A wild-guest that never reports must not keep Windows awake for good.
 WINDOW_LIST_WAIT = 600
+# Resume, Start, Restart and Shut down from the taskbar's panel, and keep
+# (saved to disk as Wild OS shuts down, signs out or restarts, board 9.9).
+POWER_HOLD = "power"
+POWER_ACTIONS = ("resume", "start", "restart", "shutdown", "keep")
+# How long a clean Windows shutdown may take before Windows is switched
+# off instead, which is reported.
+SHUTDOWN_WAIT = 90
+# The share of logind's InhibitDelayMaxSec (60 s, data/logind) that saving
+# or shutting Windows down may use when the PC itself shuts down.
+PC_SHUTDOWN_BUDGET = 50
 
 
 def log(*parts):
@@ -148,7 +163,21 @@ def app_windows(windows):
     return [w for w in windows if isinstance(w, dict) and w.get("visible", True) and not w.get("tool")]
 
 
-SAVE_TO_DISK = False
+def has_virtiofs(xml):
+    """Whether a domain definition carries a virtiofs shared folder."""
+    return bool(re.search(r"<filesystem\b[^>]*>(?:(?!</filesystem>).)*<driver\b[^>]*type=['\"]virtiofs['\"]", xml, re.S))
+
+
+def drop_virtiofs(xml):
+    """The definition without its virtiofs shared folders, and without the
+    shared memory backing that only virtiofs needed (it kept Windows'
+    memory from going back to Wild OS)."""
+    xml = re.sub(r"\s*<filesystem\b(?:(?!</filesystem>).)*<driver\b[^>]*type=['\"]virtiofs['\"](?:(?!</filesystem>).)*</filesystem>",
+                 "", xml, flags=re.S)
+    return re.sub(r"\s*<memoryBacking>(?:(?!</memoryBacking>).)*<access mode=['\"]shared['\"]/>(?:(?!</memoryBacking>).)*</memoryBacking>",
+                  "", xml, flags=re.S)
+
+
 # Windows' processor share while it boots ahead of time (the default is 100).
 BACKGROUND_CPU_WEIGHT = 20
 # Windows' share of memory follows what it uses (trim_memory), in KiB.
@@ -172,6 +201,14 @@ class Service:
         self.windows = {}
         self.error = None
         self.busy_action = None
+        # A save to disk under way, which winmoded's own stop waits for.
+        self.saving = False
+        # The live Windows still carries the old virtiofs share (save_ok).
+        self.old_share = False
+        # logind's delay lock (hold_shutdown) and whether the PC is on its
+        # way down.
+        self.inhibitor = None
+        self.pc_shutting_down = False
         self.memory_tried = -MEMORY_RETRY
         self.idle_timer = None
         self.window_list_timer = None
@@ -185,6 +222,8 @@ class Service:
             "Wake": (self.m_wake, "s", True),
             "Prestart": (self.m_prestart, "s", True),
             "Idle": (self.m_idle, "s", True),
+            "Power": (self.m_power, "s", True),
+            "Documents": (self.m_documents, "s", True),
             "Launch": (self.m_launch, "s", True),
             "Windows": (self.m_windows, "s", True),
             "Window": (self.m_window, "s", True),
@@ -205,7 +244,6 @@ class Service:
         self.power = hostinfo.Power(bus, self.host_changed)
         self.pressure = hostinfo.PressureWatch(self.host_changed)
         self.watch_libvirt()
-        self.bind_folders()
         if virsh.state(self.domain) != "":
             ok, why = firewall.apply(self.cfg, self.state.get("file_sharing", False))
             if not ok:
@@ -219,37 +257,95 @@ class Service:
                              "/org/freedesktop/login1", None, Gio.DBusSignalFlags.NONE, self.preparing_shutdown)
 
     def preparing_shutdown(self, conn, sender, path, iface, signal, params):
-        if params.unpack()[0]:
-            threading.Thread(target=self.shut_down_windows, name="shutdown", daemon=True).start()
+        self.pc_shutting_down = bool(params.unpack()[0])
+        if self.pc_shutting_down:
+            def work():
+                try:
+                    self.shut_down_windows()
+                finally:
+                    GLib.idle_add(lambda: (self.hold_shutdown(False), False)[1])
+            threading.Thread(target=work, name="shutdown", daemon=True).start()
+        else:
+            # Shutting down was called off: held again while Windows runs.
+            self.refresh()
+
+    def hold_shutdown(self, on):
+        """logind's delay lock while Windows runs: the PC's shutdown waits
+        for Windows to be saved or shut down (up to InhibitDelayMaxSec, 60 s
+        with Wild OS's logind drop-in) instead of libvirt-guests switching
+        it off part way through a save."""
+        if on and self.inhibitor is None and not self.pc_shutting_down:
+            try:
+                reply, fds = self.bus.call_with_unix_fd_list_sync(
+                    "org.freedesktop.login1", "/org/freedesktop/login1", "org.freedesktop.login1.Manager", "Inhibit",
+                    GLib.Variant("(ssss)", ("shutdown", "Windows mode", "Keeping Windows apps' work", "delay")),
+                    GLib.VariantType("(h)"), Gio.DBusCallFlags.NONE, 5000, None, None)
+                self.inhibitor = fds.get(reply.unpack()[0])
+            except GLib.Error as e:
+                log("couldn't hold the PC's shutdown for Windows:", e.message)
+        elif not on and self.inhibitor is not None:
+            os.close(self.inhibitor)
+            self.inhibitor = None
 
     def shut_down_windows(self):
-        """libvirt holds the PC's shutdown back while Windows runs, and only
-        lets go when logind's InhibitDelayMaxSec runs out (30 s); then
-        libvirt-guests shuts Windows down. Shutting it down as soon as the PC
-        starts to removes that wait: libvirt lets go when Windows is off,
-        about ten seconds in, under the shutdown screen. A setup in progress
-        is left to libvirt-guests, so setup carries on after the restart as
-        it was."""
+        """The PC is shutting down, restarting or updating. With Windows apps
+        open the person was asked as the session ended (board 9.9, the
+        agent), unless the PC was shut down some other way, so the safe
+        choice is taken here: Windows saved to disk as it is, and the next
+        sign-in reopens it. With nothing open it shuts down cleanly, which
+        also spares libvirt-guests' wait. A save or shutdown the person
+        chose is let finish first. A setup in progress is left to
+        libvirt-guests, so setup carries on after the restart as it was."""
         if self.setup.thread and self.setup.thread.is_alive():
             return
+        deadline = time.monotonic() + PC_SHUTDOWN_BUDGET
+        while (self.busy_action or self.saving) and time.monotonic() < deadline:
+            time.sleep(0.2)
         state = virsh.state(self.domain)
         if state not in ("running", "paused"):
             return
-        log("the PC is shutting down: shutting Windows down")
-        try:
-            if state == "paused":
-                virsh.resume(self.domain)
-            virsh.run("shutdown", self.domain, timeout=15)
-        except virsh.VirshError as e:
-            log("shutdown:", e)
-        # Inside logind's 30 s, so libvirt never holds the PC to the limit.
-        deadline = time.monotonic() + 22
-        while time.monotonic() < deadline:
-            if virsh.state(self.domain) not in ("running", "paused", "in shutdown"):
+        if self.all_windows() and self.save_ok():
+            log("the PC is shutting down with Windows apps open: saving Windows to disk so nothing is lost")
+            try:
+                self.do_save()
+                self.state["kept"] = {"at": int(time.time())}
+                self.save_state()
                 return
+            except virsh.VirshError as e:
+                log("saving Windows as the PC shuts down:", e)
+        log("the PC is shutting down: shutting Windows down")
+        self.stop_windows(max(5, deadline - time.monotonic()))
+
+    def stop_windows(self, wait=SHUTDOWN_WAIT):
+        """Shuts Windows down cleanly, as its own Shut down would: through the
+        guest agent, which closes apps without asking (Wild OS asked first),
+        or the power button when the agent can't be reached. A saved
+        Windows is loaded back first, so it shuts down properly rather than
+        losing the save as a power cut would. Switched off if it hasn't
+        finished in `wait` seconds; returns True then, so it can be said."""
+        st = virsh.state(self.domain)
+        if st in ("", "shut off"):
+            return False
+        if st == "saved":
+            self.wake()
+        elif st == "paused":
+            virsh.resume(self.domain)
+        deadline = time.monotonic() + wait
+        try:
+            # libvirt answers only once Windows has switched itself off, so
+            # running out of time here means Windows is still shutting down.
+            virsh.run("shutdown", self.domain, "--mode", "agent", timeout=max(5, int(wait)))
+        except virsh.VirshError as e:
+            if "took longer" not in str(e) and virsh.state(self.domain) == "running":
+                log("shutting Windows down through its agent:", e)
+                virsh.run("shutdown", self.domain, "--mode", "acpi", check=False, timeout=20)
+        while time.monotonic() < deadline:
+            if virsh.state(self.domain) in ("shut off", ""):
+                return False
             time.sleep(0.5)
-        log("Windows did not shut down in time: turning it off")
+        log(f"Windows didn't shut down in {round(wait)} s: switching it off")
         virsh.run("destroy", self.domain, check=False, timeout=15)
+        return True
 
     def save_state(self):
         try:
@@ -341,7 +437,6 @@ class Service:
             self.state["owner_uid"] = uid
             self.save_state()
             log(f"Windows mode now belongs to uid {uid}")
-            self.bind_folders()
             return None
         if owner != uid:
             try:
@@ -350,13 +445,6 @@ class Service:
                 name = "another account"
             return f"Windows mode on this PC is set up for {name}."
         return None
-
-    def bind_folders(self):
-        """Nothing to do: the shared folders reach Windows through the
-        RemoteApp connection's drive redirection (the agent's FreeRDP shares
-        them, wild-guest maps them to Z:), not through mounts made here.
-        virtiofs failed on real hardware: reads broke partway and a save to
-        disk would not load back."""
 
     def runtime_installed(self):
         """From setup's thread, once the virtual PC package is in: until then
@@ -392,7 +480,7 @@ class Service:
         action = self.life.reconsider_paused(self.state["when_idle"], self.power.on_battery, *hostinfo.meminfo(),
                                              hostinfo.under_pressure())
         # A wake or anything else holding Windows awake comes first.
-        if action == lifecycle.SAVE and SAVE_TO_DISK and not self.busy_action and not self.life.busy_reasons:
+        if action == lifecycle.SAVE and self.save_ok() and not self.busy_action and not self.life.busy_reasons:
             log("host needs the memory or is on battery: saving the paused guest to disk")
             self.run_idle(lifecycle.SAVE)
 
@@ -490,6 +578,14 @@ class Service:
         prev = self.life.vm_state
         now = time.monotonic()
         self.life.update(now, vm_state=st)
+        if st != prev:
+            self.note_since(prev, st)
+            if st in ("running", "paused") and prev not in ("running", "paused"):
+                try:
+                    self.old_share = has_virtiofs(virsh.dumpxml(self.domain))
+                except virsh.VirshError:
+                    self.old_share = False
+        self.hold_shutdown(st in ("running", "paused"))
         if st == "running":
             if prev != "running":
                 self.await_window_list(True)
@@ -502,6 +598,32 @@ class Service:
         self.schedule_idle()
         if st != prev:
             self.changed()
+
+    def note_since(self, prev, st):
+        """When Windows went into the state it is in, for the panel's "Paused
+        for 12 minutes" and "Shut down 2 hours ago". A service that has only
+        just started cannot know, unless the state is still the one it
+        recorded before (Windows shut down as the PC did, say)."""
+        since = self.state.get("since") or {}
+        if prev == "":
+            if since.get("state") == st:
+                return
+            self.state["since"] = {"state": st, "at": None}
+        else:
+            self.state["since"] = {"state": st, "at": int(time.time())}
+        # Work kept for the next sign-in is gone once Windows is anything
+        # but saved: reopened, or shut down by hand.
+        if st != "saved" and prev == "saved":
+            self.state.pop("kept", None)
+        self.save_state()
+
+    def note_timing(self, result):
+        """How long the last start from off and restore from disk took, to
+        Remote Desktop answering: what the panel says the next one takes."""
+        came_from = result.get("from") if isinstance(result, dict) else None
+        key = {"stopped": "start", "shut off": "start", "saved": "restore"}.get(came_from)
+        if key and isinstance(result.get("seconds"), (int, float)):
+            self.state["timings"] = dict(self.state.get("timings") or {}, **{key: round(result["seconds"], 1)})
 
     def await_window_list(self, waiting):
         if self.window_list_timer:
@@ -696,22 +818,25 @@ class Service:
         return False
 
     def run_idle(self, action, done=None):
-        # Saving to disk is off: on a test PC (libvirt 11.3, virtiofs
-        # attached) the save was written but would not load back, which
-        # left Windows unable to start. Paused in memory it resumes in a
-        # second and loses nothing; saving comes back once restore is proven.
-        if action == lifecycle.SAVE and not SAVE_TO_DISK:
+        # A Windows still carrying the old virtiofs share would not load
+        # back from disk (that is what failed on real hardware), so until
+        # its next cold start takes the share out it is paused instead.
+        if action == lifecycle.SAVE and not self.save_ok():
             action = lifecycle.PAUSE
             if virsh.state(self.domain) == "paused":
                 return
         self.busy_action = action
+        # Said at once: the agent ends its connection as a save starts, or
+        # the connection would reconnect to the restored Windows by itself
+        # and Windows would start its first app again.
+        self.changed()
 
         def work():
             t0 = time.monotonic()
             if action == lifecycle.PAUSE:
                 virsh.suspend(self.domain)
             else:
-                self.do_save(open_windows=False)
+                self.do_save()
             return time.monotonic() - t0
 
         def finished(result):
@@ -724,63 +849,51 @@ class Service:
                 self.state["last"] = {"action": action, "seconds": round(result, 2), "at": int(time.time())}
                 self.save_state()
             self.refresh()
+            self.changed()
             if done:
                 done(result)
 
         dbusutil.in_thread(work, done=finished)
 
-    def do_save(self, open_windows):
-        """virsh managedsave. Held until the bare-metal transport test
-        decides between virtiofs and Samba:
-        libvirt before 10.6 and virtiofsd before 1.11 refuse while the
-        virtiofs share is attached (phase 1, risk 10.7), and then the share
-        is taken out first and put back on restore. That is only safe with
-        nothing open on it, which the idle path guarantees."""
+    def save_ok(self):
+        """Whether Windows can go to disk now: set up, and not carrying the
+        virtiofs share of Windows modes set up before 2026-11-08, which
+        drop_old_share takes out at the next cold start."""
+        return virsh.state(self.domain) != "" and not self.old_share
+
+    def do_save(self):
+        """virsh managedsave. Windows is paused first, so the save writes its
+        memory once instead of chasing pages it keeps changing, and nothing
+        it does after the decision (an app saving, an update installing)
+        is half done in the image. --running brings it back running.
+
+        A shutdown that stops winmoded meanwhile waits for this (main())."""
+        self.saving = True
         try:
-            virsh.managedsave(self.domain)
-            self.state["share_detached"] = False
-            return
-        except virsh.VirshError as e:
-            if "migrat" not in str(e).lower() and "virtiofs" not in str(e).lower():
-                raise
-            log("managed save refused with the shared folder attached:", e)
-        if open_windows:
-            log("warning: taking the shared folder out with Windows apps open; files open on it will need saving again")
-        xml = self.filesystem_xml()
-        if not xml:
-            raise virsh.VirshError("managed save refused and no shared folder to take out")
-        path = os.path.join(config.STATE_DIR, "filesystem.xml")
-        with open(path, "w") as f:
-            f.write(xml)
-        virsh.run("detach-device", self.domain, path, "--live", timeout=30)
-        deadline = time.monotonic() + 30
-        while time.monotonic() < deadline and "<filesystem " in virsh.dumpxml(self.domain):
-            time.sleep(0.25)
-        self.state["share_detached"] = True
-        self.save_state()
-        try:
-            virsh.managedsave(self.domain)
-        except virsh.VirshError:
-            # Still running: Windows must not be left without its drive.
             if virsh.state(self.domain) == "running":
-                self.reattach_share()
-            raise
+                virsh.suspend(self.domain)
+            virsh.run("managedsave", self.domain, "--running", timeout=300)
+        finally:
+            self.saving = False
 
-    def filesystem_xml(self):
-        xml = virsh.dumpxml(self.domain)
-        start = xml.find("<filesystem ")
-        end = xml.find("</filesystem>", start)
-        return xml[start:end + len("</filesystem>")] if start >= 0 and end > 0 else None
-
-    def reattach_share(self):
-        path = os.path.join(config.STATE_DIR, "filesystem.xml")
-        virsh.run("attach-device", self.domain, path, "--live", timeout=30)
-        # The virtiofs service only mounts at start.
-        drive = self.cfg["drive"]
-        qga.powershell(self.domain, "Restart-Service VirtioFsSvc -Force; $d = (Get-Date).AddSeconds(60); "
-                       f"while (-not (Test-Path {drive}:\\) -and (Get-Date) -lt $d) {{ Start-Sleep -Milliseconds 200 }}", 90)
-        self.state["share_detached"] = False
-        self.save_state()
+    def drop_old_share(self):
+        """Takes the virtiofs shared folder out of the definition of a Windows
+        set up before the folders moved to the RemoteApp connection. With it
+        attached a save to disk would not load back. Only from switched
+        off: the running Windows keeps the definition it started with."""
+        try:
+            xml = virsh.dumpxml(self.domain, inactive=True)
+        except virsh.VirshError as e:
+            log("old shared folder:", e)
+            return
+        if not has_virtiofs(xml):
+            return
+        path = os.path.join(config.STATE_DIR, "domain.xml")
+        with open(path, "w") as f:
+            f.write(drop_virtiofs(xml))
+        virsh.run("define", path)
+        self.old_share = False
+        log("took the old virtiofs shared folder out of Windows; saving to disk works from now on")
 
     def reopen_guest_channel(self):
         """After a restore the guest channel has a new host end, which
@@ -824,8 +937,7 @@ class Service:
             firewall.apply(self.cfg, self.state.get("file_sharing", False))
             if st == "shut off":
                 self.match_cpus()
-            # virtiofsd starts with the guest and sees the binds made before it.
-            self.bind_folders()
+                self.drop_old_share()
             try:
                 virsh.start(self.domain)
                 if background:
@@ -863,14 +975,6 @@ class Service:
                 log("guest-set-time:", e)
             if st == "saved":
                 self.reopen_guest_channel()
-        # Also covers a save that took the drive out and then failed. A
-        # fresh start has it back already, from the guest's definition.
-        if self.state.get("share_detached"):
-            if st == "shut off":
-                self.state["share_detached"] = False
-                self.save_state()
-            else:
-                self.reattach_share()
         if not self.wait_rdp(30 if st != "shut off" else 240):
             raise RuntimeError("Windows isn't accepting the connection")
         stages["remote_desktop"] = round(time.monotonic() - t0, 2)
@@ -924,10 +1028,16 @@ class Service:
             "guest": {"connected": self.link.connected, "version": (self.link.hello or {}).get("version"),
                       "sessions": (self.link.hello or {}).get("sessions")},
             "edition": self.state.get("edition"),
-            "share_detached": self.state.get("share_detached", False),
             "last": self.state.get("last"),
+            # {state, at}: since when Windows has been as it is (note_since).
+            "since": self.state.get("since"),
+            # {start, restore}: seconds the last of each took (note_timing).
+            "timings": self.state.get("timings") or {},
+            # Saved as Wild OS shut down with apps open, for the next sign-in
+            # to reopen.
+            "kept": bool(self.state.get("kept")) and st == "saved",
             "action": self.busy_action,
-            "save_to_disk": SAVE_TO_DISK,
+            "save_to_disk": self.save_ok(),
             "memory_pending": bool(self.state.get("memory_pending")),
             "error": self.error,
             "computer_name": self.cfg["computer_name"] or self.state.get("computer_name", ""),
@@ -969,6 +1079,7 @@ class Service:
                 defer.done(json.dumps({"ok": False, "error": str(result)}))
             else:
                 self.state["last"] = {"action": "wake", "seconds": result["seconds"], "from": result["from"], "at": int(time.time())}
+                self.note_timing(result)
                 self.save_state()
                 defer.done(json.dumps(result))
 
@@ -1058,11 +1169,110 @@ class Service:
         if mode not in (lifecycle.PAUSE, lifecycle.SAVE):
             return json.dumps({"ok": False, "error": "mode is pause or save"})
         st = virsh.state(self.domain)
+        if self.busy_action:
+            return json.dumps({"ok": False, "error": "busy", "message": "Windows mode is busy. Try again in a moment."})
+        if mode == lifecycle.SAVE and not self.save_ok():
+            return json.dumps({"ok": False, "error": "old shared folder",
+                               "message": "Windows mode can save to disk once Windows has restarted. Restart it from here first."})
         # A paused Windows can still go to disk, which frees its memory.
-        if st != "running" and not (st == "paused" and mode == lifecycle.SAVE and SAVE_TO_DISK):
+        if st != "running" and not (st == "paused" and mode == lifecycle.SAVE):
             return json.dumps({"ok": False, "error": "not running"})
         self.run_idle(mode, done=lambda r: defer.done(json.dumps(
             {"ok": False, "error": str(r)} if isinstance(r, Exception) else {"ok": True, "seconds": round(r, 2)})))
+        return defer
+
+    def m_power(self, sender, action, defer):
+        """The panel's Resume, Start, Restart and Shut down, and keep: saved
+        to disk because Wild OS is shutting down or signing out with
+        Windows apps open, which the next sign-in reopens. Answers
+        {ok, from, seconds, forced (switched off after SHUTDOWN_WAIT)} or
+        {ok: false, error, message}. The agent asks about unsaved work
+        before Restart and Shut down; this does what it is told."""
+        if action in (lifecycle.PAUSE, lifecycle.SAVE):
+            return self.m_idle(sender, action, defer)
+        if action not in POWER_ACTIONS:
+            return json.dumps({"ok": False, "error": "unknown action"})
+        if self.state.get("setting_up"):
+            return json.dumps({"ok": False, "error": "setting up", "message": "Windows mode is still being set up."})
+        why = self.claim(sender)
+        if why:
+            return json.dumps({"ok": False, "error": why, "message": why})
+        if action == "keep" and not self.save_ok() and virsh.state(self.domain) in ("running", "paused"):
+            return json.dumps({"ok": False, "error": "old shared folder"})
+        self.life.hold(time.monotonic(), POWER_HOLD, True)
+        self.schedule_idle()
+
+        def work():
+            # A pause or save already under way finishes first.
+            while self.busy_action:
+                time.sleep(0.1)
+            self.busy_action = action
+            GLib.idle_add(lambda: (self.changed(), False)[1])
+            t0 = time.monotonic()
+            came_from = virsh.state(self.domain)
+            out = {"ok": True, "from": came_from}
+            if action in ("resume", "start"):
+                out.update(self.wake())
+            elif action == "keep":
+                if came_from in ("running", "paused"):
+                    self.do_save()
+                self.state["kept"] = {"at": int(time.time())}
+                self.save_state()
+            else:
+                out["forced"] = self.stop_windows()
+                if action == "restart":
+                    # From off it is a cold start, so a new memory limit or
+                    # processor count comes with it.
+                    self.state["memory_pending"] = False
+                    self.state["restart_pending"] = False
+                    self.wake()
+            out["seconds"] = round(time.monotonic() - t0, 2)
+            return out
+
+        def finished(result):
+            self.busy_action = None
+            self.life.hold(time.monotonic(), POWER_HOLD, False)
+            if action in ("start", "restart") and not isinstance(result, Exception):
+                # Signed in to by the agent next, as after a start ahead of
+                # time; paused halfway through signing in, Windows did not
+                # answer when it was woken.
+                self.life.hold(time.monotonic(), PRESTART_HOLD, True)
+                GLib.timeout_add_seconds(PRESTART_SIGN_IN_SECONDS, lambda: (
+                    self.life.hold(time.monotonic(), PRESTART_HOLD, False), self.schedule_idle(), False)[2])
+            if isinstance(result, Exception):
+                log(f"{action} failed:", result)
+                reply = {"ok": False, "error": str(result)}
+            else:
+                self.state["last"] = {"action": action, "seconds": result["seconds"], "at": int(time.time()),
+                                      "forced": bool(result.get("forced"))}
+                if result.get("forced"):
+                    log(f"{action}: Windows was switched off after it didn't shut down in {SHUTDOWN_WAIT} s")
+                self.save_state()
+                if action in ("resume", "start"):
+                    self.note_timing(result)
+                reply = result
+            self.refresh()
+            self.schedule_idle()
+            self.changed()
+            defer.done(json.dumps(reply))
+
+        dbusutil.in_thread(work, done=finished)
+        return defer
+
+    def m_documents(self, sender, defer):
+        """What is open in Windows, for the question before it shuts down:
+        wild-guest's Office documents (with Office's own Saved state) and
+        window list. A wild-guest from before "documents" answers with an
+        error, and the window list alone is used."""
+        if not self.link.connected or virsh.state(self.domain) != "running":
+            return json.dumps({"office": None, "windows": self.all_windows()})
+
+        def got(reply):
+            if reply.get("type") == "documents":
+                defer.done(json.dumps({"office": reply.get("office"), "windows": reply.get("windows") or self.all_windows()}))
+            else:
+                defer.done(json.dumps({"office": None, "windows": self.all_windows()}))
+        self.link.request({"type": "documents"}, got, timeout=12)
         return defer
 
     def guest_request(self, msg, defer, timeout=15):
@@ -1222,7 +1432,6 @@ class Service:
             self.save_state()
 
         def work():
-            self.bind_folders()
             return self.setup.start(req, uid)
 
         dbusutil.in_thread(work, done=lambda r: defer.done(f"Windows mode couldn't start setting up. ({r})"
@@ -1377,6 +1586,12 @@ def main():
                                    lambda conn, name: log(f"winmoded: serving {name}"), lost)
     GLib.unix_signal_add(GLib.PRIORITY_HIGH, 15, loop.quit)
     loop.run()
+    # Stopped as the PC shuts down while Windows is being saved: half a save
+    # would not load back, so it is let finish (systemd allows 120 s and,
+    # with KillMode=mixed, leaves virsh running meanwhile).
+    deadline = time.monotonic() + 110
+    while service.saving and time.monotonic() < deadline:
+        time.sleep(0.2)
     # Held until here, so it lives as long as the loop.
     del service
     return 0

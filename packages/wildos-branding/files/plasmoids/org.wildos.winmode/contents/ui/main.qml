@@ -63,9 +63,10 @@ PlasmoidItem {
     readonly property real memoryHeld: qemu ? Number(qemu.rss_bytes) || 0 : 0
     readonly property real memoryLimit: system ? Number(system.memory_bytes) || 0 : 0
     readonly property int processors: qemu && qemu.vcpus > 0 ? qemu.vcpus : Math.max(1, hostCores)
-    readonly property var lastApp: agent && agent.lastApp && /^[a-z0-9-]+$/.test(agent.lastApp.id) ? agent.lastApp : null
     readonly property bool canSave: system !== null && system.save_to_disk === true
-    readonly property bool busyAction: system !== null && !!system.action
+    readonly property bool busyAction: system !== null && !!system.action || pendingAction !== ""
+    // The button just pressed, until the service says what it is doing.
+    property string pendingAction: ""
 
     function levelFor(sys: var, ag: var, ok: bool, windows: int): string {
         if (!ok || !sys) {
@@ -155,38 +156,85 @@ PlasmoidItem {
         return activated === true ? name + ", activated" : activated === false ? name + ", not activated" : name;
     }
 
-    // When the idle action ran, from the system service's record of it.
-    function sinceText(action: string, lead: string): string {
-        const last = system ? system.last : null;
-        if (!last || last.action !== action || !(last.at > 0)) {
-            return "";
-        }
-        const minutes = Math.floor((now / 1000 - last.at) / 60);
-        if (minutes < 1) {
-            return lead + " just now";
-        }
+    // "12 minutes", "2 hours": how long ago a moment was, in whole units.
+    function agoText(at: real): string {
+        const minutes = Math.floor((now / 1000 - at) / 60);
         if (minutes < 60) {
-            return lead + " for " + plural(minutes, "minute", "minutes");
+            return plural(Math.max(1, minutes), "minute", "minutes");
         }
-        return lead + " since " + new Date(last.at * 1000).toLocaleTimeString(Qt.locale(), Locale.ShortFormat);
+        const hours = Math.floor(minutes / 60);
+        return hours < 24 ? plural(hours, "hour", "hours") : plural(Math.floor(hours / 24), "day", "days");
     }
 
+    // "Paused for 12 minutes", "Shut down 2 hours ago": from when Windows
+    // went into the state it is in (system.py note_since), or the state
+    // alone when the service can't know.
+    function sinceText(vm: string, lead: string, ago: bool): string {
+        const since = system ? system.since : null;
+        const at = since && since.state === vm && since.at > 0 ? since.at : 0;
+        if (!at) {
+            return lead;
+        }
+        if (now / 1000 - at < 60) {
+            return lead + " just now";
+        }
+        return ago ? lead + " " + agoText(at) + " ago" : lead + " for " + agoText(at);
+    }
+
+    // What the service is doing for a button, said in place of the state.
+    readonly property string actionText: ({
+        pause: "Pausing", save: "Saving to disk", keep: "Saving to disk", resume: "Resuming", start: "Starting Windows",
+        restart: "Restarting Windows", shutdown: "Shutting down Windows"
+    })[system && system.action ? system.action : pendingAction] || ""
+
     function subtitle(): string {
+        if (actionText !== "") {
+            return actionText;
+        }
         switch (level) {
         case "running":
             return editionText();
         case "paused":
-            return sinceText("pause", "Paused") || "Paused";
+            return sinceText("paused", "Paused", false);
         case "saved":
-            return sinceText("save", "Saved to disk") || "Saved to disk";
+            // The pill says Saved; "Saved to disk 25 minutes ago" is too
+            // long for the panel's width.
+            return sinceText("saved", "Saved", true);
         case "off":
-            return "Switched off";
+            return sinceText("shut off", "Shut down", true);
         case "starting":
             return "Getting Windows ready";
         case "updating":
             return "Installing updates";
         }
         return "Needs attention";
+    }
+
+    // "about 20 seconds", from how long the last start or restore took on
+    // this PC; empty until one has been timed.
+    function aboutText(seconds: real): string {
+        if (!(seconds > 0)) {
+            return "";
+        }
+        if (seconds < 1.5) {
+            return "about a second";
+        }
+        if (seconds < 10) {
+            return "about " + Math.round(seconds) + " seconds";
+        }
+        if (seconds < 55) {
+            return "about " + Math.round(seconds / 5) * 5 + " seconds";
+        }
+        return seconds < 90 ? "about a minute" : "about " + Math.round(seconds / 60) + " minutes";
+    }
+
+    // Saved or off: what it costs now and to come back.
+    function restingText(): string {
+        const timings = system && system.timings ? system.timings : {};
+        const about = aboutText(Number(level === "saved" ? timings.restore : timings.start));
+        const lead = level === "saved" ? "Ready in " : "Starts in ";
+        return "Uses no memory or processor. " + (about ? lead + about + ", or by itself when a Windows app opens."
+            : (level === "saved" ? "Ready again" : "Starts") + " by itself when a Windows app opens.");
     }
 
     // What the panel says the idle policy will do (winmode/lifecycle.py).
@@ -305,27 +353,25 @@ PlasmoidItem {
             hostCores = parseInt(answer, 10) || 0;
             return;
         }
+        if (command.indexOf("wildos-winmode power ") === 0) {
+            pendingAction = "";
+        }
         refresh();
     }
 
-    function pauseNow(): void {
-        run("wildos-winmode idle pause");
-    }
-
-    function saveToDisk(): void {
-        run("wildos-winmode idle save");
-    }
-
-    // The app's Start entry through kstart, the way Task Manager and Start
-    // open Windows apps, so the taskbar shows it starting.
-    function openApp(id: string): void {
-        if (!/^[a-z0-9-]+$/.test(id)) {
+    // Pause, Save to disk, Resume, Start, Restart and Shut down, through the
+    // agent, which asks first when Restart or Shut down could lose unsaved
+    // work, and says so in a notification when something fails. The panel
+    // closes for those two, so the question isn't hidden behind it.
+    function power(action: string): void {
+        if (["pause", "save", "resume", "start", "restart", "shutdown"].indexOf(action) < 0) {
             return;
         }
-        const entry = "wildos-winmode-" + id;
-        run("if command -v kstart >/dev/null 2>&1 && [ -e \"${XDG_DATA_HOME:-$HOME/.local/share}/applications/" + entry + ".desktop\" ]; "
-            + "then kstart --application " + entry + "; else wildos-winmode launch " + id + "; fi");
-        expanded = false;
+        pendingAction = action;
+        run("wildos-winmode power " + action);
+        if (action === "restart" || action === "shutdown") {
+            expanded = false;
+        }
     }
 
     // Settings ships with Wild OS, but if it has gone the click still says

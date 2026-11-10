@@ -1,6 +1,7 @@
 #include "theme.h"
 
 #include <KConfigGroup>
+#include <algorithm>
 #include <KSharedConfig>
 
 #include <QEvent>
@@ -126,9 +127,11 @@ void Theme::read()
         Q_EMIT darkChanged();
     }
 
-    const bool reduced = config->group(QStringLiteral("KDE")).readEntry("AnimationDurationFactor", 1.0) <= 0.0;
-    if (reduced != m_reducedMotion) {
+    const qreal factor = std::clamp(config->group(QStringLiteral("KDE")).readEntry("AnimationDurationFactor", 1.0), 0.0, 4.0);
+    const bool reduced = factor <= 0.0;
+    if (reduced != m_reducedMotion || !qFuzzyCompare(1.0 + factor, 1.0 + m_animationFactor)) {
         m_reducedMotion = reduced;
+        m_animationFactor = factor;
         Q_EMIT reducedMotionChanged();
     }
 }

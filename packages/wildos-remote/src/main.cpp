@@ -27,6 +27,9 @@
 #include <QDBusMessage>
 #include <QIcon>
 #include <QQmlApplicationEngine>
+#include <QQmlComponent>
+#include <QQmlIncubator>
+#include <QTimer>
 #include <QQuickStyle>
 #include <QQuickWindow>
 
@@ -127,15 +130,81 @@ int main(int argc, char *argv[])
     QObject::connect(&engine, &QQmlApplicationEngine::objectCreationFailed, &app, []() {
         QCoreApplication::exit(1);
     }, Qt::QueuedConnection);
-    engine.loadFromModule("WildOS.Remote", "Main");
+
+    // The splash loads first and the home window after it, asynchronously:
+    // loaded the usual way, the home window would hold the event loop and
+    // the splash could never appear while it waited.
+    engine.loadFromModule("WildOS.Remote", "Splash");
+    auto *splash = engine.rootObjects().isEmpty() ? nullptr : qobject_cast<QQuickWindow *>(engine.rootObjects().constFirst());
+    if (splash) {
+        engine.setIncubationController(splash->incubationController());
+    }
 
     auto *exported = new Bus(&app);
-    if (bus.isConnected()) {
-        bus.registerObject(objectPath, exported, QDBusConnection::ExportScriptableSlots);
-        bus.registerService(serviceName);
-    }
-    if (!arg.isEmpty()) {
-        QMetaObject::invokeMethod(App::instance(), [arg] { App::instance()->openArgument(arg); }, Qt::QueuedConnection);
+    // Remote is ready for links and second launches only once its home
+    // window exists to take them.
+    auto ready = [&bus, exported, arg]() {
+        if (bus.isConnected()) {
+            bus.registerObject(objectPath, exported, QDBusConnection::ExportScriptableSlots);
+            bus.registerService(serviceName);
+        }
+        if (!arg.isEmpty()) {
+            App::instance()->openArgument(arg);
+        }
+    };
+
+    QQmlComponent home(&engine);
+    QQmlIncubator incubator(QQmlIncubator::Asynchronous);
+    auto finishSplash = [splash]() {
+        if (splash) {
+            QMetaObject::invokeMethod(splash, "finish");
+        }
+    };
+    auto create = [&]() {
+        if (home.isError()) {
+            qWarning().noquote() << home.errorString();
+            QCoreApplication::exit(1);
+            return;
+        }
+        home.create(incubator);
+    };
+    QTimer poll;
+    poll.setInterval(16);
+    QObject::connect(&poll, &QTimer::timeout, &app, [&]() {
+        if (incubator.isLoading()) {
+            return;
+        }
+        poll.stop();
+        if (incubator.isError()) {
+            for (const QQmlError &e : incubator.errors()) {
+                qWarning().noquote() << e.toString();
+            }
+            QCoreApplication::exit(1);
+            return;
+        }
+        QObject *object = incubator.object();
+        QQmlEngine::setObjectOwnership(object, QQmlEngine::CppOwnership);
+        object->setParent(&engine);
+        auto *window = qobject_cast<QQuickWindow *>(object);
+        if (splash && window && window->isVisible()) {
+            // The home window comes up as the splash goes, not behind it.
+            window->setVisible(false);
+            QObject::connect(splash, SIGNAL(finished()), window, SLOT(show()));
+            QObject::connect(splash, SIGNAL(finished()), window, SLOT(requestActivate()));
+        }
+        finishSplash();
+        ready();
+    });
+    QObject::connect(&home, &QQmlComponent::statusChanged, &app, [&](QQmlComponent::Status status) {
+        if (status == QQmlComponent::Ready || status == QQmlComponent::Error) {
+            create();
+            poll.start();
+        }
+    });
+    home.loadFromModule("WildOS.Remote", "Main", QQmlComponent::Asynchronous);
+    if (home.status() == QQmlComponent::Ready || home.status() == QQmlComponent::Error) {
+        create();
+        poll.start();
     }
     const int status = app.exec();
     Desktops::instance()->closeAll();

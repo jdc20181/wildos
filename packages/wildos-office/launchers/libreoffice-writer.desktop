@@ -1,0 +1,20 @@
+[Desktop Entry]
+Type=Application
+Name=Write
+GenericName=Documents
+Comment=Write letters, reports and CVs, and open and save Word files
+Exec=wildos-write %U
+Icon=org.wildos.write
+Terminal=false
+StartupNotify=true
+StartupWMClass=libreoffice-writer
+Categories=Office;WordProcessor;
+Keywords=word;docx;doc;document;letter;report;cv;odt;writer;
+X-GIO-NoFuse=true
+InitialPreference=9
+MimeType=application/clarisworks;application/docbook+xml;application/macwriteii;application/msword;application/prs.plucker;application/rtf;application/vnd.apple.pages;application/vnd.lotus-wordpro;application/vnd.ms-word;application/vnd.ms-word.document.macroEnabled.12;application/vnd.ms-word.template.macroEnabled.12;application/vnd.ms-works;application/vnd.oasis.opendocument.text;application/vnd.oasis.opendocument.text-flat-xml;application/vnd.oasis.opendocument.text-master;application/vnd.oasis.opendocument.text-master-template;application/vnd.oasis.opendocument.text-template;application/vnd.oasis.opendocument.text-web;application/vnd.openxmlformats-officedocument.wordprocessingml.document;application/vnd.openxmlformats-officedocument.wordprocessingml.template;application/vnd.palm;application/vnd.stardivision.writer-global;application/vnd.sun.xml.writer;application/vnd.sun.xml.writer.global;application/vnd.sun.xml.writer.template;application/vnd.wordperfect;application/wordperfect;application/x-abiword;application/x-aportisdoc;application/x-doc;application/x-fictionbook+xml;application/x-hwp;application/x-iwork-pages-sffpages;application/x-mswrite;application/x-pocket-word;application/x-sony-bbeb;application/x-starwriter;application/x-starwriter-global;application/x-t602;text/rtf;
+Actions=NewDocument;
+
+[Desktop Action NewDocument]
+Name=New document
+Exec=wildos-write --new

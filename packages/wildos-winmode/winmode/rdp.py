@@ -105,6 +105,15 @@ def prepare_arguments(host, port, account, domain, drive=None):
     return [a for a in out if a != "+auto-reconnect"]
 
 
+def resume_arguments(host, port, account, domain, drive=None):
+    """A connection that brings back the windows already open in Windows'
+    session, after a save to disk or a lost connection: Remote Desktop
+    shows every window of the session it reconnects to. It asks for no
+    app (wild-guest's --start with nothing to start ends at once), so a
+    reconnect later on starts nothing again either."""
+    return arguments(host, port, account, domain, "Windows mode", "", [], drive=drive)
+
+
 def prepare_session(args, password, log_path, done, native=NATIVE_CLIENT):
     """Runs the sign-in-only connection; done(ok) when it ends. Returns the
     process, so a launch that comes first can end it."""

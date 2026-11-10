@@ -33,6 +33,10 @@ class Theme : public QObject
     // Settings > Accessibility > Reduce motion, which sets KDE's animation
     // speed to instant (kdeglobals [KDE] AnimationDurationFactor=0).
     Q_PROPERTY(bool reducedMotion READ reducedMotion NOTIFY reducedMotionChanged)
+    // KDE's animation speed (AnimationDurationFactor) as a multiplier for
+    // every Style duration, so Wild OS apps keep pace with the window
+    // manager. 0 with reduced motion.
+    Q_PROPERTY(qreal animationFactor READ animationFactor NOTIFY reducedMotionChanged)
     // Settings > Accessibility > Stronger text on glass (wildosrc
     // [Accessibility] StrongerText): Style makes glass nearly solid and
     // muted text brighter.
@@ -66,6 +70,7 @@ public:
     bool highContrast() const { return m_scheme == QLatin1String("WildOSHighContrast"); }
     qreal fontPointSize() const;
     bool reducedMotion() const { return m_reducedMotion; }
+    qreal animationFactor() const { return m_animationFactor; }
     bool strongerText() const { return m_strongerText; }
 
     QString themeId() const { return m_themeId; }
@@ -101,6 +106,7 @@ private:
     QColor m_accent;
     bool m_dark = true;
     bool m_reducedMotion = false;
+    qreal m_animationFactor = 1.0;
     bool m_strongerText = false;
     QString m_scheme;
 

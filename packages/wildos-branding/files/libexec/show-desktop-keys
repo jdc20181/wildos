@@ -1,0 +1,45 @@
+#!/bin/sh
+# Moves Win+D from KWin's Show Desktop, which slides the windows off the
+# screen, to the Wild OS one, which minimises them into the taskbar
+# (org.wildos.showdesktop). New accounts get this from their shortcut file;
+# accounts made before it are changed once, from the session's autostart.
+# The shortcut service holds its settings in memory and writes them back, so
+# the change goes through it rather than into the file.
+
+set -u
+
+state=${XDG_STATE_HOME:-$HOME/.local/state}/wildos
+marker=$state/show-desktop-keys
+[ -e "$marker" ] && exit 0
+
+# Meta+D as Qt writes it: Qt::META | Qt::Key_D.
+meta_d=268435524
+
+accel() {
+    busctl --user call org.kde.kglobalaccel /kglobalaccel org.kde.KGlobalAccel "$@"
+}
+# The keys of a KWin action, as busctl prints them.
+keys() {
+    accel shortcutKeys as 4 kwin "$1" KWin "$1"
+}
+
+# KWin registers the script's shortcut as it loads the script, so wait for it.
+i=0
+until busctl --user call org.kde.kglobalaccel /component/kwin org.kde.kglobalaccel.Component shortcutNames 2>/dev/null |
+        grep -q '"Wild OS show desktop"'; do
+    i=$((i + 1))
+    [ "$i" -ge 120 ] && exit 0
+    sleep 1
+done
+
+# Someone who moved KWin's Show Desktop to other keys keeps them; only Win+D
+# changes hands.
+if keys "Show Desktop" | grep -q " $meta_d "; then
+    accel setForeignShortcutKeys 'asa(ai)' 4 kwin "Show Desktop" KWin "Show Desktop" 0 || exit 0
+fi
+if ! keys "Wild OS show desktop" | grep -q " $meta_d "; then
+    accel setForeignShortcutKeys 'asa(ai)' 4 kwin "Wild OS show desktop" KWin "Wild OS show desktop" \
+        1 4 "$meta_d" 0 0 0 || exit 0
+fi
+
+mkdir -p "$state" && : > "$marker"

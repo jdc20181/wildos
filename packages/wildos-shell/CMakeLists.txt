@@ -31,6 +31,8 @@ install(FILES ${CMAKE_CURRENT_BINARY_DIR}/org/wildos/shell/qmldir DESTINATION ${
 # be rebuilt for each KWin version.
 install(DIRECTORY kwin/org.wildos.underglow DESTINATION ${CMAKE_INSTALL_DATADIR}/kwin/scripts)
 install(DIRECTORY kwin/org.wildos.appwindows DESTINATION ${CMAKE_INSTALL_DATADIR}/kwin/scripts)
+install(DIRECTORY kwin/org.wildos.showdesktop DESTINATION ${CMAKE_INSTALL_DATADIR}/kwin/scripts)
+install(DIRECTORY kwin/org.wildos.peekfade DESTINATION ${CMAKE_INSTALL_DATADIR}/kwin/effects)
 
 include(CTest)
 if(BUILD_TESTING)

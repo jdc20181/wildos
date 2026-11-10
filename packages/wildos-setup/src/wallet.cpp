@@ -1,21 +1,50 @@
+#include "walletkey.h"
+
 #include <QCoreApplication>
 #include <QDBusConnection>
+#include <QDBusConnectionInterface>
 #include <QDBusMessage>
 #include <QDBusReply>
 #include <QDir>
+#include <QElapsedTimer>
+#include <QEventLoop>
+#include <QFile>
 #include <QFileInfo>
+#include <QProcess>
+#include <QTimer>
 
-/* wildos-setup-wallet: opens the KWallet of the account first boot setup
- * made, in that account's first session (wildos-setup-wallet.service).
+#include <pwd.h>
+#include <unistd.h>
+
+/* wildos-setup-wallet: opens the KWallet of an account that signed in
+ * without typing a password (wildos-setup-wallet.service), and tells the
+ * person when it could not (--notice, wildos-wallet-notice.service).
  *
- * Setup signs the new account in automatically, so pam_kwallet has no
- * password to create the wallet with, and the first app to ask for a
- * secret would get KWallet's own create-a-wallet dialog. A wallet made
- * there with another password never opens at sign-in again. Setup's
- * helper made the key pam_kwallet makes from the password, with the salt
- * pam_kwallet reads; kwalletd creates the wallet with that key here, the
- * same way it does when pam_kwallet hands it one, and every later sign-in
- * with the password opens it.
+ * pam_kwallet opens the wallet with a key it makes from the password typed
+ * at sign-in. Two sign-ins type none, and without this the first app to ask
+ * for a secret gets KWallet's own password prompt:
+ *
+ * - The first session after first boot setup, which signs the new account
+ *   in once. Setup's helper made the key from the password the person chose
+ *   and hands it over once (TakeWalletKey). No wallet exists yet; kwalletd
+ *   creates it with that key, so every later sign-in with the password
+ *   opens it.
+ * - Every start of the account that signs in automatically. The system
+ *   keeps that account's key (wildos-wallet-keys) and hands it to the
+ *   account once per boot.
+ *
+ * A wallet already open (the password was typed after all) is left alone.
+ *
+ * Two cases still end with KWallet's prompt, and the notice offers the way
+ * out, in Settings, at most once per boot:
+ *
+ * - An account that signs in automatically with no key kept: it turned
+ *   automatic sign-in on before Wild OS kept keys, and nobody would guess
+ *   that turning it off and on again fixes it.
+ * - A wallet still closed after the desktop started: its password is not
+ *   the account's (made in KWallet's own dialog, or left behind by a
+ *   password change before Settings moved wallets along), so pam_kwallet's
+ *   key, or the kept one, does not open it.
  */
 namespace
 {
@@ -24,46 +53,260 @@ QDBusMessage kwallet(const QString &method)
     return QDBusMessage::createMethodCall(QStringLiteral("org.kde.kwalletd6"), QStringLiteral("/modules/kwalletd6"), QStringLiteral("org.kde.KWallet"),
                                           method);
 }
+
+QByteArray systemKey(const QString &service, const QString &path, const QString &method, QString *errorName = nullptr)
+{
+    const QDBusMessage call = QDBusMessage::createMethodCall(service, path, service, method);
+    const QDBusReply<QByteArray> key = QDBusConnection::systemBus().call(call, QDBus::Block, 30000);
+    if (!key.isValid()) {
+        qWarning("no wallet key from %s: %s", qPrintable(service), qPrintable(key.error().message()));
+        if (errorName) {
+            *errorName = key.error().name();
+        }
+        return {};
+    }
+    return key.value();
+}
+
+QString walletName(QDBusConnection &session)
+{
+    const QDBusReply<QString> local = session.call(kwallet(QStringLiteral("localWallet")), QDBus::Block, 30000);
+    return local.isValid() && !local.value().isEmpty() ? local.value() : QStringLiteral("kdewallet");
+}
+
+bool walletOpen(QDBusConnection &session, const QString &wallet)
+{
+    QDBusMessage isOpen = kwallet(QStringLiteral("isOpen"));
+    isOpen << wallet;
+    const QDBusReply<bool> open = session.call(isOpen, QDBus::Block, 30000);
+    return open.isValid() && open.value();
+}
+
+// Left by the sign-in half for the notice half, in the session's runtime
+// folder, so it goes with the session.
+QString needsKeyMarker()
+{
+    return qEnvironmentVariable("XDG_RUNTIME_DIR") + QStringLiteral("/wildos-wallet-needs-key");
+}
+
+QString walletDir()
+{
+    return QDir::homePath() + QStringLiteral("/.local/share/kwalletd");
+}
+
+int openAtSignIn()
+{
+    // Setup leaves the salt and no wallet.
+    const QString dir = walletDir();
+    const bool firstSession = QFileInfo::exists(dir + QStringLiteral("/kdewallet.salt")) && !QFileInfo::exists(dir + QStringLiteral("/kdewallet.kwl"));
+    const struct passwd *pw = ::getpwuid(::getuid());
+    const bool automatic = pw && WalletKey::autoLoginUser() == QString::fromUtf8(pw->pw_name);
+    QFile::remove(needsKeyMarker());
+    if (!firstSession && !automatic) {
+        return 0;
+    }
+    // Set only when a password was typed: pam_kwallet has started kwalletd
+    // with the key made from it. Asking kwalletd anything before that one
+    // is on the bus would start a second one through the bus, without the
+    // key.
+    if (qEnvironmentVariableIsSet("PAM_KWALLET5_LOGIN")) {
+        return 0;
+    }
+
+    QDBusConnection session = QDBusConnection::sessionBus();
+    const QString wallet = walletName(session);
+    if (walletOpen(session, wallet)) {
+        return 0;
+    }
+
+    QByteArray key;
+    if (firstSession) {
+        key = systemKey(QStringLiteral("org.wildos.Setup1"), QStringLiteral("/org/wildos/Setup1"), QStringLiteral("TakeWalletKey"));
+    }
+    if (key.isEmpty() && automatic) {
+        QString error;
+        key = systemKey(QStringLiteral("org.wildos.WalletKeys1"), QStringLiteral("/org/wildos/WalletKeys1"), QStringLiteral("Key"), &error);
+        // No key kept is expected on a computer that turned automatic
+        // sign-in on before keys were kept; the notice offers the fix.
+        if (error == QLatin1String("org.wildos.WalletKeys1.Error.NoKey")) {
+            QFile marker(needsKeyMarker());
+            marker.open(QIODevice::WriteOnly);
+            return 0;
+        }
+    }
+    if (key.isEmpty()) {
+        return 1;
+    }
+
+    // pamOpen never replies. kwalletd handles one connection's calls in
+    // order, so isOpen, sent after it, answers once it has run.
+    QDBusMessage open = kwallet(QStringLiteral("pamOpen"));
+    open << wallet << key << 0;
+    key.fill('\0');
+    if (!session.send(open)) {
+        qWarning("could not reach kwalletd");
+        return 1;
+    }
+    if (!walletOpen(session, wallet)) {
+        qWarning("kwalletd did not open %s with the key it was given", qPrintable(wallet));
+        return 1;
+    }
+    return 0;
+}
+
+// The notification's answer: the button, or the notification closing.
+class Answer : public QObject
+{
+    Q_OBJECT
+
+public:
+    uint id = 0;
+    bool accepted = false;
+
+Q_SIGNALS:
+    void finished();
+
+public Q_SLOTS:
+    void actionInvoked(uint notification, const QString &action)
+    {
+        if (id != 0 && notification == id) {
+            accepted = action == QLatin1String("password") || action == QLatin1String("default");
+            Q_EMIT finished();
+        }
+    }
+    void closed(uint notification, uint reason)
+    {
+        if (id != 0 && notification == id) {
+            qInfo("saved passwords notice closed (reason %u)", reason);
+            Q_EMIT finished();
+        }
+    }
+};
+
+int notice()
+{
+    const bool needsKey = QFileInfo::exists(needsKeyMarker());
+    if (!needsKey && !QFileInfo::exists(walletDir() + QStringLiteral("/kdewallet.kwl"))) {
+        return 0;
+    }
+    // At most once per boot: the boot's id is kept once it has been shown.
+    QFile bootIdFile(QStringLiteral("/proc/sys/kernel/random/boot_id"));
+    const QByteArray bootId = bootIdFile.open(QIODevice::ReadOnly) ? bootIdFile.readAll().trimmed() : QByteArray();
+    const QString stateDir = QDir::homePath() + QStringLiteral("/.local/state/wildos");
+    const QString shownFile = stateDir + QStringLiteral("/wallet-notice-boot");
+    QFile shown(shownFile);
+    if (!bootId.isEmpty() && shown.open(QIODevice::ReadOnly) && shown.readAll().trimmed() == bootId) {
+        return 0;
+    }
+    shown.close();
+
+    QDBusConnection session = QDBusConnection::sessionBus();
+    if (!needsKey) {
+        // pam_kwallet's opener starts kwalletd alongside the desktop and
+        // hands it the key; give it time before deciding the wallet did not
+        // open. kwalletd is only asked once it is running: started here by
+        // the bus first, it would never get pam_kwallet's key. Without
+        // pam_kwallet starting it there is nothing to say.
+        const QString kwalletd = QStringLiteral("org.kde.kwalletd6");
+        bool running = false;
+        for (int i = 0; i < 20; ++i) {
+            running = session.interface()->isServiceRegistered(kwalletd);
+            if (running && walletOpen(session, walletName(session))) {
+                return 0;
+            }
+            QEventLoop wait;
+            QTimer::singleShot(1000, &wait, &QEventLoop::quit);
+            wait.exec();
+        }
+        if (!running || walletOpen(session, walletName(session))) {
+            return 0;
+        }
+    }
+
+    const QString summary = needsKey ? QStringLiteral("Saved passwords need your password") : QStringLiteral("Saved passwords didn't open");
+    const QString body = needsKey
+        ? QStringLiteral("You sign in automatically, so your saved passwords can't open by themselves yet. Enter your password once and they will. Until then, "
+                         "apps may ask for it.")
+        : QStringLiteral("They use a different password from your account, so apps may ask for it. Move them to your account password to fix it.");
+    QDBusMessage notify = QDBusMessage::createMethodCall(QStringLiteral("org.freedesktop.Notifications"), QStringLiteral("/org/freedesktop/Notifications"),
+                                                         QStringLiteral("org.freedesktop.Notifications"), QStringLiteral("Notify"));
+    // Critical, so it stays until answered or closed: shortly after the
+    // desktop starts Plasma lets ordinary notifications expire with their
+    // popup, and the button would go with it. Once per boot at most.
+    const QVariantMap hints = {{QStringLiteral("desktop-entry"), QStringLiteral("org.wildos.settings")},
+                               {QStringLiteral("urgency"), QVariant::fromValue<uchar>(2)}};
+    notify << QStringLiteral("Settings") << uint(0) << QStringLiteral("dialog-password") << summary << body
+           << QStringList{QStringLiteral("password"), needsKey ? QStringLiteral("Enter password") : QStringLiteral("Fix it")} << hints << int(0);
+
+    const auto pause = [](int seconds) {
+        QEventLoop wait;
+        QTimer::singleShot(seconds * 1000, &wait, &QEventLoop::quit);
+        wait.exec();
+    };
+    const QString service = QStringLiteral("org.freedesktop.Notifications");
+    const QString path = QStringLiteral("/org/freedesktop/Notifications");
+    // Plasma takes the notification name before its popups are ready and
+    // closes what arrives in between at once. So this waits for the name
+    // (without asking for it, which would make the bus start a server),
+    // then a moment more, and tries once more if the first is closed
+    // straight away.
+    for (int i = 0; i < 60 && !session.interface()->isServiceRegistered(service); ++i) {
+        pause(1);
+    }
+    pause(10);
+
+    Answer answer;
+    QEventLoop loop;
+    QObject::connect(&answer, &Answer::finished, &loop, &QEventLoop::quit);
+    session.connect(service, path, service, QStringLiteral("ActionInvoked"), &answer, SLOT(actionInvoked(uint, QString)));
+    session.connect(service, path, service, QStringLiteral("NotificationClosed"), &answer, SLOT(closed(uint, uint)));
+    for (int attempt = 0; attempt < 2; ++attempt) {
+        const QDBusReply<uint> id = session.call(notify, QDBus::Block, 30000);
+        if (!id.isValid()) {
+            qWarning("could not show the saved passwords notice: %s", qPrintable(id.error().message()));
+            return 1;
+        }
+        answer.id = id.value();
+        qInfo("saved passwords notice shown (%s)", needsKey ? "no key kept" : "wallet closed");
+        QElapsedTimer shownFor;
+        shownFor.start();
+        // The notification stays in the history; this waits for it a while.
+        QTimer::singleShot(30 * 60 * 1000, &loop, &QEventLoop::quit);
+        loop.exec();
+        if (answer.accepted || shownFor.elapsed() > 5000) {
+            break;
+        }
+        pause(10);
+    }
+    QDir().mkpath(stateDir);
+    if (shown.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+        shown.write(bootId + '\n');
+        shown.close();
+    }
+    if (!answer.accepted) {
+        return 0;
+    }
+    // Started as its own app unit, so it outlives this one and the
+    // permission prompt names it as Settings. Waited for: systemd stops
+    // whatever is left in this unit when it ends, systemd-run included.
+    return QProcess::execute(QStringLiteral("systemd-run"),
+                             {QStringLiteral("--user"), QStringLiteral("--collect"), QStringLiteral("--quiet"),
+                              QStringLiteral("--unit=app-org.wildos.settings@wallet%1.service").arg(QCoreApplication::applicationPid()),
+                              QStringLiteral("/usr/bin/wildos-settings"), QStringLiteral("--page"), QStringLiteral("signin-wallet")})
+            == 0
+        ? 0
+        : 1;
+}
 }
 
 int main(int argc, char *argv[])
 {
     QCoreApplication app(argc, argv);
     app.setApplicationName(QStringLiteral("wildos-setup-wallet"));
-
-    // Setup leaves the salt and no wallet. Anything else is a later
-    // session, or an account setup did not make.
-    const QString dir = QDir::homePath() + QStringLiteral("/.local/share/kwalletd");
-    if (!QFileInfo::exists(dir + QStringLiteral("/kdewallet.salt")) || QFileInfo::exists(dir + QStringLiteral("/kdewallet.kwl"))) {
-        return 0;
+    if (app.arguments().contains(QStringLiteral("--notice"))) {
+        return notice();
     }
-
-    const QDBusMessage take = QDBusMessage::createMethodCall(QStringLiteral("org.wildos.Setup1"), QStringLiteral("/org/wildos/Setup1"),
-                                                             QStringLiteral("org.wildos.Setup1"), QStringLiteral("TakeWalletKey"));
-    const QDBusReply<QByteArray> key = QDBusConnection::systemBus().call(take, QDBus::Block, 30000);
-    if (!key.isValid()) {
-        qWarning("no wallet key from setup: %s", qPrintable(key.error().message()));
-        return 1;
-    }
-
-    QDBusConnection session = QDBusConnection::sessionBus();
-    const QDBusReply<QString> localWallet = session.call(kwallet(QStringLiteral("localWallet")), QDBus::Block, 30000);
-    const QString wallet = localWallet.isValid() && !localWallet.value().isEmpty() ? localWallet.value() : QStringLiteral("kdewallet");
-
-    // pamOpen never replies. kwalletd handles one connection's calls in
-    // order, so isOpen, sent after it, answers once it has run.
-    QDBusMessage open = kwallet(QStringLiteral("pamOpen"));
-    open << wallet << key.value() << 0;
-    if (!session.send(open)) {
-        qWarning("could not reach kwalletd");
-        return 1;
-    }
-    QDBusMessage isOpen = kwallet(QStringLiteral("isOpen"));
-    isOpen << wallet;
-    const QDBusReply<bool> opened = session.call(isOpen, QDBus::Block, 30000);
-    if (!opened.isValid() || !opened.value()) {
-        qWarning("kwalletd did not open %s with setup's key", qPrintable(wallet));
-        return 1;
-    }
-    return 0;
+    return openAtSignIn();
 }
+
+#include "wallet.moc"

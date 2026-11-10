@@ -46,12 +46,27 @@ PlasmoidItem {
             kickerRoot.favoritesModel.initForClient("org.wildos.start.favorites.instance-" + Plasmoid.id);
             // The default pins are copied once. After that the activity
             // manager owns them, so unpinning a default sticks.
+            const defaults = Array.from(Plasmoid.configuration.favorites);
             if (!Plasmoid.configuration.favoritesPortedToKAstats) {
                 if (kickerRoot.favoritesModel.count < 1) {
-                    kickerRoot.favoritesModel.portOldFavorites(Plasmoid.configuration.favorites);
+                    kickerRoot.favoritesModel.portOldFavorites(defaults);
                 }
                 Plasmoid.configuration.favoritesPortedToKAstats = true;
+            } else {
+                // Defaults added since this account's pins were made are
+                // pinned once. Accounts from before the list was kept had
+                // every pin in Helpers.pinsBeforeOffice.
+                let offered = Array.from(Plasmoid.configuration.pinsOffered);
+                if (offered.length === 0) {
+                    offered = Helpers.pinsBeforeOffice;
+                }
+                for (const id of defaults) {
+                    if (!offered.includes(id) && !kickerRoot.favoritesModel.isFavorite(id)) {
+                        kickerRoot.favoritesModel.addFavorite(id);
+                    }
+                }
             }
+            Plasmoid.configuration.pinsOffered = defaults;
             kickerRoot.refresh();
         }
     }

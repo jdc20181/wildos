@@ -112,3 +112,22 @@ RUN apt-get update \
 RUN apt-get update \
     && apt-get install -y --no-install-recommends qml6-module-qtquick-pdf qml6-module-qtmultimedia \
     && rm -rf /var/lib/apt/lists/*
+
+# wildos-setup's wallet key service checks the account's password with PAM
+# before it keeps a key for automatic sign-in.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends libpam0g-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# The repacked security-misc-shared ships emerg-shutdown and fm-shim-backend
+# compiled here (build.sh); fm-shim-backend links D-Bus and libsystemd and
+# finds them with pkg-config.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends libdbus-1-dev libsystemd-dev pkgconf \
+    && rm -rf /var/lib/apt/lists/*
+
+# Compiles go through ccache (a volume shared by every build, see
+# build-iso.sh), so a package whose code barely changed rebuilds in seconds.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ccache \
+    && rm -rf /var/lib/apt/lists/*

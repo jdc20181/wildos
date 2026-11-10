@@ -123,6 +123,17 @@ case "${1:-}" in
         else
             echo "$1" > "$LEVEL_FILE"
         fi
+        # Standard relaxes a few of Kicksecure's start-up options for speed
+        # (/etc/default/grub.d/40_wildos.cfg reads the saved level), so
+        # crossing between Standard and the stricter levels rebuilds the
+        # start-up menu. It takes effect from the next start-up.
+        case "$previous:$1" in
+            standard:strict | standard:maximum | strict:standard | maximum:standard)
+                if command -v update-grub >/dev/null 2>&1; then
+                    update-grub >/dev/null 2>&1 || true
+                fi
+                ;;
+        esac
         ;;
     boot)
         firewall "$(saved_level)"

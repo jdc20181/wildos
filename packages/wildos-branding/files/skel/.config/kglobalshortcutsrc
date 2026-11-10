@@ -15,9 +15,17 @@ manage activities=none,Meta+Q,Show Activity Switcher
 # Win+Tab is Task view. Alt+Space opens the window menu, as on Windows
 # (wildos-shell draws it); KRunner, which Wild OS does not use, gives the
 # keys up.
+#
+# Win+D minimises every window into the taskbar and brings them back, as on
+# Windows (the org.wildos.showdesktop KWin script). KWin's Show Desktop,
+# which slides the windows off the screen, gives up the keys; the taskbar's
+# peek still uses it. Accounts made before this get the change once from
+# /usr/libexec/wildos/show-desktop-keys.
 [kwin]
 Overview=Meta+W\tMeta+Tab,Meta+W,Toggle Overview
 Window Operations Menu=Alt+Space,Alt+F3,Window Operations Menu
+Show Desktop=none,Meta+D,Peek at Desktop
+Wild OS show desktop=Meta+D,Meta+D,Show the desktop (minimise every window)
 
 [services][org.kde.krunner.desktop]
 _launch=none

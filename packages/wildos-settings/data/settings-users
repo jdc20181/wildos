@@ -7,11 +7,16 @@
 #   add NAME admin|standard "FULL NAME"   password on stdin
 #   remove NAME
 #   admin NAME on|off
-#   autologin NAME|off                    only for the person asking
+#   autologin NAME                        only for the person asking; their
+#                                         own password on stdin
+#   autologin off
 
 set -eu
 
 AUTOLOGIN=/etc/sddm.conf.d/95-wildos-autologin.conf
+# Keeps the key that opens the auto sign-in account's wallet (wildos-setup).
+# tidy removes every key but that account's.
+KEYS=/usr/libexec/wildos/wildos-wallet-keys
 # The groups the installer gives the first account (usersq.conf). console
 # above all: Kicksecure's console lockdown refuses to let anyone outside it
 # sign in, SDDM included.
@@ -95,6 +100,9 @@ case "${1:-}" in
         fi
         userdel --remove "$name" 2>/dev/null || [ $? -eq 12 ] || fail "The account could not be removed."
         rm -f "/var/lib/AccountsService/icons/$name" "/var/lib/AccountsService/users/$name"
+        if [ -x "$KEYS" ]; then
+            "$KEYS" tidy
+        fi
         ;;
     admin)
         name=${2:-}
@@ -127,13 +135,26 @@ case "${1:-}" in
             if [ -e /etc/sddm.conf ]; then
                 sed -i '/^\[Autologin\]/,/^\[/{/^User=/d}' /etc/sddm.conf
             fi
+            if [ -x "$KEYS" ]; then
+                "$KEYS" tidy
+            fi
         else
             [ "$target" = "$me" ] || fail "You can only turn on automatic sign-in for yourself." 4
             person "$target"
+            # Checks the password with PAM and keeps the wallet key made from
+            # it before anything changes. It reads the password itself, so
+            # the password never passes through this script, and its own
+            # sentence on failure is the one Settings shows.
+            if [ -x "$KEYS" ] && ! "$KEYS" store "$target"; then
+                exit 4
+            fi
             install -d -m 755 /etc/sddm.conf.d
             printf '# Written by Wild OS Settings > Accounts > Sign-in options.\n[Autologin]\nUser=%s\nSession=wildos\nRelogin=false\n' "$target" > "$AUTOLOGIN.new"
             chmod 644 "$AUTOLOGIN.new"
             mv -f "$AUTOLOGIN.new" "$AUTOLOGIN"
+            if [ -x "$KEYS" ]; then
+                "$KEYS" tidy
+            fi
         fi
         ;;
     *)

@@ -1,0 +1,5 @@
+# Wild OS checks an account's password with this before it keeps the key
+# that opens the account's wallet at an automatic sign-in
+# (/usr/libexec/wildos/wildos-wallet-keys). Only the password is checked:
+# the same rules, delays and lockouts as signing in.
+@include common-auth

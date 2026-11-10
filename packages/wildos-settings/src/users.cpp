@@ -13,6 +13,7 @@
 #include <QFileInfo>
 #include <QImage>
 #include <QImageReader>
+#include <QPasswordDigestor>
 #include <QPointer>
 #include <QProcess>
 #include <QRegularExpression>
@@ -21,11 +22,7 @@
 #include <QUrl>
 
 #include <grp.h>
-#include <poll.h>
-#include <pty.h>
 #include <pwd.h>
-#include <signal.h>
-#include <sys/wait.h>
 #include <unistd.h>
 
 namespace
@@ -33,6 +30,7 @@ namespace
 const QString accountsServiceName = QStringLiteral("org.freedesktop.Accounts");
 const QString userInterface = QStringLiteral("org.freedesktop.Accounts.User");
 const QString usersHelper = QStringLiteral("/usr/libexec/wildos/settings-users");
+const QString walletKeysName = QStringLiteral("org.wildos.WalletKeys1");
 
 bool isAdmin(const char *name, gid_t gid)
 {
@@ -103,94 +101,110 @@ QString sddmAutoLogin()
     return user;
 }
 
-// passwd on a pseudo-terminal, answering its prompts. Returns an empty
-// string on success, otherwise what passwd said.
-QString runPasswd(const QByteArray &current, const QByteArray &next)
+// Changes your password through wildos-wallet-keys, as root: the hardened
+// system keeps passwd without setuid, so an account cannot run it on its
+// own password. The service checks the current password and applies the
+// password rules as passwd would. Returns an empty string on success,
+// otherwise the sentence to show.
+QString changeOwnPassword(const QByteArray &current, const QByteArray &next)
 {
-    int master = -1;
-    const pid_t pid = forkpty(&master, nullptr, nullptr, nullptr);
-    if (pid < 0) {
-        return QStringLiteral("Wild OS could not start the password change.");
-    }
-    if (pid == 0) {
-        setenv("LC_ALL", "C", 1);
-        setenv("LANGUAGE", "C", 1);
-        execl("/usr/bin/passwd", "passwd", static_cast<char *>(nullptr));
-        _exit(127);
-    }
-
-    QByteArray pending;
-    QByteArray all;
-    int newPrompts = 0;
-    bool gaveUp = false;
-    while (true) {
-        pollfd fd{master, POLLIN, 0};
-        const int ready = poll(&fd, 1, 15000);
-        if (ready <= 0) {
-            gaveUp = ready == 0;
-            break;
-        }
-        char buffer[512];
-        const ssize_t n = read(master, buffer, sizeof buffer);
-        if (n <= 0) {
-            break;
-        }
-        pending.append(buffer, n);
-        all.append(buffer, n);
-        const QByteArray prompt = pending.trimmed().toLower();
-        if (!prompt.endsWith("password:")) {
-            continue;
-        }
-        const QByteArray last = prompt.mid(prompt.lastIndexOf('\n') + 1);
-        QByteArray answer;
-        if (last.contains("new") || last.contains("retype") || last.contains("again")) {
-            // A third "new password" prompt means the first was turned
-            // down; passwd has already said why.
-            if (++newPrompts > 2) {
-                gaveUp = true;
-                break;
-            }
-            answer = next;
-        } else {
-            answer = current;
-        }
-        answer.append('\n');
-        if (write(master, answer.constData(), size_t(answer.size())) < 0) {
-            break;
-        }
-        pending.clear();
-    }
-    if (gaveUp) {
-        kill(pid, SIGTERM);
-    }
-    int status = 0;
-    waitpid(pid, &status, 0);
-    close(master);
-    if (!gaveUp && WIFEXITED(status) && WEXITSTATUS(status) == 0) {
+    QDBusMessage change = QDBusMessage::createMethodCall(walletKeysName, QStringLiteral("/org/wildos/WalletKeys1"), walletKeysName,
+                                                         QStringLiteral("ChangePassword"));
+    change << QString::fromUtf8(current) << QString::fromUtf8(next);
+    const QDBusMessage reply = QDBusConnection::systemBus().call(change, QDBus::Block, 90000);
+    if (reply.type() == QDBusMessage::ReplyMessage) {
         return {};
     }
+    if (reply.errorName().startsWith(QLatin1String("org.wildos.WalletKeys1.Error.")) && !reply.errorMessage().isEmpty()) {
+        return reply.errorMessage();
+    }
+    return QStringLiteral("Wild OS could not change the password.");
+}
 
-    const QString output = QString::fromUtf8(all);
-    if (output.contains(QLatin1String("Authentication token manipulation error"), Qt::CaseInsensitive)
-        || output.contains(QLatin1String("Authentication failure"), Qt::CaseInsensitive)) {
-        if (newPrompts == 0) {
-            return QStringLiteral("The current password isn't right.");
-        }
+// pam_kwallet's key: PBKDF2 SHA-512, 50000 rounds, 56 bytes (kwallet-pam's
+// pam_kwallet.c), from the password and the salt in kdewallet.salt.
+QByteArray walletKey(const QByteArray &password, const QByteArray &salt)
+{
+    return QPasswordDigestor::deriveKeyPbkdf2(QCryptographicHash::Sha512, password, salt, 50000, 56);
+}
+
+// After a password change, moves the wallet from the key made from the old
+// password to the one made from the new password, through kwalletd's
+// pamChangeHash (a Wild OS patch, build/patches/kwallet). kwalletd refuses
+// when the old key does not open the wallet, which happens when someone
+// gave it a password of its own. Returns false only for a wallet that
+// exists and could not be moved.
+constexpr int kwalletdUnreachable = -1000;
+
+// Moves the wallet from the key made from one password to the key made from
+// another (the same password checks the wallet opens with it), opening it
+// afterwards when asked. Returns pamChangeHash's answer: 0 done, 1 no
+// wallet (nor salt), a Backend error such as -9 when the first key does not
+// open it, or kwalletdUnreachable.
+int rekeyWallet(const QByteArray &from, const QByteArray &to, bool openAfter)
+{
+    // Where pam_kwallet looks, whatever XDG_DATA_HOME says.
+    const QString dir = QDir::homePath() + QStringLiteral("/.local/share/kwalletd");
+    QFile saltFile(dir + QStringLiteral("/kdewallet.salt"));
+    const QByteArray salt = saltFile.open(QIODevice::ReadOnly) ? saltFile.read(57) : QByteArray();
+    if (salt.size() != 56) {
+        return 1;
     }
-    static const QRegularExpression bad(QStringLiteral("BAD PASSWORD:\\s*(.+)"));
-    const auto match = bad.match(output);
-    if (match.hasMatch()) {
-        QString reason = match.captured(1).trimmed();
-        reason[0] = reason[0].toUpper();
-        if (!reason.endsWith(QLatin1Char('.'))) {
-            reason += QLatin1Char('.');
-        }
-        return QStringLiteral("Wild OS turned down the new password. ") + reason;
+    QDBusConnection session = QDBusConnection::sessionBus();
+    auto kwallet = [](const QString &method) {
+        return QDBusMessage::createMethodCall(QStringLiteral("org.kde.kwalletd6"), QStringLiteral("/modules/kwalletd6"), QStringLiteral("org.kde.KWallet"),
+                                              method);
+    };
+    const QDBusReply<QString> local = session.call(kwallet(QStringLiteral("localWallet")), QDBus::Block, 10000);
+    const QString wallet = local.isValid() && !local.value().isEmpty() ? local.value() : QStringLiteral("kdewallet");
+    if (!QFileInfo::exists(dir + QLatin1Char('/') + wallet + QStringLiteral(".kwl"))) {
+        return 1;
     }
-    if (output.contains(QLatin1String("same"), Qt::CaseInsensitive) || output.contains(QLatin1String("unchanged"), Qt::CaseInsensitive)) {
-        return QStringLiteral("Choose a password you have not used for this account before.");
+    const QByteArray toKey = walletKey(to, salt);
+    QDBusMessage change = kwallet(QStringLiteral("pamChangeHash"));
+    change << wallet << walletKey(from, salt) << toKey;
+    const QDBusReply<int> changed = session.call(change, QDBus::Block, 30000);
+    if (!changed.isValid()) {
+        return kwalletdUnreachable;
     }
-    return QStringLiteral("The password was not changed.");
+    if (changed.value() == 0 && openAfter) {
+        // pamOpen never replies; isOpen, sent after it on the same
+        // connection, answers once it has run.
+        QDBusMessage open = kwallet(QStringLiteral("pamOpen"));
+        open << wallet << toKey << 0;
+        session.send(open);
+        QDBusMessage isOpen = kwallet(QStringLiteral("isOpen"));
+        isOpen << wallet;
+        session.call(isOpen, QDBus::Block, 10000);
+    }
+    return changed.value();
+}
+
+// kwalletd's answers when a key does not open the wallet.
+bool wrongWalletKey(int code)
+{
+    return code == -5 || code == -7 || code == -8 || code == -9;
+}
+
+bool moveWallet(const QByteArray &current, const QByteArray &next)
+{
+    const int code = rekeyWallet(current, next, false);
+    return code == 0 || code == 1;
+}
+
+// The system's copy of the key, for the account that signs in
+// automatically, follows the new password. A copy that cannot be refreshed
+// is removed, since it no longer opens the wallet; the next start then asks
+// for the password instead.
+void refreshKeptKey(const QByteArray &next)
+{
+    QDBusConnection bus = QDBusConnection::systemBus();
+    QDBusMessage store = QDBusMessage::createMethodCall(walletKeysName, QStringLiteral("/org/wildos/WalletKeys1"), walletKeysName, QStringLiteral("Store"));
+    store << QString::fromUtf8(next);
+    if (bus.call(store, QDBus::Block, 60000).type() != QDBusMessage::ReplyMessage) {
+        bus.call(QDBusMessage::createMethodCall(walletKeysName, QStringLiteral("/org/wildos/WalletKeys1"), walletKeysName, QStringLiteral("Forget")),
+                 QDBus::Block, 10000);
+    }
 }
 }
 
@@ -362,9 +376,19 @@ void Users::changePassword(const QString &current, const QString &next, const QS
 {
     setBusy(QStringLiteral("password"));
     QPointer<Users> self(this);
-    QThread *thread = QThread::create([self, current = current.toUtf8(), next = next.toUtf8(), hint] {
-        const QString error = runPasswd(current, next);
-        QMetaObject::invokeMethod(qApp, [self, error, hint] {
+    const bool automatic = !m_autoLogin.isEmpty() && m_autoLogin == m_me.value(QStringLiteral("userName")).toString();
+    QThread *thread = QThread::create([self, current = current.toUtf8(), next = next.toUtf8(), hint, automatic] {
+        const QString error = changeOwnPassword(current, next);
+        bool walletMoved = true;
+        if (error.isEmpty()) {
+            walletMoved = moveWallet(current, next);
+            // A wallet left on the old key still opens with the kept key,
+            // so that key stays as it is.
+            if (automatic && walletMoved) {
+                refreshKeptKey(next);
+            }
+        }
+        QMetaObject::invokeMethod(qApp, [self, error, hint, walletMoved] {
             if (!self) {
                 return;
             }
@@ -376,7 +400,56 @@ void Users::changePassword(const QString &current, const QString &next, const QS
             if (self->m_accountsService && hint != self->m_me.value(QStringLiteral("hint")).toString()) {
                 self->callUser(QStringLiteral("SetPasswordHint"), hint, QStringLiteral("password"));
             }
-            Q_EMIT self->done(QStringLiteral("password"), QStringLiteral("Your password was changed. Use the new one next time you sign in."));
+            Q_EMIT self->done(QStringLiteral("password"),
+                              walletMoved ? QStringLiteral("Your password was changed. Use the new one next time you sign in.")
+                                          : QStringLiteral("Your password was changed. Your saved passwords still open with the old one, so apps may ask "
+                                                           "you for it."));
+        });
+    });
+    connect(thread, &QThread::finished, thread, &QObject::deleteLater);
+    thread->start();
+}
+
+void Users::openWallet(const QString &password, const QString &walletPassword)
+{
+    setBusy(QStringLiteral("wallet"));
+    const bool automatic = !m_autoLogin.isEmpty() && m_autoLogin == m_me.value(QStringLiteral("userName")).toString();
+    QPointer<Users> self(this);
+    QThread *thread = QThread::create([self, password = password.toUtf8(), walletPassword = walletPassword.toUtf8(), automatic] {
+        // The account password first, checked by PAM: a wallet moved to a
+        // mistyped password would open with nothing. Store also keeps the
+        // key for the automatic sign-in.
+        QDBusMessage check = QDBusMessage::createMethodCall(walletKeysName, QStringLiteral("/org/wildos/WalletKeys1"), walletKeysName,
+                                                            automatic ? QStringLiteral("Store") : QStringLiteral("CheckPassword"));
+        check << QString::fromUtf8(password);
+        const QDBusMessage checked = QDBusConnection::systemBus().call(check, QDBus::Block, 60000);
+        QString what = QStringLiteral("wallet");
+        QString error;
+        if (checked.type() != QDBusMessage::ReplyMessage) {
+            error = checked.errorName().endsWith(QLatin1String("WrongPassword")) ? QStringLiteral("That password isn't right.")
+                                                                                  : QStringLiteral("Wild OS could not check your password.");
+        } else {
+            const int code = rekeyWallet(walletPassword.isEmpty() ? password : walletPassword, password, true);
+            if (wrongWalletKey(code)) {
+                what = QStringLiteral("wallet-other");
+                error = walletPassword.isEmpty()
+                    ? QStringLiteral("Your saved passwords use a different password from your account. Type that one too, and they will move to your account password.")
+                    : QStringLiteral("That isn't the password your saved passwords use.");
+            } else if (code != 0 && code != 1) {
+                error = QStringLiteral("Wild OS could not open your saved passwords.");
+            }
+        }
+        QMetaObject::invokeMethod(qApp, [self, what, error, automatic] {
+            if (!self) {
+                return;
+            }
+            self->setBusy({});
+            if (!error.isEmpty()) {
+                Q_EMIT self->failed(what, error);
+            } else {
+                Q_EMIT self->done(QStringLiteral("wallet"), automatic ? QStringLiteral("Your saved passwords are open, and open by themselves from now on.")
+                                                                      : QStringLiteral("Your saved passwords are open, and open when you sign in."));
+            }
         });
     });
     connect(thread, &QThread::finished, thread, &QObject::deleteLater);
@@ -424,10 +497,12 @@ void Users::setAdmin(const QString &userName, bool admin)
            admin ? QStringLiteral("The account is now an administrator.") : QStringLiteral("The account is now a standard user."));
 }
 
-void Users::setAutoLogin(bool on)
+void Users::setAutoLogin(bool on, const QString &password)
 {
-    helper(QStringLiteral("autologin"), {QStringLiteral("autologin"), on ? m_me.value(QStringLiteral("userName")).toString() : QStringLiteral("off")}, {},
-           on ? QStringLiteral("This computer will sign you in when it starts.") : QStringLiteral("This computer will ask for your password when it starts."));
+    helper(QStringLiteral("autologin"), {QStringLiteral("autologin"), on ? m_me.value(QStringLiteral("userName")).toString() : QStringLiteral("off")},
+           on ? password.toUtf8() + '\n' : QByteArray(),
+           on ? QStringLiteral("This computer will sign you in when it starts, with your saved passwords ready.")
+              : QStringLiteral("This computer will ask for your password when it starts."));
 }
 
 QString Users::suggestUserName(const QString &fullName) const

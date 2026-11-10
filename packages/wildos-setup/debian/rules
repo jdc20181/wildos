@@ -8,6 +8,7 @@
 override_dh_installsystemd:
 	dh_installsystemd --no-restart-on-upgrade --no-start wildos-setup-boot.service
 	dh_installsystemd --no-enable --no-start --no-restart-on-upgrade wildos-setup-helper.service
+	dh_installsystemd --no-enable --no-start --no-restart-on-upgrade wildos-wallet-keys.service
 
 # Not in the compat 13 sequence yet. Creates the wildos-setup account from
 # debian/wildos-setup.sysusers, before tmpfiles gives that account its home.

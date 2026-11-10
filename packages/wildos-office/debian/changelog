@@ -1,0 +1,7 @@
+wildos-office (0.1.0) trixie; urgency=medium
+
+  * Write and Tables: LibreOffice Writer and Calc dressed as Wild OS apps,
+    with their own start screens, Wild OS ribbons and Word and Excel
+    formats by default.
+
+ -- Wild OS Developers <dev@wildos.io>  Tue, 10 Nov 2026 10:00:00 +0000

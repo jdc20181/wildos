@@ -1,3 +1,33 @@
+wildos-winmode (0.3.2) trixie; urgency=medium
+
+  * Save to disk is back. It was held back because a save would not load
+    on a PC with the old virtiofs shared folder; the folders now travel
+    over the RemoteApp connection, a Windows still carrying that share
+    loses it at its next start from off, and the code that took the
+    share out and put it back is gone. Windows is paused before it is
+    saved and comes back running, and the connection ends as it saves,
+    so Remote Desktop can't reopen the first app a second time when
+    Windows comes back; a new connection brings its windows back.
+  * Resume, Start, Restart and Shut down for the taskbar's Windows mode
+    panel (Power on the service and the agent, "wildos-winmode power").
+    Shut down goes through Windows' guest agent, else the power button,
+    and Windows is switched off after 90 seconds if it hasn't finished,
+    which is said. Restart is a shut down and a start from off.
+  * Unsaved work: wild-guest reads Word, Excel and PowerPoint's own Saved
+    state over COM ("documents"), and window titles mark it for apps
+    such as Notepad. Restart and Shut down ask first when anything is,
+    or might be, unsaved.
+  * Shutting down, restarting or signing out of Wild OS with Windows apps
+    open asks (board 9.9) through ksmserver's session management, as an
+    app with unsaved work does: Keep my work saves Windows to disk and
+    the next sign-in brings its apps back; after 60 seconds that is the
+    choice. A PC shut down any other way with apps open saves Windows
+    too, under a logind delay lock (InhibitDelayMaxSec 60).
+  * The panel says how long Windows has been paused, saved or off, and
+    how long it last took to start and to come back from disk.
+
+ -- Wild OS Developers <dev@wildos.io>  Tue, 10 Nov 2026 13:30:00 +0000
+
 wildos-winmode (0.3.1) trixie; urgency=medium
 
   * Windows has all the memory it is set to while any Windows app is open.

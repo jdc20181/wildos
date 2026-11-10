@@ -1,3 +1,13 @@
+wildos-branding (0.1.3) trixie; urgency=medium
+
+  * Windows mode's taskbar panel (board WinModeStatusPanel): Pause, Save
+    to disk, Restart and Shut down while Windows runs; Resume first
+    while paused or saved; Start Windows mode when it is off. It says how
+    long Windows has been paused, saved or off, and how long the last
+    start or restore took here.
+
+ -- Wild OS Developers <dev@wildos.io>  Tue, 10 Nov 2026 13:30:00 +0000
+
 wildos-branding (0.1.2) trixie; urgency=medium
 
   * Every Plasma style has a solid twin for stronger text on glass.

@@ -1,0 +1,104 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE script:module PUBLIC "-//OpenOffice.org//DTD OfficeDocument 1.0//EN" "module.dtd">
+<script:module xmlns:script="http://openoffice.org/2000/script" script:name="Icons" script:language="StarBasic">REM The Wild OS icons come in two themes: light strokes for the dark Wild OS
+REM theme (wildos_dark_svg) and dark strokes for the light one (wildos_svg).
+REM LibreOffice keeps whichever theme is set whatever the window colours, so
+REM this reads the colours each document window was given and switches theme
+REM when they no longer match: as the window first opens, and every time it
+REM comes back to the front, which catches a switch between light and dark
+REM made in Settings while a document is open.
+REM A user who picked another icon theme in Tools &gt; Options keeps it.
+
+Global aWatched() As Object
+Global nWatched As Integer
+
+REM Bound to the OnFocus document event in wildos.xcd.
+Sub Update(oEvent As Object)
+	On Error Resume Next
+	Dim oDoc As Object, oWindow As Object
+	oDoc = oEvent.Source
+	If IsNull(oDoc) Then Exit Sub
+	If Not HasUnoInterfaces(oDoc, &quot;com.sun.star.frame.XModel&quot;) Then Exit Sub
+	oWindow = oDoc.getCurrentController().getFrame().getContainerWindow()
+	If IsNull(oWindow) Then Exit Sub
+	Match(oWindow)
+	Watch(oWindow)
+End Sub
+
+REM OnFocus only fires when focus moves between documents, so each window
+REM also gets a listener for coming back from another app.
+Sub Watch(oWindow As Object)
+	Dim i As Integer
+	For i = 0 To nWatched - 1
+		If EqualUnoObjects(aWatched(i), oWindow) Then Exit Sub
+	Next
+	If Not HasUnoInterfaces(oWindow, &quot;com.sun.star.awt.XTopWindow&quot;) Then Exit Sub
+	oWindow.addTopWindowListener(CreateUnoListener(&quot;IconsWindow_&quot;, &quot;com.sun.star.awt.XTopWindowListener&quot;))
+	ReDim Preserve aWatched(nWatched)
+	aWatched(nWatched) = oWindow
+	nWatched = nWatched + 1
+End Sub
+
+Sub Match(oWindow As Object)
+	On Error Resume Next
+	REM Dark exactly when LibreOffice itself would call it dark: a window
+	REM background darker than grey 192, by Qt&apos;s qGray weighting.
+	Dim nColour As Long, nGrey As Long
+	nColour = oWindow.StyleSettings.DialogColor
+	nGrey = ((nColour \ 65536 And 255) * 11 + (nColour \ 256 And 255) * 16 + (nColour And 255) * 5) \ 32
+	Dim sWanted As String
+	If nGrey &lt; 192 Then
+		sWanted = &quot;wildos_dark_svg&quot;
+	Else
+		sWanted = &quot;wildos_svg&quot;
+	End If
+
+	Dim oProvider As Object, oMisc As Object
+	Dim aArgs(0) As New com.sun.star.beans.PropertyValue
+	oProvider = CreateUnoService(&quot;com.sun.star.configuration.ConfigurationProvider&quot;)
+	aArgs(0).Name = &quot;nodepath&quot;
+	aArgs(0).Value = &quot;/org.openoffice.Office.Common/Misc&quot;
+	oMisc = oProvider.createInstanceWithArguments(&quot;com.sun.star.configuration.ConfigurationUpdateAccess&quot;, aArgs())
+	Dim sCurrent As String
+	sCurrent = oMisc.SymbolStyle
+	If sCurrent &lt;&gt; &quot;wildos_svg&quot; And sCurrent &lt;&gt; &quot;wildos_dark_svg&quot; Then Exit Sub
+	If sCurrent = sWanted Then Exit Sub
+	oMisc.SymbolStyle = sWanted
+	oMisc.commitChanges()
+End Sub
+
+Sub IconsWindow_windowActivated(oEvent As Object)
+	Match(oEvent.Source)
+End Sub
+
+Sub IconsWindow_windowClosed(oEvent As Object)
+	Dim i As Integer, j As Integer
+	For i = 0 To nWatched - 1
+		If EqualUnoObjects(aWatched(i), oEvent.Source) Then
+			For j = i To nWatched - 2
+				aWatched(j) = aWatched(j + 1)
+			Next
+			nWatched = nWatched - 1
+			Exit Sub
+		End If
+	Next
+End Sub
+
+Sub IconsWindow_windowOpened(oEvent As Object)
+End Sub
+
+Sub IconsWindow_windowClosing(oEvent As Object)
+End Sub
+
+Sub IconsWindow_windowMinimized(oEvent As Object)
+End Sub
+
+Sub IconsWindow_windowNormalized(oEvent As Object)
+End Sub
+
+Sub IconsWindow_windowDeactivated(oEvent As Object)
+End Sub
+
+Sub IconsWindow_disposing(oEvent As Object)
+End Sub
+</script:module>

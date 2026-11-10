@@ -264,6 +264,8 @@ QtObject {
         "kcm_energyinfo": "power",
         "kcm_kwin_virtualdesktops": "desktops",
         "kcm_smserver": "signin",
+        // From the saved passwords notification (wildos-setup-wallet).
+        "signin-wallet": "signin",
         "kcm_keyboard": "keyboard",
         "kcm_device_automounter": "autoplay",
         "kcm_gamecontroller": "gamecontrollers",

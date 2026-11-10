@@ -1,3 +1,29 @@
+wildos-settings (0.1.4) trixie; urgency=medium
+
+  * Sign-in options has a saved passwords dialog, opened from that
+    notification (--page signin-wallet): it checks your password, keeps the
+    automatic sign-in key, and moves a wallet with another password to your
+    account password.
+
+ -- Wild OS Developers <dev@wildos.io>  Tue, 10 Nov 2026 14:00:00 +0000
+
+wildos-settings (0.1.3) trixie; urgency=medium
+
+  * Changing your password works again: it goes through wildos-wallet-keys
+    instead of passwd, and a password the rules turn down says why.
+
+ -- Wild OS Developers <dev@wildos.io>  Tue, 10 Nov 2026 13:00:00 +0000
+
+wildos-settings (0.1.2) trixie; urgency=medium
+
+  * Turning on automatic sign-in asks for your password, so your saved
+    passwords (KWallet) open by themselves at each start. Turning it off,
+    or removing the account, removes the key the system kept for it.
+  * Changing your password moves your saved passwords to the new password,
+    so they keep opening when you sign in, and refreshes the kept key.
+
+ -- Wild OS Developers <dev@wildos.io>  Tue, 10 Nov 2026 12:00:00 +0000
+
 wildos-settings (0.1.1) trixie; urgency=medium
 
   * Accessibility has Outline windows, Stronger text on glass and Blur windows

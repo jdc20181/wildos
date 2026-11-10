@@ -6,6 +6,7 @@ Build-Depends:
  debhelper-compat (= 13),
  cmake,
  qt6-base-dev,
+ libpam0g-dev,
 Standards-Version: 4.7.0
 Rules-Requires-Root: no
 
@@ -22,6 +23,7 @@ Depends:
  network-manager,
  accountsservice,
  passwd,
+ libpam-runtime,
  procps,
  systemd,
 Description: Wild OS first boot setup

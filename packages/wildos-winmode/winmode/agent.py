@@ -22,7 +22,7 @@ import time
 
 from gi.repository import Gio, GLib
 
-from . import config, dbusutil, launchers, msdl, paths, rdp, theme
+from . import config, dbusutil, documents, launchers, msdl, paths, rdp, theme, xsmp
 
 XML = """
 <node>
@@ -50,6 +50,11 @@ XML = """
       <arg name="files" type="as" direction="in"/>
       <arg type="as" direction="out"/>
     </method>
+    <method name="Power">
+      <arg name="action" type="s" direction="in"/>
+      <arg type="s" direction="out"/>
+    </method>
+    <method name="Documents"><arg type="s" direction="out"/></method>
     <method name="RefreshApps"><arg type="s" direction="out"/></method>
     <method name="SetOption">
       <arg name="key" type="s" direction="in"/>
@@ -87,6 +92,17 @@ NOT_YET = "This isn't available yet."
 SESSION_WAIT = 90
 # Seconds after sign-in before Windows is started ahead of time.
 PRESTART_DELAY = 45
+# Seconds after the agent starts before Windows apps kept as Wild OS shut
+# down are brought back.
+KEPT_DELAY = 5
+# The question before Windows (or Wild OS) shuts down waits for the person;
+# the system dialog takes the safe choice itself after 60 seconds.
+ASK_TIMEOUT = 600
+# Windows' own restart and shutdown can take minutes with updates.
+POWER_TIMEOUT = 900
+# Keeping Windows apps' work as the session ends: a save that takes longer
+# carries on, but the session's end no longer waits for it.
+LEAVE_SAVE_TIMEOUT = 75
 # A launch is watched every 1.5 s for up to two minutes; its program gone
 # on three polls in a row (4.5 s, longer than any launcher takes to hand
 # over) with no new window means it ended before it opened.
@@ -262,6 +278,8 @@ class Agent:
             "OutsideSharedFolders": (self.m_outside, "as", False),
             "CopyIntoDocuments": (self.m_copy, "as", False),
             "RefreshApps": (self.m_refresh, "s", False),
+            "Power": (self.m_power, "s", False),
+            "Documents": (self.m_documents, "s", False),
             "SetOption": (self.m_set_option, "s", False),
             "SetProductKey": (self.m_set_product_key, "s", False),
             "CheckUpdates": (lambda sender: NOT_YET, "s", False),
@@ -297,8 +315,16 @@ class Agent:
         # memory into a session that is ready. The service declines on battery,
         # without enough free memory, or when Windows is already up.
         GLib.timeout_add_seconds(PRESTART_DELAY, lambda: (self.prestart(), False)[1])
+        # Work kept as Wild OS last shut down (board 9.9) comes back a moment
+        # after sign-in, once the desktop is up.
+        GLib.timeout_add_seconds(KEPT_DELAY, lambda: (self.reopen_kept(), False)[1])
+        # Asked as the session ends, like an app with unsaved work.
+        self.leaving = xsmp.LeaveWatcher(log)
+        self.session_end = xsmp.Client(session, self.windows_open, self.ask_before_leaving, log)
 
     def prestart(self):
+        if self.host.get("kept"):
+            return
         def done(reply):
             if isinstance(reply, GLib.Error):
                 log("starting Windows ahead of time:", reply.message)
@@ -367,7 +393,9 @@ class Agent:
     def call_json(self, method, args=None, signature=None, done=None, timeout=600):
         def parsed(value):
             if isinstance(value, GLib.Error):
-                done({"ok": False, "error": value.message})
+                # The service didn't answer at all (not there, crashed or
+                # too slow), as against answering with an error.
+                done({"ok": False, "error": value.message, "unanswered": True})
                 return
             try:
                 done(json.loads(value) if isinstance(value, str) else {})
@@ -406,10 +434,22 @@ class Agent:
                     self.setup_finished()
                 if isinstance(st.get("windows"), list):
                     self.set_windows(st["windows"])
+                self.end_connection_if_gone(st)
             self.changed()
             if then:
                 then()
         self.call_json("Status", done=got, timeout=10)
+
+    def end_connection_if_gone(self, st):
+        """A connection to a Windows that is being saved to disk, or is off,
+        ends here. Left to itself it reconnects once Windows is back, and
+        Remote Desktop then starts the connection's first app again: a
+        second copy of whatever was opened first. Windows' own windows come
+        back through a new connection (reopen_windows)."""
+        if st.get("action") in ("save", "keep", "shutdown", "restart") or st.get("vm") == "saved":
+            if self.conn.open and not self.waking:
+                log("Windows is going to disk or off: ending the connection")
+                self.conn.close()
 
     def changed(self):
         self.export.emit("Changed")
@@ -440,6 +480,7 @@ class Agent:
         for w in ws:
             seen = self.tagger.seen_at_handle(w.get("hwnd")) if self.tagger else None
             self.window_appeared(self.app_for(w), w.get("hwnd"), seen or now, "window on screen" if seen else "window listed")
+        self.reopen_if_needed()
 
     # Per-launch timing (brief 5.5a). Each launch records, in seconds from
     # the click: connection_ready (Windows awake and the session able to
@@ -1061,6 +1102,195 @@ class Agent:
     def m_firmware(self, sender, defer):
         self.call("Firmware", None, None, lambda r: defer.done(r if isinstance(r, str) else "{}"), timeout=120)
         return defer
+
+    # Pause, Save to disk, Resume, Start, Restart and Shut down (the taskbar's
+    # Windows mode panel), and the question before Windows or Wild OS shuts
+    # down with work open (board 9.9).
+    def m_power(self, sender, action, defer):
+        """"" when done, or a sentence to show. Restart and Shut down ask
+        first when an app has unsaved changes, or might (an app whose state
+        Windows can't tell): Go back leaves everything as it is; for Shut
+        down, Save to disk instead keeps the work and frees the memory."""
+        if action not in ("pause", "save", "resume", "start", "restart", "shutdown"):
+            return "That isn't something Windows mode can do."
+
+        def answered(choice):
+            if choice == "back":
+                defer.done("")
+            elif choice == "error":
+                defer.done("Windows mode couldn't check for unsaved work, so Windows was left as it is.")
+            else:
+                self.power(lambda message: defer.done(message), "save" if choice == "keep" else action)
+
+        def checked(docs):
+            if not documents.needs_asking(docs):
+                self.power(defer.done, action)
+            else:
+                self.ask("windows-" + action, docs, answered)
+
+        if action in ("restart", "shutdown"):
+            self.documents_now(checked)
+        else:
+            self.power(defer.done, action)
+        return defer
+
+    def power(self, done, action):
+        failed = {"pause": "Windows couldn't be paused.", "save": "Windows couldn't be saved to disk.",
+                  "resume": "Windows couldn't be resumed.", "start": "Windows couldn't start.",
+                  "restart": "Windows couldn't restart.", "shutdown": "Windows couldn't shut down."}
+
+        def finished(reply):
+            self.refresh_host()
+            if not reply.get("ok"):
+                log(action, "failed:", reply.get("error"))
+                done(reply.get("message") or failed.get(action, "That didn't work.") + " Try again, or restart the PC.")
+                return
+            if action in ("resume", "start", "restart"):
+                self.reopen_windows()
+            if action in ("start", "restart"):
+                self.prepare_session()
+            if reply.get("forced"):
+                done("Windows didn't finish shutting down, so Windows mode switched it off.")
+                return
+            done("")
+
+        # The connection ends first: it would otherwise reconnect to the
+        # restored or restarted Windows by itself (end_connection_if_gone).
+        if action in ("save", "restart", "shutdown"):
+            self.conn.close()
+        self.call_json("Power", (action,), "(s)", finished, timeout=POWER_TIMEOUT)
+
+    def reopen_windows(self, within=90):
+        """Windows' own windows back on the desktop after a resume: through
+        the open connection if it lived through the pause, or through a new
+        one that asks for no app. Waits for wild-guest's window list, which
+        follows a restore by a few seconds."""
+        self.reopen_until = time.monotonic() + within
+        self.reopen_if_needed()
+
+    def reopen_if_needed(self):
+        if time.monotonic() > getattr(self, "reopen_until", 0) or self.conn.running or self.waking:
+            return
+        if not any(self.app_for(w) != "" for w in self.windows):
+            return
+        self.reopen_until = 0
+
+        def go(creds):
+            if not creds.get("password") or self.conn.running:
+                return
+            args = rdp.resume_arguments(self.host.get("guest_address"), self.host.get("rdp_port", 3389), creds["account"],
+                                        creds.get("domain", ""), drive=self.drive_folder())
+            try:
+                self.conn.start(args, creds["password"])
+                log("Windows apps open in Windows are back on the desktop")
+            except OSError as e:
+                log("couldn't bring Windows apps back:", e)
+        self.credentials(go)
+
+    def reopen_kept(self):
+        """Windows apps kept as Wild OS last shut down, signed out or
+        restarted: Windows is restored and its windows come back."""
+        if not self.host.get("kept") or self.waking:
+            return
+        log("bringing back the Windows apps kept when Wild OS last shut down")
+        self.power(lambda message: message and log("reopening kept work:", message), "resume")
+
+    def windows_open(self):
+        """Whether the session's end should ask (board 9.9): any Windows app
+        open that could hold work."""
+        return bool(documents.documents(self.windows, None, self.app_name))
+
+    def app_name(self, image):
+        app = self.registry.get(launchers.app_id_for_image(image, self.registry) or "")
+        return app["name"] if app else None
+
+    def documents_now(self, done, timeout=20, unanswered=None):
+        """What is open in Windows, with what is unsaved (documents.py).
+        unanswered(), when given, runs instead when the service doesn't
+        answer in time."""
+        def got(reply):
+            if unanswered and reply.get("unanswered"):
+                unanswered()
+                return
+            windows = reply.get("windows") if isinstance(reply.get("windows"), list) else self.windows
+            done(documents.documents(windows, reply.get("office"), self.app_name))
+        self.call_json("Documents", done=got, timeout=timeout)
+
+    def m_documents(self, sender, defer):
+        self.documents_now(lambda docs: defer.done(json.dumps(docs)))
+        return defer
+
+    def ask(self, action, docs, answered):
+        """Board 9.9 through wildos-dialogs; answered(keep, discard, back,
+        or error when it couldn't be asked)."""
+        payload = json.dumps([{"app": d["app"], "document": d["document"], "unsaved": d["unsaved"]} for d in docs])
+
+        def finished(conn, res):
+            try:
+                choice = conn.call_finish(res).unpack()[0]
+            except GLib.Error as e:
+                log("the question about open Windows apps couldn't be asked:", e.message)
+                choice = "error"
+            answered(choice)
+
+        self.session.call("org.wildos.SystemDialogs", "/Dialogs", "org.wildos.SystemDialogs", "AskWindowsShutdown",
+                          GLib.Variant("(ss)", (action, payload)), GLib.VariantType("(s)"), Gio.DBusCallFlags.NONE,
+                          ASK_TIMEOUT * 1000, None, finished)
+
+    def ask_before_leaving(self, finish):
+        """Wild OS is shutting down, restarting or signing out with Windows
+        apps open: board 9.9. Keep my work saves Windows to disk as it is
+        (the next sign-in brings it back), Close without saving shuts it
+        down, Go back calls the session's end off. finish(cancel)."""
+        action = self.leaving.current()
+        words = {"restart": "restart", "signout": "sign out"}.get(action, "shut down")
+
+        def kept(reply):
+            if reply.get("ok"):
+                finish(False)
+                return
+            if reply.get("unanswered"):
+                # Never hold a sign-out for a service that doesn't answer;
+                # one still saving carries on, and the PC's own shutdown
+                # waits for it.
+                log("Windows mode's service didn't answer in time; letting the session end:", reply.get("error"))
+                finish(False)
+                return
+            log("keeping Windows apps' work failed:", reply.get("error"))
+            self.notify(f"Windows mode couldn't keep your Windows apps, so Wild OS didn't {words}. "
+                        "Save your work in them, then try again.")
+            finish(True)
+            self.power(lambda message: None, "resume")
+
+        def answered(choice):
+            if choice == "back":
+                finish(True)
+            elif choice == "discard":
+                self.conn.close()
+                self.call_json("Power", ("shutdown",), "(s)", lambda reply: None, timeout=POWER_TIMEOUT)
+                finish(False)
+            else:
+                # Keep, the default after 60 seconds, and the safe choice
+                # when the question couldn't be asked at all.
+                self.conn.close()
+                self.call_json("Power", ("keep",), "(s)", kept, timeout=LEAVE_SAVE_TIMEOUT)
+
+        def checked(docs):
+            if docs:
+                self.ask(action, docs, answered)
+            else:
+                finish(False)
+
+        def no_service():
+            # Nothing can be kept without it, so nothing is promised.
+            log("Windows mode's service didn't answer; not asking about Windows apps")
+            finish(False)
+        self.documents_now(checked, timeout=8, unanswered=no_service)
+
+    def notify(self, text):
+        self.session.call("org.freedesktop.Notifications", "/org/freedesktop/Notifications", "org.freedesktop.Notifications", "Notify",
+                          GLib.Variant("(susssasa{sv}i)", ("Windows mode", 0, "wildos-windows-app", "Windows mode", text, [], {}, -1)),
+                          None, Gio.DBusCallFlags.NONE, 5000, None, None)
 
     def setup_finished(self):
         """Windows is ready: its apps get Start entries, and files open in

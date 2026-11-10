@@ -1,3 +1,18 @@
+wildos-remote (0.1.2) trixie; urgency=medium
+
+  * The loading splash shows on every start, for about a second, as Write
+    and Tables do.
+
+ -- Wild OS Developers <dev@wildos.io>  Tue, 10 Nov 2026 15:00:00 +0000
+
+wildos-remote (0.1.1) trixie; urgency=medium
+
+  * A loading splash in Remote's orange shows while the home window loads,
+    if that takes more than a third of a second. The home window now loads
+    in the background, so the splash can draw while it waits.
+
+ -- Wild OS Developers <dev@wildos.io>  Tue, 10 Nov 2026 14:10:00 +0000
+
 wildos-remote (0.1.0) trixie; urgency=medium
 
   * First release: saved desktop and SSH hosts, Remote Desktop sessions on

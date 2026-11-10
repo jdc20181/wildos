@@ -26,6 +26,10 @@ Theme=WildOS
 
 [KDE]
 LookAndFeelPackage=org.wildos.desktop
+# Window, menu and Wild OS app animations run a quarter faster than KDE's,
+# so the desktop feels quick without anything snapping. Reduce motion in
+# Settings still sets 0.
+AnimationDurationFactor=0.75
 # Kvantum draws every Qt 5 and Qt 6 control from the WildOS theme; see
 # /etc/xdg/Kvantum/kvantum.kvconfig.
 widgetStyle=kvantum

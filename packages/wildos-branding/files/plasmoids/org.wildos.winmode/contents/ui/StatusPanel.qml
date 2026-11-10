@@ -7,15 +7,15 @@ import org.kde.kirigami as Kirigami
 import org.kde.ksvg as KSvg
 import WildOS.UI as UI
 
-// The panel from board 4.14. While Windows apps are open: the edition, a
-// Running pill, processor use over the last minute, memory against the limit
-// set for Windows, what is open, and Pause now and Save to disk along a
-// darker foot. While paused (and once saved or off) it is narrower: how long,
-// the memory held, and the app to open again. It only offers what the person
-// can act on, so Save to disk waits until the service can save, and an app
-// is only offered once one has been opened. Plasma's theme draws the glass;
-// sizes are the board's outer edge with the theme's frame margins taken off,
-// as in the security flyout.
+// The panel from boards 4.14 and WinModeStatusPanel. While Windows runs: the
+// edition, a Running pill, processor use over the last minute, memory against
+// the limit set for Windows, what is open, and Pause, Save to disk, Restart
+// and Shut down along a darker foot. Paused, saved or off it is narrower: how
+// long, the memory held or what coming back costs, and Resume or Start
+// first. It only offers what the person can act on, so Save to disk waits
+// until the service can save. Plasma's theme draws the glass; sizes are the
+// board's outer edge with the theme's frame margins taken off, as in the
+// security flyout.
 FocusScope {
     id: panel
 
@@ -34,7 +34,6 @@ FocusScope {
 
     readonly property string level: winmode.level
     readonly property bool running: level === "running"
-    readonly property bool resting: level === "paused" || level === "saved" || level === "off"
     readonly property bool vmRunning: winmode.system !== null && winmode.system.vm === "running"
 
     readonly property int glassBorder: 1
@@ -43,9 +42,8 @@ FocusScope {
     readonly property int outerWidth: running ? 360 : 330
     readonly property real innerWidth: outerWidth - 2 * (glassBorder + pad)
 
-    readonly property bool hasFoot: !resting
-    readonly property real footHeight: hasFoot ? foot.implicitHeight + 26 : 0
-    readonly property real glassHeight: 2 * glassBorder + pad + body.implicitHeight + (hasFoot ? 14 + footHeight : pad)
+    readonly property real footHeight: foot.implicitHeight + 26
+    readonly property real glassHeight: 2 * glassBorder + pad + body.implicitHeight + 14 + footHeight
 
     readonly property real contentWidth: outerWidth - edgeLeft - edgeRight
     readonly property real contentHeight: glassHeight - edgeTop - edgeBottom
@@ -279,8 +277,7 @@ FocusScope {
             lineHeight: 1.5
             wrapMode: Text.Wrap
             elide: Text.ElideNone
-            text: panel.level === "saved" ? "Uses no memory. Ready in a few seconds when you open a Windows app."
-                : "Uses no memory. Starts when you open a Windows app, which takes about a minute."
+            text: panel.winmode.restingText()
         }
 
         UI.Label {
@@ -371,44 +368,14 @@ FocusScope {
             elide: Text.ElideNone
             text: idle
         }
-
-        // Resting: Save to disk while it can still free memory, and the app
-        // to open again as the main action. With neither, the way to the
-        // settings.
-        RowLayout {
-            id: restingActions
-            readonly property bool canSave: panel.level === "paused" && panel.winmode.canSave
-            readonly property bool canOpen: panel.winmode.lastApp !== null
-            visible: panel.resting && (canSave || canOpen)
-            Layout.fillWidth: true
-            spacing: 8
-
-            Action {
-                visible: restingActions.canSave
-                enabled: !panel.winmode.busyAction
-                text: "Save to disk"
-                onClicked: panel.winmode.saveToDisk()
-            }
-
-            Action {
-                visible: restingActions.canOpen
-                kind: "primary"
-                text: restingActions.canOpen ? "Open " + panel.winmode.lastApp.name : ""
-                onClicked: panel.winmode.openApp(panel.winmode.lastApp.id)
-            }
-        }
-
-        SettingsLink {
-            visible: panel.resting && !restingActions.visible
-            onClicked: panel.winmode.openSettings()
-        }
     }
 
     // The darker foot, edge to edge inside the glass border, as on quick
-    // settings: Pause now and Save to disk while Windows runs, and the way
-    // to Windows mode's settings.
+    // settings: what can be done with Windows now, and the way to Windows
+    // mode's settings. Running: Pause, Save to disk, Restart, Shut down.
+    // Paused: Resume first, filled. Saved: Resume across the top, as the
+    // apps it was saved with come back with it. Off: Start Windows mode.
     Rectangle {
-        visible: panel.hasFoot
         anchors.left: parent.left
         anchors.leftMargin: panel.glassBorder - panel.edgeLeft
         anchors.right: parent.right
@@ -435,23 +402,55 @@ FocusScope {
             width: panel.innerWidth
             spacing: 10
 
-            RowLayout {
-                visible: panel.vmRunning && (panel.running || panel.level === "attention")
+            GridLayout {
+                id: controls
+                readonly property bool live: panel.vmRunning && (panel.running || panel.level === "attention")
+                readonly property bool paused: panel.level === "paused"
+                readonly property bool saved: panel.level === "saved"
+                visible: live || paused || saved
                 Layout.fillWidth: true
-                spacing: 8
+                columns: 2
+                rowSpacing: 8
+                columnSpacing: 8
+                enabled: !panel.winmode.busyAction
 
                 Action {
-                    enabled: !panel.winmode.busyAction
-                    text: "Pause now"
-                    onClicked: panel.winmode.pauseNow()
+                    visible: controls.live
+                    text: "Pause"
+                    onClicked: panel.winmode.power("pause")
                 }
 
                 Action {
-                    visible: panel.winmode.canSave
-                    enabled: !panel.winmode.busyAction
+                    visible: controls.paused || controls.saved
+                    Layout.columnSpan: controls.saved ? 2 : 1
+                    kind: "primary"
+                    text: "Resume"
+                    onClicked: panel.winmode.power("resume")
+                }
+
+                Action {
+                    visible: (controls.live || controls.paused) && panel.winmode.canSave
                     text: "Save to disk"
-                    onClicked: panel.winmode.saveToDisk()
+                    onClicked: panel.winmode.power("save")
                 }
+
+                Action {
+                    text: "Restart"
+                    onClicked: panel.winmode.power("restart")
+                }
+
+                Action {
+                    text: "Shut down"
+                    onClicked: panel.winmode.power("shutdown")
+                }
+            }
+
+            Action {
+                visible: panel.level === "off"
+                enabled: !panel.winmode.busyAction
+                kind: "primary"
+                text: "Start Windows mode"
+                onClicked: panel.winmode.power("start")
             }
 
             SettingsLink {

@@ -22,6 +22,7 @@ import Qt5Compat.GraphicalEffects
 import QtQuick.Templates as T
 import Qt.labs.folderlistmodel
 import org.kde.plasma.plasma5support as P5Support
+import org.kde.plasma.workspace.dbus as DBus
 import org.wildos.shell as WildOS
 import WildOS.UI as UI
 
@@ -256,7 +257,10 @@ Item {
     readonly property int topPadding: Math.round(Math.min(thickPanelSvg.fixedMargins.top + Kirigami.Units.smallSpacing, spacingAtMinSize));
     readonly property int bottomPadding: Math.round(Math.min(thickPanelSvg.fixedMargins.bottom + Kirigami.Units.smallSpacing, spacingAtMinSize));
     readonly property int leftPadding: Math.round(Math.min(thickPanelSvg.fixedMargins.left + Kirigami.Units.smallSpacing, spacingAtMinSize));
-    readonly property int rightPadding: Math.round(Math.min(thickPanelSvg.fixedMargins.right + Kirigami.Units.smallSpacing, spacingAtMinSize));
+    // Plasma's panel moves every pointer event inside these paddings onto
+    // the nearest widget, so the show desktop sliver in the last 8 px would
+    // never see the pointer. With the sliver on, nothing is padded there.
+    readonly property int rightPadding: usePills && WildOS.TaskbarStyle.showDesktop ? 0 : Math.round(Math.min(thickPanelSvg.fixedMargins.right + Kirigami.Units.smallSpacing, spacingAtMinSize));
 
     readonly property int minPanelHeight: translucentItem.minimumDrawingHeight
     readonly property int minPanelWidth: translucentItem.minimumDrawingWidth
@@ -630,9 +634,10 @@ Item {
 
     // Show desktop, as on Windows: the last 8 px of the bar, down to the
     // screen's corner pixel, so a flick of the pointer into the corner finds
-    // it. Clicking shows the desktop and clicking again brings the windows
-    // back. With peek on, resting the pointer there shows the desktop until
-    // it moves away, and a click while peeking keeps it shown. Settings >
+    // it. Clicking minimises every window and clicking again brings the same
+    // windows back (the org.wildos.showdesktop KWin script, also on Win+D).
+    // With peek on, resting the pointer there fades the windows out until it
+    // moves away, and a click while peeking minimises them. Settings >
     // Personalisation > Taskbar turns both on and off (wildosrc [Taskbar]).
     MouseArea {
         id: showDesktopCorner
@@ -648,6 +653,7 @@ Item {
 
         // The desktop is showing because of a peek, so leaving undoes it.
         property bool peeking: false
+        property var pendingToggle: null
 
         onContainsMouseChanged: {
             if (containsMouse) {
@@ -664,11 +670,19 @@ Item {
         }
         onClicked: {
             peekTimer.stop();
-            if (peeking) {
-                peeking = false;
+            if (!peeking) {
+                root.toggleDesktop();
                 return;
             }
-            KWindowSystem.showingDesktop = !KWindowSystem.showingDesktop;
+            // The peek ends once the windows are minimised, so they stay
+            // out of sight rather than fading back first.
+            peeking = false;
+            // Held here so the reply is not collected before it arrives.
+            pendingToggle = root.toggleDesktop();
+            pendingToggle.finished.connect(() => {
+                KWindowSystem.showingDesktop = false;
+                pendingToggle = null;
+            });
         }
         onVisibleChanged: {
             if (!visible && peeking) {
@@ -709,6 +723,18 @@ Item {
         }
     }
 
+    // The same as Win+D: runs the org.wildos.showdesktop KWin script's
+    // shortcut through the global shortcut service.
+    function toggleDesktop(): var {
+        return DBus.SessionBus.asyncCall({
+            service: "org.kde.kglobalaccel",
+            path: "/component/kwin",
+            iface: "org.kde.kglobalaccel.Component",
+            member: "invokeShortcut",
+            arguments: [new DBus.string("Wild OS show desktop")],
+        });
+    }
+
     function openTaskbarMenu(x: real): void {
         const entries = [];
         if (taskManagerEntry.count > 0) {
@@ -721,7 +747,7 @@ Item {
                 run: () => runner.connectSource("kstart --desktopfile org.wildos.settings -- wildos-settings --page taskbar") });
         }
         entries.push({ text: "Show the desktop", icon: "menu-desktop", shortcut: "Win+D",
-            run: () => KWindowSystem.showingDesktop = !KWindowSystem.showingDesktop });
+            run: () => root.toggleDesktop() });
         taskbarMenu.entries = entries;
         taskbarMenu.x = Math.round(Math.max(8, Math.min(root.width - taskbarMenu.implicitWidth - 8, x)));
         taskbarMenu.y = -12 - taskbarMenu.implicitHeight;

@@ -6,7 +6,9 @@ import WildOS.UI as UI
 // Sign-in options, after Windows 11: changing the password (current one
 // first, then the new one twice and an optional hint), signing in
 // automatically when the computer starts, restarting apps after signing
-// in, and the way to the screen lock.
+// in, and the way to the screen lock. Turning automatic sign-in on asks for
+// your own password, so the system can keep the key that opens your saved
+// passwords (KWallet) when nobody types one.
 PageScroll {
     id: page
 
@@ -36,21 +38,50 @@ PageScroll {
                     notice.show("Password changed", message, false);
                 }
             } else if (what === "autologin") {
+                autoDialog.close();
                 notice.show("Automatic sign-in", message, false);
+            } else if (what === "wallet") {
+                walletDialog.close();
+                notice.show("Saved passwords", message, false);
             }
         }
         function onFailed(what, reason) {
-            if (what === "password") {
+            if (what === "wallet" || what === "wallet-other") {
+                walletDialog.needsOther = walletDialog.needsOther || what === "wallet-other";
+                walletDialog.error = reason;
+            } else if (what === "password") {
                 passwordDialog.error = reason;
             } else if (what === "autologin") {
-                notice.show("Automatic sign-in was not changed", reason, true);
                 autoToggle.checked = Qt.binding(() => page.autoOn);
+                if (autoDialog.visible) {
+                    autoDialog.error = reason;
+                } else {
+                    notice.show("Automatic sign-in was not changed", reason, true);
+                }
             }
         }
     }
 
     Notice {
         id: notice
+    }
+
+    // The saved passwords notification (wildos-setup-wallet) opens this
+    // page with Navigator.request "wallet".
+    function takeRequest() {
+        if (Navigator.request === "wallet") {
+            Navigator.request = "";
+            walletDialog.open();
+        }
+    }
+
+    Component.onCompleted: takeRequest()
+
+    Connections {
+        target: Navigator
+        function onRequestChanged() {
+            page.takeRequest();
+        }
     }
 
     ColumnLayout {
@@ -101,7 +132,7 @@ PageScroll {
                     minHeight: 72
                     title: "Sign in automatically when this computer starts"
                     description: page.autoOther ? "Set up for " + Users.autoLogin + ". Turning it on here moves it to you."
-                        : "Anyone who turns the computer on gets straight to your files, so only use it on a computer that stays at home."
+                        : "Anyone who turns the computer on gets straight to your files and saved passwords, so only use it on a computer that stays at home."
                     status: page.autoOn ? "On" : "Off"
 
                     UI.Toggle {
@@ -110,7 +141,14 @@ PageScroll {
                         checked: page.autoOn
                         enabled: Users.busy !== "autologin"
                         Accessible.name: "Sign in automatically when this computer starts"
-                        onToggled: Users.setAutoLogin(checked)
+                        onToggled: {
+                            if (checked) {
+                                checked = Qt.binding(() => page.autoOn);
+                                autoDialog.open();
+                            } else {
+                                Users.setAutoLogin(false);
+                            }
+                        }
                     }
                 }
 
@@ -138,6 +176,137 @@ PageScroll {
                 }
             }
         }
+    }
+
+    UI.Dialog {
+        id: walletDialog
+
+        property string error
+        property bool needsOther: false
+
+        title: "Open your saved passwords"
+        text: needsOther
+            ? "Your saved passwords use a different password from your account. Type both, and Wild OS moves them to your account password so they open when you sign in."
+            : page.autoOn
+                ? "This computer signs you in automatically, so your saved passwords need your password once. After this they open by themselves at every start."
+                : "Type your account password so your saved passwords open when you sign in."
+        onAboutToShow: {
+            error = "";
+            needsOther = false;
+            walletPasswordField.text = "";
+            walletOtherField.text = "";
+            walletPasswordField.forceActiveFocus();
+        }
+
+        UI.TextField {
+            id: walletPasswordField
+            Layout.fillWidth: true
+            placeholderText: "Your account password"
+            revealable: true
+            onTextChanged: walletDialog.error = ""
+            onAccepted: walletDialog.needsOther ? walletOtherField.forceActiveFocus() : walletButton.clicked()
+        }
+
+        UI.TextField {
+            id: walletOtherField
+            Layout.fillWidth: true
+            visible: walletDialog.needsOther
+            placeholderText: "The password your saved passwords use"
+            revealable: true
+            onTextChanged: walletDialog.error = ""
+            onAccepted: walletButton.clicked()
+        }
+
+        UI.Label {
+            Layout.fillWidth: true
+            visible: text.length > 0
+            text: walletDialog.error
+            size: 12
+            color: UI.Style.danger
+            wrapMode: Text.Wrap
+            elide: Text.ElideNone
+        }
+
+        buttons: [
+            UI.Button {
+                id: walletButton
+                text: "Continue"
+                kind: "primary"
+                busy: Users.busy === "wallet"
+                enabled: walletPasswordField.text.length > 0 && (!walletDialog.needsOther || walletOtherField.text.length > 0)
+                    && Users.busy !== "wallet"
+                onClicked: {
+                    if (!enabled) {
+                        return;
+                    }
+                    walletDialog.error = "";
+                    Users.openWallet(walletPasswordField.text, walletDialog.needsOther ? walletOtherField.text : "");
+                }
+            },
+            UI.Button {
+                text: "Cancel"
+                enabled: Users.busy !== "wallet"
+                onClicked: walletDialog.close()
+            }
+        ]
+    }
+
+    UI.Dialog {
+        id: autoDialog
+
+        property string error
+
+        title: "Sign in automatically"
+        text: (Protection.status.encryption === "on"
+            ? "Anyone who gets past the disk password when this computer starts will reach your files and your saved passwords, without your account password."
+            : "Anyone who turns this computer on will reach your files and your saved passwords, without a password.")
+            + " Type your password so Wild OS can open your saved passwords for you."
+        onAboutToShow: {
+            error = "";
+            autoPasswordField.text = "";
+            autoPasswordField.forceActiveFocus();
+        }
+
+        UI.TextField {
+            id: autoPasswordField
+            Layout.fillWidth: true
+            placeholderText: "Your password"
+            revealable: true
+            onTextChanged: autoDialog.error = ""
+            onAccepted: turnOnButton.clicked()
+        }
+
+        UI.Label {
+            Layout.fillWidth: true
+            visible: text.length > 0
+            text: autoDialog.error
+            size: 12
+            color: UI.Style.danger
+            wrapMode: Text.Wrap
+            elide: Text.ElideNone
+        }
+
+        buttons: [
+            UI.Button {
+                id: turnOnButton
+                text: "Turn on"
+                kind: "primary"
+                busy: Users.busy === "autologin"
+                enabled: autoPasswordField.text.length > 0 && Users.busy !== "autologin"
+                onClicked: {
+                    if (!enabled) {
+                        return;
+                    }
+                    autoDialog.error = "";
+                    Users.setAutoLogin(true, autoPasswordField.text);
+                }
+            },
+            UI.Button {
+                text: "Cancel"
+                enabled: Users.busy !== "autologin"
+                onClicked: autoDialog.close()
+            }
+        ]
     }
 
     UI.Dialog {

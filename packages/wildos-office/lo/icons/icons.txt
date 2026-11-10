@@ -1,0 +1,715 @@
+# Which icon each LibreOffice command or image gets in the Wild OS theme.
+#
+#   target   icon   [tone]
+#
+# A target is a UNO command (Bold, for .uno:Bold) or a LibreOffice image path
+# with the size it is drawn at (svx/res/doc_modified_no.png@16). An icon is a
+# file in svg/ (drawn on the design boards or by us) or lucide/ (adapted from
+# Lucide). Tones: fg (default, the text colour), accent for the actions the
+# boards draw in blue, muted for the sidebar strip and status bar, and red,
+# yellow, green where the colour carries meaning.
+
+# Clipboard
+Paste                       paste               accent
+Cut                         cut                 accent
+Copy                        copy                accent
+PasteSpecial                paste-special       accent
+PasteSpecialMenu            paste-special       accent
+PasteUnformatted            paste-text          accent
+PasteOnlyText               paste-text          accent
+PasteOnlyValue              paste-values        accent
+PasteOnlyFormula            paste-formula       accent
+PasteTransposed             paste-transposed    accent
+FormatPaintbrush            lucide/paintbrush
+SelectAll                   lucide/text-select
+Undo                        lucide/undo-2
+Redo                        lucide/redo-2
+
+# File menu
+AddDirect                   lucide/file-plus
+NewDoc                      lucide/file-plus
+Open                        lucide/folder-open
+OpenRemote                  lucide/folder-symlink
+OpenUrl                     lucide/globe
+OpenFromWriter              lucide/file-text
+OpenFromCalc                lucide/sheet
+RecentFileList              lucide/history
+Save                        lucide/save
+SaveAs                      lucide/save-pen
+SaveACopy                   lucide/save-all
+ExportToPDF                 lucide/file-down
+ExportDirectToPDF           lucide/file-down
+ExportDirectToEPUB          lucide/book-down
+ExportTo                    lucide/file-output
+SendMail                    lucide/mail
+SendMailDocAsPDF            lucide/mail
+PrintPreview                lucide/file-search
+ClosePreview                lucide/x
+Print                       lucide/printer
+PrintDefault                lucide/printer
+PrinterSetup                lucide/file-cog
+SetDocumentProperties       lucide/info
+Signature                   lucide/signature
+OptionsTreeDialog           lucide/settings
+HelpIndex                   lucide/circle-help
+ExtendedHelp                lucide/message-circle-question
+CloseDoc                    lucide/x
+EditDoc                     lucide/pencil
+
+# Character formatting
+Bold                        bold
+Italic                      italic
+Underline                   underline
+UnderlineDouble             underline-double
+Strikeout                   strikethrough
+Overline                    overline
+Shadowed                    text-shadow
+OutlineFont                 lucide/type-outline
+SmallCaps                   lucide/case-sensitive
+SuperScript                 lucide/superscript
+SubScript                   lucide/subscript
+Grow                        lucide/a-arrow-up
+Shrink                      lucide/a-arrow-down
+Spacing                     lucide/letter-spacing
+ChangeCaseToUpper           lucide/case-upper
+ChangeCaseToLower           lucide/case-lower
+ResetAttributes             lucide/remove-formatting
+SetDefault                  lucide/remove-formatting
+CharFontName                lucide/type
+FontHeight                  lucide/a-large-small
+FontDialog                  lucide/type
+CharacterMenu               lucide/type
+TextAttributes              lucide/type
+Color                       font-colour         red
+FontColor                   font-colour         red
+CharColorExt                font-colour         red
+CharBackColor               highlight           yellow
+BackColor                   highlight           yellow
+CharBackgroundExt           highlight           yellow
+BackgroundColor             highlight           yellow
+TableCellBackgroundColor    fill-colour
+FillColor                   fill-colour
+XLineColor                  line-colour
+FrameLineColor              line-colour
+LineColor                   line-colour
+
+# Character and paragraph styles
+DefaultCharStyle            lucide/type
+EmphasisCharStyle           italic
+StrongEmphasisCharStyle     bold
+QuoteCharStyle              lucide/quote
+SourceCharStyle             lucide/code
+TextBodyParaStyle           lucide/text
+TitleParaStyle              lucide/heading
+Heading1ParaStyle           lucide/heading-1
+Heading2ParaStyle           lucide/heading-2
+Heading3ParaStyle           lucide/heading-3
+QuoteParaStyle              lucide/text-quote
+PreformattedParaStyle       lucide/code-xml
+StyleApply                  styles
+DesignerDialog              lucide/swatch-book
+EditStyle                   lucide/pencil-line
+StyleNewByExample           lucide/square-plus
+StyleUpdateByExample        lucide/refresh-cw
+InspectorDeck               lucide/text-search  muted
+
+# Lists and paragraphs
+DefaultBullet               bullets
+BulletListStyle             bullets
+DefaultNumbering            numbering
+NumberListStyle             numbering
+AlphaListStyle              numbering
+AlphaLowListStyle           numbering
+RomanListStyle              numbering
+RomanLowListStyle           numbering
+NumberingMenu               numbering
+OutlineBullet               lucide/list-tree
+SetOutline                  lucide/list-tree
+RemoveBullets               lucide/list-x
+NumberingStart              lucide/list-restart
+ContinueNumbering           lucide/list-plus
+IncrementLevel              lucide/list-indent-increase
+DecrementLevel              lucide/list-indent-decrease
+IncrementSubLevels          lucide/list-indent-increase
+DecrementSubLevels          lucide/list-indent-decrease
+MoveUp                      lucide/arrow-up
+MoveDown                    lucide/arrow-down
+MoveUpSubItems              lucide/chevrons-up
+MoveDownSubItems            lucide/chevrons-down
+InsertNeutralParagraph      lucide/pilcrow-left
+ParagraphMenu               lucide/pilcrow
+ParagraphDialog             lucide/pilcrow
+IncrementIndent             indent
+DecrementIndent             outdent
+HangingIndent               hanging-indent
+LineSpacing                 line-spacing
+ParaspaceIncrease           para-space-more
+ParaspaceDecrease           para-space-less
+LeftPara                    align-left
+AlignLeft                   align-left
+CenterPara                  align-centre
+AlignHorizontalCenter       align-centre
+RightPara                   align-right
+AlignRight                  align-right
+JustifyPara                 justify
+AlignBlock                  justify
+AlignTop                    valign-top
+CellVertTop                 valign-top
+AlignVCenter                valign-middle
+CellVertCenter              valign-middle
+AlignBottom                 valign-bottom
+CellVertBottom              valign-bottom
+ParaLeftToRight             lucide/pilcrow-right
+ParaRightToLeft             lucide/pilcrow-left
+TextdirectionLeftToRight    lucide/pilcrow-right
+TextdirectionTopToBottom    lucide/arrow-down-to-line
+VerticalText                lucide/arrow-down-to-line
+NoBreak                     lucide/wrap-text
+WrapText                    wrap-text
+Hyphenate                   hyphenation
+
+# Insert
+InsertGraphic               picture             accent
+GraphicDialog               picture
+InsertTable                 table               accent
+TableDialog                 lucide/table-properties
+InsertObjectChart           chart               accent
+BasicShapes                 lucide/shapes       accent
+InsertDraw                  lucide/shapes
+BasicShapes.rectangle           shape-rectangle        accent
+BasicShapes.round-rectangle     shape-round-rectangle  accent
+BasicShapes.quadrat             shape-square           accent
+BasicShapes.round-quadrat       lucide/square          accent
+BasicShapes.circle              lucide/circle          accent
+BasicShapes.ellipse             shape-ellipse          accent
+BasicShapes.circle-pie          shape-pie              accent
+BasicShapes.isosceles-triangle  lucide/triangle        accent
+BasicShapes.right-triangle      shape-right-triangle   accent
+BasicShapes.trapezoid           shape-trapezoid        accent
+BasicShapes.diamond             lucide/diamond         accent
+BasicShapes.parallelogram       shape-parallelogram    accent
+BasicShapes.pentagon            lucide/pentagon        accent
+BasicShapes.hexagon             lucide/hexagon         accent
+BasicShapes.octagon             lucide/octagon         accent
+BasicShapes.cross               shape-cross            accent
+BasicShapes.ring                shape-ring             accent
+BasicShapes.block-arc           shape-block-arc        accent
+BasicShapes.can                 lucide/cylinder        accent
+BasicShapes.cube                lucide/box             accent
+BasicShapes.paper               shape-paper            accent
+BasicShapes.frame               shape-frame            accent
+Line                        line
+HyperlinkDialog             lucide/link         accent
+EditHyperlink               lucide/link-2
+OpenHyperlinkOnCursor       lucide/external-link
+RemoveHyperlink             lucide/unlink
+InsertBookmark              lucide/bookmark     accent
+InsertReferenceField        lucide/square-arrow-out-up-right accent
+InsertPageHeader            lucide/panel-top    accent
+InsertPageFooter            lucide/panel-bottom accent
+PageNumberWizard            lucide/hash         accent
+EditHeaderAndFooter         lucide/panels-top-bottom accent
+Text                        text-box            accent
+DrawText                    text-box            accent
+AddTextBox                  text-box
+InsertFieldCtrl             lucide/text-cursor-input accent
+InsertField                 lucide/text-cursor-input
+InsertSection               lucide/rows-2       accent
+CharmapControl              lucide/omega        accent
+InsertSymbol                lucide/omega
+InsertObjectStarMath        lucide/square-radical accent
+InsertFormula               function
+InsertDateField             lucide/calendar
+InsertDateFieldVar          lucide/calendar
+InsertCurrentDate           lucide/calendar
+InsertTimeField             lucide/clock
+InsertTimeFieldVar          lucide/clock
+InsertCurrentTime           lucide/clock
+InsertPageNumberField       lucide/hash
+InsertPageCountField        lucide/file-digit
+InsertTitleField            lucide/heading
+InsertTopicField            lucide/tag
+InsertAuthorField           lucide/user
+Gallery                     lucide/images
+InsertSparkline             lucide/activity
+InsertSheetFromFile         lucide/file-input
+
+# Comments
+InsertAnnotation            lucide/message-square-plus accent
+ShowAnnotations             lucide/message-square
+ShowAllNotes                lucide/message-square
+ShowNote                    lucide/message-square
+HideAllNotes                lucide/message-square-off
+HideNote                    lucide/message-square-off
+EditAnnotation              lucide/message-square-text
+ReplyComment                lucide/message-square-reply
+DeleteComment               lucide/message-square-x
+DeleteNote                  lucide/message-square-x
+DeleteAllNotes              lucide/message-square-x
+FormatAllNotes              lucide/message-square-more
+
+# Layout
+PageMargin                  margins             accent
+Margins                     margins             accent
+Orientation                 orientation         accent
+AttributePageSize           page-size           accent
+PageColumnType              lucide/columns-2    accent
+FormatColumns               lucide/columns-3
+PageDialog                  lucide/file-cog     accent
+PageFormatDialog            lucide/file-cog     accent
+TitlePageDialog             lucide/file-text
+LineNumberingDialog         lucide/list-ordered
+InsertPagebreak             page-break
+InsertColumnBreak           lucide/columns-2
+InsertBreak                 lucide/separator-horizontal
+InsertRowBreak              lucide/separator-horizontal
+DeleteAllBreaks             lucide/eraser
+WrapMenu                    wrap-on             accent
+WrapOff                     wrap-off
+WrapOn                      wrap-on
+WrapIdeal                   wrap-on
+WrapLeft                    wrap-left
+WrapRight                   wrap-right
+WrapThrough                 wrap-through
+WrapContour                 wrap-contour
+ContourDialog               lucide/pen-tool
+BringToFront                lucide/bring-to-front
+SendToBack                  lucide/send-to-back
+ObjectForwardOne            lucide/layers-arrow-up
+ObjectBackOne               lucide/layers-arrow-down
+SetObjectToForeground       lucide/layers
+SetObjectToBackground       lucide/layers-2
+ArrangeMenu                 lucide/layers
+ArrangeFrameMenu            lucide/layers
+ObjectAlign                 lucide/align-center-vertical
+ObjectAlignLeft             lucide/align-start-vertical
+AlignCenter                 lucide/align-center-vertical
+ObjectAlignRight            lucide/align-end-vertical
+AlignUp                     lucide/align-start-horizontal
+AlignMiddle                 lucide/align-center-horizontal
+AlignDown                   lucide/align-end-horizontal
+AnchorMenu                  lucide/anchor
+FlipMenu                    lucide/flip-horizontal-2
+RotateFlipMenu              lucide/rotate-cw
+FlipHorizontal              lucide/flip-horizontal-2
+ObjectMirrorHorizontal      lucide/flip-horizontal-2
+FlipVertical                lucide/flip-vertical-2
+ObjectMirrorVertical        lucide/flip-vertical-2
+RotateLeft                  lucide/rotate-ccw
+RotateRight                 lucide/rotate-cw
+ToggleObjectRotateMode      lucide/rotate-cw-square
+ToggleObjectBezierMode      lucide/spline
+TransformDialog             lucide/scaling
+FormatGroup                 lucide/group
+FormatUngroup               lucide/ungroup
+EnterGroup                  lucide/log-in
+LeaveGroup                  lucide/log-out
+FormatArea                  lucide/paint-bucket
+FillStyle                   lucide/paint-bucket
+FormatLine                  lucide/pen-line
+LineStyle                   line-style
+XLineStyle                  line-style
+LineWidth                   line-width
+LineEndStyle                lucide/move-right
+FillShadow                  shadow
+SetBorderStyle              lucide/grid-2x2
+FrameDialog                 lucide/frame
+ChainFrames                 lucide/link
+UnhainFrames                lucide/unlink
+RenameObject                lucide/pencil-line
+ObjectTitleDescription      lucide/scan-text
+
+# Pictures
+Crop                        lucide/crop
+CompressGraphic             lucide/shrink
+ChangePicture               lucide/image-up
+SaveGraphic                 lucide/image-down
+GrafMode                    lucide/contrast
+GrafTransparence            lucide/blend
+GraphicFilterToolbox        lucide/wand-sparkles
+
+# Tables
+InsertCell                  insert-cells        accent
+DeleteCell                  delete-cells
+FormatCellDialog            table               accent
+InsertRowsBefore            insert-row-above
+InsertRowsAfter             insert-row-below
+InsertColumnsBefore         insert-col-left
+InsertColumnsAfter          insert-col-right
+DeleteRows                  delete-row
+DeleteColumns               delete-col
+DeleteTable                 delete-table
+TableInsertMenu             insert-row-below
+TableDeleteMenu             delete-row
+MergeCells                  merge-cells
+ToggleMergeCells            merge-cells
+SplitCell                   split-cell
+SplitTable                  lucide/table-rows-split
+SelectTable                 lucide/scan
+TableSelectAll              lucide/scan
+TableDeselectAll            lucide/square-x
+EntireCell                  lucide/square
+EntireRow                   lucide/rows-3
+EntireColumn                lucide/columns-3
+DistributeColumns           lucide/align-horizontal-distribute-center
+DistributeRows              lucide/align-vertical-distribute-center
+TableAutoFitMenu            col-width
+ColumnWidth                 col-width
+SetOptimalColumnWidth       lucide/unfold-horizontal
+SetMinimalColumnWidth       lucide/fold-horizontal
+RowHeight                   row-height
+SetOptimalRowHeight         lucide/unfold-vertical
+SetMinimalRowHeight         lucide/fold-vertical
+TableNumberFormatDialog     lucide/hash
+TableSort                   sort
+TableEvents                 lucide/zap
+UnsetCellsReadOnly          lucide/lock-open
+OptimizeTable               col-width
+AutoFormat                  lucide/wand-sparkles accent
+
+# Sheets, cells and numbers
+Insert                      plus
+Remove                      lucide/trash-2
+Delete                      lucide/eraser
+Move                        lucide/arrow-left-right
+DuplicateSheet              copy
+RenameTable                 lucide/pencil-line
+SetTabBgColor               lucide/palette
+SheetRightToLeft            lucide/pilcrow-left
+Show                        lucide/eye
+Hide                        lucide/eye-off
+ShowColumn                  lucide/eye
+ShowRow                     lucide/eye
+HideColumn                  lucide/eye-off
+HideRow                     lucide/eye-off
+FillDown                    lucide/arrow-down-to-line
+FillUp                      lucide/arrow-up-to-line
+FillLeft                    lucide/arrow-left-to-line
+FillRight                   lucide/arrow-right-to-line
+FreezePanes                 lucide/snowflake
+SplitWindow                 lucide/square-split-horizontal
+NumberFormatCurrency        currency
+NumberFormatPercent         percent
+NumberFormatIncDecimals     decimal-add
+NumberFormatDecDecimals     decimal-remove
+NumberFormatDecimal         lucide/hash
+NumberFormatStandard        lucide/letter-text
+NumberFormatDate            lucide/calendar
+NumberFormatScientific      lucide/square-letter-e
+Accent1CellStyles           cell-style          accent
+Accent2CellStyles           cell-style          accent
+Accent3CellStyles           cell-style          accent
+GoodCellStyles              lucide/circle-check green
+NeutralCellStyles           lucide/circle       yellow
+BadCellStyles               lucide/circle-x     red
+WarningCellStyles           lucide/triangle-alert yellow
+ErrorCellStyles             lucide/octagon-x    red
+NoteCellStyles              lucide/sticky-note
+FootnoteCellStyles          cell-style
+Protect                     lucide/lock         accent
+ToolProtectionDocument      lucide/shield       accent
+ProtectTraceChangeMode      lucide/lock-keyhole
+
+# Data
+DataSort                    sort                accent
+SortAscending               lucide/arrow-down-a-z
+SortDescending              lucide/arrow-down-z-a
+DataFilterAutoFilter        filter              accent
+DataFilterStandardFilter    lucide/list-filter
+DataFilterSpecialFilter     lucide/list-filter-plus
+DataFilterRemoveFilter      lucide/filter-x
+DataDataPilotRun            lucide/table-properties accent
+TextToColumns               lucide/table-columns-split accent
+HandleDuplicateRecords      lucide/copy-x       accent
+Validation                  lucide/shield-check accent
+DataSubTotals               lucide/square-sigma
+DataConsolidate             lucide/merge
+GoalSeekDialog              lucide/target
+SolverDialog                lucide/calculator
+DefineDBName                lucide/database
+DataAreaRefresh             lucide/database-zap
+DefineName                  lucide/tag
+InsertName                  lucide/tags
+FunctionDialog              function            accent
+AutoSum                     autosum             accent
+Group                       lucide/group
+Ungroup                     lucide/ungroup
+ShowDetail                  lucide/square-plus
+HideDetail                  lucide/square-minus
+ConditionalFormatMenu       lucide/paint-roller accent
+ConditionalFormatDialog     lucide/paint-roller
+ColorScaleFormatDialog      lucide/palette
+DataBarFormatDialog         lucide/chart-bar
+IconSetFormatDialog         lucide/circle-dot
+CondDateFormatDialog        lucide/calendar
+DefinePrintArea             lucide/square-dashed
+AddPrintArea                lucide/square-plus
+EditPrintArea               lucide/square-pen
+DeletePrintArea             lucide/square-dashed-x
+ColumnOperations            lucide/columns-3
+RowOperations               lucide/rows-3
+
+# References and review
+InsertMultiIndex            lucide/table-of-contents accent
+UpdateCurIndex              lucide/refresh-cw
+UpdateAllIndexes            lucide/refresh-cw
+UpdateFields                lucide/refresh-cw
+UpdateAll                   lucide/refresh-ccw  accent
+EditCurIndex                lucide/pencil-line
+RemoveTableOf               lucide/list-x
+InsertFootnote              footnote            accent
+InsertEndnote               endnote
+FootnoteDialog              lucide/settings-2
+EndnoteDialog               lucide/settings-2
+InsertAuthoritiesEntry      lucide/quote        accent
+InsertCaptionDialog         lucide/captions     accent
+InsertIndexesEntry          lucide/tag          accent
+SpellingAndGrammarDialog    lucide/spell-check  accent
+SpellDialog                 lucide/spell-check  accent
+SpellOnline                 lucide/spell-check-2
+ThesaurusDialog             lucide/book-open-text
+WordCountDialog             lucide/whole-word
+TrackChanges                lucide/file-pen-line accent
+TraceChangeMode             lucide/file-pen-line accent
+TrackChangesBar             lucide/file-pen-line
+ShowTrackedChanges          lucide/diff
+AcceptTrackedChanges        lucide/list-checks  accent
+AcceptChanges               lucide/list-checks  accent
+AcceptTrackedChange         lucide/check        green
+RejectTrackedChange         lucide/x            red
+NextTrackedChange           lucide/arrow-down
+PreviousTrackedChange       lucide/arrow-up
+CompareDocuments            lucide/git-compare  accent
+
+# Find
+FocusToFindbar              find                accent
+FindBar                     find                accent
+RecSearch                   find
+SearchDialog                replace             accent
+UpSearch                    lucide/chevron-up
+DownSearch                  lucide/chevron-down
+ExitSearch                  lucide/x
+
+# View and navigation
+PrintLayout                 lucide/file-text    accent
+BrowseView                  lucide/globe        accent
+NormalViewMode              lucide/sheet        accent
+PagebreakMode               lucide/file-spreadsheet accent
+Ruler                       lucide/ruler
+ControlCodes                lucide/pilcrow
+ShowWhitespace              lucide/space
+InputLineVisible            lucide/text-cursor-input
+ViewRowColumnHeaders        lucide/panels-top-left
+ToggleSheetGrid             lucide/grid-3x3
+GridVisible                 lucide/grid-3x3
+GridUse                     lucide/magnet
+HelplinesMove               lucide/move
+ViewValueHighlighting       lucide/scan-eye
+ToggleFormula               lucide/square-function
+ViewDataSourceBrowser       lucide/database
+Navigator                   navigator
+Sidebar                     lucide/panel-right
+Zoom                        lucide/scan-search
+Zoom100Percent              zoom-100
+ZoomIn                      lucide/zoom-in
+ZoomPlus                    lucide/zoom-in
+ZoomOut                     lucide/zoom-out
+ZoomMinus                   lucide/zoom-out
+ZoomPage                    lucide/file-scan
+ZoomPageWidth               lucide/move-horizontal
+PreviewZoom                 lucide/zoom-in
+FullScreen                  lucide/maximize     accent
+ShowSinglePage              page-single         muted
+ShowTwoPages                page-two            muted
+ShowMultiplePages           page-two            muted
+ShowBookview                lucide/book-open    muted
+GoToStartOfDoc              lucide/chevrons-up
+GoToEndOfDoc                lucide/chevrons-down
+PageUp                      lucide/chevron-up
+PageDown                    lucide/chevron-down
+ScrollToPrevious            lucide/chevron-up
+ScrollToNext                lucide/chevron-down
+JumpUpThisLevel             lucide/arrow-up
+JumpDownThisLevel           lucide/arrow-down
+FirstPage                   lucide/chevrons-left
+PreviousPage                lucide/chevron-left
+NextPage                    lucide/chevron-right
+LastPage                    lucide/chevrons-right
+ColorSettings               lucide/palette
+Size                        lucide/ruler-dimension-line muted
+
+# Context menu entries that LibreOffice's own themes leave without an icon,
+# given one so the menus read evenly
+UpdateSelectedField         lucide/refresh-cw
+FieldDialog                 lucide/text-cursor-input
+EditFootnote                footnote
+IndexEntryDialog            lucide/tag
+AuthoritiesEntryDialog      lucide/quote
+OpenLocalURL                lucide/external-link
+ContentControlProperties    lucide/settings-2
+DeleteContentControl        lucide/x
+PasteNestedTable            paste-special
+PasteRowsBefore             insert-row-above
+PasteColumnsBefore          insert-col-left
+InsertRowDialog             insert-row-below
+InsertColumnDialog          insert-col-right
+SetRowHeight                row-height
+SetColumnWidth              col-width
+HeadingRowsRepeat           lucide/repeat
+ExternalEdit                lucide/external-link
+Rotate180                   lucide/rotate-cw-square
+RotateReset                 lucide/undo-dot
+FormatStylesMenu            styles
+FormatSparklineMenu         lucide/activity
+CurrentConditionalFormatDialog lucide/paint-roller
+
+# Rarer menu entries
+About                       lucide/badge-info
+AssignMacro                 lucide/square-code
+AvailableToolbars           lucide/app-window
+ConfigureDialog             lucide/sliders-horizontal
+ControlProperties           lucide/settings-2
+FormProperties              lucide/settings-2
+CloseWin                    lucide/x
+Donation                    lucide/heart
+ExportAsGraphic             lucide/image-down
+PrintPagePreview            lucide/printer
+ClearArrows                 lucide/eraser
+DeletePivotTable            lucide/trash-2
+RecalcPivotTable            lucide/refresh-cw
+NameGroup                   lucide/pencil-line
+FormatSpacingMenu           line-spacing
+SpacePara1                  line-spacing
+SpacePara15                 line-spacing
+SpacePara2                  line-spacing
+TextAlign                   align-left
+OutlineUp                   lucide/arrow-up
+OutlineDown                 lucide/arrow-down
+OutlineLeft                 lucide/arrow-left
+OutlineRight                lucide/arrow-right
+ExtrusionToggle             lucide/box
+FontworkShapeType           lucide/spline
+FontworkAlignmentFloater    align-centre
+FontworkCharacterSpacingFloater lucide/letter-spacing
+FontworkSameLetterHeights   lucide/a-large-small
+
+# Sidebar: the deck tabs down the right edge and the deck and panel buttons
+sfx2/res/symphony/sidebar-property-large.png@24     sidebar-properties  muted
+sfx2/res/symphony/sidebar-property-small.png@16     sidebar-properties  muted
+sfx2/res/symphony/sidebar-style-large.png@24        styles              muted
+sfx2/res/symphony/sidebar-gallery-large.png@24      picture             muted
+sfx2/res/symphony/sidebar-navigator-large.png@24    navigator           muted
+sfx2/res/symphony/sidebar-functions-large.png@24    function            muted
+sfx2/res/symphony/sidebar-a11y-large.png@24         lucide/accessibility muted
+sfx2/res/symphony/morebutton.png@11                 lucide/ellipsis     muted
+sfx2/res/symphony/open_more.png@14x16               lucide/ellipsis     muted
+sfx2/res/menu.png@14x13                             lucide/menu         muted
+sfx2/res/chevron.png@14x16                          lucide/chevrons-right muted
+sfx2/res/closedoc.png@8                             lucide/x            muted
+vcl/res/closedoc.png@8                              lucide/x            muted
+svx/res/galicon.png@16                              lucide/layout-grid
+svx/res/galdetail.png@16                            lucide/list
+AdditionsDialog                                     lucide/package-plus
+svx/res/symphony/spacing1.png@16                    lucide/arrow-up-to-line
+svx/res/symphony/spacing2.png@16                    lucide/arrow-down-to-line
+svx/res/symphony/Indent4.png@16                     indent
+svx/res/symphony/Indent3.png@16                     outdent
+svx/res/symphony/Indent2.png@16                     first-line-indent
+svx/res/lo01.png@16                                 text-from-bottom
+svx/res/lo02.png@16                                 text-from-top
+svx/res/lo03.png@16                                 text-in-cell
+sc/res/fx.png@16                                    function
+sw/res/sr20006.png@16                               lucide/settings-2
+res/locked.png@16                                   lucide/link
+res/unlocked.png@16                                 lucide/unlink
+
+# Styles deck
+res/sc05554.png@16                                  lucide/paint-bucket
+res/sc05555.png@16                                  lucide/square-plus
+res/sc05556.png@16                                  lucide/refresh-cw
+sw/res/sf01.png@16                                  lucide/pilcrow
+sw/res/sf02.png@16                                  lucide/type
+sw/res/sf03.png@16                                  lucide/frame
+sw/res/sf04.png@16                                  lucide/file
+sw/res/sf05.png@16                                  bullets
+sw/res/sf06.png@16                                  table
+sc/res/sf01.png@16                                  cell-style
+sc/res/sf02.png@16                                  lucide/file
+
+# Navigator in Write: its toolbar, then the kinds of content it lists
+sw/res/sc20244.png@16                               lucide/layers
+sw/res/sc20234.png@16                               lucide/list-tree
+sw/res/sc20179.png@16                               lucide/panel-top
+sw/res/sc20177.png@16                               lucide/panel-bottom
+sw/res/sc20182.png@16                               lucide/anchor
+sw/res/sc20183.png@16                               lucide/bookmark-plus
+sw/res/sc20236.png@16                               lucide/heading
+sw/res/sc20233.png@16                               lucide/hand-grab
+sw/res/sc20172.png@16                               lucide/arrow-left
+sw/res/sc20173.png@16                               lucide/arrow-right
+sw/res/sc20174.png@16                               lucide/arrow-up
+sw/res/sc20171.png@16                               lucide/arrow-down
+sw/res/sc20245.png@16                               lucide/pencil
+sw/res/sc20246.png@16                               lucide/refresh-cw
+sw/res/sc20247.png@16                               lucide/file-plus
+sw/res/sc20248.png@16                               lucide/save
+sw/res/nc20000.png@16                               lucide/heading
+sw/res/nc20001.png@16                               table
+sw/res/nc20002.png@16                               lucide/frame
+sw/res/nc20003.png@16                               picture
+sw/res/nc20004.png@16                               lucide/box
+sw/res/nc20005.png@16                               lucide/bookmark
+sw/res/nc20006.png@16                               lucide/rows-2
+sw/res/nc20007.png@16                               lucide/link
+sw/res/nc20008.png@16                               lucide/square-arrow-out-up-right
+sw/res/nc20009.png@16                               lucide/table-of-contents
+sw/res/nc20010.png@16                               lucide/message-square
+sw/res/nc20011.png@16                               lucide/shapes
+sw/res/nc20012.png@16                               footnote
+sw/res/nc20013.png@16                               endnote
+sw/res/brokenlink.png@16                            lucide/unlink
+
+# Navigator in Tables
+sc/res/na03.png@16                                  lucide/table-2
+sc/res/na05.png@16                                  lucide/arrow-up-to-line
+sc/res/na06.png@16                                  lucide/arrow-down-to-line
+sc/res/na011.png@16                                 lucide/list-tree
+sc/res/na010.png@16                                 lucide/arrow-left-right
+sc/res/na07.png@16                                  lucide/layers
+sc/res/na09.png@16                                  lucide/hand-grab
+sc/res/nc01.png@16                                  lucide/sheet
+sc/res/nc02.png@16                                  lucide/tag
+sc/res/nc03.png@16                                  lucide/database
+sc/res/nc04.png@16                                  picture
+sc/res/nc05.png@16                                  lucide/box
+sc/res/nc06.png@16                                  lucide/message-square
+sc/res/nc07.png@16                                  lucide/link
+sc/res/nc08.png@16                                  lucide/shapes
+
+# Formula bar in Tables
+sc/res/sc26047.png@16                               function            muted
+sc/res/sc26048.png@16                               autosum             muted
+sc/res/sc26049.png@16                               lucide/equal        muted
+sc/res/sc26050.png@16                               lucide/x            muted
+sc/res/sc26051.png@16                               lucide/check        muted
+
+# Status bar
+svx/res/doc_modified_no.png@16                      doc-saved           muted
+svx/res/doc_modified_yes.png@16                     doc-modified        muted
+svx/res/doc_modified_feedback.png@16                doc-modified        muted
+svx/res/standard-selection.png@32x16                  select-standard     muted
+svx/res/extending-selection.png@32x16                 select-extend       muted
+svx/res/adding-selection.png@32x16                    select-add          muted
+svx/res/block-selection.png@32x16                     select-block        muted
+svx/res/a11y_check_issues_not_found.png@16          lucide/accessibility muted
+svx/res/a11y_check_issues_found.png@16              lucide/accessibility yellow
+svx/res/zoom_page_statusbar.png@14                  lucide/scan         muted
+svx/res/slidezoomin_10.png@10                       plus                muted
+svx/res/slidezoomout_10.png@10                      minus               muted
+svx/res/slidezoombutton_10.png@10                   slider-thumb        accent
+sw/res/emptypage.png@12x16                          page-single         muted
+sw/res/emptypage_a.png@12x16                        page-single         accent
+sw/res/twopages.png@25x16                           page-two            muted
+sw/res/twopages_a.png@25x16                         page-two            accent
+sw/res/doublepage.png@24x16                         lucide/book-open    muted
+sw/res/doublepage_a.png@24x16                       lucide/book-open    accent

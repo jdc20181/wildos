@@ -589,6 +589,29 @@ QString Verifier::purposeOf(const QString &actionId, const QString &program)
     return {};
 }
 
+QString Verifier::quickName(const QString &actionId, const QHash<QString, QString> &details, QString *iconName)
+{
+    const auto &map = wordings();
+    const auto wording = map.constFind(actionId);
+    if (wording != map.constEnd() && wording->app) {
+        *iconName = QString::fromUtf8(wording->icon);
+        return QString::fromUtf8(wording->app);
+    }
+    bool ok = false;
+    const qint64 pid = details.value(QStringLiteral("polkit.subject-pid")).toLongLong(&ok);
+    if (!ok || pid <= 0) {
+        return {};
+    }
+    bool flatpak = false;
+    const QString appId = appIdOf(pid, &flatpak);
+    const KService::Ptr service = appId.isEmpty() ? KService::Ptr() : KService::serviceByDesktopName(appId);
+    if (!service || service->name().isEmpty()) {
+        return {};
+    }
+    *iconName = service->icon();
+    return service->name();
+}
+
 Verdict Verifier::check(const QString &actionId, const QString &message, const QHash<QString, QString> &details)
 {
     Verdict verdict;

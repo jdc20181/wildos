@@ -1,0 +1,20 @@
+{
+    "KPackageStructure": "KWin/Script",
+    "KPlugin": {
+        "Authors": [
+            {
+                "Email": "dev@wildos.io",
+                "Name": "Wild OS"
+            }
+        ],
+        "Description": "Windows key + D and the corner of the taskbar minimise every window, and bring the same windows back the second time",
+        "EnabledByDefault": true,
+        "Id": "org.wildos.showdesktop",
+        "License": "GPL-3.0-or-later",
+        "Name": "Show desktop",
+        "Version": "0.1.0",
+        "Website": "https://wildos.io"
+    },
+    "X-Plasma-API": "javascript",
+    "X-Plasma-MainScript": "code/main.js"
+}

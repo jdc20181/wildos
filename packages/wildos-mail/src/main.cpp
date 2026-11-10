@@ -1,3 +1,6 @@
+#include <QColor>
+#include <QQmlComponent>
+#include <QElapsedTimer>
 #include <QCommandLineParser>
 #include <QDBusConnection>
 #include <QDBusConnectionInterface>
@@ -242,6 +245,53 @@ int runCalendar(int argc, char *argv[])
 }
 }
 
+// The launch splash, drawn before the window is built so it is on screen
+// while Mail starts. Returns null if it could not be made.
+QObject *showSplash(QQmlApplicationEngine *engine, bool calendar)
+{
+    QQmlComponent component(engine, QStringLiteral("WildOS.UI"), QStringLiteral("LoadingSplash"));
+    const QString icons = QStringLiteral("file:///usr/share/icons/hicolor/scalable/apps/");
+    QVariantMap properties = calendar
+        ? QVariantMap{
+              {QStringLiteral("appName"), QStringLiteral("Calendar")},
+              {QStringLiteral("iconSource"), QUrl(icons + QStringLiteral("org.wildos.calendar.svg"))},
+              {QStringLiteral("accent"), QColor(QStringLiteral("#ff8a6e"))},
+              {QStringLiteral("accentDeep"), QColor(QStringLiteral("#d9362b"))},
+              {QStringLiteral("status"), QStringLiteral("Opening your calendar")},
+              {QStringLiteral("noteStart"), QStringLiteral("Google, iCloud and CalDAV calendars")},
+              {QStringLiteral("noteEnd"), QStringLiteral("Reminders from sign-in")},
+          }
+        : QVariantMap{
+              {QStringLiteral("appName"), QStringLiteral("Mail")},
+              {QStringLiteral("iconSource"), QUrl(icons + QStringLiteral("org.wildos.mail.svg"))},
+              {QStringLiteral("accent"), QColor(QStringLiteral("#3fb6ff"))},
+              {QStringLiteral("accentDeep"), QColor(QStringLiteral("#0a63d1"))},
+              {QStringLiteral("status"), QStringLiteral("Opening your inbox")},
+              {QStringLiteral("noteStart"), QStringLiteral("Every account in one inbox")},
+              {QStringLiteral("noteEnd"), QStringLiteral("Trackers blocked")},
+          };
+    properties.insert(QStringLiteral("showDelay"), 0);
+    properties.insert(QStringLiteral("minimumTime"), 900);
+    QObject *splash = component.createWithInitialProperties(properties);
+    auto *window = qobject_cast<QQuickWindow *>(splash);
+    if (!window) {
+        delete splash;
+        return nullptr;
+    }
+    // Let it reach the screen before building the window blocks the loop.
+    QElapsedTimer waited;
+    waited.start();
+    bool drawn = false;
+    QObject::connect(window, &QQuickWindow::frameSwapped, window, [&drawn]() {
+        drawn = true;
+    }, Qt::DirectConnection);
+    while (!drawn && waited.elapsed() < 500) {
+        QCoreApplication::processEvents(QEventLoop::AllEvents, 20);
+    }
+    QObject::disconnect(window, &QQuickWindow::frameSwapped, window, nullptr);
+    return splash;
+}
+
 int main(int argc, char *argv[])
 {
     // One program: wildos-calendar is a link to it, and opens Mail's window
@@ -308,7 +358,24 @@ int main(int argc, char *argv[])
     QObject::connect(&engine, &QQmlApplicationEngine::objectCreationFailed, &app, []() {
         QCoreApplication::exit(1);
     }, Qt::QueuedConnection);
+    // As Office apps do, Mail opens on its splash (board 12.5) and the window
+    // follows: it is built hidden behind the splash and shown as it fades.
+    QObject *splash = showSplash(&engine, calendar);
+    if (splash) {
+        engine.setInitialProperties({{QStringLiteral("visible"), false}});
+    }
     engine.loadFromModule("WildOS.Mail", "Main");
+    engine.setInitialProperties({});
+    if (splash) {
+        auto *window = qobject_cast<QWindow *>(engine.rootObjects().value(engine.rootObjects().size() - 1));
+        if (window && window != splash) {
+            QObject::connect(splash, SIGNAL(finished()), window, SLOT(show()));
+            QObject::connect(splash, SIGNAL(finished()), window, SLOT(requestActivate()));
+            QMetaObject::invokeMethod(splash, "finish");
+        } else if (window) {
+            QMetaObject::invokeMethod(splash, "finish");
+        }
+    }
 
     auto *remote = new Remote(&engine);
     if (bus.isConnected()) {

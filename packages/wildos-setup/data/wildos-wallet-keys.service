@@ -1,0 +1,24 @@
+[Unit]
+Description=Wild OS password changes and wallet key for automatic sign-in
+
+[Service]
+Type=dbus
+BusName=org.wildos.WalletKeys1
+ExecStart=/usr/libexec/wildos/wildos-wallet-keys
+Environment=LANG=C.UTF-8
+# Who has taken their key since the computer started. Kept when the
+# service exits after a minute idle, gone at the next start.
+RuntimeDirectory=wildos-wallet-keys
+RuntimeDirectoryMode=0700
+RuntimeDirectoryPreserve=yes
+# Writes the key store, the account's wallet salt (as the account) and,
+# for a password change, /etc/shadow, so /etc stays writable.
+ProtectSystem=yes
+PrivateTmp=yes
+PrivateNetwork=yes
+NoNewPrivileges=yes
+ProtectKernelModules=yes
+ProtectKernelTunables=yes
+ProtectControlGroups=yes
+RestrictRealtime=yes
+LockPersonality=yes

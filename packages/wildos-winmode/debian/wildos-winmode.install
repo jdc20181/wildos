@@ -14,6 +14,9 @@ winmode/system.py usr/lib/wildos/winmode/winmode
 winmode/theme.py usr/lib/wildos/winmode/winmode
 winmode/virsh.py usr/lib/wildos/winmode/winmode
 winmode/windows.py usr/lib/wildos/winmode/winmode
+winmode/documents.py usr/lib/wildos/winmode/winmode
+winmode/xsmp.py usr/lib/wildos/winmode/winmode
+data/logind/50-wildos-winmode.conf usr/lib/systemd/logind.conf.d
 bin/winmoded usr/libexec/wildos
 bin/wildos-winmode usr/bin
 build/wild-guest.exe usr/share/wildos/winmode/guest

@@ -1,0 +1,11 @@
+Wild OS icons for Write and Tables
+
+svg/ holds the icons drawn on the Wild OS design boards for Write and Tables
+(Paste, Cut, Copy, the text and paragraph buttons, Picture, Table, Find,
+Replace, Sort, Filter, Chart, AutoSum, the sidebar strip) and the ones drawn
+for Wild OS in the same style.
+
+lucide/ holds icons from Lucide 1.71.0 (https://lucide.dev), unchanged
+except that tools/gen-icons.py draws them with the boards' 1.8 stroke and
+Wild OS colours. Lucide is under the ISC licence, with the icons it took
+from Feather under the MIT licence; both are in lucide/LICENSE.

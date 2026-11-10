@@ -41,7 +41,7 @@ Page {
             id: withKey
             checked: true
             title: "Enter a product key"
-            description: "A Windows 11 Pro key, from a sticker, an email or a licence you bought for another PC."
+            description: "A Windows 11 Pro key from a sticker, an email or another PC."
 
             RowLayout {
                 spacing: 8
@@ -80,23 +80,27 @@ Page {
             id: thisPc
             visible: page.kind === "inuse" && Setup.edition !== "home"
             title: "Use this PC's licence"
-            description: "Windows mode activates with the licence built into this PC. The Windows already installed isn't changed. Microsoft's terms count each copy of Windows, so you may want to remove the old one later."
+            description: "Activates with this PC's built-in licence and leaves the installed Windows alone. Microsoft's terms count each copy, so you may want to remove the old one later."
         }
 
         RadioCard {
             id: noKey
             title: "Continue without activating"
-            description: "Windows and your programs work the same. Microsoft's terms ask you to buy a licence; you can add a key any time in Settings."
-        }
-
-        RadioCard {
-            id: skipNone
-            title: "Skip Windows mode for now"
-            description: "Many Windows programs still run on the desktop without it, and Office works in the browser. Turn it on later in Settings."
+            description: "Everything works the same. Microsoft's terms still ask you to buy a licence, and you can add a key later in Settings."
         }
     }
 
+    // Skipping is not a licence choice, so it sits in the footer rather than
+    // taking a card of its own.
     buttons: [
+        UI.LinkButton {
+            text: "Skip Windows mode for now"
+            size: 12
+            onClicked: page.skipped()
+        },
+        Item {
+            implicitWidth: 6
+        },
         UI.Button {
             text: "Back"
             onClicked: page.back()
@@ -106,9 +110,7 @@ Page {
             text: "Continue"
             enabled: !withKey.checked || Setup.keyShapeValid(keyField.text)
             onClicked: {
-                if (skipNone.checked) {
-                    page.skipped();
-                } else if (thisPc.checked && thisPc.visible) {
+                if (thisPc.checked && thisPc.visible) {
                     page.chosen("firmware", "", "");
                 } else if (noKey.checked) {
                     page.chosen("none", "", "");

@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Layouts
+import QtQuick.Templates as T
 import WildOS.Settings
 import WildOS.UI as UI
 
@@ -139,10 +140,21 @@ PageScroll {
         return groups.length > 1 ? prefix + ": " + listOf(groups.map(label)) : prefix;
     }
 
-    // Only the newest Wild OS update can show its notes: the changelog on
-    // disk is the one that update installed.
-    readonly property string releaseNotes: Updates.releaseNotes()
+    // What the waiting Wild OS build brings, from the update site's notes:
+    // every build since the one installed, or just the waiting one when the
+    // installed build is not known. Empty when the notes could not be
+    // fetched, and the page reads as it did before there were notes.
+    readonly property var pendingNotes: Updates.notes, Updates.pendingBuild > 0
+        ? Updates.notesBetween(Updates.installedBuild > 0 ? Updates.installedBuild : Updates.pendingBuild - 1, Updates.pendingBuild) : []
+    readonly property string pendingSummary: Updates.notes, Updates.pendingBuild > 0
+        ? Updates.summary(Updates.installedBuild > 0 ? Updates.installedBuild : Updates.pendingBuild - 1, Updates.pendingBuild) : ""
+    // The builds this computer has had, newest first, for "What's new".
+    readonly property var installedNotes: Updates.notes.filter(b => b.build <= Updates.installedBuild).slice(0, 10)
     readonly property int newestRelease: Updates.history.findIndex(e => e.kind === "update" && e.succeeded && e.packages.some(n => n.startsWith("wildos")))
+
+    function sentence(text) {
+        return text.length > 0 ? text.charAt(0).toUpperCase() + text.slice(1) + "." : "";
+    }
 
     StatusCard {
         iconCircle: 60
@@ -241,10 +253,20 @@ PageScroll {
                     model: page.showAll ? page.pending : page.pending.slice(0, 6)
 
                     UI.SettingRow {
+                        id: pendingRow
                         required property var modelData
-                        title: modelData.group === "app" ? modelData.app : page.groupTitle(modelData.group, modelData.security)
-                        description: modelData.group === "app" ? "App update" : Format.plural(modelData.count, "update", "updates")
+                        readonly property bool wildos: modelData.group === "wildos"
+                        title: wildos && Updates.pendingBuild > 0 ? "Wild OS build " + Updates.pendingBuild
+                            : modelData.group === "app" ? modelData.app : page.groupTitle(modelData.group, modelData.security)
+                        description: wildos && page.pendingSummary.length > 0 ? page.sentence(page.pendingSummary)
+                            : modelData.group === "app" ? "App update" : Format.plural(modelData.count, "update", "updates")
                         status: modelData.security ? "Security fix" : ""
+                        below: BuildNotes {
+                            width: parent ? parent.width : 0
+                            visible: pendingRow.wildos && page.pendingNotes.length > 0
+                            builds: page.pendingNotes
+                            limit: 5
+                        }
                     }
                 }
 
@@ -346,11 +368,19 @@ PageScroll {
 
                         UI.LinkButton {
                             anchors.verticalCenter: parent.verticalCenter
-                            visible: index === page.newestRelease && page.releaseNotes.length > 0
+                            visible: index === page.newestRelease && page.installedNotes.length > 0
                             text: "What's new"
                             onClicked: notesDialog.open()
                         }
                     }
+                }
+
+                UI.SettingRow {
+                    visible: page.installedNotes.length > 0
+                    title: "What's new in Wild OS"
+                    description: page.installedNotes.length > 0 ? "You have build " + Updates.installedBuild + ". See what recent builds changed." : ""
+                    chevron: true
+                    onClicked: notesDialog.open()
                 }
 
                 UI.SettingRow {
@@ -383,15 +413,58 @@ PageScroll {
 
     UI.Dialog {
         id: notesDialog
-        title: "What's new in " + page.version.replace(/\.$/, "")
+        title: "What's new in Wild OS"
+        text: "You have build " + Updates.installedBuild + ". Newest first."
 
-        UI.Label {
+        Flickable {
+            id: notesScroll
             Layout.fillWidth: true
-            text: page.releaseNotes.split("\n").map(line => "•  " + line).join("\n")
-            color: UI.Style.inkStatus
-            lineHeight: 1.4
-            wrapMode: Text.Wrap
-            elide: Text.ElideNone
+            Layout.preferredHeight: Math.min(contentHeight, 440)
+            contentHeight: notesColumn.implicitHeight
+            clip: true
+            boundsBehavior: Flickable.StopAtBounds
+            T.ScrollBar.vertical: UI.ScrollBar {}
+
+            ColumnLayout {
+                id: notesColumn
+                width: notesScroll.width - 12
+                spacing: 20
+
+                Repeater {
+                    model: notesDialog.visible ? page.installedNotes : []
+
+                    ColumnLayout {
+                        id: buildNotes
+                        required property var modelData
+                        Layout.fillWidth: true
+                        spacing: 8
+
+                        UI.Label {
+                            Layout.fillWidth: true
+                            text: "Build " + buildNotes.modelData.build
+                                + (Format.isValid(buildNotes.modelData.date) ? ", " + Format.day(buildNotes.modelData.date) : "")
+                            size: 15
+                            font.weight: Font.DemiBold
+                            Accessible.role: Accessible.Heading
+                        }
+
+                        BuildNotes {
+                            Layout.fillWidth: true
+                            visible: buildNotes.modelData.items.length > 0
+                            builds: [buildNotes.modelData]
+                            limit: 4
+                        }
+
+                        UI.Label {
+                            Layout.fillWidth: true
+                            visible: buildNotes.modelData.items.length === 0
+                            text: "Small changes under the surface."
+                            size: 13
+                            color: UI.Style.inkStatus
+                        }
+                    }
+                }
+            }
         }
 
         buttons: [

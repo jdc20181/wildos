@@ -29,6 +29,7 @@ Depends:
  wildos-portal,
  wildos-taskmanager,
  wildos-mail,
+ wildos-office,
  wildos-remote,
  wildos-overlays,
  kde-plasma-desktop,

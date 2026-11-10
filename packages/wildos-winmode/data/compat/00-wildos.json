@@ -112,7 +112,7 @@
    "engine": "windows-mode",
    "alternative": {
     "storeId": "org.libreoffice.LibreOffice",
-    "text": "LibreOffice opens and saves Word, Excel and PowerPoint files, and it's free in the Store."
+    "text": "Write and Tables come with Wild OS and open and save Word and Excel files. For PowerPoint files, LibreOffice is free in the Store."
    }
   },
   {
@@ -219,7 +219,7 @@
    "engine": "native",
    "alternative": {
     "storeId": "org.libreoffice.LibreOffice",
-    "text": "LibreOffice has a Wild OS version in the Store, so it doesn't need Windows app support."
+    "text": "Write and Tables, built on LibreOffice, come with Wild OS. The rest of LibreOffice is free in the Store, so it doesn't need Windows app support."
    }
   },
   {

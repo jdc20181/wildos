@@ -5,6 +5,9 @@ set -e
 # trying to start a session that is gone.
 if [ "$1" = "remove" ] || [ "$1" = "purge" ]; then
     rm -f /etc/sddm.conf.d/99-wildos-setup.conf /etc/sddm.conf.d/98-wildos-first-sign-in.conf
+    # Nothing is left to hand the wallet key out, so it must not stay on
+    # the disk either.
+    rm -rf /var/lib/wildos/wallet
 fi
 
 #DEBHELPER#

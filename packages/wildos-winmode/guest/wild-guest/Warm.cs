@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Reflection;
 using System.Runtime.InteropServices;
@@ -118,6 +119,62 @@ namespace WildOS.Guest
         {
             lastLaunch = DateTime.UtcNow;
             return Call(delegate { return Take(path, args); }, 15000);
+        }
+
+        // The documents open in Word, Excel and PowerPoint, each with Office's
+        // own Saved property, for the question asked before Windows shuts
+        // down. Only the instance Windows hands out for each app (the first
+        // one registered) can be reached; a second Excel started on its own
+        // is not, and its windows go by their titles alone. Warm instances
+        // are hidden and hold nothing, so they are passed over.
+        public List<object> OfficeDocuments()
+        {
+            return Call(delegate { return ReadOfficeDocuments(); }, 8000);
+        }
+
+        List<object> ReadOfficeDocuments()
+        {
+            var list = new List<object>();
+            foreach (var pair in officeProgIds)
+            {
+                if (System.Diagnostics.Process.GetProcessesByName(pair.Key).Length == 0) continue;
+                object app;
+                try { app = Marshal.GetActiveObject(pair.Value); }
+                catch (Exception) { continue; }
+                // The same COM object on the same thread is the same wrapper,
+                // so a warm entry is recognised by reference.
+                if (warm.Exists(e => ReferenceEquals(e.Office, app))) continue;
+                try
+                {
+                    object docs = Get(app, pair.Key == "excel" ? "Workbooks" : pair.Key == "powerpnt" ? "Presentations" : "Documents");
+                    long count = Convert.ToInt64(Get(docs, "Count"), CultureInfo.InvariantCulture);
+                    for (long i = 1; i <= count; i++)
+                    {
+                        object doc = docs.GetType().InvokeMember("Item", BindingFlags.InvokeMethod | BindingFlags.GetProperty, null, docs,
+                            new object[] { (int)i });
+                        // PowerPoint answers with an MsoTriState, -1 for true.
+                        object saved = Get(doc, "Saved");
+                        var d = new Dictionary<string, object>();
+                        d["app"] = pair.Key;
+                        d["name"] = Convert.ToString(Get(doc, "Name"));
+                        d["path"] = Convert.ToString(Get(doc, "FullName"));
+                        d["saved"] = saved is bool ? (bool)saved : Convert.ToInt64(saved, CultureInfo.InvariantCulture) != 0;
+                        list.Add(d);
+                        Marshal.ReleaseComObject(doc);
+                    }
+                    Marshal.ReleaseComObject(docs);
+                }
+                catch (Exception e)
+                {
+                    // Busy with a dialog of its own, Office refuses calls.
+                    Log.Write("documents: " + pair.Key + ": " + e.Message);
+                }
+                finally
+                {
+                    Marshal.ReleaseComObject(app);
+                }
+            }
+            return list;
         }
 
         void Run()

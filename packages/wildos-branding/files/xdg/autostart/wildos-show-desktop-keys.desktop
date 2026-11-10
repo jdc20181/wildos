@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=Wild OS show desktop keys
+Exec=/usr/libexec/wildos/show-desktop-keys
+OnlyShowIn=KDE;
+NoDisplay=true
+X-KDE-autostart-phase=2

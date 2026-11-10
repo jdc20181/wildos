@@ -929,6 +929,15 @@ void System::setScreenCorner(int corner, const QString &action)
                                                              : QStringLiteral("None");
     config->group(QStringLiteral("ElectricBorders")).writeEntry(name, built);
     config->sync();
+    // KWin's reconfigure only reaches the corners' own actions. Overview and
+    // window view read which corners they hold when told to by name, so
+    // without this Task view stayed where it was until the next sign-in.
+    for (const QString &effect : {QStringLiteral("overview"), QStringLiteral("windowview")}) {
+        auto message = QDBusMessage::createMethodCall(QStringLiteral("org.kde.KWin"), QStringLiteral("/Effects"), QStringLiteral("org.kde.kwin.Effects"),
+                                                      QStringLiteral("reconfigureEffect"));
+        message << effect;
+        QDBusConnection::sessionBus().asyncCall(message);
+    }
     reconfigureKWin();
 }
 

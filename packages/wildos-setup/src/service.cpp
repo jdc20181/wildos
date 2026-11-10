@@ -1,4 +1,5 @@
 #include "service.h"
+#include "walletkey.h"
 
 #include <QCoreApplication>
 #include <QDBusArgument>
@@ -13,7 +14,6 @@
 #include <QFileInfo>
 #include <QJsonDocument>
 #include <QJsonObject>
-#include <QPasswordDigestor>
 #include <QProcess>
 #include <QRegularExpression>
 
@@ -43,13 +43,6 @@ const QString setupUser = QStringLiteral("wildos-setup");
 const QStringList baseGroups = {QStringLiteral("console"), QStringLiteral("audio"), QStringLiteral("video"), QStringLiteral("plugdev"),
                                 QStringLiteral("netdev"), QStringLiteral("bluetooth"), QStringLiteral("scanner"), QStringLiteral("privleap")};
 const QStringList adminGroups = {QStringLiteral("sudo"), QStringLiteral("lpadmin")};
-
-// pam_kwallet's own numbers (KWALLET_PAM_* in kwallet-pam's pam_kwallet.c).
-// The key made here has to be the one it makes from the same password at
-// every later sign-in, or the wallet stops opening.
-constexpr int walletSaltSize = 56;
-constexpr int walletKeySize = 56;
-constexpr int walletIterations = 50000;
 
 struct Result {
     int code = -1;
@@ -448,6 +441,7 @@ void SetupService::removeEarlierAccount()
     }
     if (const struct passwd *pw = ::getpwnam(QFile::encodeName(earlier).constData())) {
         const qlonglong uid = pw->pw_uid;
+        WalletKey::forget(pw->pw_uid);
         run(QStringLiteral("pkill"), {QStringLiteral("-KILL"), QStringLiteral("-u"), earlier});
         // Through AccountsService when it runs, so it forgets the account
         // instead of writing its user file back after userdel.
@@ -564,6 +558,12 @@ QString SetupService::CreateAccount(const QString &realName, const QString &pass
             refuse(QStringLiteral("Failed"), QStringLiteral("Automatic sign-in could not be turned on."));
             return {};
         }
+        // Every later start signs in without a password too, so the wallet
+        // needs its key from the system each time, not only from this
+        // process in the first session.
+        if (!m_walletKey.isEmpty() && !WalletKey::store(m_walletUid, m_walletKey)) {
+            qWarning("could not keep the wallet key for automatic sign-in");
+        }
     } else if (namesUser(autoLoginConf, userName)) {
         removeDurably(autoLoginConf);
     }
@@ -578,7 +578,7 @@ void SetupService::prepareWallet(const struct passwd *pw, const QString &passwor
 {
     forgetWalletKey();
     const QString dir = accountFolder(pw, {QStringLiteral(".local"), QStringLiteral("share"), QStringLiteral("kwalletd")});
-    QByteArray salt(walletSaltSize, '\0');
+    QByteArray salt(WalletKey::saltSize, '\0');
     if (dir.isEmpty() || ::getrandom(salt.data(), salt.size(), 0) != salt.size()
         || !writeAtomically(dir + QStringLiteral("/kdewallet.salt"), salt, 0600, pw->pw_uid, pw->pw_gid)) {
         // pam_kwallet makes its own salt at the first sign-in with the
@@ -586,7 +586,7 @@ void SetupService::prepareWallet(const struct passwd *pw, const QString &passwor
         qWarning("could not prepare the wallet's salt");
         return;
     }
-    m_walletKey = QPasswordDigestor::deriveKeyPbkdf2(QCryptographicHash::Sha512, password.toUtf8(), salt, walletIterations, walletKeySize);
+    m_walletKey = WalletKey::derive(password.toUtf8(), salt);
     m_walletUid = pw->pw_uid;
 }
 

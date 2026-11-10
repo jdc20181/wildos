@@ -863,7 +863,6 @@ class Setup:
         started = self.rec.get("install_started")
         if virsh.state(domain) in ("shut off", "saved"):
             firewall.apply(self.cfg, False)
-            self.svc.bind_folders()
             virsh.start(domain)
             if not started:
                 self.press_to_boot(domain)

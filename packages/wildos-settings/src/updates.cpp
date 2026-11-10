@@ -10,12 +10,22 @@
 #include <QDBusObjectPath>
 #include <QDBusPendingCallWatcher>
 #include <QDBusPendingReply>
+#include <QDir>
 #include <QFile>
 #include <QFileInfo>
 #include <QHash>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QNetworkAccessManager>
+#include <QNetworkProxy>
+#include <QNetworkReply>
 #include <QProcess>
 #include <QRegularExpression>
+#include <QSaveFile>
+#include <QSet>
 #include <QStandardPaths>
+#include <QUrl>
 
 using PackageKit::Daemon;
 using PackageKit::Transaction;
@@ -27,6 +37,71 @@ namespace
 QString restartMarker()
 {
     return QStandardPaths::writableLocation(QStandardPaths::RuntimeLocation) + QStringLiteral("/wildos-restart-needed");
+}
+
+// What the update that asked for a restart brings, for the restart prompt
+// (wildos-system-dialogs), gone with the restart like the marker above.
+QString summaryMarker()
+{
+    return QStandardPaths::writableLocation(QStandardPaths::RuntimeLocation) + QStringLiteral("/wildos-update-summary");
+}
+
+// The last notes fetched, so Settings still has them offline.
+QString notesCache()
+{
+    return QStandardPaths::writableLocation(QStandardPaths::GenericCacheLocation) + QStringLiteral("/wildos/update-notes.json");
+}
+
+// The build a package version was made in: 0.1.0+r261 is build 261. Local
+// builds carry no +r and count as 0.
+int buildOf(const QString &version)
+{
+    static const QRegularExpression revision(QStringLiteral("\\+r(\\d+)"));
+    const auto match = revision.match(version);
+    return match.hasMatch() ? match.captured(1).toInt() : 0;
+}
+
+// The notes come from the update site, so they go the way apt goes there:
+// through Tor when Wild OS's source is a tor+https one, through apt's proxy
+// when it has one, and straight there otherwise.
+QNetworkProxy aptProxy()
+{
+    QFile sources(QStringLiteral("/etc/apt/sources.list.d/wildos.sources"));
+    if (sources.open(QIODevice::ReadOnly) && sources.readAll().contains("tor+http")) {
+        // apt-transport-tor's own default.
+        return QNetworkProxy(QNetworkProxy::Socks5Proxy, QStringLiteral("127.0.0.1"), 9050);
+    }
+    QProcess config;
+    config.start(QStringLiteral("apt-config"), {QStringLiteral("dump")});
+    if (!config.waitForFinished(3000) || config.exitCode() != 0) {
+        return QNetworkProxy(QNetworkProxy::NoProxy);
+    }
+    // apt's settings by key: "https", "https::deb.wildos.io", "http", ...
+    QHash<QString, QString> proxies;
+    static const QRegularExpression line(QStringLiteral("^Acquire::(https?)::Proxy(::deb\\.wildos\\.io)? \"(.*)\";$"));
+    const auto lines = QString::fromUtf8(config.readAllStandardOutput()).split(QLatin1Char('\n'));
+    for (const QString &text : lines) {
+        const auto match = line.match(text);
+        if (match.hasMatch()) {
+            proxies.insert(match.captured(1) + match.captured(2), match.captured(3));
+        }
+    }
+    // A proxy for this one host wins over the one for every https site,
+    // which wins over the http one apt also uses for https.
+    QString chosen;
+    for (const char *key : {"https::deb.wildos.io", "https", "http::deb.wildos.io", "http"}) {
+        chosen = proxies.value(QString::fromLatin1(key));
+        if (!chosen.isEmpty()) {
+            break;
+        }
+    }
+    const QUrl url(chosen);
+    if (chosen.isEmpty() || chosen.compare(QLatin1String("DIRECT"), Qt::CaseInsensitive) == 0 || !url.isValid() || url.host().isEmpty()) {
+        return QNetworkProxy(QNetworkProxy::NoProxy);
+    }
+    const bool socks = url.scheme().startsWith(QLatin1String("socks"));
+    return QNetworkProxy(socks ? QNetworkProxy::Socks5Proxy : QNetworkProxy::HttpProxy, url.host(), quint16(url.port(socks ? 1080 : 8080)),
+                         url.userName(), url.password());
 }
 
 // Debian rarely says a restart is needed (no /run/reboot-required without
@@ -67,10 +142,17 @@ Updates::Updates(QObject *parent)
     // prompt ever appeared.
     PackageKit::Daemon::global()->setHints(QStringList{QStringLiteral("interactive=true")});
     m_restartNeeded = QFileInfo::exists(QStringLiteral("/run/reboot-required")) || QFileInfo::exists(restartMarker());
+    m_network = new QNetworkAccessManager(this);
+    readInstalledBuild();
+    QFile cache(notesCache());
+    if (cache.open(QIODevice::ReadOnly)) {
+        readNotes(cache.readAll());
+    }
     if (available()) {
         readLastChecked();
         listUpdates();
         loadHistory();
+        fetchNotes();
     }
 }
 
@@ -158,6 +240,7 @@ void Updates::check()
         readLastChecked();
         if (status == Transaction::ExitSuccess) {
             listUpdates();
+            fetchNotes();
         } else if (m_state != QLatin1String("error")) {
             setState(QStringLiteral("error"), status == Transaction::ExitCancelled ? QStringLiteral("The check was cancelled.")
                                                                                     : QStringLiteral("Wild OS could not check for updates."));
@@ -209,6 +292,13 @@ void Updates::listUpdates()
         });
         m_updates = *collected;
         m_pending = *ids;
+        m_pendingBuild = 0;
+        for (const QVariant &update : std::as_const(m_updates)) {
+            const auto map = update.toMap();
+            if (map.value(QStringLiteral("name")).toString().startsWith(QLatin1String("wildos"))) {
+                m_pendingBuild = std::max(m_pendingBuild, buildOf(map.value(QStringLiteral("version")).toString()));
+            }
+        }
         Q_EMIT updatesChanged();
         setState(m_updates.isEmpty() ? QStringLiteral("uptodate") : QStringLiteral("available"));
         if (m_installAfterList) {
@@ -267,8 +357,17 @@ void Updates::startInstall()
                     Q_EMIT restartNeededChanged();
                 }
             }
+            // The restart prompt says what the restart finishes installing.
+            const QString brought = needsRestart(m_pending) && m_pendingBuild > m_installedBuild ? summary(m_installedBuild, m_pendingBuild) : QString();
+            QSaveFile summaryFile(summaryMarker());
+            if (!brought.isEmpty() && summaryFile.open(QIODevice::WriteOnly)) {
+                summaryFile.write(brought.toUtf8());
+                summaryFile.commit();
+            }
+            readInstalledBuild();
             m_updates.clear();
             m_pending.clear();
+            m_pendingBuild = 0;
             Q_EMIT updatesChanged();
             if (QFileInfo::exists(QStringLiteral("/run/reboot-required")) && !m_restartNeeded) {
                 m_restartNeeded = true;
@@ -473,38 +572,137 @@ QVariantMap Updates::describe(const QString &package) const
     return result("other");
 }
 
-QString Updates::releaseNotes() const
+void Updates::readInstalledBuild()
 {
-    // dh_installchangelogs puts a native package's changelog here.
-    const QString path = QStringLiteral("/usr/share/doc/wildos-base/changelog.gz");
-    if (!QFileInfo::exists(path)) {
-        return {};
+    // A build stamps its number only on the packages it changed, so the
+    // highest number among them is the build this computer has.
+    QProcess query;
+    query.start(QStringLiteral("dpkg-query"), {QStringLiteral("-W"), QStringLiteral("-f=${Status}\t${Version}\n"), QStringLiteral("wildos-*")});
+    if (!query.waitForFinished(3000)) {
+        return;
     }
-    QProcess zcat;
-    zcat.start(QStringLiteral("zcat"), {path});
-    if (!zcat.waitForFinished(3000) || zcat.exitCode() != 0) {
-        return {};
-    }
-    const QString text = QString::fromUtf8(zcat.readAllStandardOutput());
-    // The newest entry runs from the first line to the first " -- " sign-off;
-    // its bullet lines are what changed.
-    QStringList notes;
-    const auto lines = text.split(QLatin1Char('\n'));
-    for (int i = 1; i < lines.size(); ++i) {
-        const QString line = lines.at(i);
-        if (line.startsWith(QLatin1String(" -- "))) {
-            break;
+    int build = 0;
+    const auto lines = QString::fromUtf8(query.readAllStandardOutput()).split(QLatin1Char('\n'), Qt::SkipEmptyParts);
+    for (const QString &line : lines) {
+        if (line.section(QLatin1Char('\t'), 0, 0).endsWith(QLatin1String(" installed"))) {
+            build = std::max(build, buildOf(line.section(QLatin1Char('\t'), 1)));
         }
-        static const QRegularExpression bullet(QStringLiteral("^\\s+\\*\\s+"));
-        const QString trimmed = line.trimmed();
-        if (trimmed.isEmpty()) {
+    }
+    if (build != m_installedBuild) {
+        m_installedBuild = build;
+        Q_EMIT installedBuildChanged();
+    }
+}
+
+void Updates::fetchNotes()
+{
+    QNetworkRequest request{QUrl(QStringLiteral("https://deb.wildos.io/notes.json"))};
+    request.setTransferTimeout(20000);
+    request.setAttribute(QNetworkRequest::CacheLoadControlAttribute, QNetworkRequest::AlwaysNetwork);
+    m_network->setProxy(aptProxy());
+    QNetworkReply *reply = m_network->get(request);
+    connect(reply, &QNetworkReply::finished, this, [this, reply] {
+        reply->deleteLater();
+        // A failure keeps the notes Settings already has, or none, and the
+        // page then reads as it did before there were notes.
+        if (reply->error() != QNetworkReply::NoError) {
+            return;
+        }
+        const QByteArray json = reply->readAll();
+        if (readNotes(json)) {
+            QDir().mkpath(QFileInfo(notesCache()).path());
+            QSaveFile cache(notesCache());
+            if (cache.open(QIODevice::WriteOnly)) {
+                cache.write(json);
+                cache.commit();
+            }
+        }
+    });
+}
+
+bool Updates::readNotes(const QByteArray &json)
+{
+    const QJsonDocument doc = QJsonDocument::fromJson(json);
+    if (!doc.isObject() || !doc.object().value(QStringLiteral("builds")).isArray()) {
+        return false;
+    }
+    static const QStringList categories = {QStringLiteral("new"), QStringLiteral("improved"), QStringLiteral("fixed")};
+    QVariantList notes;
+    const QJsonArray builds = doc.object().value(QStringLiteral("builds")).toArray();
+    for (const QJsonValue &value : builds) {
+        const QJsonObject build = value.toObject();
+        const int number = build.value(QStringLiteral("build")).toInt();
+        if (number <= 0) {
             continue;
         }
-        if (bullet.match(line).hasMatch()) {
-            notes << QString(line).remove(bullet);
-        } else if (!notes.isEmpty()) {
-            notes.last() += QLatin1Char(' ') + trimmed;
+        QVariantList items;
+        const QJsonArray entries = build.value(QStringLiteral("items")).toArray();
+        for (const QJsonValue &entry : entries) {
+            const QJsonObject item = entry.toObject();
+            const QString category = item.value(QStringLiteral("category")).toString();
+            const QString text = item.value(QStringLiteral("text")).toString().trimmed();
+            if (!text.isEmpty() && categories.contains(category)) {
+                items.append(QVariantMap{{QStringLiteral("category"), category}, {QStringLiteral("text"), text}});
+            }
+        }
+        notes.append(QVariantMap{
+            {QStringLiteral("build"), number},
+            {QStringLiteral("date"), QDateTime::fromString(build.value(QStringLiteral("date")).toString(), Qt::ISODate).toLocalTime()},
+            {QStringLiteral("items"), items},
+        });
+    }
+    std::sort(notes.begin(), notes.end(), [](const QVariant &a, const QVariant &b) {
+        return a.toMap().value(QStringLiteral("build")).toInt() > b.toMap().value(QStringLiteral("build")).toInt();
+    });
+    m_notes = notes;
+    Q_EMIT notesChanged();
+    return true;
+}
+
+QVariantList Updates::notesBetween(int after, int upTo) const
+{
+    QVariantList result;
+    for (const QVariant &build : m_notes) {
+        const int number = build.toMap().value(QStringLiteral("build")).toInt();
+        if (number > after && number <= upTo) {
+            result.append(build);
         }
     }
-    return notes.join(QLatin1Char('\n'));
+    return result;
+}
+
+QString Updates::summary(int after, int upTo) const
+{
+    QHash<QString, int> counts;
+    QSet<QString> seen;
+    const QVariantList builds = notesBetween(after, upTo);
+    for (const QVariant &build : builds) {
+        const QVariantList items = build.toMap().value(QStringLiteral("items")).toList();
+        for (const QVariant &entry : items) {
+            const auto item = entry.toMap();
+            const QString text = item.value(QStringLiteral("text")).toString();
+            if (!seen.contains(text)) {
+                seen.insert(text);
+                counts[item.value(QStringLiteral("category")).toString()] += 1;
+            }
+        }
+    }
+    auto count = [](int n, const char *one, const char *many) {
+        return QString::number(n) + QLatin1Char(' ') + QString::fromLatin1(n == 1 ? one : many);
+    };
+    QStringList parts;
+    if (const int n = counts.value(QStringLiteral("new"))) {
+        parts << count(n, "new feature", "new features");
+    }
+    if (const int n = counts.value(QStringLiteral("fixed"))) {
+        parts << count(n, "fix", "fixes");
+    }
+    if (const int n = counts.value(QStringLiteral("improved"))) {
+        parts << count(n, "improvement", "improvements");
+    }
+    if (parts.size() <= 1) {
+        return parts.join(QString());
+    }
+    const QString last = parts.takeLast();
+    return parts.join(QStringLiteral(", ")) + QStringLiteral(" and ") + last;
 }

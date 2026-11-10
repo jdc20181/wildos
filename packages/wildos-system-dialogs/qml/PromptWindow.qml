@@ -77,6 +77,7 @@ Window {
         id: restart
         RestartCard {
             security: Prompts.info.security === true
+            summary: Prompts.info.summary || ""
             countdown: Prompts.info.mode === "countdown"
             seconds: Prompts.countdown
             scheduled: Prompts.info.scheduled || ""

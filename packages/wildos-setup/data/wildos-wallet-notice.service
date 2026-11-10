@@ -1,0 +1,12 @@
+[Unit]
+Description=Say when saved passwords could not open by themselves
+PartOf=graphical-session.target
+# The notification needs the desktop's notification server, and the verdict
+# of the sign-in half (wildos-setup-wallet.service).
+After=plasma-plasmashell.service wildos-setup-wallet.service
+
+[Service]
+# Waits for the person to answer the notification, so nothing waits on it.
+Type=simple
+ExecStart=/usr/libexec/wildos/wildos-setup-wallet --notice
+Slice=background.slice

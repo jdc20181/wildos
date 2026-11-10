@@ -293,8 +293,12 @@ QtObject {
     readonly property int windowButtonWidth: 46
     readonly property int windowRadius: 14
 
-    readonly property int hoverDuration: 150
-    readonly property int quickDuration: 120
+    // Every duration follows KDE's animation speed, so Wild OS apps keep pace
+    // with window and menu animations.
+    readonly property real animationFactor: Theme.animationFactor
+    // Colour fades stay at full length with reduced motion, as before.
+    readonly property int hoverDuration: reducedMotion ? 150 : Math.round(150 * animationFactor)
+    readonly property int quickDuration: reducedMotion ? 120 : Math.round(120 * animationFactor)
     // Movement (slides, scaling, travelling highlights) stops when this is
     // on; colour and opacity changes may stay.
     readonly property bool reducedMotion: Theme.reducedMotion
@@ -303,9 +307,9 @@ QtObject {
     // leave faster on an accelerating one, and nothing travels far. With
     // reduced motion every duration is 0, every travel is 0 and nothing
     // scales, so surfaces simply appear in their final place.
-    readonly property int motionFast: reducedMotion ? 0 : 120
-    readonly property int motionNormal: reducedMotion ? 0 : 200
-    readonly property int motionSlow: reducedMotion ? 0 : 300
+    readonly property int motionFast: reducedMotion ? 0 : Math.round(120 * animationFactor)
+    readonly property int motionNormal: reducedMotion ? 0 : Math.round(200 * animationFactor)
+    readonly property int motionSlow: reducedMotion ? 0 : Math.round(300 * animationFactor)
     // easing.type values: OutQuint is close to Fluent's decelerate
     // (0.1, 0.9, 0.2, 1), InCubic to its accelerate, InOutCubic to its
     // standard curve for something that moves from one place to another.

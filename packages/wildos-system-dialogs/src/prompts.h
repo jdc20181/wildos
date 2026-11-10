@@ -119,6 +119,10 @@ private:
     QString m_windowsId;
     QString m_windowsTarget;
     QDBusMessage m_shutdownReply;
+    // shutdown, restart or signout (Wild OS ending the session), or
+    // windows-shutdown or windows-restart (Windows alone, from the panel).
+    QString m_shutdownAction;
+    QString safeShutdownAnswer() const;
     QDBusMessage m_devicesReply;
     QTimer m_shutdownTimer;
 };

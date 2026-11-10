@@ -64,21 +64,19 @@
             "key": "libreoffice",
             "ids": [
                 "org.libreoffice.LibreOffice",
-                "libreoffice-startcenter.desktop",
-                "libreoffice-writer.desktop"
+                "libreoffice-impress.desktop"
             ],
             "packages": [
-                "libreoffice-writer",
-                "libreoffice-calc",
                 "libreoffice-impress",
+                "libreoffice-draw",
                 "libreoffice-kf6"
             ],
             "flatpak": "org.libreoffice.LibreOffice",
-            "desktop": "libreoffice-startcenter",
+            "desktop": "libreoffice-impress",
             "name": "LibreOffice",
-            "summary": "Documents, spreadsheets and presentations that work with Office files",
-            "tagline": "Documents, spreadsheets, slides",
-            "insteadOf": "Microsoft Office",
+            "summary": "Presentations and drawings that work with PowerPoint files. Write and Tables, for documents and spreadsheets, come with Wild OS",
+            "tagline": "Slides and drawings",
+            "insteadOf": "PowerPoint",
             "aliases": [
                 "office",
                 "word",

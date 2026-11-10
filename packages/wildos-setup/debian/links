@@ -1,1 +1,2 @@
 usr/lib/systemd/user/wildos-setup-wallet.service usr/lib/systemd/user/plasma-workspace.target.wants/wildos-setup-wallet.service
+usr/lib/systemd/user/wildos-wallet-notice.service usr/lib/systemd/user/plasma-workspace.target.wants/wildos-wallet-notice.service

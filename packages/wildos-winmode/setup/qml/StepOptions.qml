@@ -17,8 +17,8 @@ Page {
     property bool termsAccepted: false
 
     title: "Choose options"
-    text: "These suit most people. You can change any of them later in Settings, under Windows apps."
-    note: Setup.office ? "About 30 GB in total, including Microsoft 365." : "About 26 GB in total."
+    text: "These suit most people. You can change any of them later in Settings, under Windows apps. "
+          + (Setup.office ? "About 30 GB in total, including Microsoft 365." : "About 26 GB in total.")
 
     UI.Card {
         Layout.fillWidth: true
@@ -146,72 +146,22 @@ Page {
         }
     }
 
-    ColumnLayout {
-        Layout.fillWidth: true
-        spacing: 10
-
-        UI.Label {
-            text: "Your files"
-            size: 15
-            font.weight: Font.DemiBold
-            Accessible.role: Accessible.Heading
-        }
-
-        UI.Card {
-            Layout.fillWidth: true
-
-            Column {
-                width: parent.width
-
-                UI.ListRow {
-                    title: "Folders Windows apps can see"
-                    description: "Saving in Word or Excel goes straight into these folders on Wild OS"
-
-                    Row {
-                        anchors.verticalCenter: parent.verticalCenter
-                        spacing: 6
-
-                        Repeater {
-                            model: Setup.folders
-
-                            UI.Chip {
-                                required property string modelData
-                                text: modelData
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    UI.Card {
-        Layout.fillWidth: true
-
-        Column {
-            width: parent.width
-
-            UI.ListRow {
-                title: "I accept Microsoft's licence terms"
-                description: Setup.office
-                    ? "Windows and Microsoft 365 are installed under Microsoft's licence terms."
-                    : "Windows is installed under Microsoft's licence terms."
-                interactive: true
-                onClicked: page.termsAccepted = !page.termsAccepted
-                leading: UI.CheckBox {
-                    checked: page.termsAccepted
-                    Accessible.name: "I accept Microsoft's licence terms"
-                    onToggled: page.termsAccepted = checked
-                }
-            }
-        }
-    }
-
+    // The terms tick sits in the footer beside Set up, so it is never
+    // scrolled out of sight.
     buttons: [
+        UI.CheckBox {
+            text: "I accept Microsoft's licence terms"
+            checked: page.termsAccepted
+            onToggled: page.termsAccepted = checked
+        },
         UI.LinkButton {
-            text: "Read the terms"
+            text: "Read them"
             size: 12
+            Accessible.name: "Read Microsoft's licence terms"
             onClicked: Setup.openUrl("https://www.microsoft.com/en-gb/useterms")
+        },
+        Item {
+            implicitWidth: 6
         },
         UI.Button {
             text: "Back"

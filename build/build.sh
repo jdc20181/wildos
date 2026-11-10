@@ -30,6 +30,24 @@ fi
 SRC=/tmp/src
 WORK=/work
 CACHE=/cache/apt
+# Patched Debian rebuilds (Calamares, KIO, Kvantum and the rest) are shared by
+# every build on this PC when build-iso.sh mounts /rebuilds, so a new
+# worktree's build doesn't spend most of an hour making them again.
+REBUILDS=/rebuilds
+[ -d "$REBUILDS" ] || REBUILDS=/cache
+# Compiles go through ccache, shared the same way, so a package whose code
+# barely changed recompiles in seconds.
+if [ -d /ccache ] && [ -d /usr/lib/ccache ]; then
+    export PATH="/usr/lib/ccache:$PATH" CCACHE_DIR=/ccache CCACHE_BASEDIR=/work CCACHE_MAXSIZE=25G CCACHE_COMPILERCHECK=content
+fi
+# Compiler processes in all, by memory as well as cores: a Qt compile can
+# take over a gigabyte, so cores alone would run out of memory first.
+mem_kib=$(awk '/MemTotal/ {print $2}' /proc/meminfo)
+limit=$(cat /sys/fs/cgroup/memory.max 2>/dev/null || echo max)
+[ "$limit" != max ] && [ $(( limit / 1024 )) -lt "$mem_kib" ] && mem_kib=$(( limit / 1024 ))
+BUILD_THREADS=$(( mem_kib / 1572864 ))
+[ "$BUILD_THREADS" -gt "$(nproc)" ] && BUILD_THREADS=$(nproc)
+[ "$BUILD_THREADS" -lt 2 ] && BUILD_THREADS=2
 OUT=/out
 SUITE=trixie
 VOLID=WILDOS
@@ -49,6 +67,45 @@ if [ "${1:-}" = --incremental ]; then
     source "$SRC/build/incremental.sh"
     ROOTFS=$INC/rootfs
 fi
+
+# Builds take turns, one at a time on this PC unless WILDOS_BUILD_SLOTS allows
+# more. The cache is shared by every build, so locks in it make a further
+# build wait instead of slowing every build and starving the test VMs of
+# memory. A publish (WILDOS_PUBLISH=1) has a slot of its own, so an update
+# never queues behind work in progress; publishes take turns with each other.
+mkdir -p /cache
+if [ "${WILDOS_PUBLISH:-}" = 1 ]; then
+    slots=(.publish-lock)
+else
+    slots=(.build-lock)
+    for ((n = 2; n <= ${WILDOS_BUILD_SLOTS:-1}; n++)); do slots+=(".build-lock-$n"); done
+fi
+slot=
+while [ -z "$slot" ]; do
+    for try in "${slots[@]}"; do
+        exec 9>"/cache/$try"
+        if flock -n 9; then slot=$try; break; fi
+        exec 9>&-
+    done
+    [ -n "$slot" ] && break
+    if [ -z "${waited:-}" ]; then
+        log "Waiting for a build slot. Building now:"
+        for try in "${slots[@]}"; do sed 's/^/    /' "/cache/$try.who" 2>/dev/null || true; done
+        waited=1
+    fi
+    # With one slot, wait on its lock itself rather than asking again and again.
+    if [ "${#slots[@]}" = 1 ]; then
+        exec 9>"/cache/${slots[0]}"
+        flock 9
+        slot=${slots[0]}
+    else
+        sleep 5
+    fi
+done
+echo "${WILDOS_ONLY:-every package} from ${WILDOS_CHECKOUT:-a checkout}, since $(date +%T)" > "/cache/$slot.who"
+# Which checkout this scratch volume belongs to, so volumes left behind by
+# deleted worktrees can be found and removed.
+[ -n "${WILDOS_CHECKOUT:-}" ] && echo "$WILDOS_CHECKOUT" > "$WORK/.checkout"
 
 log "Wild OS $VERSION"
 rm -rf "$WORK/pkgsrc" "$WORK/repo" "$WORK/rootfs" "$WORK/iso"
@@ -112,6 +169,18 @@ else
     # build carry on before the packages were made.
     max_jobs=$(( $(nproc) / 4 ))
     [ "$max_jobs" -lt 2 ] && max_jobs=2
+    # BUILD_THREADS (cores and memory) is shared out between the packages
+    # building at once, not handed to each one in full: 6 packages each told
+    # to use all 24 cores asked for 144 compilers at a time.
+    todo=0
+    for pkg in "$WORK"/pkgsrc/*/; do
+        [ -e "$pkg/NOT-READY" ] && continue
+        if [ -n "${WILDOS_ONLY+set}" ] && [[ " $WILDOS_ONLY " != *" $(basename "$pkg") "* ]]; then continue; fi
+        todo=$((todo + 1))
+    done
+    if [ "$todo" -gt 0 ] && [ "$todo" -lt "$max_jobs" ]; then max_jobs=$todo; fi
+    threads=$(( BUILD_THREADS / max_jobs ))
+    [ "$threads" -lt 1 ] && threads=1
     failed=0
     running=0
     built=()
@@ -129,7 +198,7 @@ else
         fi
         name=$(basename "$pkg")
         built+=("$name")
-        (cd "$pkg" && DEB_BUILD_OPTIONS="parallel=$(nproc)" dpkg-buildpackage -us -uc -b -d -tc >"$WORK/build-$name.log" 2>&1 \
+        (cd "$pkg" && DEB_BUILD_OPTIONS="parallel=$threads" dpkg-buildpackage -us -uc -b -d -tc >"$WORK/build-$name.log" 2>&1 \
             || { echo "ERROR: $name failed to build:" >&2; tail -40 "$WORK/build-$name.log" >&2; exit 1; }) &
         running=$((running + 1))
     done
@@ -179,7 +248,7 @@ done
     cd "$WORK"
     version=$(apt-cache policy calamares | sed -n 's/^  Candidate: //p')
     stamp=$(cat "$SRC"/build/patches/calamares/*.patch | sha256sum | cut -c1-12)
-    cached="/cache/calamares/$version$(wildos_suffix calamares)-$stamp"
+    cached="$REBUILDS/calamares/$version$(wildos_suffix calamares)-$stamp"
     if [ ! -d "$cached" ]; then
         log "Building patched Calamares $version"
         echo "deb-src http://deb.debian.org/debian $SUITE main" > /etc/apt/sources.list.d/wildos-src.list
@@ -200,10 +269,13 @@ done
             cat debian/changelog
         } > debian/changelog.new
         mv debian/changelog.new debian/changelog
-        DEB_BUILD_OPTIONS="nocheck parallel=$(nproc)" dpkg-buildpackage -us -uc -b >/dev/null
-        mkdir -p "$cached"
-        cp ../calamares_*+wildos*_*.deb "$cached/"
+        DEB_BUILD_OPTIONS="nocheck parallel=$BUILD_THREADS" dpkg-buildpackage -us -uc -b >/dev/null
+        fill="$cached.part.$BASHPID"
+        rm -rf "$fill" && mkdir -p "$fill"
+        cp ../calamares_*+wildos*_*.deb "$fill/"
         cd "$WORK" && rm -rf calamares-src
+        # Another build may have made the same one meanwhile; either copy is good.
+        mv -T "$fill" "$cached" 2>/dev/null || rm -rf "$fill"
     fi
     cp "$cached"/*.deb "$WORK/repo/"
 )
@@ -218,7 +290,7 @@ done
         version=$(apt-cache policy qt-style-kvantum | sed -n 's/^  Candidate: //p')
     fi
     stamp=$(cat "$SRC"/build/patches/kvantum/*.patch | sha256sum | cut -c1-12)
-    cached="/cache/kvantum/$version$(wildos_suffix kvantum)-$stamp"
+    cached="$REBUILDS/kvantum/$version$(wildos_suffix kvantum)-$stamp"
     if [ ! -d "$cached" ]; then
         log "Building patched Kvantum $version"
         echo "deb-src http://deb.debian.org/debian $SUITE main" > /etc/apt/sources.list.d/wildos-src.list
@@ -239,11 +311,14 @@ done
             cat debian/changelog
         } > debian/changelog.new
         mv debian/changelog.new debian/changelog
-        DEB_BUILD_OPTIONS="nocheck parallel=$(nproc)" dpkg-buildpackage -us -uc -b >/dev/null
-        mkdir -p "$cached"
-        cp ../*+wildos[0-9]*_*.deb "$cached/"
-        rm -f "$cached"/*dbgsym*
+        DEB_BUILD_OPTIONS="nocheck parallel=$BUILD_THREADS" dpkg-buildpackage -us -uc -b >/dev/null
+        fill="$cached.part.$BASHPID"
+        rm -rf "$fill" && mkdir -p "$fill"
+        cp ../*+wildos[0-9]*_*.deb "$fill/"
+        rm -f "$fill"/*dbgsym*
         cd "$WORK" && rm -rf kvantum-src
+        # Another build may have made the same one meanwhile; either copy is good.
+        mv -T "$fill" "$cached" 2>/dev/null || rm -rf "$fill"
     fi
     cp "$cached"/*.deb "$WORK/repo/"
 )
@@ -260,7 +335,7 @@ done
         version=$(apt-cache policy libkf6kiocore6 | sed -n 's/^  Candidate: //p')
     fi
     stamp=$(cat "$SRC"/build/patches/kio/*.patch | sha256sum | cut -c1-12)
-    cached="/cache/kio/$version$(wildos_suffix kio)-$stamp"
+    cached="$REBUILDS/kio/$version$(wildos_suffix kio)-$stamp"
     if [ ! -d "$cached" ]; then
         log "Building patched KIO $version"
         echo "deb-src http://deb.debian.org/debian $SUITE main" > /etc/apt/sources.list.d/wildos-src.list
@@ -281,11 +356,14 @@ done
             cat debian/changelog
         } > debian/changelog.new
         mv debian/changelog.new debian/changelog
-        DEB_BUILD_OPTIONS="nocheck nodoc parallel=$(nproc)" dpkg-buildpackage -us -uc -b >/dev/null
-        mkdir -p "$cached"
-        cp ../*+wildos[0-9]*_*.deb "$cached/"
-        rm -f "$cached"/*dbgsym*
+        DEB_BUILD_OPTIONS="nocheck nodoc parallel=$BUILD_THREADS" dpkg-buildpackage -us -uc -b >/dev/null
+        fill="$cached.part.$BASHPID"
+        rm -rf "$fill" && mkdir -p "$fill"
+        cp ../*+wildos[0-9]*_*.deb "$fill/"
+        rm -f "$fill"/*dbgsym*
         cd "$WORK" && rm -rf kio-src
+        # Another build may have made the same one meanwhile; either copy is good.
+        mv -T "$fill" "$cached" 2>/dev/null || rm -rf "$fill"
     fi
     cp "$cached"/*.deb "$WORK/repo/"
 )
@@ -300,7 +378,7 @@ done
         version=$(apt-cache policy libkf6xmlgui6 | sed -n 's/^  Candidate: //p')
     fi
     stamp=$(cat "$SRC"/build/patches/kxmlgui/*.patch | sha256sum | cut -c1-12)
-    cached="/cache/kxmlgui/$version$(wildos_suffix kxmlgui)-$stamp"
+    cached="$REBUILDS/kxmlgui/$version$(wildos_suffix kxmlgui)-$stamp"
     if [ ! -d "$cached" ]; then
         log "Building patched KXmlGui $version"
         echo "deb-src http://deb.debian.org/debian $SUITE main" > /etc/apt/sources.list.d/wildos-src.list
@@ -321,11 +399,59 @@ done
             cat debian/changelog
         } > debian/changelog.new
         mv debian/changelog.new debian/changelog
-        DEB_BUILD_OPTIONS="nocheck nodoc parallel=$(nproc)" dpkg-buildpackage -us -uc -b >/dev/null
-        mkdir -p "$cached"
-        cp ../*+wildos[0-9]*_*.deb "$cached/"
-        rm -f "$cached"/*dbgsym*
+        DEB_BUILD_OPTIONS="nocheck nodoc parallel=$BUILD_THREADS" dpkg-buildpackage -us -uc -b >/dev/null
+        fill="$cached.part.$BASHPID"
+        rm -rf "$fill" && mkdir -p "$fill"
+        cp ../*+wildos[0-9]*_*.deb "$fill/"
+        rm -f "$fill"/*dbgsym*
         cd "$WORK" && rm -rf kxmlgui-src
+        # Another build may have made the same one meanwhile; either copy is good.
+        mv -T "$fill" "$cached" 2>/dev/null || rm -rf "$fill"
+    fi
+    cp "$cached"/*.deb "$WORK/repo/"
+)
+# KWallet with the patch from build/patches/kwallet: kwalletd can change the
+# key a wallet opens with when the account's password changes, without its
+# own dialog, so Settings keeps the wallet opening at sign-in after a
+# password change. Republished +wildos1 like KIO, since its packages require
+# each other's exact version.
+(
+    cd "$WORK"
+    version=$(apt-cache policy kwallet6 | sed -n 's/^  Candidate: //p')
+    if [ -z "$version" ] || [ "$version" = "(none)" ]; then
+        apt-get update -qq
+        version=$(apt-cache policy kwallet6 | sed -n 's/^  Candidate: //p')
+    fi
+    stamp=$(cat "$SRC"/build/patches/kwallet/*.patch | sha256sum | cut -c1-12)
+    cached="$REBUILDS/kwallet/$version$(wildos_suffix kwallet)-$stamp"
+    if [ ! -d "$cached" ]; then
+        log "Building patched KWallet $version"
+        echo "deb-src http://deb.debian.org/debian $SUITE main" > /etc/apt/sources.list.d/wildos-src.list
+        apt-get update -qq
+        DEBIAN_FRONTEND=noninteractive apt-get build-dep -y -qq "kf6-kwallet=$version" >/dev/null
+        rm -rf kwallet-src && mkdir kwallet-src && cd kwallet-src
+        apt-get source -qq "kf6-kwallet=$version" >/dev/null
+        cd kf6-kwallet-*/
+        mkdir -p debian/patches
+        for patch in "$SRC"/build/patches/kwallet/*.patch; do
+            cp "$patch" debian/patches/
+            basename "$patch" >> debian/patches/series
+        done
+        {
+            printf 'kf6-kwallet (%s%s) %s; urgency=medium\n\n' "$version" "$(wildos_suffix kwallet)" "$SUITE"
+            printf '  * Wild OS patches: %s\n\n' "$(cd "$SRC/build/patches/kwallet" && ls *.patch | tr '\n' ' ')"
+            printf ' -- Wild OS Developers <dev@wildos.io>  %s\n\n' "$(date -R)"
+            cat debian/changelog
+        } > debian/changelog.new
+        mv debian/changelog.new debian/changelog
+        DEB_BUILD_OPTIONS="nocheck nodoc parallel=$BUILD_THREADS" dpkg-buildpackage -us -uc -b >/dev/null
+        fill="$cached.part.$BASHPID"
+        rm -rf "$fill" && mkdir -p "$fill"
+        cp ../*+wildos[0-9]*_*.deb "$fill/"
+        rm -f "$fill"/*dbgsym*
+        cd "$WORK" && rm -rf kwallet-src
+        # Another build may have made the same one meanwhile; either copy is good.
+        mv -T "$fill" "$cached" 2>/dev/null || rm -rf "$fill"
     fi
     cp "$cached"/*.deb "$WORK/repo/"
 )
@@ -347,7 +473,7 @@ done
         version=$(apt-cache policy libcamel-1.2-64t64 | sed -n 's/^  Candidate: //p')
     fi
     stamp=$(sed -n '/^# evolution-data-server with Camel/,/^)$/p' "$SRC/build/build.sh" | sha256sum | cut -c1-12)
-    cached="/cache/eds/$version$(wildos_suffix eds)-$stamp"
+    cached="$REBUILDS/eds/$version$(wildos_suffix eds)-$stamp"
     if [ ! -d "$cached" ]; then
         log "Building evolution-data-server $version with the Camel providers split out"
         echo "deb-src http://deb.debian.org/debian $SUITE main" > /etc/apt/sources.list.d/wildos-src.list
@@ -450,18 +576,162 @@ STANZA
             cat debian/changelog
         } > debian/changelog.new
         mv debian/changelog.new debian/changelog
-        DEB_BUILD_OPTIONS="nocheck nodoc parallel=$(nproc)" dpkg-buildpackage -us -uc -b >/dev/null
-        mkdir -p "$cached"
-        cp ../*+wildos[0-9]*_*.deb "$cached/"
-        rm -f "$cached"/*dbgsym* "$cached"/*-tests_* "$cached"/*-doc_*
+        DEB_BUILD_OPTIONS="nocheck nodoc parallel=$BUILD_THREADS" dpkg-buildpackage -us -uc -b >/dev/null
+        fill="$cached.part.$BASHPID"
+        rm -rf "$fill" && mkdir -p "$fill"
+        cp ../*+wildos[0-9]*_*.deb "$fill/"
+        rm -f "$fill"/*dbgsym* "$fill"/*-tests_* "$fill"/*-doc_*
         cd "$WORK" && rm -rf eds-src
+        # Another build may have made the same one meanwhile; either copy is good.
+        mv -T "$fill" "$cached" 2>/dev/null || rm -rf "$fill"
     fi
     cp "$cached"/*.deb "$WORK/repo/"
 )
+# Six Kicksecure packages hard-depend on a compiler toolchain (gcc, make,
+# binutils, the C library headers, dkms, and equivs with debhelper), about
+# 260 MB of the image that nothing on a Wild OS computer uses. They are
+# republished without those dependencies, +wildos1 so apt prefers them, like
+# plymouth: Kicksecure's own updates to them reach computers when the next
+# update build picks them up, and its other packages keep coming from its
+# repository. NVIDIA's driver still installs from Settings
+# (settings-graphics-driver): dkms brings make and binutils, and the kernel
+# headers installed with it bring gcc.
+#
+# Two of them compiled small programs while they installed. Those are
+# compiled here instead, by the package's own build files with its own
+# hardening flags, and shipped in the package, which then depends on the
+# libraries they link rather than on a compiler.
+KS_APT=$WORK/ks-apt
+rm -rf "$KS_APT"
+mkdir -p "$KS_APT/etc/apt/apt.conf.d" "$KS_APT/etc/apt/preferences.d" "$KS_APT/var/lib/apt/lists/partial" \
+    "$KS_APT/var/cache/apt/archives/partial" "$KS_APT/var/lib/dpkg"
+: > "$KS_APT/var/lib/dpkg/status"
+echo "deb [signed-by=$SRC/build/keys/kicksecure.asc] https://deb.kicksecure.com $SUITE main contrib non-free" \
+    > "$KS_APT/etc/apt/sources.list"
+cat > "$KS_APT/apt.conf" <<EOF
+Dir "$KS_APT/";
+Dir::State::status "$KS_APT/var/lib/dpkg/status";
+APT::Architecture "amd64";
+APT::Sandbox::User "root";
+EOF
+ks_apt() { APT_CONFIG=$KS_APT/apt.conf "$@"; }
+ks_apt apt-get update -qq
+REPACK=$WORK/ks-repack
+repack_fail() {
+    echo "ERROR: Kicksecure's $1 changed shape; update its repack in build.sh" >&2
+    exit 1
+}
+# Unpacks Kicksecure's newest <package> into $REPACK/pkg with the named
+# dependencies taken out, each of which has to be there.
+repack_open() {
+    local name=$1 version control deps dep kept
+    shift
+    version=$(ks_apt apt-cache policy "$name" | sed -n 's/^  Candidate: //p')
+    [ -n "$version" ] && [ "$version" != "(none)" ] || { echo "ERROR: Kicksecure no longer publishes $name; drop its repack" >&2; exit 1; }
+    rm -rf "$REPACK" && mkdir -p "$REPACK"
+    (cd "$REPACK" && ks_apt apt-get download -qq "$name=$version")
+    dpkg-deb -R "$REPACK/${name}_"*.deb "$REPACK/pkg"
+    control=$REPACK/pkg/DEBIAN/control
+    # The edit below works on a Depends written on one line.
+    [ "$(grep -c '^Depends: ' "$control")" = 1 ] || repack_fail "$name"
+    ! sed -n '/^Depends: /{n;p}' "$control" | grep -q '^[[:space:]]' || repack_fail "$name"
+    deps=$(sed -n 's/^Depends: //p' "$control" | sed 's/, */\n/g')
+    for dep in "$@"; do
+        grep -qxF "$dep" <<<"$deps" || repack_fail "$name"
+    done
+    kept=$(grep -vxF -f <(printf '%s\n' "$@") <<<"$deps" | paste -sd, | sed 's/,/, /g')
+    sed -i -e "s/^Depends: .*/Depends: $kept/" -e 's/^Version: \(.*\)$/Version: \1+wildos1/' "$control"
+}
+# Adds programs compiled into $REPACK/pkg to the package: it becomes amd64
+# and depends on the libraries they link.
+repack_ship() {
+    local pkg=$REPACK/pkg control f size linked=() libs=
+    control=$pkg/DEBIAN/control
+    grep -qx 'Architecture: all' "$control" || repack_fail "$(sed -n 's/^Package: //p' "$control")"
+    size=$(sed -n 's/^Installed-Size: //p' "$control")
+    for f in "$@"; do
+        chmod 0755 "$pkg/$f"
+        size=$((size + ($(stat -c %s "$pkg/$f") + 1023) / 1024))
+        (cd "$pkg" && md5sum "$f" >> DEBIAN/md5sums)
+        # A static program (emerg-shutdown) links nothing to depend on.
+        objdump -p "$pkg/$f" | grep -q NEEDED && linked+=("$pkg/$f")
+    done
+    if [ ${#linked[@]} -gt 0 ]; then
+        # dpkg-shlibdeps reads the package name from a debian/control.
+        mkdir -p "$REPACK/shlibs/debian"
+        printf 'Source: shlibs\n\nPackage: shlibs\nArchitecture: any\n' > "$REPACK/shlibs/debian/control"
+        libs=$(cd "$REPACK/shlibs" && dpkg-shlibdeps -O "${linked[@]}" | sed -n 's/^shlibs:Depends=//p')
+    fi
+    sed -i -e 's/^Architecture: all$/Architecture: amd64/' -e "s/^Installed-Size: .*/Installed-Size: $size/" "$control"
+    [ -z "$libs" ] || sed -i "s/^Depends: .*/&, $libs/" "$control"
+}
+repack_close() {
+    dpkg-deb -b "$REPACK/pkg" "$WORK/repo/" >/dev/null
+    rm -rf "$REPACK"
+}
+
+# security-misc-shared compiled emerg-shutdown (powers off at once when the
+# boot drive is pulled out) and fm-shim-backend (its org.freedesktop.FileManager1
+# service) in its postinst. emerg-shutdown would also compile at run time,
+# but only when its program is missing.
+repack_open security-misc-shared build-essential libdbus-1-dev libsystemd-dev pkgconf
+(
+    cd "$REPACK/pkg"
+    [ "$(grep -cxE '        build_(fm_shim_backend|emerg_shutdown)' DEBIAN/postinst)" = 2 ] || repack_fail security-misc-shared
+    sed -i -E '/^        build_(fm_shim_backend|emerg_shutdown)$/d' DEBIAN/postinst
+    for program in emerg-shutdown fm-shim-backend; do
+        bash "usr/libexec/security-misc/compile-$program" "usr/src/security-misc/$program.c" "usr/bin/$program"
+    done
+)
+repack_ship usr/bin/emerg-shutdown usr/bin/fm-shim-backend
+repack_close
+
+# sdwdate, the time sync, built sclockadj (moves the clock gradually) with
+# make and gcc in its postinst.
+repack_open sdwdate gcc libc6-dev
+(
+    cd "$REPACK/pkg"
+    start='       ## Build sclockadj program.'
+    end='       popd >/dev/null'
+    [ "$(grep -cxF "$start" DEBIAN/postinst)" = 1 ] && [ "$(grep -cxF "$end" DEBIAN/postinst)" = 1 ] || repack_fail sdwdate
+    sed -i "\|^$start\$|,\|^$end\$|d" DEBIAN/postinst
+    ! grep -qwE 'make|gcc' DEBIAN/postinst || repack_fail sdwdate
+    make -s -C usr/src/sdwdate
+    mv usr/src/sdwdate/sclockadj usr/libexec/sdwdate/sclockadj
+)
+repack_ship usr/libexec/sdwdate/sclockadj
+repack_close
+
+# usability-misc depends on dkms so modules (VirtualBox's, for Kicksecure)
+# can be built; nothing in it builds one.
+repack_open usability-misc dkms
+! grep -qE 'dkms|gcc' "$REPACK"/pkg/DEBIAN/p* || repack_fail usability-misc
+repack_close
+
+# dist-base-files depends on dpkg-dev (which brings make and binutils) for
+# dpkg-parsechangelog, which its postinst runs once to record its version
+# and carries on without.
+repack_open dist-base-files dpkg-dev
+[ "$(grep -c 'dpkg-parsechangelog .*|| true$' "$REPACK/pkg/DEBIAN/postinst")" = 1 ] || repack_fail dist-base-files
+! grep -qE 'dpkg-(parsechangelog|architecture|buildflags|vendor|source)' "$REPACK"/pkg/DEBIAN/{preinst,prerm,postrm} 2>/dev/null \
+    || repack_fail dist-base-files
+repack_close
+
+# helper-scripts and dist-general-cli depend on equivs, which builds
+# placeholder packages and brings debhelper, autotools, libtool and gcc. Its
+# only user is helper-scripts' dummy-dependency command, which Kicksecure's
+# release upgrade runs on Qubes alone; nothing on Wild OS runs it.
+for name in helper-scripts dist-general-cli; do
+    repack_open "$name" equivs
+    ! grep -rlw 'equivs' "$REPACK/pkg" --exclude=control --exclude=md5sums --exclude-dir=doc \
+        | grep -vx "$REPACK/pkg/usr/bin/dummy-dependency" | grep -q . || repack_fail "$name"
+    repack_close
+done
+rm -rf "$KS_APT"
 (cd "$WORK/repo" && apt-ftparchive packages . > Packages)
 ls -1 "$WORK/repo"/*.deb
-# What the update repository publishes: the Wild
-# OS packages and the Debian packages rebuilt with Wild OS changes, without
+# What the update repository publishes: the Wild OS packages and the Debian
+# and Kicksecure packages rebuilt or repacked with Wild OS changes, without
 # debug symbols.
 rm -rf "$OUT/debs" && mkdir -p "$OUT/debs"
 find "$WORK/repo" -maxdepth 1 \( -name 'wildos-*.deb' -o -name '*+wildos[0-9]*.deb' \) ! -name '*-dbgsym_*' \

@@ -134,6 +134,7 @@ member [mscorlib]System.Math.Min :: int32(int32, int32)
 member [mscorlib]System.NotSupportedException..ctor :: instance void()
 member [mscorlib]System.Object..ctor :: instance void()
 member [mscorlib]System.Object.GetType :: instance class [mscorlib]System.Type()
+member [mscorlib]System.Object.ReferenceEquals :: bool(object, object)
 member [mscorlib]System.Object.ToString :: instance string()
 member [mscorlib]System.ParamArrayAttribute..ctor :: instance void()
 member [mscorlib]System.Reflection.Assembly.GetExecutingAssembly :: class [mscorlib]System.Reflection.Assembly()
@@ -149,6 +150,7 @@ member [mscorlib]System.Runtime.InteropServices.GCHandle.Free :: instance void()
 member [mscorlib]System.Runtime.InteropServices.Marshal.AllocHGlobal :: native int(int32)
 member [mscorlib]System.Runtime.InteropServices.Marshal.Copy :: void(native int, unsigned int8[], int32, int32)
 member [mscorlib]System.Runtime.InteropServices.Marshal.FreeHGlobal :: void(native int)
+member [mscorlib]System.Runtime.InteropServices.Marshal.GetActiveObject :: object(string)
 member [mscorlib]System.Runtime.InteropServices.Marshal.GetLastWin32Error :: int32()
 member [mscorlib]System.Runtime.InteropServices.Marshal.PtrToStringUni :: string(native int)
 member [mscorlib]System.Runtime.InteropServices.Marshal.PtrToStructure :: object(native int, class [mscorlib]System.Type)
@@ -258,6 +260,7 @@ member class [mscorlib]System.Collections.Generic.Dictionary`2<string,object>.se
 member class [mscorlib]System.Collections.Generic.Dictionary`2<string,string>..ctor :: instance void(class [mscorlib]System.Collections.Generic.IEqualityComparer`1<!0>)
 member class [mscorlib]System.Collections.Generic.Dictionary`2<string,string>.Add :: instance void(!0, !1)
 member class [mscorlib]System.Collections.Generic.Dictionary`2<string,string>.ContainsKey :: instance bool(!0)
+member class [mscorlib]System.Collections.Generic.Dictionary`2<string,string>.GetEnumerator :: instance valuetype [mscorlib]System.Collections.Generic.Dictionary`2/Enumerator<!0,!1>()
 member class [mscorlib]System.Collections.Generic.Dictionary`2<string,string>.TryGetValue :: instance bool(!0, [out] !1&)
 member class [mscorlib]System.Collections.Generic.Dictionary`2<unsigned int32,class WildOS.Guest.SessionClient>..ctor :: instance void()
 member class [mscorlib]System.Collections.Generic.Dictionary`2<unsigned int32,class WildOS.Guest.SessionClient>.ContainsKey :: instance bool(!0)
@@ -316,12 +319,16 @@ member class [mscorlib]System.Func`1<!0>.Invoke :: instance !0()
 member class [mscorlib]System.Func`1<class [mscorlib]System.Collections.Generic.Dictionary`2<string,object>>..ctor :: instance void(object, native int)
 member class [mscorlib]System.Func`1<class [mscorlib]System.Collections.Generic.List`1<object>>..ctor :: instance void(object, native int)
 member class [mscorlib]System.Predicate`1<class WildOS.Guest.WarmPool/Entry>..ctor :: instance void(object, native int)
+member valuetype [mscorlib]System.Collections.Generic.Dictionary`2/Enumerator<string,string>.MoveNext :: instance bool()
+member valuetype [mscorlib]System.Collections.Generic.Dictionary`2/Enumerator<string,string>.get_Current :: instance valuetype [mscorlib]System.Collections.Generic.KeyValuePair`2<!0,!1>()
 member valuetype [mscorlib]System.Collections.Generic.Dictionary`2/KeyCollection/Enumerator<unsigned int32,class WildOS.Guest.SessionClient>.MoveNext :: instance bool()
 member valuetype [mscorlib]System.Collections.Generic.Dictionary`2/KeyCollection/Enumerator<unsigned int32,class WildOS.Guest.SessionClient>.get_Current :: instance !0()
 member valuetype [mscorlib]System.Collections.Generic.Dictionary`2/ValueCollection/Enumerator<string,object>.MoveNext :: instance bool()
 member valuetype [mscorlib]System.Collections.Generic.Dictionary`2/ValueCollection/Enumerator<string,object>.get_Current :: instance !1()
 member valuetype [mscorlib]System.Collections.Generic.Dictionary`2/ValueCollection/Enumerator<unsigned int32,class WildOS.Guest.SessionClient>.MoveNext :: instance bool()
 member valuetype [mscorlib]System.Collections.Generic.Dictionary`2/ValueCollection/Enumerator<unsigned int32,class WildOS.Guest.SessionClient>.get_Current :: instance !1()
+member valuetype [mscorlib]System.Collections.Generic.KeyValuePair`2<string,string>.get_Key :: instance !0()
+member valuetype [mscorlib]System.Collections.Generic.KeyValuePair`2<string,string>.get_Value :: instance !1()
 member valuetype [mscorlib]System.Collections.Generic.List`1/Enumerator<class WildOS.Guest.SessionClient>.MoveNext :: instance bool()
 member valuetype [mscorlib]System.Collections.Generic.List`1/Enumerator<class WildOS.Guest.SessionClient>.get_Current :: instance !0()
 member valuetype [mscorlib]System.Collections.Generic.List`1/Enumerator<class WildOS.Guest.WarmPool/Entry>.MoveNext :: instance bool()
@@ -369,6 +376,7 @@ type [mscorlib]System.Byte
 type [mscorlib]System.Char
 type [mscorlib]System.Collections.DictionaryEntry
 type [mscorlib]System.Collections.Generic.Dictionary`2
+type [mscorlib]System.Collections.Generic.Dictionary`2/Enumerator
 type [mscorlib]System.Collections.Generic.Dictionary`2/KeyCollection
 type [mscorlib]System.Collections.Generic.Dictionary`2/KeyCollection/Enumerator
 type [mscorlib]System.Collections.Generic.Dictionary`2/ValueCollection
@@ -376,6 +384,7 @@ type [mscorlib]System.Collections.Generic.Dictionary`2/ValueCollection/Enumerato
 type [mscorlib]System.Collections.Generic.IDictionary`2
 type [mscorlib]System.Collections.Generic.IEnumerable`1
 type [mscorlib]System.Collections.Generic.IEqualityComparer`1
+type [mscorlib]System.Collections.Generic.KeyValuePair`2
 type [mscorlib]System.Collections.Generic.List`1
 type [mscorlib]System.Collections.Generic.List`1/Enumerator
 type [mscorlib]System.Collections.IDictionary

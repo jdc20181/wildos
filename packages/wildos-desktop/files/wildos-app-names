@@ -84,6 +84,21 @@ if [ -f "$SRC/org.wildos.terminal.desktop" ]; then
 else
     rename org.kde.konsole "Terminal" "Terminal"
 fi
+# Launchers that Wild OS packages ship whole, under the stock app's id so its
+# windows and file types still find them: Write and Tables for LibreOffice.
+for f in /usr/share/wildos/launchers/*.desktop; do
+    [ -f "$f" ] || continue
+    id=$(basename "$f" .desktop)
+    [ -f "$SRC/$id.desktop" ] || continue
+    cp "$f" "$DST/$id.desktop.new"
+    mv "$DST/$id.desktop.new" "$DST/$id.desktop"
+done
+# With Write and Tables in place, LibreOffice's own start centre stays out of
+# menus. Impress and the rest show up as themselves if installed from the Store.
+if [ -f /usr/share/wildos/launchers/libreoffice-writer.desktop ]; then
+    hide libreoffice-startcenter
+    hide libreoffice-xsltfilter
+fi
 rename org.kde.kcalc "Calculator" "Calculator"
 rename org.kde.kwrite "Text editor" "Text editor"
 rename org.kde.okular "Documents" "Document viewer"

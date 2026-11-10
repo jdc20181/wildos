@@ -19,6 +19,11 @@ blurEnabled=true
 contrastEnabled=true
 org.wildos.snapEnabled=true
 org.wildos.launchEnabled=true
+# The taskbar's peek fades the windows out where they stand, as on Windows,
+# instead of sliding them off to the screen edges. Both effects animate
+# showing the desktop, so only one may run.
+windowapertureEnabled=false
+org.wildos.peekfadeEnabled=true
 
 # The Wild OS window switcher, with a plain dim behind it instead of KWin
 # fading the other windows.

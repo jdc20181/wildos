@@ -1,0 +1,167 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Wild OS defaults for Write and Tables. A bundled layer: everything here
+     is a default the user can still change in Tools > Options. -->
+<oor:data xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:oor="http://openoffice.org/2001/registry">
+  <dependency file="main"/>
+  <dependency file="writer"/>
+  <dependency file="calc"/>
+
+  <oor:component-data oor:package="org.openoffice" oor:name="Setup">
+    <node oor:name="Office">
+      <node oor:name="Factories">
+        <node oor:name="com.sun.star.text.TextDocument">
+          <prop oor:name="ooSetupFactoryWindowAttributes"><value>,,,;8;</value></prop>
+          <prop oor:name="ooSetupFactoryTemplateFile"><value>file:///usr/share/wildos-office/templates/default/Default.ott</value></prop>
+          <prop oor:name="ooSetupFactoryDefaultFilter"><value>MS Word 2007 XML</value></prop>
+          <prop oor:name="ooSetupFactoryUIName"><value xml:lang="en-US">Write</value></prop>
+        </node>
+        <node oor:name="com.sun.star.sheet.SpreadsheetDocument">
+          <prop oor:name="ooSetupFactoryWindowAttributes"><value>,,,;8;</value></prop>
+          <prop oor:name="ooSetupFactoryTemplateFile"><value>file:///usr/share/wildos-office/templates/default/Default.ots</value></prop>
+          <prop oor:name="ooSetupFactoryDefaultFilter"><value>Calc MS Excel 2007 XML</value></prop>
+          <prop oor:name="ooSetupFactoryUIName"><value xml:lang="en-US">Tables</value></prop>
+        </node>
+      </node>
+    </node>
+    <node oor:name="Product">
+      <prop oor:name="ooSetupLastVersion"><value>99.0</value></prop>
+      <prop oor:name="LastTimeDonateShown"><value>9999999999</value></prop>
+      <prop oor:name="WhatsNew"><value>false</value></prop>
+      <prop oor:name="LastTimeGetInvolvedShown"><value>9999999999</value></prop>
+    </node>
+  </oor:component-data>
+
+  <oor:component-data oor:package="org.openoffice.Office" oor:name="Common">
+    <!-- Pages stay white under the dark theme, as printed paper is. -->
+    <node oor:name="Appearance">
+      <prop oor:name="ApplicationAppearance"><value>1</value></prop>
+    </node>
+    <node oor:name="Misc">
+      <prop oor:name="ShowTipOfTheDay"><value>false</value></prop>
+    </node>
+    <node oor:name="Save">
+      <node oor:name="Document">
+        <prop oor:name="WarnAlienFormat"><value>false</value></prop>
+      </node>
+    </node>
+  </oor:component-data>
+
+  <!-- The status bar's sum field shows Sum and Count, as Excel's does. -->
+  <oor:component-data oor:package="org.openoffice.Office" oor:name="Calc">
+    <node oor:name="Layout">
+      <node oor:name="Other">
+        <prop oor:name="StatusbarMultiFunction"><value>520</value></prop>
+      </node>
+    </node>
+  </oor:component-data>
+
+  <!-- Window titles: see the WildOSOffice Basic library in the bundled
+       wildos-office extension. -->
+  <oor:component-data oor:package="org.openoffice.Office" oor:name="Events">
+    <node oor:name="ApplicationEvents">
+      <node oor:name="Bindings">
+      <node oor:name="OnNew" oor:op="replace">
+        <prop oor:name="BindingURL"><value>vnd.sun.star.script:WildOSOffice.Title.Update?language=Basic&amp;location=application</value></prop>
+      </node>
+      <node oor:name="OnLoad" oor:op="replace">
+        <prop oor:name="BindingURL"><value>vnd.sun.star.script:WildOSOffice.Title.Update?language=Basic&amp;location=application</value></prop>
+      </node>
+      <node oor:name="OnViewCreated" oor:op="replace">
+        <prop oor:name="BindingURL"><value>vnd.sun.star.script:WildOSOffice.Title.Update?language=Basic&amp;location=application</value></prop>
+      </node>
+      <node oor:name="OnSaveAsDone" oor:op="replace">
+        <prop oor:name="BindingURL"><value>vnd.sun.star.script:WildOSOffice.Title.Update?language=Basic&amp;location=application</value></prop>
+      </node>
+      <node oor:name="OnSaveToDone" oor:op="replace">
+        <prop oor:name="BindingURL"><value>vnd.sun.star.script:WildOSOffice.Title.Update?language=Basic&amp;location=application</value></prop>
+      </node>
+      <node oor:name="OnTitleChanged" oor:op="replace">
+        <prop oor:name="BindingURL"><value>vnd.sun.star.script:WildOSOffice.Title.Update?language=Basic&amp;location=application</value></prop>
+      </node>
+      </node>
+    </node>
+  </oor:component-data>
+
+  <!-- Icons drawn for Wild OS. They start in the dark theme's light strokes,
+       and the WildOSOffice.Icons macro swaps to the light theme's set when
+       a document window gains focus under light colours. -->
+  <oor:component-data oor:package="org.openoffice.Office" oor:name="Common">
+    <node oor:name="Misc">
+      <prop oor:name="SymbolStyle"><value>wildos_dark_svg</value></prop>
+    </node>
+  </oor:component-data>
+  <oor:component-data oor:package="org.openoffice.Office" oor:name="Events">
+    <node oor:name="ApplicationEvents">
+      <node oor:name="Bindings">
+        <node oor:name="OnFocus" oor:op="replace">
+          <prop oor:name="BindingURL"><value>vnd.sun.star.script:WildOSOffice.Icons.Update?language=Basic&amp;location=application</value></prop>
+        </node>
+      </node>
+    </node>
+  </oor:component-data>
+
+  <!-- The Wild OS ribbon is the only notebookbar offered. LibreOffice's own
+       variants stay installed but only show in experimental mode, so the
+       Toolbar Layout menu lists just the ribbon and the classic menus. -->
+  <oor:component-data oor:package="org.openoffice.Office.UI" oor:name="ToolbarMode">
+    <prop oor:name="ActiveWriter"><value>notebookbar_wildos.ui</value></prop>
+    <prop oor:name="ActiveCalc"><value>notebookbar_wildos.ui</value></prop>
+    <node oor:name="Applications">
+      <node oor:name="Writer">
+        <prop oor:name="Active"><value>notebookbar_wildos.ui</value></prop>
+        <node oor:name="Modes">
+          <node oor:name="WildOS" oor:op="replace">
+            <prop oor:name="Label"><value xml:lang="en-US">Wild OS ribbon</value></prop>
+            <prop oor:name="CommandArg"><value>notebookbar_wildos.ui</value></prop>
+            <prop oor:name="MenuPosition"><value>0</value></prop>
+            <prop oor:name="IsExperimental"><value>false</value></prop>
+            <prop oor:name="HasNotebookbar"><value>true</value></prop>
+            <prop oor:name="HasMenubar"><value>false</value></prop>
+            <prop oor:name="Toolbars"><value/></prop>
+            <prop oor:name="UserToolbars"><value/></prop>
+            <prop oor:name="Sidebar"><value>Tabs</value></prop>
+          </node>
+          <node oor:name="Default">
+            <prop oor:name="Label"><value xml:lang="en-US">Classic menus and toolbars</value></prop>
+            <prop oor:name="MenuPosition"><value>1</value></prop>
+          </node>
+          <node oor:name="Single"><prop oor:name="IsExperimental"><value>true</value></prop></node>
+          <node oor:name="Sidebar"><prop oor:name="IsExperimental"><value>true</value></prop></node>
+          <node oor:name="Tabbed"><prop oor:name="IsExperimental"><value>true</value></prop></node>
+          <node oor:name="TabbedCompact"><prop oor:name="IsExperimental"><value>true</value></prop></node>
+          <node oor:name="GroupedbarCompact"><prop oor:name="IsExperimental"><value>true</value></prop></node>
+          <node oor:name="GroupedbarFull"><prop oor:name="IsExperimental"><value>true</value></prop></node>
+          <node oor:name="ContextualSingle"><prop oor:name="IsExperimental"><value>true</value></prop></node>
+          <node oor:name="ContextualGroups"><prop oor:name="IsExperimental"><value>true</value></prop></node>
+        </node>
+      </node>
+      <node oor:name="Calc">
+        <prop oor:name="Active"><value>notebookbar_wildos.ui</value></prop>
+        <node oor:name="Modes">
+          <node oor:name="WildOS" oor:op="replace">
+            <prop oor:name="Label"><value xml:lang="en-US">Wild OS ribbon</value></prop>
+            <prop oor:name="CommandArg"><value>notebookbar_wildos.ui</value></prop>
+            <prop oor:name="MenuPosition"><value>0</value></prop>
+            <prop oor:name="IsExperimental"><value>false</value></prop>
+            <prop oor:name="HasNotebookbar"><value>true</value></prop>
+            <prop oor:name="HasMenubar"><value>false</value></prop>
+            <prop oor:name="Toolbars"><value/></prop>
+            <prop oor:name="UserToolbars"><value/></prop>
+            <prop oor:name="Sidebar"><value>Tabs</value></prop>
+          </node>
+          <node oor:name="Default">
+            <prop oor:name="Label"><value xml:lang="en-US">Classic menus and toolbars</value></prop>
+            <prop oor:name="MenuPosition"><value>1</value></prop>
+          </node>
+          <node oor:name="Single"><prop oor:name="IsExperimental"><value>true</value></prop></node>
+          <node oor:name="Sidebar"><prop oor:name="IsExperimental"><value>true</value></prop></node>
+          <node oor:name="Tabbed"><prop oor:name="IsExperimental"><value>true</value></prop></node>
+          <node oor:name="TabbedCompact"><prop oor:name="IsExperimental"><value>true</value></prop></node>
+          <node oor:name="GroupedbarCompact"><prop oor:name="IsExperimental"><value>true</value></prop></node>
+          <node oor:name="GroupedbarFull"><prop oor:name="IsExperimental"><value>true</value></prop></node>
+          <node oor:name="ContextualGroups"><prop oor:name="IsExperimental"><value>true</value></prop></node>
+        </node>
+      </node>
+    </node>
+  </oor:component-data>
+</oor:data>

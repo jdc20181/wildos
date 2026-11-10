@@ -43,4 +43,9 @@ Verdict check(const QString &actionId, const QString &message, const QHash<QStri
 
 // One plain line for an action, or empty when Wild OS has none.
 QString purposeOf(const QString &actionId, const QString &program);
+
+// The name to show while check() runs, which can take seconds: the
+// action's own wording, or the app the subject's systemd scope names.
+// Cheap; empty when neither says. check() has the last word.
+QString quickName(const QString &actionId, const QHash<QString, QString> &details, QString *iconName);
 }

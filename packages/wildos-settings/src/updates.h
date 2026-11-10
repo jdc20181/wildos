@@ -10,6 +10,8 @@
 
 // Checks for and installs system updates through PackageKit, the service the
 // Store uses, so both always agree on what is waiting.
+class QNetworkAccessManager;
+
 class Updates : public QObject
 {
     Q_OBJECT
@@ -27,6 +29,15 @@ class Updates : public QObject
     Q_PROPERTY(QString error READ error NOTIFY stateChanged)
     Q_PROPERTY(bool restartNeeded READ restartNeeded NOTIFY restartNeededChanged)
     Q_PROPERTY(bool available READ available CONSTANT)
+    // Wild OS builds: the one installed and the one waiting, 0 when unknown
+    // or nothing from Wild OS is waiting. A build is the +rN every Wild OS
+    // package's version carries.
+    Q_PROPERTY(int installedBuild READ installedBuild NOTIFY installedBuildChanged)
+    Q_PROPERTY(int pendingBuild READ pendingBuild NOTIFY updatesChanged)
+    // What each recent build changed, newest first, from notes.json on the
+    // update site: {build, date, items: [{category, text}]}, category new,
+    // improved or fixed. Empty when it could never be fetched.
+    Q_PROPERTY(QVariantList notes READ notes NOTIFY notesChanged)
 
 public:
     explicit Updates(QObject *parent = nullptr);
@@ -41,6 +52,9 @@ public:
     QString error() const { return m_error; }
     bool restartNeeded() const { return m_restartNeeded; }
     bool available() const;
+    int installedBuild() const { return m_installedBuild; }
+    int pendingBuild() const { return m_pendingBuild; }
+    QVariantList notes() const { return m_notes; }
 
     Q_INVOKABLE void check();
     Q_INVOKABLE void listUpdates();
@@ -51,8 +65,11 @@ public:
     // wildos, core, browser, desktop, app, library or other; title is the
     // app's own name for an app and empty otherwise.
     Q_INVOKABLE QVariantMap describe(const QString &package) const;
-    // The newest entry of a Wild OS package's changelog, for "What's new".
-    Q_INVOKABLE QString releaseNotes() const;
+    // The notes of the builds after `after`, up to and including `upTo`.
+    Q_INVOKABLE QVariantList notesBetween(int after, int upTo) const;
+    // Those builds' changes in a few words: "3 fixes and 2 improvements".
+    Q_INVOKABLE QString summary(int after, int upTo) const;
+    Q_INVOKABLE void fetchNotes();
 
 Q_SIGNALS:
     void stateChanged();
@@ -61,6 +78,8 @@ Q_SIGNALS:
     void historyChanged();
     void progressChanged();
     void restartNeededChanged();
+    void installedBuildChanged();
+    void notesChanged();
 
 private Q_SLOTS:
     void onOldTransaction(const QDBusObjectPath &tid, const QString &timespec, bool succeeded, uint role, uint duration, const QString &data,
@@ -74,6 +93,8 @@ private:
     static QString errorText(PackageKit::Transaction::Error error, bool installing);
     void startInstall();
     void refreshThenInstall();
+    void readInstalledBuild();
+    bool readNotes(const QByteArray &json);
 
     QString m_state = QStringLiteral("idle");
     QVariantList m_updates;
@@ -92,4 +113,8 @@ private:
     bool m_staleRetrying = false;
     bool m_staleRetried = false;
     bool m_installAfterList = false;
+    int m_installedBuild = 0;
+    int m_pendingBuild = 0;
+    QVariantList m_notes;
+    QNetworkAccessManager *m_network = nullptr;
 };

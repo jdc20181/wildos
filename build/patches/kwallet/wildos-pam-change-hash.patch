@@ -1,0 +1,154 @@
+Description: Wild OS: change a wallet's PAM key without a dialog
+ pam_kwallet opens the wallet with a key made from the sign-in password,
+ but does nothing when the password changes, so after a change the wallet
+ never opens at sign-in again and the first app that needs a secret gets
+ a prompt for the old password. kwalletd's own changePassword always shows
+ a dialog. pamChangeHash re-encrypts the wallet from the key made from the
+ old password to the key made from the new one, both made the way
+ pam_kwallet makes them, and refuses if the old key does not open it.
+ Wild OS Settings calls it after changing the account's password.
+Author: Wild OS Developers <dev@wildos.io>
+Forwarded: not-needed
+
+diff -ru a/src/api/KWallet/org.kde.KWallet.nodeprecated.xml b/src/api/KWallet/org.kde.KWallet.nodeprecated.xml
+--- a/src/api/KWallet/org.kde.KWallet.nodeprecated.xml
++++ b/src/api/KWallet/org.kde.KWallet.nodeprecated.xml
+@@ -269,5 +269,11 @@
+       <arg name="sessionTimeout" type="i" direction="in"/>
+       <annotation name="org.freedesktop.DBus.Method.NoReply" value="true"/>
+     </method>
++    <method name="pamChangeHash">
++      <arg type="i" direction="out"/>
++      <arg name="wallet" type="s" direction="in"/>
++      <arg name="oldHash" type="ay" direction="in"/>
++      <arg name="newHash" type="ay" direction="in"/>
++    </method>
+   </interface>
+ </node>
+diff -ru a/src/api/KWallet/org.kde.KWallet.xml b/src/api/KWallet/org.kde.KWallet.xml
+--- a/src/api/KWallet/org.kde.KWallet.xml
++++ b/src/api/KWallet/org.kde.KWallet.xml
+@@ -301,5 +301,11 @@
+       <arg name="sessionTimeout" type="i" direction="in"/>
+       <annotation name="org.freedesktop.DBus.Method.NoReply" value="true"/>
+     </method>
++    <method name="pamChangeHash">
++      <arg type="i" direction="out"/>
++      <arg name="wallet" type="s" direction="in"/>
++      <arg name="oldHash" type="ay" direction="in"/>
++      <arg name="newHash" type="ay" direction="in"/>
++    </method>
+   </interface>
+ </node>
+diff -ru a/src/runtime/kwalletd/autotests/mockkwalletd.cpp b/src/runtime/kwalletd/autotests/mockkwalletd.cpp
+--- a/src/runtime/kwalletd/autotests/mockkwalletd.cpp
++++ b/src/runtime/kwalletd/autotests/mockkwalletd.cpp
+@@ -114,6 +114,7 @@
+ MOCK_FUNCTION(KWalletD, networkWallet, 0, );
+ MOCK_FUNCTION(KWalletD, localWallet, 0, );
+ MOCK_FUNCTION(KWalletD, pamOpen, 3, );
++MOCK_FUNCTION(KWalletD, pamChangeHash, 3, );
+ MOCK_FUNCTION(KWalletD, sync, 2, );
+ MOCK_FUNCTION(KWalletD, changePassword, 3, );
+ MOCK_FUNCTION(KWalletD, reconfigure, 0, );
+diff -ru a/src/runtime/kwalletd/backend/kwalletbackend.cc b/src/runtime/kwalletd/backend/kwalletbackend.cc
+--- a/src/runtime/kwalletd/backend/kwalletbackend.cc
++++ b/src/runtime/kwalletd/backend/kwalletbackend.cc
+@@ -335,6 +335,29 @@
+     return openInternal();
+ }
+
++int Backend::changePreHashed(const QByteArray &oldHash, const QByteArray &newHash)
++{
++    if (!_open) {
++        return -255;
++    }
++    if (_cipherType != BACKEND_CIPHER_BLOWFISH || newHash.size() != 56) {
++        return -42; // unsupported encryption scheme
++    }
++    // Opening swaps the modern hash in, so both hold the key in use.
++    if (!_useNewHash || _newPassHash != oldHash) {
++        return -9; // incorrect password
++    }
++
++    _passhash = newHash;
++    _newPassHash = newHash;
++    const int rc = sync(0);
++    if (rc != 0) {
++        _passhash = oldHash;
++        _newPassHash = oldHash;
++    }
++    return rc;
++}
++
+ int Backend::openInternal(WId w)
+ {
+     // No wallet existed.  Let's create it.
+diff -ru a/src/runtime/kwalletd/backend/kwalletbackend.h b/src/runtime/kwalletd/backend/kwalletbackend.h
+--- a/src/runtime/kwalletd/backend/kwalletbackend.h
++++ b/src/runtime/kwalletd/backend/kwalletbackend.h
+@@ -86,6 +86,10 @@
+     // If opening fails, the password's hash will be cleared.
+     int openPreHashed(const QByteArray &passwordHash);
+
++    // Re-encrypt an open wallet with another pre-hashed password, but only
++    // if it was opened with oldHash. On failure the wallet keeps oldHash.
++    int changePreHashed(const QByteArray &oldHash, const QByteArray &newHash);
++
+     // Close the wallet, losing any changes.
+     // if save is true, the wallet is saved prior to closing it.
+     int close(bool save = false);
+diff -ru a/src/runtime/kwalletd/kwalletd.cpp b/src/runtime/kwalletd/kwalletd.cpp
+--- a/src/runtime/kwalletd/kwalletd.cpp
++++ b/src/runtime/kwalletd/kwalletd.cpp
+@@ -1921,6 +1921,33 @@
+     return handle;
+ }
+
++int KWalletD::pamChangeHash(const QString &wallet, const QByteArray &oldHash, const QByteArray &newHash)
++{
++    if (_processing) {
++        return -1;
++    }
++
++    // An open wallet is changed in place, so every app keeps its handle.
++    const QPair<int, KWallet::Backend *> walletInfo = findWallet(wallet);
++    if (walletInfo.second) {
++        return walletInfo.second->changePreHashed(oldHash, newHash);
++    }
++    // openPreHashed would create a missing wallet.
++    if (!wallets().contains(wallet)) {
++        return 1;
++    }
++
++    KWallet::Backend b(wallet);
++    int rc = b.openPreHashed(oldHash);
++    if (rc == 0 && b.isOpen()) {
++        rc = b.changePreHashed(oldHash, newHash);
++    }
++    if (b.isOpen()) {
++        b.close(false);
++    }
++    return rc;
++}
++
+ // vim: tw=220:ts=4
+
+ #include "moc_kwalletd.cpp"
+diff -ru a/src/runtime/kwalletd/kwalletd.h b/src/runtime/kwalletd/kwalletd.h
+--- a/src/runtime/kwalletd/kwalletd.h
++++ b/src/runtime/kwalletd/kwalletd.h
+@@ -171,6 +171,13 @@
+     // password as the password hash is transmitted using D-Bus.
+     int pamOpen(const QString &wallet, const QByteArray &passwordHash, int sessionTimeout);
+
++    // Re-encrypt a wallet that opens with oldHash so that it opens with
++    // newHash, both made the way the kwallet PAM module makes them. Used
++    // when the account's password changes, so the wallet keeps opening at
++    // sign-in. The wallet stays as it was (open or closed). Returns 0 on
++    // success, 1 when there is no such wallet, or a Backend error.
++    int pamChangeHash(const QString &wallet, const QByteArray &oldHash, const QByteArray &newHash);
++
+ Q_SIGNALS:
+     void walletAsyncOpened(int id, int handle); // used to notify KWallet::Wallet
+     void walletListDirty();

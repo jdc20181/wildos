@@ -1,0 +1,22 @@
+{
+    "KPackageStructure": "KWin/Effect",
+    "KPlugin": {
+        "Authors": [
+            {
+                "Email": "dev@wildos.io",
+                "Name": "Wild OS"
+            }
+        ],
+        "Category": "Show Desktop Animation",
+        "Description": "Windows fade out while the desktop shows and fade back after, so a peek at the desktop looks through them",
+        "EnabledByDefault": true,
+        "Id": "org.wildos.peekfade",
+        "License": "GPL-3.0-or-later",
+        "Name": "Peek at the desktop",
+        "Version": "0.1.0",
+        "Website": "https://wildos.io"
+    },
+    "X-KDE-Ordering": 50,
+    "X-KWin-Exclusive-Category": "show-desktop",
+    "X-Plasma-API": "javascript"
+}

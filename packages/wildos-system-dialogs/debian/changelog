@@ -1,3 +1,22 @@
+wildos-system-dialogs (0.1.3) trixie; urgency=medium
+
+  * Board 9.9 also asks before Windows alone restarts or shuts down from
+    the taskbar panel (windows-restart, windows-shutdown): no countdown,
+    Go back as the safe answer, and for Shut down, Save to disk instead.
+  * The minute before Windows apps' work is kept now counts down and ends:
+    Qt 6 refused the timer's connection, so it stayed at 60 seconds.
+  * Enter presses the button that has focus.
+
+ -- Wild OS Developers <dev@wildos.io>  Tue, 10 Nov 2026 14:50:00 +0000
+
+wildos-system-dialogs (0.1.2) trixie; urgency=medium
+
+  * The permission prompt names the app asking (such as Settings) while it
+    is still checking where the request comes from, instead of reading
+    "Allow  to make changes".
+
+ -- Wild OS Developers <dev@wildos.io>  Tue, 10 Nov 2026 13:00:00 +0000
+
 wildos-system-dialogs (0.1.1) trixie; urgency=medium
 
   * Installing a package from a file is never shown as verified, nor as

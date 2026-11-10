@@ -252,6 +252,14 @@ namespace WildOS.Guest
                     case "warm-list":
                         reply = Message("warm-list", "apps", pool.Describe());
                         break;
+                    case "documents":
+                        // Office busy past the wait still leaves the window
+                        // titles to go by; office is then null, not empty.
+                        List<object> office = null;
+                        try { office = pool.OfficeDocuments(); }
+                        catch (Exception e) { Log.Write("documents: " + e.Message); }
+                        reply = Message("documents", "office", office, "windows", Windows.List());
+                        break;
                     case "theme":
                         Theme.Apply(m);
                         reply = Message("theme", "ok", true, "applied", true);

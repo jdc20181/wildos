@@ -15,10 +15,16 @@ const friendlyNames = {
     "org.kde.konsole": "Terminal",
     "org.kde.kcalc": "Calculator",
     "org.kde.kwrite": "Text editor",
+    "libreoffice-writer": "Write",
+    "libreoffice-calc": "Tables",
     "org.kde.okular": "Documents",
     "org.kde.gwenview": "Pictures",
     "org.keepassxc.KeePassXC": "Password manager",
 };
+
+// The default Start pins before Write and Tables, which every account made
+// until then was given.
+const pinsBeforeOffice = ["org.wildos.mail.desktop", "org.wildos.files.desktop", "org.wildos.calendar.desktop", "brave-browser.desktop", "mullvad-browser.desktop", "org.wildos.store.desktop", "org.wildos.settings.desktop", "org.wildos.terminal.desktop", "org.kde.kcalc.desktop", "org.kde.kwrite.desktop", "org.kde.okular.desktop", "org.kde.gwenview.desktop", "org.keepassxc.KeePassXC.desktop"];
 
 // Apps that make up the system itself. Windows does not offer to uninstall
 // these from Start either.

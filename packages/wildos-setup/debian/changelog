@@ -1,3 +1,31 @@
+wildos-setup (0.1.3) trixie; urgency=medium
+
+  * When saved passwords could not open by themselves, a notification says
+    so once per boot and opens Settings at the fix: an account signing in
+    automatically with no key kept (turned on before keys were kept), or a
+    wallet whose password is not the account's.
+  * wildos-wallet-keys checks the caller's own password (CheckPassword).
+
+ -- Wild OS Developers <dev@wildos.io>  Tue, 10 Nov 2026 14:00:00 +0000
+
+wildos-setup (0.1.2) trixie; urgency=medium
+
+  * wildos-wallet-keys changes an account's own password (ChangePassword):
+    it checks the current password, then runs the passwd PAM stack as root
+    with the account as the real user, so the password rules apply. passwd
+    has no setuid on Wild OS, so Settings could not change passwords.
+
+ -- Wild OS Developers <dev@wildos.io>  Tue, 10 Nov 2026 13:00:00 +0000
+
+wildos-setup (0.1.1) trixie; urgency=medium
+
+  * An account that signs in automatically gets its saved passwords too:
+    wildos-wallet-keys keeps the key that opens its KWallet, readable by
+    root only, and wildos-setup-wallet opens the wallet with it at each
+    start. Setup keeps the key when it turns automatic sign-in on.
+
+ -- Wild OS Developers <dev@wildos.io>  Tue, 10 Nov 2026 12:00:00 +0000
+
 wildos-setup (0.1.0) trixie; urgency=medium
 
   * Initial release.

@@ -1,0 +1,5 @@
+[D-BUS Service]
+Name=org.wildos.WalletKeys1
+Exec=/usr/libexec/wildos/wildos-wallet-keys
+User=root
+SystemdService=wildos-wallet-keys.service

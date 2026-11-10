@@ -11,6 +11,8 @@ PromptCard {
     id: card
 
     property bool security: false
+    // "3 fixes and 2 improvements", when Settings knows what the update brings.
+    property string summary
     property bool countdown: false
     property int seconds: 0
     property string scheduled
@@ -25,7 +27,8 @@ PromptCard {
     title: countdown ? "Restarting to finish updating" : "Restart to finish updating"
     text: countdown
         ? "Wild OS will restart in " + seconds + (seconds === 1 ? " second" : " seconds") + ", at the time you chose. Your apps and windows will reopen where you left them."
-        : (security ? "A security update is ready." : "An update is ready.") + " Your apps and windows will reopen where you left them."
+        : (security ? "A security update is ready" : "An update is ready") + (summary.length > 0 ? ", with " + summary + "." : ".")
+            + " Your apps and windows will reopen where you left them."
 
     picture: Rectangle {
         width: 40

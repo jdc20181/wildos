@@ -14,7 +14,11 @@ agent itself.
                                            notifies (the taskbar asks every few seconds)
   wildos-winmode refresh-apps              make Start entries for Windows' apps again
   wildos-winmode windows                   the Windows windows open now
-  wildos-winmode idle pause|save           pause or save Windows now (the taskbar panel's buttons)
+  wildos-winmode idle pause|save           pause or save Windows now, straight to the system service
+  wildos-winmode power <action>            pause, save, resume, start, restart or shutdown (the
+                                           taskbar panel's buttons); restart and shutdown ask
+                                           first when an app may have unsaved work
+  wildos-winmode documents                 what is open in Windows and whether it is saved
   wildos-winmode launch-stats [--check]    launch times by state, 50th and 95th percentile;
                                            --check fails when a 95th percentile misses its target
   wildos-winmode install-guest             put this package's wild-guest into Windows
@@ -225,6 +229,14 @@ def main(argv):
             return launch_stats("--check" in rest)
         if cmd == "idle" and rest and rest[0] in ("pause", "save"):
             print(host("Idle", (rest[0],), "(s)"))
+            return 0
+        if cmd == "power" and len(rest) == 1:
+            sentence = agent("Power", (rest[0],), "(s)", timeout=1800)
+            if sentence:
+                tell(sentence)
+            return 1 if sentence else 0
+        if cmd == "documents":
+            print(json.dumps(json.loads(agent("Documents", timeout=30)), indent=1))
             return 0
         if cmd == "guest" and len(rest) == 1:
             print(host("GuestRequest", (rest[0],), "(s)"))

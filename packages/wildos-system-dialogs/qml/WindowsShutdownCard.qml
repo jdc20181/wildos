@@ -8,10 +8,16 @@ import WildOS.UI as UI
 // radius 18, a 20px title, the open documents with their state, the
 // accent card saying what keeping does, and a footer with "Close without
 // saving" at the left. After 60 seconds the safe choice is taken.
+//
+// The taskbar panel's Restart and Shut down for Windows alone ask the same
+// way (actions windows-restart and windows-shutdown) when an app may have
+// unsaved work, with no countdown: restarting can't keep the work, so Go
+// back is the main button; shutting down offers Save to disk instead,
+// which keeps it and still frees the memory.
 Item {
     id: card
 
-    // shutdown, restart or signout
+    // shutdown, restart or signout; windows-restart or windows-shutdown
     property string action: "shutdown"
     property var apps: []
     property string reopen
@@ -21,7 +27,21 @@ Item {
     signal discard()
     signal back()
 
-    readonly property string keepText: action === "restart" ? "Keep my work and restart" : action === "signout" ? "Keep my work and sign out" : "Keep my work and shut down"
+    readonly property bool windowsOnly: action.startsWith("windows-")
+    readonly property bool canKeep: action !== "windows-restart"
+    readonly property string keepText: action === "windows-shutdown" ? "Save to disk instead"
+        : action === "restart" ? "Keep my work and restart" : action === "signout" ? "Keep my work and sign out" : "Keep my work and shut down"
+    readonly property string keepDetail: action === "windows-shutdown"
+        ? "Windows mode is saved to disk as it is, in about 5 seconds, and uses no memory until you open a Windows app."
+        : "Windows mode is saved to disk as it is, in about 5 seconds. Next time, " + (card.reopen.startsWith("Your ") ? "your " + card.reopen.slice(5) : card.reopen)
+    readonly property string discardText: action === "windows-restart" ? "Restart without saving"
+        : action === "windows-shutdown" ? "Shut down without saving" : "Close without saving"
+    readonly property string body: action === "windows-restart"
+        ? "Restarting Windows closes them, and changes that aren't saved are lost. Save your work in them first, then restart."
+        : action === "windows-shutdown"
+        ? "Shutting down Windows closes them, and changes that aren't saved are lost. Save your work in them first, or save Windows mode to disk instead, which keeps everything as it is."
+        : "Nothing will be lost. Wild OS can keep them exactly as they are, unsaved changes included, and reopen them next time you "
+            + (action === "signout" ? "sign in." : "switch on.")
     readonly property string title: "Your Windows apps are still open"
 
     width: 640
@@ -70,8 +90,7 @@ Item {
 
                 UI.Label {
                     Layout.fillWidth: true
-                    text: "Nothing will be lost. Wild OS can keep them exactly as they are, unsaved changes included, and reopen them next time you "
-                        + (card.action === "signout" ? "sign in." : "switch on.")
+                    text: card.body
                     size: 13
                     color: UI.Style.inkAlpha(0.82, 0.76)
                     wrapMode: Text.Wrap
@@ -113,6 +132,7 @@ Item {
             }
 
             Rectangle {
+                visible: card.canKeep
                 Layout.fillWidth: true
                 implicitHeight: keepRow.implicitHeight + 32
                 radius: UI.Style.radiusMd
@@ -159,7 +179,7 @@ Item {
 
                         UI.Label {
                             Layout.fillWidth: true
-                            text: "Windows mode is saved to disk as it is, in about 5 seconds. Next time, " + (card.reopen.startsWith("Your ") ? "your " + card.reopen.slice(5) : card.reopen)
+                            text: card.keepDetail
                             size: 13
                             color: UI.Style.inkStatus
                             wrapMode: Text.Wrap
@@ -200,7 +220,8 @@ Item {
                 spacing: 10
 
                 UI.LinkButton {
-                    text: "Close without saving"
+                    id: discardLink
+                    text: card.discardText
                     onClicked: card.discard()
                 }
 
@@ -209,12 +230,15 @@ Item {
                 }
 
                 UI.Button {
+                    id: backButton
+                    kind: card.canKeep ? "secondary" : "primary"
                     text: "Go back"
                     onClicked: card.back()
                 }
 
                 UI.Button {
                     id: keepButton
+                    visible: card.canKeep
                     kind: "primary"
                     text: card.keepText
                     onClicked: card.keep()
@@ -224,7 +248,20 @@ Item {
     }
 
     Keys.onEscapePressed: card.back()
+    // Enter presses the button that has focus, which is the safe one to
+    // start with; the buttons themselves only take Space.
+    function enter() {
+        if (discardLink.activeFocus) {
+            card.discard();
+        } else if (keepButton.activeFocus && card.canKeep) {
+            card.keep();
+        } else {
+            card.back();
+        }
+    }
+    Keys.onReturnPressed: card.enter()
+    Keys.onEnterPressed: card.enter()
     function takeFocus() {
-        keepButton.forceActiveFocus();
+        (card.canKeep ? keepButton : backButton).forceActiveFocus();
     }
 }

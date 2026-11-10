@@ -111,6 +111,9 @@ void Agent::begin(const Request &request)
     m_trust = QStringLiteral("checking");
     m_verdict = {};
     m_verdict.purpose = Verifier::purposeOf(request.actionId, request.details.value(QStringLiteral("program")));
+    // Until the check is done the prompt would otherwise read "Allow  to
+    // make changes".
+    m_verdict.appName = Verifier::quickName(request.actionId, request.details, &m_verdict.iconName);
     ++m_serial;
     Q_EMIT serialChanged();
 

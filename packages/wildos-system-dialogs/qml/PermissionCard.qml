@@ -94,7 +94,7 @@ Item {
 
             UI.Label {
                 Layout.fillWidth: true
-                text: "Allow " + Agent.appName + " to make changes to this computer?"
+                text: "Allow " + (Agent.appName.length > 0 ? Agent.appName : "this app") + " to make changes to this computer?"
                 size: 20
                 font.weight: Font.DemiBold
                 lineHeightMode: Text.FixedHeight
@@ -127,7 +127,7 @@ Item {
 
                         UI.Label {
                             Layout.fillWidth: true
-                            text: Agent.appName
+                            text: Agent.appName.length > 0 ? Agent.appName : "An app"
                             size: 14
                             font.weight: Font.DemiBold
                         }

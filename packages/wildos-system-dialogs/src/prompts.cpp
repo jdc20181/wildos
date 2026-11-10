@@ -127,6 +127,15 @@ Prompts::Prompts(QObject *parent)
         }
         Q_EMIT countdownChanged();
     });
+    // Connected once here: Qt 6 refuses Qt::UniqueConnection for a lambda,
+    // which left the minute before Windows apps' work is kept never ending.
+    m_shutdownTimer.setInterval(1000);
+    connect(&m_shutdownTimer, &QTimer::timeout, this, [this] {
+        if (--m_countdown <= 0) {
+            answerWindowsShutdown(QStringLiteral("keep"));
+        }
+        Q_EMIT countdownChanged();
+    });
 }
 
 void Prompts::show(const QString &kind)
@@ -331,8 +340,18 @@ void Prompts::showRestart()
     if (m_demo) {
         security = true;
     }
+    // What the Wild OS update waiting on this restart brings, in a few
+    // words, left by Settings > Updates when it installed it.
+    QString summary;
+    QFile summaryFile(QStandardPaths::writableLocation(QStandardPaths::RuntimeLocation) + QStringLiteral("/wildos-update-summary"));
+    if (!m_demo && summaryFile.open(QIODevice::ReadOnly)) {
+        summary = QString::fromUtf8(summaryFile.readAll()).trimmed();
+    } else if (m_demo) {
+        summary = QStringLiteral("3 fixes and 2 improvements");
+    }
     const QDateTime at = scheduled();
     m_info.insert(QStringLiteral("security"), security);
+    m_info.insert(QStringLiteral("summary"), summary);
     m_info.insert(QStringLiteral("mode"), QStringLiteral("ask"));
     m_info.insert(QStringLiteral("scheduled"), at.isValid() ? describe(at, QDateTime::currentDateTime()) : QString());
     m_restartAsked = true;
@@ -470,9 +489,10 @@ void Prompts::askWindowsShutdown(const QString &action, const QString &appsJson,
     // A second ask while one is showing (two sign-outs at once) settles the
     // first the safe way.
     if (m_shutdownReply.type() == QDBusMessage::MethodCallMessage) {
-        QDBusConnection::sessionBus().send(m_shutdownReply.createReply(QStringLiteral("keep")));
+        QDBusConnection::sessionBus().send(m_shutdownReply.createReply(safeShutdownAnswer()));
     }
     m_shutdownReply = reply;
+    m_shutdownAction = action;
     QVariantList apps;
     QStringList unsavedDocs;
     QString unsavedApp;
@@ -510,19 +530,24 @@ void Prompts::askWindowsShutdown(const QString &action, const QString &appsJson,
         {QStringLiteral("apps"), apps},
         {QStringLiteral("reopen"), reopen},
     };
-    m_countdown = 60;
+    // Wild OS shutting down can't wait for ever, so after a minute the work
+    // is kept. Restarting or shutting down Windows alone can wait: nothing
+    // happens until the person says.
+    const bool windowsOnly = action.startsWith(QLatin1String("windows-"));
+    m_countdown = windowsOnly ? 0 : 60;
     Q_EMIT countdownChanged();
-    if (!m_shutdownTimer.isActive()) {
-        m_shutdownTimer.setInterval(1000);
-        connect(&m_shutdownTimer, &QTimer::timeout, this, [this] {
-            if (--m_countdown <= 0) {
-                answerWindowsShutdown(QStringLiteral("keep"));
-            }
-            Q_EMIT countdownChanged();
-        }, Qt::UniqueConnection);
+    m_shutdownTimer.stop();
+    if (!windowsOnly) {
+        m_shutdownTimer.start();
     }
-    m_shutdownTimer.start();
     show(QStringLiteral("windowsshutdown"));
+}
+
+QString Prompts::safeShutdownAnswer() const
+{
+    // Wild OS ending the session keeps the work; Windows' own restart or
+    // shutdown simply doesn't happen.
+    return m_shutdownAction.startsWith(QLatin1String("windows-")) ? QStringLiteral("back") : QStringLiteral("keep");
 }
 
 void Prompts::answerWindowsShutdown(const QString &choice)
@@ -628,6 +653,13 @@ void Prompts::demo(const QString &kind)
                            QStringLiteral("[{\"app\":\"Excel\",\"document\":\"Budget 2027.xlsx\",\"unsaved\":true},"
                                           "{\"app\":\"Excel\",\"document\":\"Book1\",\"unsaved\":true},"
                                           "{\"app\":\"Word\",\"document\":\"Quote for Harbour Café.docx\",\"unsaved\":false}]"),
+                           QDBusMessage());
+    } else if (kind == QLatin1String("windowsrestart") || kind == QLatin1String("windowspoweroff")) {
+        // The taskbar panel's Restart and Shut down for Windows alone.
+        askWindowsShutdown(kind == QLatin1String("windowsrestart") ? QStringLiteral("windows-restart") : QStringLiteral("windows-shutdown"),
+                           QStringLiteral("[{\"app\":\"Excel\",\"document\":\"Budget 2027.xlsx\",\"unsaved\":true},"
+                                          "{\"app\":\"Invoice Maker\",\"document\":\"March invoices\",\"unsaved\":null},"
+                                          "{\"app\":\"Notepad\",\"document\":\"notes.txt\",\"unsaved\":false}]"),
                            QDBusMessage());
     } else if (kind == QLatin1String("windowsdevices")) {
         askWindowsDevices(QStringLiteral("Zoom"),

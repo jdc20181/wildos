@@ -1,2 +1,4 @@
 d /run/wildos-setup 0700 wildos-setup wildos-setup -
 d /var/lib/wildos 0755 root root -
+# The wallet key of the account that signs in automatically (wildos-wallet-keys).
+d /var/lib/wildos/wallet 0700 root root -

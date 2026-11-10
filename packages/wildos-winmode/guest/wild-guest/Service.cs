@@ -241,6 +241,7 @@ namespace WildOS.Guest
                 case "running":
                 case "launch":
                 case "warm-list":
+                case "documents":
                     var target = Target(m);
                     if (target != null)
                     {

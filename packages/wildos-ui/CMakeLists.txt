@@ -31,6 +31,7 @@ qt_add_qml_module(wildosui
     PLUGIN_TARGET wildosui
     NO_PLUGIN_OPTIONAL
     QML_FILES ${QML_SOURCES}
+    RESOURCES data/wildos-mark.svg
     SOURCES
         src/theme.cpp src/theme.h
         src/windowframe.cpp src/windowframe.h
