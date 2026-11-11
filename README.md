@@ -127,7 +127,7 @@ Windows mode doesn't imitate Windows. It runs a real, licensed copy of Windows 1
 - **In your control.** Click the Windows mode status in the taskbar to pause, save to disk, restart or shut it down. The same controls are in Settings.
 - **Never lose work.** Shut down with an unsaved document and Windows is kept exactly as it was, then reopened next time.
 - **Your files stay yours.** Windows only sees the folders you share. Saving in Word puts the file straight into your Documents folder.
-- **Sealed off.** Its own private network, no view of your home network, and a repair that puts Windows back to how it was after setup.
+- **Sealed off.** Its own private network, with no view of your home network.
 
 ### What you need
 
@@ -210,7 +210,7 @@ The ISO is written to `out/`. The first build downloads about 3 GB of packages; 
 - [x] Our own apps: Mail and Calendar, Write, Tables and Remote
 - [x] Themes and RGB lighting
 - [x] Taskbar previews, snap assist, Quick Look and the rest of the little things
-- [x] Windows programs that open the moment you click
+- [x] Windows started ahead of time after you sign in, so the first Windows program opens quickly
 - [ ] **Now:** Testing and fixes on real hardware
 - [ ] **Later:** Windows 11 Home support, device passthrough, Strict and Maximum protection levels
 
