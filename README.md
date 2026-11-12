@@ -10,7 +10,7 @@
 
 ### A free, private Linux desktop laid out like Windows, with real Windows apps when you need them.
 
-**[Website](https://wildos.io)** · **[Take the tour](https://wildos.io/tour/)** · **[How it works](https://wildos.io/how-it-works/)** · **[FAQ](https://wildos.io/faq/)** · **[Download](https://wildos.io/faq/)**
+**[Website](https://wildos.io)** · **[Take the tour](https://wildos.io/tour/)** · **[How it works](https://wildos.io/how-it-works/)** · **[FAQ](https://wildos.io/faq/)** · **[Download](https://wildos.io/download/)**
 
 [![Release](https://img.shields.io/github/v/release/wildorigins/wildos?include_prereleases&label=release&style=flat-square)](https://github.com/wildorigins/wildos/releases)
 [![Licence](https://img.shields.io/badge/licence-GPL--3.0--or--later-3a56c4?style=flat-square)](LICENSE)
@@ -20,7 +20,7 @@
 </div>
 
 > [!IMPORTANT]
-> Wild OS is young and moving fast. [Download the latest release](https://wildos.io/faq/), and back up anything that matters before you install.
+> Wild OS is young and moving fast. [Download the latest release](https://wildos.io/download/), and back up anything that matters before you install.
 
 ## Two ways to use it
 
@@ -200,7 +200,7 @@ Tested something? [Open an issue](https://github.com/wildorigins/wildos/issues) 
 ## Try it
 
 > [!WARNING]
-> Alpha builds are for testing. Try them from the USB stick or in a virtual machine before installing over anything you care about.
+> Wild OS is still in testing. Try it from the USB stick or in a virtual machine before installing over anything you care about.
 
 1. **Download** the ISO from [wildos.io/download/iso](https://wildos.io/download/iso) and its checksums from [wildos.io/download/checksums](https://wildos.io/download/checksums). The checksums are signed with the Wild OS key in [packages/wildos-base/files/apt/wildos-updates-keyring.asc](packages/wildos-base/files/apt/wildos-updates-keyring.asc).
 2. **Verify** the download.
@@ -247,11 +247,13 @@ The ISO is written to `out/`. The first build downloads about 3 GB of packages; 
 - [x] More of our own apps: PDF, Capture, Notes, Music, Videos, Voice, Archive and Backup
 - [x] Restore points before updates, and a recovery screen that offers the last working version
 - [x] Problem reports you read before you send
+- [x] Standard, Strict and Maximum protection levels in Settings
+- [x] Steam and 32-bit apps when you want them, with game controllers and a performance overlay
 - [x] Themes and RGB lighting
 - [x] Taskbar previews, snap assist, Quick Look and the rest of the little things
 - [x] Windows started ahead of time after you sign in, so the first Windows program opens quickly
 - [ ] **Now:** Testing and fixes on real hardware
-- [ ] **Later:** Windows 11 Home support, device passthrough, Strict and Maximum protection levels
+- [ ] **Later:** Windows 11 Home support and device passthrough
 
 ## Contributing
 
