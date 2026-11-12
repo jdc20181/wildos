@@ -1,0 +1,41 @@
+Source: wildos-videos
+Section: video
+Priority: optional
+Maintainer: Wild OS Developers <dev@wildos.io>
+Build-Depends:
+ debhelper-compat (= 13),
+ cmake,
+ extra-cmake-modules,
+ pkg-config,
+ qt6-base-dev,
+ qt6-declarative-dev,
+ libmpv-dev,
+ libkf6dbusaddons-dev,
+ libkf6windowsystem-dev,
+Standards-Version: 4.7.0
+Rules-Requires-Root: no
+
+Package: wildos-videos
+Architecture: any
+Depends:
+ ${shlibs:Depends},
+ ${misc:Depends},
+ wildos-ui (>= 0.1.3),
+ qml6-module-qtcore,
+ qml6-module-qtquick,
+ qml6-module-qtquick-controls,
+ qml6-module-qtquick-templates,
+ qml6-module-qtquick-layouts,
+ qml6-module-qtquick-shapes,
+ qml6-module-qtquick-effects,
+ qml6-module-qtquick-window,
+ qml6-module-qtquick-dialogs,
+ qml6-module-qtqml-workerscript,
+Description: Wild OS Videos
+ Videos plays the films and clips on your PC: chapters on the seek bar,
+ subtitles from the file or a .srt beside it, a choice of audio track,
+ speeds from half to double, picture in picture and full screen. It lists
+ the other videos in the same folder, remembers where you stopped in each
+ one and picks up there next time. Opened on its own it shows the Videos
+ folder. Positions and thumbnails stay on this PC: nothing is streamed or
+ looked up online.

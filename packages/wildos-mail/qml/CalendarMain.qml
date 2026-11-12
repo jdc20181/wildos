@@ -79,8 +79,8 @@ UI.AppWindow {
                 current: "calendar"
                 squareCorner: window.maximised
                 onPicked: function (app) {
-                    if (app === "mail") {
-                        Apps.open("mail");
+                    if (app !== "calendar") {
+                        Apps.open(app);
                     }
                 }
             }

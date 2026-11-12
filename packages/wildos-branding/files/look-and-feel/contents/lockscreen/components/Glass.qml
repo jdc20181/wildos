@@ -13,7 +13,7 @@ Item {
     property color tint: UI.Style.glassOnWallpaperField
     property color borderColor: UI.Style.borderOnWallpaper
     property real radius: height / 2
-    property real blurRadius: 30
+    property real blurRadius: 64
     property bool shadow: false
 
     readonly property bool blurAvailable: backdrop !== null

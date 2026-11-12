@@ -18,7 +18,7 @@
 QWidget {
     background-color: transparent;
     color: #eef1f8;
-    font-family: "Inter";
+    font-family: "Albert Sans";
     font-size: 13px;
     selection-background-color: rgba(143, 180, 255, 0.35);
     selection-color: #eef1f8;
@@ -28,7 +28,7 @@ QDialog,
 QMessageBox,
 QMenu,
 QComboBox QAbstractItemView {
-    background-color: #1a1e33;
+    background-color: #222428;
 }
 
 QLabel:disabled,
@@ -45,7 +45,7 @@ QStackedWidget#viewManagerStack {
 }
 
 QToolTip {
-    background-color: #1b2038;
+    background-color: #24262a;
     color: #eef1f8;
     border: 1px solid rgba(255, 255, 255, 0.12);
     border-radius: 6px;
@@ -62,7 +62,7 @@ QPushButton {
     background-color: rgba(255, 255, 255, 0.06);
     color: #eef1f8;
     font-size: 13px;
-    font-weight: 500;
+    font-weight: 480;
 }
 
 QPushButton:hover {
@@ -81,7 +81,7 @@ QPushButton:default {
     border: none;
     background-color: #8fb4ff;
     color: #0f1530;
-    font-weight: 600;
+    font-weight: 550;
 }
 
 QPushButton:default:hover {
@@ -125,7 +125,7 @@ QTextEdit {
     padding: 0px 12px;
     border: 1px solid rgba(255, 255, 255, 0.10);
     border-radius: 8px;
-    background-color: rgba(6, 8, 20, 0.35);
+    background-color: rgba(9, 11, 15, 0.35);
     color: #f3f5fb;
 }
 
@@ -195,7 +195,7 @@ QComboBox QAbstractItemView {
     padding: 6px;
     border: 1px solid rgba(255, 255, 255, 0.14);
     border-radius: 14px;
-    background-color: rgba(22, 26, 46, 0.94);
+    background-color: rgba(29, 31, 35, 0.94);
     color: #eef1f8;
     outline: none;
     selection-background-color: rgba(255, 255, 255, 0.10);
@@ -234,7 +234,7 @@ QRadioButton::indicator:checked {
     height: 8px;
     border: 5px solid #8fb4ff;
     border-radius: 9px;
-    background-color: #0f1530;
+    background-color: #1a1c20;
 }
 
 QRadioButton::indicator:disabled {
@@ -312,7 +312,7 @@ QHeaderView::section {
     border-bottom: 1px solid rgba(255, 255, 255, 0.07);
     padding: 6px 8px;
     font-size: 12px;
-    font-weight: 600;
+    font-weight: 550;
 }
 
 QTableView {
@@ -382,7 +382,7 @@ QGroupBox {
     border: 1px solid rgba(255, 255, 255, 0.07);
     border-radius: 12px;
     background-color: rgba(255, 255, 255, 0.05);
-    font-weight: 600;
+    font-weight: 550;
 }
 
 QGroupBox::title {
@@ -418,7 +418,7 @@ QMenu {
     padding: 6px;
     border: 1px solid rgba(255, 255, 255, 0.14);
     border-radius: 14px;
-    background-color: rgba(22, 26, 46, 0.94);
+    background-color: rgba(29, 31, 35, 0.94);
 }
 
 QMenu::item {
@@ -464,7 +464,7 @@ QLabel#exec-message,
 
 #ChoicePage QLabel#m_drivesLabel {
     font-size: 28px;
-    font-weight: 600;
+    font-weight: 550;
 }
 
 #ChoicePage QLabel#m_messageLabel {
@@ -474,7 +474,7 @@ QLabel#exec-message,
 
 #ChoicePage QLabel#m_diskLabel {
     font-size: 13px;
-    font-weight: 500;
+    font-weight: 480;
 }
 
 #ChoicePage QComboBox {
@@ -492,9 +492,10 @@ QLabel#exec-message,
     background-color: rgba(255, 255, 255, 0.09);
 }
 
+/* Only the edge marks it: an accent wash over the dark sheet reads as navy. */
 #ChoicePage Calamares--Widgets--PrettyRadioButton[checked="true"] {
     border: 2px solid #8fb4ff;
-    background-color: rgba(143, 180, 255, 0.10);
+    background-color: rgba(255, 255, 255, 0.04);
 }
 
 #ChoicePage QLabel#alongsideUsed,
@@ -528,7 +529,7 @@ QLabel#exec-message,
  * DiskEditorPage in wildos-disk-page.patch. */
 #DiskEditorPage QLabel#editorTitle {
     font-size: 28px;
-    font-weight: 600;
+    font-weight: 550;
 }
 
 #DiskEditorPage QLabel#editorSubtitle {
@@ -544,7 +545,7 @@ QLabel#exec-message,
 
 #DiskEditorPage QLabel#panelTitle {
     font-size: 15px;
-    font-weight: 600;
+    font-weight: 550;
 }
 
 #DiskEditorPage QLabel#panelNote,
@@ -642,12 +643,12 @@ PartitionLabelsView {
 
 QLabel#summaryTitle {
     font-size: 22px;
-    font-weight: 600;
+    font-weight: 550;
 }
 
 QLabel#summaryItemTitle {
     font-size: 15px;
-    font-weight: 600;
+    font-weight: 550;
 }
 
 QLabel#summaryItemBody {
@@ -674,13 +675,13 @@ QDialogButtonBox QPushButton {
 QMessageBox#sheetDialog {
     border: 1px solid rgba(255, 255, 255, 0.12);
     border-radius: 16px;
-    background-color: #1a1e33;
+    background-color: #222428;
 }
 
 QMessageBox#sheetDialog QLabel#qt_msgbox_label {
     min-width: 380px;
     font-size: 17px;
-    font-weight: 600;
+    font-weight: 550;
 }
 
 QMessageBox#sheetDialog QLabel#qt_msgbox_informativelabel {

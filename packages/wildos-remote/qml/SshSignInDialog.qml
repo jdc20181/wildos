@@ -57,7 +57,7 @@ Panel {
                 UI.Label {
                     text: qsTr("Sign in to %1").arg(dialog.details.name || "")
                     size: 20
-                    font.weight: Font.Bold
+                    font.weight: UI.Style.weightBold
                 }
                 UI.Label {
                     text: dialog.details.address || ""
@@ -71,7 +71,7 @@ Panel {
             Layout.fillWidth: true
             Layout.preferredHeight: 56
             radius: 10
-            color: dialog.retry ? Qt.rgba(255 / 255, 154 / 255, 138 / 255, 0.10) : UI.Style.tone(0.05)
+            color: dialog.retry ? Qt.alpha(UI.Style.danger, 0.10) : UI.Style.tone(0.05)
             RowLayout {
                 anchors.fill: parent
                 anchors.leftMargin: 14
@@ -86,7 +86,7 @@ Panel {
                     visible: dialog.retry
                     name: "warning"
                     size: 18
-                    color: "#ff9a8a"
+                    color: UI.Style.danger
                 }
                 ColumnLayout {
                     Layout.fillWidth: true
@@ -95,7 +95,7 @@ Panel {
                         Layout.fillWidth: true
                         text: dialog.retry ? qsTr("%1 didn't accept that").arg(dialog.details.name || "") : qsTr("Connected to %1").arg(dialog.details.name || "")
                         size: 13
-                        font.weight: Font.DemiBold
+                        font.weight: UI.Style.weightSemiBold
                     }
                     UI.Label {
                         Layout.fillWidth: true
@@ -113,7 +113,7 @@ Panel {
         UI.Label {
             text: qsTr("Password")
             size: 13
-            font.weight: Font.DemiBold
+            font.weight: UI.Style.weightSemiBold
         }
         UI.TextField {
             id: password

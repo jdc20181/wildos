@@ -1,0 +1,373 @@
+#!/usr/bin/python3
+"""Reports where system updates stand, one key=value per line, for the
+Updates icon on the taskbar. It asks PackageKit, the service Settings > Updates
+and the Store use, so all three always agree on what is waiting. It needs no
+privileges and changes nothing on the system.
+
+Keys, in the order printed:
+
+  state=na|installing|checking|error|available|current|unchecked
+                     "na" in the live session or without PackageKit, with
+                     why=live or why=missing after it.
+                     "installing" and "checking" while anyone is doing it:
+                     Settings, the Store, this icon or apt's own timers.
+                     "error" when the last check from this icon failed and
+                     nothing has checked successfully since. "unchecked"
+                     when the list has not been refreshed for a week, so
+                     "current" would be a guess.
+  by=you|auto        Who is installing or checking: "auto" is apt's daily
+                     refresh and the automatic security updates.
+  updates=N          Updates ready to install, as Settings lists them.
+  security=N         How many of those are security fixes.
+  checked=EPOCH      When the list of updates was last refreshed; 0 if never.
+  restart=yes|no     An installed update takes effect after a restart.
+  auto=on|off        Security updates install by themselves.
+  error=TEXT         Why the last check failed, when state is error.
+
+  update-status check    refreshes the list through PackageKit first, as
+                         Check now in Settings does, then reports.
+"""
+
+import os
+import re
+import subprocess
+import sys
+import time
+
+import gi
+
+gi.require_version("Gio", "2.0")
+from gi.repository import Gio, GLib  # noqa: E402
+
+PK = "org.freedesktop.PackageKit"
+PK_PATH = "/org/freedesktop/PackageKit"
+TX = "org.freedesktop.PackageKit.Transaction"
+
+# PackageKit's enums (pk-enum.h), as they travel over D-Bus.
+ROLE_REFRESH_CACHE = 13
+ROLE_UPDATE_PACKAGES = 22
+ROLE_UPGRADE_SYSTEM = 33
+INFO_IMPORTANT = 7
+INFO_SECURITY = 8
+INFO_BLOCKED = 9
+EXIT_SUCCESS = 1
+FILTER_NONE = 1 << 1
+
+ERROR_NO_NETWORK = 2
+ERROR_NO_CACHE = 18
+ERROR_CANNOT_GET_LOCK = 26
+ERROR_REPO_NOT_AVAILABLE = 37
+ERROR_NOT_AUTHORIZED = 48
+ERROR_CANNOT_FETCH_SOURCES = 64
+ERROR_LOCK_REQUIRED = 67
+
+LISTS = "/var/lib/apt/lists"
+WEEK = 7 * 86400
+
+runtime = os.environ.get("XDG_RUNTIME_DIR") or "/tmp"
+state_dir = os.path.join(os.environ.get("XDG_STATE_HOME") or os.path.expanduser("~/.local/state"), "wildos")
+# The counts, kept until dpkg or the lists change, because asking PackageKit
+# starts it and reads every package.
+counts_file = os.path.join(runtime, "wildos-update-counts.%d" % os.getuid())
+# When PackageKit last refreshed the lists. It only knows while it runs, and
+# it stops when idle, so the last answer is kept.
+checked_file = os.path.join(state_dir, "updates-checked")
+# Why this icon's last check failed: the time, then the words.
+failed_file = os.path.join(state_dir, "updates-check-failed")
+
+
+def mtime(path):
+    try:
+        return int(os.stat(path).st_mtime)
+    except OSError:
+        return 0
+
+
+def read_lines(path):
+    try:
+        with open(path, encoding="utf-8") as f:
+            return f.read().splitlines()
+    except OSError:
+        return []
+
+
+def write_lines(path, lines):
+    try:
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        tmp = "%s.%d" % (path, os.getpid())
+        with open(tmp, "w", encoding="utf-8") as f:
+            f.write("\n".join(str(x) for x in lines) + "\n")
+        os.replace(tmp, path)
+    except OSError:
+        pass
+
+
+def number(text):
+    try:
+        return int(text)
+    except (TypeError, ValueError):
+        return 0
+
+
+def live():
+    try:
+        with open("/proc/cmdline", encoding="utf-8") as f:
+            return "rd.live.image" in f.read()
+    except OSError:
+        return False
+
+
+def unit_busy(unit):
+    # A oneshot service is "activating" for as long as it runs.
+    result = subprocess.run(["systemctl", "is-active", unit], capture_output=True, text=True)
+    return result.stdout.strip() == "activating"
+
+
+def auto_updates():
+    if not any(os.access(os.path.join(d, "unattended-upgrade"), os.X_OK) for d in ("/usr/bin", "/usr/sbin")):
+        return "off"
+    result = subprocess.run(["apt-config", "dump"], capture_output=True, text=True)
+    return "on" if 'APT::Periodic::Unattended-Upgrade "1";' in result.stdout else "off"
+
+
+class PackageKit:
+    def __init__(self):
+        self.bus = Gio.bus_get_sync(Gio.BusType.SYSTEM, None)
+
+    def call(self, path, interface, method, args=None, reply=None, timeout=5000):
+        return self.bus.call_sync(PK, path, interface, method, args,
+                                  GLib.VariantType(reply) if reply else None,
+                                  Gio.DBusCallFlags.NONE, timeout, None)
+
+    def bus_call(self, method, args, reply):
+        return self.bus.call_sync("org.freedesktop.DBus", "/org/freedesktop/DBus", "org.freedesktop.DBus",
+                                  method, args, GLib.VariantType(reply), Gio.DBusCallFlags.NONE, 2000, None)
+
+    def installed(self):
+        try:
+            names = self.bus_call("ListActivatableNames", None, "(as)")[0]
+            return PK in names or self.running()
+        except GLib.Error:
+            return False
+
+    def running(self):
+        try:
+            return self.bus_call("NameHasOwner", GLib.Variant("(s)", (PK,)), "(b)")[0]
+        except GLib.Error:
+            return False
+
+    def roles(self):
+        """What the transactions running now are doing. Never starts PackageKit."""
+        if not self.running():
+            return []
+        roles = []
+        try:
+            paths = self.call(PK_PATH, PK, "GetTransactionList", reply="(ao)")[0]
+        except GLib.Error:
+            return []
+        for path in paths:
+            try:
+                role = self.call(path, "org.freedesktop.DBus.Properties", "Get",
+                                 GLib.Variant("(ss)", (TX, "Role")), "(v)")[0]
+                roles.append(role)
+            except GLib.Error:
+                pass
+        return roles
+
+    def seconds_since_refresh(self):
+        try:
+            seconds = self.call(PK_PATH, PK, "GetTimeSinceAction", GLib.Variant("(u)", (ROLE_REFRESH_CACHE,)), "(u)")[0]
+        except GLib.Error:
+            return None
+        # PackageKit answers with the largest number it has when it never has.
+        return seconds if seconds < 10 * 365 * 86400 else None
+
+    def transaction(self, method, args, on_package=None, timeout=60):
+        """Runs one transaction to the end. Returns (succeeded, error code, details)."""
+        loop = GLib.MainLoop()
+        outcome = {"exit": 0, "error": 0, "details": ""}
+        try:
+            path = self.call(PK_PATH, PK, "CreateTransaction", reply="(o)")[0]
+        except GLib.Error:
+            return False, 0, ""
+
+        def signal(_bus, _sender, _path, _iface, name, params):
+            if name == "Package" and on_package:
+                on_package(params[0], params[1])
+            elif name == "ErrorCode":
+                outcome["error"] = params[0]
+                outcome["details"] = params[1]
+            elif name == "Finished":
+                outcome["exit"] = params[0]
+                loop.quit()
+
+        sub = self.bus.signal_subscribe(PK, TX, None, path, None, Gio.DBusSignalFlags.NONE, signal)
+        try:
+            # Lets polkit ask, as Settings does, if this computer's rules
+            # want a password for refreshing.
+            self.call(path, TX, "SetHints", GLib.Variant("(as)", (["interactive=true"],)))
+            self.call(path, TX, method, args)
+        except GLib.Error:
+            self.bus.signal_unsubscribe(sub)
+            return False, 0, ""
+        GLib.timeout_add_seconds(timeout, loop.quit)
+        loop.run()
+        self.bus.signal_unsubscribe(sub)
+        return outcome["exit"] == EXIT_SUCCESS, outcome["error"], outcome["details"]
+
+    def updates(self):
+        """(updates, security fixes), as Settings counts them, or None."""
+        found = {"all": 0, "security": 0}
+
+        def package(info, _package_id):
+            # Blocked updates are held back on purpose and cannot be installed.
+            if info == INFO_BLOCKED:
+                return
+            found["all"] += 1
+            if info in (INFO_SECURITY, INFO_IMPORTANT):
+                found["security"] += 1
+
+        ok, _, _ = self.transaction("GetUpdates", GLib.Variant("(t)", (FILTER_NONE,)), package, timeout=45)
+        return (found["all"], found["security"]) if ok else None
+
+
+def error_text(code):
+    if code in (ERROR_NO_NETWORK, ERROR_NO_CACHE, ERROR_REPO_NOT_AVAILABLE, ERROR_CANNOT_FETCH_SOURCES):
+        return "Wild OS could not reach the update servers. Check your internet connection and try again."
+    if code == ERROR_NOT_AUTHORIZED:
+        return "Checking needs the administrator password, and it was not given."
+    if code in (ERROR_CANNOT_GET_LOCK, ERROR_LOCK_REQUIRED):
+        return "Another app is installing software. Try again when it has finished."
+    return "Wild OS could not check for updates. Try again in a few minutes."
+
+
+def own_hosts():
+    hosts = {"deb.wildos.io"}
+    try:
+        with open("/etc/apt/sources.list.d/wildos.sources", encoding="utf-8") as f:
+            hosts.update(h.lower() for h in re.findall(r"https?://([^/\s]+)", f.read()))
+    except OSError:
+        pass
+    return hosts
+
+
+def only_others_failed(details):
+    """True when every source apt named as failing was added by other
+    software (Steam's, with a signing key Debian no longer accepts).
+    PackageKit fails the whole refresh for one bad source though apt
+    refreshed the rest, and Settings > Updates counts that as checked."""
+    failed = set()
+    for line in details.splitlines():
+        # Notices name sources that are fine, such as one without 32-bit
+        # packages on a PC with 32-bit support turned on.
+        if "Skipping acquire" in line or "support architecture" in line:
+            continue
+        match = re.search(r"(?:tor\+)?https?://([^/\s'\"]+)", line)
+        if match:
+            failed.add(match.group(1).lower())
+    return bool(failed) and not failed & own_hosts()
+
+
+def check(pk):
+    ok, code, details = pk.transaction("RefreshCache", GLib.Variant("(b)", (True,)), timeout=600)
+    if ok or only_others_failed(details):
+        try:
+            os.remove(failed_file)
+        except OSError:
+            pass
+        write_lines(checked_file, [int(time.time())])
+    else:
+        write_lines(failed_file, [int(time.time()), error_text(code)])
+
+
+def last_checked(pk):
+    # apt's own refreshes (the daily timer) leave the lists' times and apt's
+    # stamp; PackageKit's leave its record, which is the one Settings shows.
+    checked = mtime("/var/lib/apt/periodic/update-success-stamp")
+    try:
+        for name in os.listdir(LISTS):
+            if name.endswith("Release"):
+                checked = max(checked, mtime(os.path.join(LISTS, name)))
+    except OSError:
+        pass
+    known = number((read_lines(checked_file) or ["0"])[0])
+    if pk.running() or known == 0:
+        seconds = pk.seconds_since_refresh()
+        if seconds is not None:
+            at = int(time.time()) - seconds
+            # Within a minute is the same answer again.
+            if abs(at - known) > 60:
+                known = at
+                write_lines(checked_file, [known])
+    return max(checked, known)
+
+
+def main():
+    if live():
+        print("state=na")
+        print("why=live")
+        return
+    pk = PackageKit()
+    if not pk.installed():
+        print("state=na")
+        print("why=missing")
+        return
+
+    if len(sys.argv) > 1 and sys.argv[1] == "check":
+        check(pk)
+
+    roles = pk.roles()
+    if unit_busy("apt-daily-upgrade.service"):
+        busy, by = "installing", "auto"
+    elif ROLE_UPDATE_PACKAGES in roles or ROLE_UPGRADE_SYSTEM in roles:
+        busy, by = "installing", "you"
+    elif ROLE_REFRESH_CACHE in roles:
+        busy, by = "checking", "you"
+    elif unit_busy("apt-daily.service"):
+        busy, by = "checking", "auto"
+    else:
+        busy, by = "", ""
+
+    checked = last_checked(pk)
+    key = "%d %d %d" % (mtime("/var/lib/dpkg/status"), mtime(LISTS), checked)
+    cached = read_lines(counts_file)
+    known = len(cached) == 2
+    updates, security = (number(x) for x in (cached[1].split() + ["0", "0"])[:2]) if known else (0, 0)
+    # While something installs or checks, PackageKit would queue the question
+    # behind it, so the last answer stands until it is done.
+    if (not known or cached[0] != key) and not busy:
+        answer = pk.updates()
+        if answer is not None:
+            updates, security = answer
+            known = True
+            write_lines(counts_file, [key, "%d %d" % answer])
+
+    failed = read_lines(failed_file)
+    failed_at = number(failed[0]) if failed else 0
+    error = failed[1] if len(failed) > 1 and failed_at > checked else ""
+
+    if busy:
+        state = busy
+    elif error:
+        state = "error"
+    elif known and updates > 0:
+        state = "available"
+    elif checked == 0 or time.time() - checked > WEEK or not known:
+        state = "unchecked"
+    else:
+        state = "current"
+
+    restart = os.path.exists("/run/reboot-required") or os.path.exists(os.path.join(runtime, "wildos-restart-needed"))
+
+    print("state=" + state)
+    print("by=" + by)
+    print("updates=%d" % updates)
+    print("security=%d" % security)
+    print("checked=%d" % checked)
+    print("restart=" + ("yes" if restart else "no"))
+    print("auto=" + auto_updates())
+    print("error=" + error)
+
+
+if __name__ == "__main__":
+    main()

@@ -23,7 +23,7 @@ T.AbstractButton {
 
     background: Rectangle {
         radius: 8
-        color: button.current ? UI.Style.accentAlpha(0.16, 0.12) : button.down ? UI.Style.surfacePressed : button.hovered ? UI.Style.surfaceHover : "transparent"
+        color: button.current ? UI.Style.fillSelected(0.16, 0.12) : button.down ? UI.Style.surfacePressed : button.hovered ? UI.Style.surfaceHover : "transparent"
         Behavior on color {
             ColorAnimation { duration: UI.Style.hoverDuration }
         }
@@ -45,7 +45,7 @@ T.AbstractButton {
             anchors.verticalCenter: parent.verticalCenter
             text: button.text
             size: 13.5
-            font.weight: button.current ? Font.DemiBold : Font.Normal
+            font.weight: button.current ? UI.Style.weightSemiBold : UI.Style.weightRegular
         }
     }
 }

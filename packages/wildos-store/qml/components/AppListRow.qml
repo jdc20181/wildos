@@ -67,7 +67,7 @@ T.AbstractButton {
             anchors.verticalCenter: parent.verticalCenter
             text: row.number
             size: 16
-            font.weight: Font.Bold
+            font.weight: UI.Style.weightBold
             font.features: { "tnum": 1 }
             color: Metrics.inkSecondary
         }
@@ -93,7 +93,7 @@ T.AbstractButton {
                 width: parent.width
                 text: row.app ? row.app.name : ""
                 size: 14.5
-                font.weight: Font.DemiBold
+                font.weight: UI.Style.weightSemiBold
             }
 
             UI.Label {

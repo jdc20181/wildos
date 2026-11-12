@@ -21,6 +21,7 @@ agent itself.
   wildos-winmode documents                 what is open in Windows and whether it is saved
   wildos-winmode launch-stats [--check]    launch times by state, 50th and 95th percentile;
                                            --check fails when a 95th percentile misses its target
+  wildos-winmode check-iso <file>          whether a Windows 11 ISO can be used instead of the download
   wildos-winmode install-guest             put this package's wild-guest into Windows
   wildos-winmode guest '<json>'            send wild-guest one request (troubleshooting)
 """
@@ -155,10 +156,13 @@ def taskbar_status():
     """The taskbar's Windows mode item asks this every few seconds. Asking
     starts the agent and the system service, which a PC without Windows
     mode must never pay for, so they are only asked once this account has
-    Windows apps or the agent is up anyway. "answering" false means Windows
-    mode is set up but its services didn't reply."""
+    Windows apps, while a setup is under way (it carries on after a restart,
+    with nothing else to start the agent), or when the agent is up anyway.
+    "answering" false means Windows mode is set up but its services didn't
+    reply."""
     try:
-        if not os.path.exists(launchers.registry_file()) and not agent_running():
+        if (not os.path.exists(launchers.registry_file()) and not os.path.exists(SETTING_UP)
+                and not agent_running()):
             print(json.dumps({"agent": None, "system": None}))
             return 0
         print(json.dumps({"agent": json.loads(agent("Status", timeout=10)),
@@ -170,6 +174,8 @@ def taskbar_status():
 
 
 SETUP_APP = "/usr/libexec/wildos/wildos-winmode-setup"
+# The system service's mark of a setup under way (setup.MARKER).
+SETTING_UP = os.path.join(config.STATE_DIR, "setting-up")
 
 
 def main(argv):
@@ -241,6 +247,11 @@ def main(argv):
         if cmd == "guest" and len(rest) == 1:
             print(host("GuestRequest", (rest[0],), "(s)"))
             return 0
+        # The setup wizard's check of a Windows 11 file someone already has,
+        # run as them; prints {"ok": ...} as JSON.
+        if cmd == "check-iso" and len(rest) == 1:
+            from . import isocheck
+            return isocheck.main([local_path(rest[0])])
         if cmd == "install-guest":
             print(host("InstallGuestHelper"))
             return 0

@@ -71,7 +71,7 @@ execute_after_dh_install:
 	# Breeze's shapes and sizes.
 	python3 tools/cursor-colours.py /usr/share/icons/Breeze_Light debian/wildos-branding/usr/share/icons
 	# The start-up animation and disk unlock screen, every frame drawn from
-	# the logo masters and Inter at each screen scale (see the tool for why).
+	# the logo masters and Albert Sans at each screen scale (see the tool for why).
 	python3 tools/render-boot-assets.py debian/wildos-branding/usr/share/plymouth/themes/wildos \
 		debian/wildos-branding/usr/share/wildos/boot-handoff
 	# The start-up menu, drawn by the same generator as the USB stick's so

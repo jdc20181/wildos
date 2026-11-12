@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>org.wildos.music</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0-or-later</project_license>
+  <name>Music</name>
+  <summary>Play the songs in your Music folder</summary>
+  <description>
+    <p>
+      Music plays the songs in the Music folder in your home folder. Browse
+      them by song, album, artist or folder, make playlists, like songs, and
+      shrink Music to a mini player that stays on top of your other windows.
+    </p>
+    <p>
+      It reads titles, cover art and lyrics from the files themselves and
+      keeps playlists as .m3u8 files in Music/Playlists, so any other player
+      can open them. The media keys and the media controls in the taskbar
+      work with it. Nothing is streamed or looked up online: no accounts and
+      no tracking.
+    </p>
+  </description>
+  <launchable type="desktop-id">org.wildos.music.desktop</launchable>
+  <icon type="stock">wildos-music</icon>
+  <categories>
+    <category>AudioVideo</category>
+    <category>Audio</category>
+    <category>Player</category>
+  </categories>
+  <provides>
+    <binary>wildos-music</binary>
+  </provides>
+  <pkgname>wildos-music</pkgname>
+  <url type="homepage">https://wildos.io</url>
+  <developer id="io.wildos">
+    <name>Wild OS</name>
+  </developer>
+  <content_rating type="oars-1.1"/>
+  <releases>
+    <release version="0.1.0" date="2026-11-11"/>
+  </releases>
+</component>

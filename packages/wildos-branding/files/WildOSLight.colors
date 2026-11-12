@@ -1,10 +1,9 @@
-# The light Wild OS scheme, from the README's light mode rules: ink #151b2c
-# on near-white glass, accent deepened to #3563d8 with white text on it.
-# Glass tokens are translucent; these are their solid equivalents over the
-# light ground #eef1f7. Not selected anywhere yet: Settings will switch to it
-# (with the WildOSLight Kvantum theme) when light mode ships.
+# The light Wild OS scheme (design v2 Mica): near-black ink on neutral light
+# grey, accent deepened to #3563d8 with white text on it. Glass tokens are
+# translucent; these are their solid equivalents for the parts of Qt that
+# cannot draw translucency.
 #
-#   ink #151b2c         ink-muted ~#616672    ground #eef1f7
+#   ink #1a1a1a         ink-muted ~#606060    window #f3f3f3
 #   accent #3563d8      on-accent #ffffff     accent-text #2a55c4
 
 [ColorEffects:Disabled]
@@ -28,58 +27,58 @@ IntensityAmount=0
 IntensityEffect=0
 
 [Colors:Button]
-BackgroundAlternate=230,234,242
-BackgroundNormal=236,239,246
+BackgroundAlternate=245,245,245
+BackgroundNormal=251,251,251
 DecorationFocus=53,99,216
 DecorationHover=53,99,216
 ForegroundActive=42,85,196
-ForegroundInactive=97,102,114
+ForegroundInactive=96,96,96
 ForegroundLink=42,85,196
 ForegroundNegative=197,55,44
 ForegroundNeutral=154,100,0
-ForegroundNormal=21,27,44
+ForegroundNormal=26,26,26
 ForegroundPositive=47,122,31
 ForegroundVisited=106,75,196
 
 [Colors:Complementary]
-BackgroundAlternate=18,23,43
-BackgroundNormal=15,19,38
+BackgroundAlternate=28,29,34
+BackgroundNormal=32,33,38
 DecorationFocus=143,180,255
 DecorationHover=143,180,255
 ForegroundActive=185,207,255
-ForegroundInactive=179,184,198
+ForegroundInactive=205,206,208
 ForegroundLink=185,207,255
 ForegroundNegative=242,160,138
 ForegroundNeutral=242,196,107
-ForegroundNormal=238,241,248
+ForegroundNormal=255,255,255
 ForegroundPositive=159,211,138
 ForegroundVisited=196,178,255
 
 [Colors:Header]
-BackgroundAlternate=232,236,244
-BackgroundNormal=238,241,247
+BackgroundAlternate=235,235,235
+BackgroundNormal=238,238,238
 DecorationFocus=53,99,216
 DecorationHover=53,99,216
 ForegroundActive=42,85,196
-ForegroundInactive=97,102,114
+ForegroundInactive=96,96,96
 ForegroundLink=42,85,196
 ForegroundNegative=197,55,44
 ForegroundNeutral=154,100,0
-ForegroundNormal=21,27,44
+ForegroundNormal=26,26,26
 ForegroundPositive=47,122,31
 ForegroundVisited=106,75,196
 
 [Colors:Header][Inactive]
-BackgroundAlternate=238,241,247
-BackgroundNormal=244,246,251
+BackgroundAlternate=243,243,243
+BackgroundNormal=243,243,243
 DecorationFocus=53,99,216
 DecorationHover=53,99,216
 ForegroundActive=42,85,196
-ForegroundInactive=97,102,114
+ForegroundInactive=96,96,96
 ForegroundLink=42,85,196
 ForegroundNegative=197,55,44
 ForegroundNeutral=154,100,0
-ForegroundNormal=21,27,44
+ForegroundNormal=26,26,26
 ForegroundPositive=47,122,31
 ForegroundVisited=106,75,196
 
@@ -98,44 +97,44 @@ ForegroundPositive=255,255,255
 ForegroundVisited=255,255,255
 
 [Colors:Tooltip]
-BackgroundAlternate=242,244,249
-BackgroundNormal=250,251,254
+BackgroundAlternate=243,243,243
+BackgroundNormal=249,249,249
 DecorationFocus=53,99,216
 DecorationHover=53,99,216
 ForegroundActive=42,85,196
-ForegroundInactive=97,102,114
+ForegroundInactive=96,96,96
 ForegroundLink=42,85,196
 ForegroundNegative=197,55,44
 ForegroundNeutral=154,100,0
-ForegroundNormal=21,27,44
+ForegroundNormal=26,26,26
 ForegroundPositive=47,122,31
 ForegroundVisited=106,75,196
 
 [Colors:View]
-BackgroundAlternate=242,244,249
-BackgroundNormal=250,251,254
+BackgroundAlternate=245,245,245
+BackgroundNormal=251,251,251
 DecorationFocus=53,99,216
 DecorationHover=53,99,216
 ForegroundActive=42,85,196
-ForegroundInactive=97,102,114
+ForegroundInactive=96,96,96
 ForegroundLink=42,85,196
 ForegroundNegative=197,55,44
 ForegroundNeutral=154,100,0
-ForegroundNormal=21,27,44
+ForegroundNormal=26,26,26
 ForegroundPositive=47,122,31
 ForegroundVisited=106,75,196
 
 [Colors:Window]
-BackgroundAlternate=238,241,247
-BackgroundNormal=244,246,251
+BackgroundAlternate=238,238,238
+BackgroundNormal=243,243,243
 DecorationFocus=53,99,216
 DecorationHover=53,99,216
 ForegroundActive=42,85,196
-ForegroundInactive=97,102,114
+ForegroundInactive=96,96,96
 ForegroundLink=42,85,196
 ForegroundNegative=197,55,44
 ForegroundNeutral=154,100,0
-ForegroundNormal=21,27,44
+ForegroundNormal=26,26,26
 ForegroundPositive=47,122,31
 ForegroundVisited=106,75,196
 
@@ -148,9 +147,9 @@ shadeSortColumn=true
 contrast=4
 
 [WM]
-activeBackground=238,241,247
-activeBlend=21,27,44
-activeForeground=21,27,44
-inactiveBackground=244,246,251
-inactiveBlend=97,102,114
-inactiveForeground=97,102,114
+activeBackground=243,243,243
+activeBlend=26,26,26
+activeForeground=26,26,26
+inactiveBackground=238,238,238
+inactiveBlend=96,96,96
+inactiveForeground=96,96,96

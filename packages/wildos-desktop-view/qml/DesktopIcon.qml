@@ -46,8 +46,8 @@ Item {
         id: plate
         anchors.fill: parent
         radius: 10
-        color: tile.selected || tile.dragHover ? UI.Style.accentAlpha(0.28, 0.28)
-            : hover.containsMouse ? UI.Style.accentAlpha(0.14, 0.14)
+        color: tile.selected || tile.dragHover ? UI.Style.fillSelected(0.28, 0.28)
+            : hover.containsMouse ? UI.Style.fillSubtle(0.14, 0.14)
             : "transparent"
         border.width: 1
         border.color: tile.selected || tile.dragHover ? Qt.rgba(tile.accentText.r, tile.accentText.g, tile.accentText.b, 0.55)
@@ -120,6 +120,7 @@ Item {
                 text: tile.name
                 color: UI.Style.inkOnWallpaper
                 font.family: UI.Style.fontFamily
+                font.letterSpacing: UI.Style.tracking(UI.Style.px(12))
                 font.pixelSize: UI.Style.px(12)
                 lineHeightMode: Text.FixedHeight
                 lineHeight: UI.Style.px(12) * 1.3

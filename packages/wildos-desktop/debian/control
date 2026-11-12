@@ -28,9 +28,19 @@ Depends:
  wildos-setup,
  wildos-portal,
  wildos-taskmanager,
+ wildos-recovery,
  wildos-mail,
  wildos-office,
  wildos-remote,
+ wildos-pdf,
+ wildos-capture,
+ wildos-notes,
+ wildos-music,
+ wildos-videos,
+ wildos-archive,
+ wildos-voice,
+ wildos-backup,
+ wildos-report,
  wildos-overlays,
  kde-plasma-desktop,
  plasma-workspace,
@@ -62,6 +72,10 @@ Depends:
  fonts-noto-core,
  fonts-noto-color-emoji,
  usbguard-notifier,
+# AppImages mount themselves with FUSE 2, which Debian no longer installs
+# for anything else since the image left out Recommends (plasma-vault
+# brought it in before). fuse3 already gives them fusermount.
+ libfuse2t64,
  python3,
  xdg-user-dirs,
 # kwalletd's Secret Service (secret-tool, Brave, Windows mode's keyring)
@@ -69,6 +83,11 @@ Depends:
 # every libsecret call fails. QCA only recommends it, and recommends are
 # not installed.
  libqca-qt6-plugins,
+# Fingerprint readers: fprintd talks to the reader, and the PAM module lets
+# the sign-in screen, the lock screen, sudo and administrator prompts take
+# a finger (see files/pam-configs/wildos-fingerprint).
+ fprintd,
+ libpam-fprintd,
 # KDE Connect opens network ports for phone pairing, which a security-focused
 # system should not do unasked; Konqueror would be a second browser; Kup is a
 # backup tray app that sits in the bar. desktop-base is Debian's artwork
@@ -86,7 +105,6 @@ Conflicts:
  xwaylandvideobridge,
 Recommends:
  dolphin,
- ark,
  kwrite,
  okular,
  gwenview,

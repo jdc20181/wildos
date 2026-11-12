@@ -12,6 +12,7 @@
 #include "client.h"
 #include "rail.h"
 #include "railwindow.h"
+#include "screens.h"
 #include "selftest.h"
 #include "service.h"
 
@@ -135,6 +136,13 @@ int main(int argc, char **argv)
 
     startSelfTest(&rail, &client);
 
+    Screens screens;
+    QObject::connect(&screens, &Screens::changed, &app, [&] {
+        if (client.running()) {
+            rail.relayout(screens.layout(rail.scale()));
+        }
+    });
+
     bool quitting = false;
     if (options.prepareSession) {
         client.setPrepareOnly(true);
@@ -190,11 +198,22 @@ int main(int argc, char **argv)
         if (scale <= 0) {
             scale = screen ? screen->devicePixelRatio() : 1.0;
         }
-        rail.setScale(scale);
-        const QSize logical = screen ? screen->geometry().size() : QSize(1920, 1080);
-        client.setDisplay(QSize(int(std::lround(logical.width() * scale)), int(std::lround(logical.height() * scale))), scale);
-        qInfo("wildos-rdp: connecting at scale %.2f, desktop %dx%d", scale, int(std::lround(logical.width() * scale)),
-              int(std::lround(logical.height() * scale)));
+        // A monitor in Windows for every screen, each at its own scale when
+        // KWin says exactly what that is; Windows' primary is this desktop's.
+        QList<Monitor> layout = screens.layout(scale);
+        if (layout.isEmpty()) {
+            const QSize logical = screen ? screen->geometry().size() : QSize(1920, 1080);
+            Monitor only;
+            only.logical = QRect(QPoint(0, 0), logical);
+            only.scale = scale;
+            layout = monitors::arrange({only});
+        }
+        const Monitor &primary = layout.first();
+        rail.setScale(primary.scale);
+        rail.setLayout(layout);
+        client.setLayout(layout);
+        client.setDisplay(layout.size() > 1 ? monitors::bounds(layout).size() : primary.rect.size(), primary.scale);
+        qInfo("wildos-rdp: connecting at scale %.2f, monitors %s", primary.scale, qPrintable(monitors::describe(layout)));
         connecting.start();
         client.start();
     };

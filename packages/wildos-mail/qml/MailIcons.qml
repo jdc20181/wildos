@@ -1,10 +1,15 @@
 pragma Singleton
 
 import QtQuick
+import WildOS.UI as UI
 
 // Mail's own line icons, drawn on the same 24px grid and stroke as the
 // system set (WildOS.UI Icons), taken from the Mail and Calendar artboards.
 QtObject {
+    // A favourite's or an important task's star: warm gold, not the accent,
+    // as the People and Tasks boards draw it in each mode.
+    readonly property color star: UI.Style.dark ? "#ffc46a" : "#9e7941"
+
     readonly property var paths: ({
         "inbox": "M3 13l3-8h12l3 8v6H3zM3 13h5l1 3h6l1-3h5",
         "sent": "M21 3L10 14M21 3l-7 18-4-7-7-4z",
@@ -63,6 +68,19 @@ QtObject {
         "palette": "M12 21a9 9 0 1 1 9-9c0 2-1.5 3-3 3h-2a2 2 0 0 0-1.5 3.3A1.6 1.6 0 0 1 12 21zM7.5 11h.01M10 7h.01M15 7.5h.01",
         "check": "M5 12l5 5L20 7",
         "close": "M6 6l12 12M18 6L6 18",
-        "file": "M14 3H6v18h12V7zM14 3v4h4"
+        "file": "M14 3H6v18h12V7zM14 3v4h4",
+        "user-plus": "M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM19 8v6M22 11h-6",
+        "tag": "M3 3h8l10 10-8 8L3 11zM7.5 7.5h.01",
+        "share-out": "M4 12v8h16v-8M12 3v13M7 8l5-5 5 5",
+        "upload": "M12 15V3M7 8l5-5 5 5M5 21h14",
+        "group": "M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM23 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8",
+        "sort-down": "M7 4v16M3 16l4 4 4-4M14 6h7M14 12h5M14 18h3",
+        "phone": "M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.7a2 2 0 0 1-.5 2.1L8 9.8a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.7.7a2 2 0 0 1 1.7 2z",
+        "cake": "M20 21v-8a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8M4 16s.5-1 2-1 2.5 2 4 2 2.5-2 4-2 2.5 2 4 2 2-1 2-1M2 21h20M7 8v3M12 8v3M17 8v3M7 4h.01M12 4h.01M17 4h.01",
+        "sun": "M12 17a5 5 0 1 0 0-10 5 5 0 0 0 0 10zM12 1v2M12 21v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M1 12h2M21 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4",
+        "cart": "M3 4h2l2.5 11h11L21 7H6.5M9 20h.01M18 20h.01",
+        "circle": "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z",
+        "check-circle": "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM8 12l3 3 5-6",
+        "home": "M3 10l9-7 9 7v10a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1z"
     })
 }

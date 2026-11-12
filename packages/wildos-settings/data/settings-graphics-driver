@@ -36,6 +36,14 @@ rebuild_initramfs() {
     fi
 }
 
+# The restore point apt's hook takes first (wildos-recovery) is named for
+# what this does, so Settings > System > Recovery can say what going back
+# undoes.
+case "${1:-}" in
+nvidia) export WILDOS_RESTORE_LABEL="Before installing the graphics driver" ;;
+open) export WILDOS_RESTORE_LABEL="Before changing the graphics driver" ;;
+esac
+
 case "${1:-}" in
 nvidia)
     step "Checking for updates"

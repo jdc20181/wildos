@@ -7,9 +7,9 @@
 #include "models.h"
 
 // What Mail and Calendar share without starting the other's engine: the
-// app rail's buttons (Mail and Calendar are separate windows with their own
-// taskbar buttons, so moving between them starts, or brings forward, the
-// other) and a person's initials and colour.
+// app rail's buttons (Calendar's own window and Mail's, which also holds
+// People and Tasks, have their own taskbar buttons, so moving between them
+// starts, or brings forward, the other) and a person's initials and colour.
 class Apps : public QObject
 {
     Q_OBJECT
@@ -21,7 +21,14 @@ public:
 
     Q_INVOKABLE void open(const QString &app) const
     {
-        QProcess::startDetached(app == QLatin1String("calendar") ? QStringLiteral("wildos-calendar") : QStringLiteral("wildos-mail"), {});
+        if (app == QLatin1String("calendar")) {
+            QProcess::startDetached(QStringLiteral("wildos-calendar"), {});
+        } else if (app == QLatin1String("people") || app == QLatin1String("tasks")) {
+            // People and Tasks are tabs of Mail's window.
+            QProcess::startDetached(QStringLiteral("wildos-mail"), {QStringLiteral("--") + app});
+        } else {
+            QProcess::startDetached(QStringLiteral("wildos-mail"), {});
+        }
     }
     // Right-clicking the rail: Calendar in a window of its own. Mail has
     // one window, so for Mail this is the same as choosing it.

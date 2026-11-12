@@ -91,7 +91,7 @@ Item {
                 if (!s) {
                     continue;
                 }
-                windows.push(windowComponent.createObject(null, { desktop: d, screen: s, sourceRect: layout[i].rect, primary: i === 0 }));
+                windows.push(windowComponent.createObject(null, { desktop: d, screen: s, targetScreen: s.name, sourceRect: layout[i].rect, primary: i === 0 }));
             }
         } else {
             windows.push(windowComponent.createObject(null, { desktop: d, primary: true }));

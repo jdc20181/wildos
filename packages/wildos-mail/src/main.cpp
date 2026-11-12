@@ -119,6 +119,15 @@ public Q_SLOTS:
         }
         raise(m_engine);
     }
+    // wildos-mail --people or --tasks, or a task's reminder: that tab.
+    Q_SCRIPTABLE void showSection(const QString &section)
+    {
+        const auto roots = m_engine->rootObjects();
+        if (!roots.isEmpty()) {
+            QMetaObject::invokeMethod(roots.constFirst(), "showSection", Q_ARG(QVariant, section));
+        }
+        raise(m_engine);
+    }
     // Calendar's launcher, or a reminder's Open: the Calendar tab, at the
     // event if one is named.
     Q_SCRIPTABLE void showCalendar(const QString &key, const QString &day)
@@ -269,7 +278,7 @@ QObject *showSplash(QQmlApplicationEngine *engine, bool calendar)
               {QStringLiteral("accent"), QColor(QStringLiteral("#3fb6ff"))},
               {QStringLiteral("accentDeep"), QColor(QStringLiteral("#0a63d1"))},
               {QStringLiteral("status"), QStringLiteral("Opening your inbox")},
-              {QStringLiteral("noteStart"), QStringLiteral("Every account in one inbox")},
+              {QStringLiteral("noteStart"), QStringLiteral("Gmail, iCloud and other IMAP accounts")},
               {QStringLiteral("noteEnd"), QStringLiteral("Trackers blocked")},
           };
     properties.insert(QStringLiteral("showDelay"), 0);
@@ -328,12 +337,17 @@ int main(int argc, char *argv[])
     const QCommandLineOption calendarOption(QStringLiteral("calendar"), QStringLiteral("Open on the Calendar tab."));
     const QCommandLineOption event(QStringLiteral("event"), QStringLiteral("An event to open in Calendar."), QStringLiteral("key"));
     const QCommandLineOption day(QStringLiteral("day"), QStringLiteral("The day it is on, as YYYY-MM-DD."), QStringLiteral("date"));
+    const QCommandLineOption peopleOption(QStringLiteral("people"), QStringLiteral("Open on the People tab."));
+    const QCommandLineOption tasksOption(QStringLiteral("tasks"), QStringLiteral("Open on the Tasks tab."));
     parser.addOption(calendarOption);
     parser.addOption(event);
     parser.addOption(day);
+    parser.addOption(peopleOption);
+    parser.addOption(tasksOption);
     parser.process(app);
     const QString arg = parser.positionalArguments().value(0);
     calendar = calendar || parser.isSet(calendarOption) || parser.isSet(event);
+    const QString section = parser.isSet(peopleOption) ? QStringLiteral("people") : parser.isSet(tasksOption) ? QStringLiteral("tasks") : QString();
 
     QDBusConnection bus = QDBusConnection::sessionBus();
     // Google's answer to a sign-in goes to whichever of Mail and Calendar
@@ -348,7 +362,11 @@ int main(int argc, char *argv[])
         return 0;
     }
     if (registered(serviceName)) {
-        if (calendar) {
+        if (!section.isEmpty()) {
+            auto message = QDBusMessage::createMethodCall(serviceName, objectPath, serviceName, QStringLiteral("showSection"));
+            message << section;
+            bus.call(message);
+        } else if (calendar) {
             auto message = QDBusMessage::createMethodCall(serviceName, objectPath, serviceName, QStringLiteral("showCalendar"));
             message << parser.value(event) << parser.value(day);
             bus.call(message);
@@ -391,6 +409,8 @@ int main(int argc, char *argv[])
     }
     if (calendar) {
         remote->showCalendar(parser.value(event), parser.value(day));
+    } else if (!section.isEmpty()) {
+        remote->showSection(section);
     }
     // Reminders start at sign-in; started here too in case that was missed.
     if (!registered(remindersService)) {

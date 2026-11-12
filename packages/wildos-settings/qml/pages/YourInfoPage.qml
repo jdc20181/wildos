@@ -54,7 +54,7 @@ PageScroll {
                     Layout.fillWidth: true
                     text: System.userFullName
                     size: 22
-                    font.weight: Font.DemiBold
+                    font.weight: UI.Style.weightSemiBold
                 }
 
                 UI.Label {

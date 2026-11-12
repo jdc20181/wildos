@@ -95,9 +95,7 @@ Rectangle {
     function timeChoices(from) {
         const list = [];
         for (let m = 0; m < 24 * 60; m += 15) {
-            const h = Math.floor(m / 60);
-            const t = (h < 10 ? "0" : "") + h + ":" + (m % 60 === 0 ? "00" : m % 60);
-            list.push({ value: m, text: t });
+            list.push({ value: m, text: Formats.time(new Date(2000, 0, 1, Math.floor(m / 60), m % 60)) });
         }
         return list;
     }
@@ -215,8 +213,9 @@ Rectangle {
                     placeholderTextColor: UI.Style.inkPlaceholder
                     color: UI.Style.ink
                     font.family: UI.Style.fontFamily
+                    font.letterSpacing: UI.Style.tracking(UI.Style.px(20))
                     font.pixelSize: UI.Style.px(20)
-                    font.weight: Font.DemiBold
+                    font.weight: UI.Style.weightSemiBold
                     leftPadding: 0
                     bottomPadding: 10
                     background: Rectangle {
@@ -322,7 +321,7 @@ Rectangle {
                     }
                     UI.ComboBox {
                         visible: !editor.allDay
-                        implicitWidth: 96
+                        implicitWidth: Formats.twelveHour() ? 116 : 96
                         model: editor.times
                         currentIndex: editor.indexFor(editor.startTime)
                         onActivated: function (i) {
@@ -341,7 +340,7 @@ Rectangle {
                     }
                     UI.ComboBox {
                         visible: !editor.allDay
-                        implicitWidth: 96
+                        implicitWidth: Formats.twelveHour() ? 116 : 96
                         model: editor.times
                         currentIndex: editor.indexFor(editor.endTime)
                         onActivated: function (i) {
@@ -457,6 +456,7 @@ Rectangle {
                             wrapMode: TextEdit.Wrap
                             color: UI.Style.ink
                             font.family: UI.Style.fontFamily
+                            font.letterSpacing: UI.Style.tracking(UI.Style.px(13))
                             font.pixelSize: UI.Style.px(13)
                             placeholderText: qsTr("Add notes")
                             placeholderTextColor: UI.Style.inkPlaceholder
@@ -497,7 +497,7 @@ Rectangle {
                         horizontalAlignment: Text.AlignHCenter
                         text: Formats.weekdayAndDay(editor.shownDay)
                         size: 13
-                        font.weight: Font.DemiBold
+                        font.weight: UI.Style.weightSemiBold
                     }
                     UI.IconButton {
                         iconName: "chevron-right"
@@ -563,7 +563,7 @@ Rectangle {
                                 width: 40
                                 y: -6
                                 visible: index > 0
-                                text: (index < 10 ? "0" : "") + index + ":00"
+                                text: Formats.hour(index)
                                 size: 11
                                 color: UI.Style.inkSubtle
                             }
@@ -597,7 +597,7 @@ Rectangle {
                                 UI.Label {
                                     text: modelData.title
                                     size: 12
-                                    font.weight: Font.DemiBold
+                                    font.weight: UI.Style.weightSemiBold
                                 }
                                 UI.Label {
                                     text: modelData.rangeText
@@ -624,7 +624,7 @@ Rectangle {
                             UI.Label {
                                 text: title.text.length > 0 ? title.text : qsTr("New event")
                                 size: 12
-                                font.weight: Font.DemiBold
+                                font.weight: UI.Style.weightSemiBold
                             }
                             UI.Label {
                                 text: qsTr("%1 to %2").arg(Formats.time(editor.startTime)).arg(Formats.time(editor.endTime))

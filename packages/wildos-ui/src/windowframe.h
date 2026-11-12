@@ -73,8 +73,8 @@ private:
     QPointer<QQuickWindow> m_window;
     int m_radius = 14;
     bool m_shadowOn = true;
-    // shadow-window: 0 30px 80px rgba(4,8,24,0.45).
-    QColor m_shadowColour = QColor(4, 8, 24, 115);
+    // shadow-window: 0 30px 80px rgba(10,12,16,0.45).
+    QColor m_shadowColour = QColor(10, 12, 16, 115);
     bool m_blurOn = true;
     bool m_blurAvailable = false;
     bool m_pending = false;

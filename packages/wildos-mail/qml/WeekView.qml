@@ -84,13 +84,13 @@ Item {
                         UI.Label {
                             text: head.day.getDate()
                             size: 20
-                            font.weight: Font.DemiBold
-                            color: head.today ? UI.Style.accent : UI.Style.ink
+                            font.weight: UI.Style.weightSemiBold
+                            color: UI.Style.ink
                         }
                         UI.Label {
                             text: Formats.names().toString(head.day, "dddd")
                             size: 12
-                            color: head.today ? UI.Style.accent : UI.Style.inkMuted
+                            color: head.today ? UI.Style.ink : UI.Style.inkMuted
                             elide: Text.ElideRight
                             width: view.columnWidth - 16
                         }
@@ -184,7 +184,7 @@ Item {
                         width: parent.width - 14
                         text: chip.modelData.title
                         size: 12
-                        font.weight: Font.DemiBold
+                        font.weight: UI.Style.weightSemiBold
                         elide: Text.ElideRight
                     }
                     MouseArea {
@@ -223,7 +223,7 @@ Item {
                             width: view.gutter - 10
                             y: -7
                             horizontalAlignment: Text.AlignRight
-                            text: (index < 10 ? "0" : "") + index + ":00"
+                            text: Formats.hour(index)
                             size: 11
                             color: UI.Style.inkSubtle
                         }
@@ -306,7 +306,7 @@ Item {
                                         width: parent.width
                                         text: block.modelData.title
                                         size: 12
-                                        font.weight: Font.DemiBold
+                                        font.weight: UI.Style.weightSemiBold
                                         elide: Text.ElideRight
                                     }
                                     UI.Label {

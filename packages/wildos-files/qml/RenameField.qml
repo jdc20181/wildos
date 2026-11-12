@@ -33,6 +33,16 @@ Rectangle {
         }
     }
 
+    // Keys the text has no use for (Left at the start, Right at the end, Up,
+    // Down, Page Down) would reach the view behind, which moves the
+    // selection, takes focus and ends the rename. As in Explorer they stop
+    // here: only Enter, Escape, Tab or clicking away end it.
+    Keys.onPressed: event => {
+        if (event.key !== Qt.Key_Tab && event.key !== Qt.Key_Backtab) {
+            event.accepted = true;
+        }
+    }
+
     TextInput {
         id: input
         anchors.fill: parent
@@ -43,9 +53,12 @@ Rectangle {
         wrapMode: field.multiLine ? TextInput.WrapAnywhere : TextInput.NoWrap
         text: field.original
         color: UI.Style.inkField
-        selectionColor: UI.Style.accentSelected
-        selectedTextColor: UI.Style.ink
+        selectionColor: UI.Style.textSelection
+        // The name keeps its colour when selected, so starting a rename does
+        // not make it look brighter; the highlight shows the selection.
+        selectedTextColor: UI.Style.inkField
         font.family: UI.Style.fontFamily
+        font.letterSpacing: UI.Style.tracking(UI.Style.px(field.multiLine ? 12 : 13))
         font.pixelSize: UI.Style.px(field.multiLine ? 12 : 13)
         clip: true
         selectByMouse: true

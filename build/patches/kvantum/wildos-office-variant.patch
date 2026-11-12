@@ -1,0 +1,44 @@
+Description: Wild OS office variant of the WildOS Kvantum theme
+ WildOSOffice and WildOSOfficeLight are the WildOS theme with the denser
+ toolbar buttons and drop-downs (28 px) of the Write and Tables ribbon on
+ the design boards. kvantum.kvconfig gives them to LibreOffice; like WildOS
+ they mean whichever variant matches the colour scheme applied, and follow
+ light and dark mode and the accent while LibreOffice is open.
+Author: Wild OS Developers <dev@wildos.io>
+Forwarded: not-needed
+
+--- a/Kvantum/style/Kvantum.cpp
++++ b/Kvantum/style/Kvantum.cpp
+@@ -241,6 +241,16 @@
+     wildosAccent_ = wildosSystemAccent().name();
+     wildosFollowScheme();
+   }
++  /* Wild OS: WildOSOffice and WildOSOfficeLight are the same theme with the
++     denser toolbar buttons and drop-downs of the Write and Tables ribbon,
++     given to LibreOffice in kvantum.kvconfig, and follow the scheme too. */
++  else if (theme == KL1("WildOSOffice") || theme == KL1("WildOSOfficeLight"))
++  {
++    wildosVariant_ = wildosSchemeVariant();
++    theme = wildosVariant_ == KL1("WildOSLight") ? KL1("WildOSOfficeLight") : KL1("WildOSOffice");
++    wildosAccent_ = wildosSystemAccent().name();
++    wildosFollowScheme();
++  }
+ 
+   setBuiltinDefaultTheme();
+   setTheme(theme, useDark);
+--- a/Kvantum/style/qt5/Kvantum5.cpp
++++ b/Kvantum/style/qt5/Kvantum5.cpp
+@@ -279,6 +279,13 @@
+     theme = wildosVariant_ = wildosSchemeVariant();
+     wildosFollowScheme();
+   }
++  else if (theme == QLatin1String("WildOSOffice") || theme == QLatin1String("WildOSOfficeLight"))
++  {
++    wildosVariant_ = wildosSchemeVariant();
++    theme = wildosVariant_ == QLatin1String("WildOSLight") ? QStringLiteral("WildOSOfficeLight")
++                                                            : QStringLiteral("WildOSOffice");
++    wildosFollowScheme();
++  }
+ 
+   setBuiltinDefaultTheme();
+   setTheme(theme, useDark);

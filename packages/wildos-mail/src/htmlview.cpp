@@ -183,12 +183,12 @@ void HtmlView::rebuild()
     }
     // How Mail dresses a message: plain mail in the window's own type and
     // colours; designed mail on white with dark text, as its sender saw it.
-    const QString ink = m_paper ? QStringLiteral("#1b1f2a") : m_textColor.name(QColor::HexRgb);
+    const QString ink = m_paper ? QStringLiteral("#1f2125") : m_textColor.name(QColor::HexRgb);
     const QString link = m_paper ? QStringLiteral("#1a5fd0") : m_linkColor.name(QColor::HexRgb);
     const QString quote = m_paper ? QStringLiteral("#5b6275") : m_quoteColor.name(QColor::HexRgb);
     const QString css = QStringLiteral(
                             "html, body { height: auto; }"
-                            "body { color: %1; font-family: Inter, sans-serif; font-size: %4px; line-height: 1.6; margin: 0; }"
+                            "body { color: %1; font-family: 'Albert Sans', 'Segoe UI', Arial, sans-serif; font-size: %4px; line-height: 1.6; margin: 0; }"
                             "a { color: %2; }"
                             "blockquote { margin: 0 0 0 4px; padding-left: 12px; border-left: 2px solid %3; color: %3; }"
                             "img { max-width: 100%; }"
@@ -333,12 +333,12 @@ litehtml::uint_ptr HtmlView::create_font(const litehtml::tchar_t *faceName, int 
             families << QStringLiteral("Noto Sans Mono");
         } else if (lower == QLatin1String("sans-serif") || lower.contains(QLatin1String("arial")) || lower.contains(QLatin1String("helvetica"))
                    || lower.contains(QLatin1String("segoe")) || lower == QLatin1String("system-ui") || lower == QLatin1String("-apple-system")) {
-            families << QStringLiteral("Inter");
+            families << QStringLiteral("Albert Sans");
         } else {
             families << family;
         }
     }
-    families << QStringLiteral("Inter");
+    families << QStringLiteral("Albert Sans");
     QFont font;
     font.setFamilies(families);
     font.setPixelSize(qMax(1, size));
@@ -367,7 +367,7 @@ void HtmlView::delete_font(litehtml::uint_ptr hFont)
 
 QFont HtmlView::fontFor(litehtml::uint_ptr handle) const
 {
-    return m_fonts.value(handle, QFont(QStringLiteral("Inter")));
+    return m_fonts.value(handle, QFont(QStringLiteral("Albert Sans")));
 }
 
 int HtmlView::text_width(const litehtml::tchar_t *text, litehtml::uint_ptr hFont)
@@ -396,7 +396,7 @@ int HtmlView::get_default_font_size() const
 
 const litehtml::tchar_t *HtmlView::get_default_font_name() const
 {
-    return "Inter";
+    return "Albert Sans";
 }
 
 void HtmlView::draw_list_marker(litehtml::uint_ptr hdc, const litehtml::list_marker &marker)

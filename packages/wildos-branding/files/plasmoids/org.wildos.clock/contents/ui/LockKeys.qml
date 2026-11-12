@@ -74,7 +74,7 @@ Item {
             id: card
             anchors.fill: parent
             radius: 20
-            color: UI.Style.glass(16, 20, 38, 0.84, 0.92)
+            color: UI.Style.glassFloat
             border.width: 1
             border.color: UI.Style.borderGlass
 

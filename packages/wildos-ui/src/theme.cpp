@@ -1,5 +1,7 @@
 #include "theme.h"
 
+#include "historyswipe.h"
+
 #include <KConfigGroup>
 #include <algorithm>
 #include <KSharedConfig>
@@ -28,11 +30,11 @@ QColor parseColour(const QString &value)
     return value.isEmpty() ? QColor() : QColor(value);
 }
 
-// Dawn's window glass and the light glass of the theme cards. A theme's
+// Dawn's Mica window glass in each scheme. A theme's
 // glass is given as this one surface; every other surface keeps its
 // relation to it (see Style.tinted).
-const QColor darkReference = QColor::fromRgbF(18 / 255.0, 22 / 255.0, 40 / 255.0, 0.86);
-const QColor lightReference = QColor::fromRgbF(250 / 255.0, 251 / 255.0, 254 / 255.0, 0.82);
+const QColor darkReference = QColor::fromRgbF(24 / 255.0, 26 / 255.0, 34 / 255.0, 0.95);
+const QColor lightReference = QColor::fromRgbF(243 / 255.0, 243 / 255.0, 243 / 255.0, 0.96);
 
 // {"colour": "#rrggbb", "alpha": 0.86}, or a bare "#rrggbb".
 QColor jsonColour(const QJsonValue &value)
@@ -54,6 +56,7 @@ Theme::Theme(QObject *parent)
 {
     read();
     qGuiApp->installEventFilter(this);
+    HistorySwipe::install();
     // plasma-apply-colorscheme rewrites kdeglobals in several steps, and
     // between them the accent entry is briefly gone. Reading at once would
     // flash the default accent before the new one, so changes are read once
@@ -154,6 +157,7 @@ void Theme::readTheme()
     m_themeAccent = jsonColour(theme.value(QStringLiteral("accent")).toObject().value(QStringLiteral("colour")));
     m_glass = jsonColour(theme.value(QStringLiteral("glass")));
     m_taskbarTint = jsonColour(theme.value(QStringLiteral("taskbarGlass")));
+    m_panelTint = jsonColour(theme.value(QStringLiteral("panelGlass")));
     m_textOnAccent = jsonColour(theme.value(QStringLiteral("textOnAccent")));
     m_accentText = jsonColour(theme.value(QStringLiteral("accentText")));
     Q_EMIT themeChanged();

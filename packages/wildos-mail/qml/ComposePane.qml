@@ -261,10 +261,11 @@ Rectangle {
                     width: parent.width - 74
                     anchors.verticalCenter: parent.verticalCenter
                     color: UI.Style.ink
-                    selectionColor: UI.Style.accentSelected
+                    selectionColor: UI.Style.textSelection
                     font.family: UI.Style.fontFamily
+                    font.letterSpacing: UI.Style.tracking(UI.Style.px(14))
                     font.pixelSize: UI.Style.px(14)
-                    font.weight: Font.Medium
+                    font.weight: UI.Style.weightMedium
                     clip: true
                     onTextEdited: composer.touch()
                     KeyNavigation.tab: editor
@@ -300,7 +301,7 @@ Rectangle {
                         MailIcon {
                             name: att.modelData.type.startsWith("image/") ? "picture" : "paperclip"
                             size: 16
-                            color: UI.Style.accent
+                            color: UI.Style.iconMuted
                         }
                         ColumnLayout {
                             Layout.fillWidth: true
@@ -353,11 +354,12 @@ Rectangle {
                     textFormat: TextEdit.RichText
                     wrapMode: TextEdit.Wrap
                     color: UI.Style.ink
-                    selectionColor: UI.Style.accentSelected
+                    selectionColor: UI.Style.textSelection
                     selectedTextColor: UI.Style.ink
                     font.family: UI.Style.fontFamily
+                    font.letterSpacing: UI.Style.tracking(UI.Style.px(14.5))
                     font.pixelSize: UI.Style.px(14.5)
-                    font.weight: Font.Normal
+                    font.weight: UI.Style.weightRegular
                     placeholderText: qsTr("Write your message")
                     placeholderTextColor: UI.Style.inkPlaceholder
                     background: null

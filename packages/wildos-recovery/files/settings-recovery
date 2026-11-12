@@ -1,0 +1,56 @@
+#!/bin/sh
+# Settings > System > Recovery's root helper. Runs as root through pkexec
+# (org.wildos.settings.recovery), and passes on only these requests:
+#
+#   create <label>             a restore point now, named by the person
+#   go-back <id> [hold]        go back to restore point <id>; "hold" keeps
+#                              that update away for two weeks
+#   delete <id>                delete restore point <id>
+#   limits <3|5|10> <10|20|40> <on|off>
+#   restart-recovery           start in start-up recovery once
+#   reset keep|everything      Reset Wild OS, in start-up recovery
+
+set -eu
+RP=/usr/libexec/wildos/restore-points
+
+number() {
+    case "$1" in
+        '' | *[!0-9]*) echo "not a restore point: $1" >&2; exit 2 ;;
+    esac
+}
+
+case "${1:-}" in
+create)
+    label=$(printf '%s' "${2:-}" | tr -d '\000-\037' | cut -c1-80)
+    [ -n "$label" ] || label="Restore point you made"
+    exec "$RP" create --kind manual --label "$label"
+    ;;
+go-back)
+    number "${2:-}"
+    if [ "${3:-}" = hold ]; then
+        exec "$RP" go-back "$2" --hold
+    fi
+    exec "$RP" go-back "$2"
+    ;;
+delete)
+    number "${2:-}"
+    exec "$RP" delete "$2"
+    ;;
+limits)
+    exec "$RP" limits "${2:-}" "${3:-}" "${4:-}"
+    ;;
+restart-recovery)
+    exec /usr/libexec/wildos/recovery-boot next
+    ;;
+reset)
+    case "${2:-}" in
+        keep | everything) exec /usr/libexec/wildos/recovery-boot next "reset-${2}" ;;
+    esac
+    echo "usage: settings-recovery reset keep|everything" >&2
+    exit 2
+    ;;
+*)
+    echo "usage: settings-recovery create LABEL | go-back ID [hold] | delete ID | limits N GB on|off | restart-recovery | reset keep|everything" >&2
+    exit 2
+    ;;
+esac

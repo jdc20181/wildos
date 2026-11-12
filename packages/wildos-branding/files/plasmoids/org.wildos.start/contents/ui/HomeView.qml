@@ -4,7 +4,8 @@ import QtQuick
 import WildOS.UI as UI
 import WildOS.UI as UI
 
-// Pinned apps and recent documents: the page Start opens on.
+// Pinned apps and recent documents, the page Start opens on, and the Office
+// apps Windows mode is getting ready while it sets itself up (board 9.13).
 FocusScope {
     id: home
 
@@ -80,6 +81,11 @@ FocusScope {
                     text: "Pin apps from All apps to keep them here"
                 }
             }
+        }
+
+        WindowsSetupSection {
+            width: parent.width
+            launcher: home.launcher
         }
 
         Column {

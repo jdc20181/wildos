@@ -96,6 +96,7 @@ WPage {
                           : [qsTr("Weak"), qsTr("Weak"), qsTr("Fair"), qsTr("Good"), qsTr("Strong")][page.strength]
                     color: UI.Style.inkStatus
                     font.family: UI.Style.fontFamily
+                    font.letterSpacing: UI.Style.tracking(12)
                     font.pixelSize: 12
                 }
             }
@@ -126,6 +127,7 @@ WPage {
                     text: page.matching ? qsTr("Passwords match") : qsTr("Passwords do not match yet")
                     color: UI.Style.inkStatus
                     font.family: UI.Style.fontFamily
+                    font.letterSpacing: UI.Style.tracking(12)
                     font.pixelSize: 12
                 }
             }
@@ -165,6 +167,7 @@ WPage {
                             text: qsTr("Create a recovery key")
                             color: UI.Style.ink
                             font.family: UI.Style.fontFamily
+                            font.letterSpacing: UI.Style.tracking(14)
                             font.pixelSize: 14
                         }
                         Text {
@@ -172,6 +175,7 @@ WPage {
                             text: qsTr("A one-off code to save or write down, in case you ever forget the password. Recommended.")
                             color: UI.Style.inkMuted
                             font.family: UI.Style.fontFamily
+                            font.letterSpacing: UI.Style.tracking(12)
                             font.pixelSize: 12
                             lineHeight: 1.5
                             wrapMode: Text.WordWrap
@@ -206,6 +210,7 @@ WPage {
                             text: qsTr("Don't encrypt")
                             color: UI.Style.ink
                             font.family: UI.Style.fontFamily
+                            font.letterSpacing: UI.Style.tracking(14)
                             font.pixelSize: 14
                         }
                         Text {
@@ -213,6 +218,7 @@ WPage {
                             text: qsTr("Faster to start, but anyone with your laptop can read your files. Not recommended.")
                             color: UI.Style.inkMuted
                             font.family: UI.Style.fontFamily
+                            font.letterSpacing: UI.Style.tracking(12)
                             font.pixelSize: 12
                             lineHeight: 1.5
                             wrapMode: Text.WordWrap
@@ -257,6 +263,7 @@ WPage {
                       : qsTr("If you lose both the password and the recovery key, nobody can get your files back, not even us. That's what keeps them safe.")
                 color: UI.Style.ink
                 font.family: UI.Style.fontFamily
+                font.letterSpacing: UI.Style.tracking(13)
                 font.pixelSize: 13
                 lineHeight: 1.5
                 wrapMode: Text.WordWrap

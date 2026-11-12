@@ -1,0 +1,505 @@
+Description: Write and Tables on scaled screens
+ Follows wildos-ui-polish. The ribbon, the style cards, the sheet tabs and
+ the formula bar drew their sizes in device pixels, so on a scaled screen
+ (a 4K laptop at 250 %) the text grew while File, the tab row, the search
+ field and the cards stayed small and the font name box showed one letter.
+ Their sizes are now the boards' pixels times the screen's scale.
+ Margins and box spacing from a .ui, and the width a .ui gives a toolbox
+ item, are scaled the same way, as GTK scales its own; at 100 % nothing
+ changes.
+ From 150 % the sidebar's strip is at least 40 px scaled, since it was
+ measured before its icons arrived at the scaled size and cut them in
+ half, and a narrower width saved earlier is widened to it.
+Author: Wild OS Developers <dev@wildos.io>
+Forwarded: not-needed
+--- a/sc/source/ui/app/inputwin.cxx
++++ b/sc/source/ui/app/inputwin.cxx
+@@ -902,10 +902,11 @@
+     }
+     else
+     {
+-        mxBackground->set_margin_start(6);
+-        mxBackground->set_margin_end(6);
+-        mxBackground->set_margin_top(3);
+-        mxBackground->set_margin_bottom(3);
++        const float fScale = GetDPIScaleFactor();
++        mxBackground->set_margin_start(6 * fScale);
++        mxBackground->set_margin_end(6 * fScale);
++        mxBackground->set_margin_top(3 * fScale);
++        mxBackground->set_margin_bottom(3 * fScale);
+         // The scrolled window has its own one pixel frame; the rounded edge
+         // drawn in Paint takes its place.
+         for (vcl::Window* pChild = GetWindow(GetWindowType::FirstChild); pChild;
+@@ -950,15 +951,17 @@
+     aEdge.Merge(rStyleSettings.GetDialogTextColor(), 235);
+     if (HasChildPathFocus())
+         aEdge = rStyleSettings.GetAccentColor();
+-    tools::Rectangle aField(Point(x - 5, y - 2), Size(width + 10, height + 4));
++    const float fScale = GetDPIScaleFactor();
++    tools::Rectangle aField(Point(x - tools::Long(5 * fScale), y - tools::Long(2 * fScale)),
++                            Size(width + tools::Long(10 * fScale), height + tools::Long(4 * fScale)));
+     rRenderContext.Push(vcl::PushFlags::LINECOLOR | vcl::PushFlags::FILLCOLOR);
+     rRenderContext.SetAntialiasing(rRenderContext.GetAntialiasing() | AntialiasingFlags::Enable);
+     rRenderContext.SetLineColor();
+     rRenderContext.SetFillColor(aEdge);
+-    rRenderContext.DrawRect(aField, 5, 5);
++    rRenderContext.DrawRect(aField, 5 * fScale, 5 * fScale);
+     aField.shrink(1);
+     rRenderContext.SetFillColor(ScWildOSFieldColor(rStyleSettings));
+-    rRenderContext.DrawRect(aField, 4, 4);
++    rRenderContext.DrawRect(aField, 4 * fScale, 4 * fScale);
+     rRenderContext.Pop();
+ }
+ 
+--- a/sfx2/source/sidebar/SidebarController.cxx
++++ b/sfx2/source/sidebar/SidebarController.cxx
+@@ -435,6 +435,15 @@
+     const sal_Int32 nWidth(mpParentWindow->GetSizePixel().Width());
+     const sal_Int32 nHeight(mpParentWindow->GetSizePixel().Height());
+ 
++    // Wild OS: a width saved before the strip grew for a scaled screen would
++    // cut its icons in half; the strip is never narrower than its icons.
++    if (nWidth > 0 && nWidth < nTabBarDefaultWidth && mpParentWindow->GetDPIScaleFactor() >= 1.5f
++        && !mpParentWindow->IsFloatingMode())
++    {
++        SetChildWindowWidth(nTabBarDefaultWidth);
++        return;
++    }
++
+     mbIsDeckOpen = (nWidth > nTabBarDefaultWidth);
+ 
+     if (mnSavedSidebarWidth <= 0)
+--- a/sfx2/source/sidebar/TabBar.cxx
++++ b/sfx2/source/sidebar/TabBar.cxx
+@@ -78,6 +78,11 @@
+     UpdateMenus();
+ 
+     gDefaultWidth = m_xContainer->get_preferred_size().Width();
++    // Wild OS: measured before the deck icons arrive at a scaled screen's
++    // size, the strip came out too narrow at 250 % and cut the icons in
++    // half; on a screen scaled 150 % or more it is at least the boards' 40 px, scaled.
++    if (GetDPIScaleFactor() >= 1.5f)
++        gDefaultWidth = std::max<int>(gDefaultWidth, std::lround(40 * GetDPIScaleFactor()));
+ 
+     // we have this widget just so we can measure best width for static TabBar::GetDefaultWidth
+     mxMeasureBox->hide();
+--- a/svtools/source/control/tabbar.cxx
++++ b/svtools/source/control/tabbar.cxx
+@@ -150,7 +150,8 @@
+     void drawWildOSTab(const Color& rBar, const Color& rInk, const Color& rAccent)
+     {
+         tools::Rectangle aPill(maRect);
+-        const tools::Long nInset = std::max<tools::Long>(0, (aPill.GetHeight() - 26) / 2);
++        const float fScale = mrRenderContext.GetDPIScaleFactor();
++        const tools::Long nInset = std::max<tools::Long>(0, (aPill.GetHeight() - tools::Long(26 * fScale)) / 2);
+         aPill.AdjustTop(nInset);
+         aPill.AdjustBottom(-nInset);
+         mrRenderContext.SetLineColor();
+@@ -160,13 +161,13 @@
+             if (!mbCustomColored)
+                 aFill.Merge(rInk, 235);
+             mrRenderContext.SetFillColor(aFill);
+-            mrRenderContext.DrawRect(aPill, 5, 5);
++            mrRenderContext.DrawRect(aPill, 5 * fScale, 5 * fScale);
+         }
+         if (mbSelected)
+         {
+             mrRenderContext.SetFillColor(rAccent);
+-            mrRenderContext.DrawRect(tools::Rectangle(Point(aPill.Left() + 3, aPill.Bottom() - 1),
+-                                                      Point(aPill.Right() - 3, aPill.Bottom())));
++            mrRenderContext.DrawRect(tools::Rectangle(Point(aPill.Left() + tools::Long(3 * fScale), aPill.Bottom() - std::max<tools::Long>(1, fScale) + 1),
++                                                      Point(aPill.Right() - tools::Long(3 * fScale), aPill.Bottom())));
+         }
+         if (mbProtect)
+         {
+--- a/svx/source/tbxctrls/StylesPreviewWindow.cxx
++++ b/svx/source/tbxctrls/StylesPreviewWindow.cxx
+@@ -26,8 +26,16 @@
+ #include <vcl/svapp.hxx>
+ #include <o3tl/safeint.hxx>
+ #include <algorithm>
++#include <cmath>
+ #include <vcl/layout.hxx>
+ #include <vcl/settings.hxx>
++
++// Wild OS: the cards are the boards' pixels at 100 %; on a scaled screen
++// (a 4K laptop at 250 %) they grow with everything else.
++static tools::Long lcl_cpx(double fPixels)
++{
++    return std::lround(fPixels * Application::GetDefaultDevice()->GetDPIScaleFactor());
++}
+ #include <sfx2/objsh.hxx>
+ #include <svl/itemset.hxx>
+ #include <sfx2/tbxctrl.hxx>
+@@ -459,8 +467,8 @@
+ 
+     if (m_bCards)
+     {
+-        m_xStylesView->set_item_width(StyleItemController::CARD_WIDTH
+-                                      + StyleItemController::CARD_GAP);
++        m_xStylesView->set_item_width(lcl_cpx(StyleItemController::CARD_WIDTH)
++                                      + lcl_cpx(StyleItemController::CARD_GAP));
+         m_xStylesView->connect_query_tooltip(LINK(this, StylesPreviewWindow_Base, CardTooltip));
+     }
+ 
+@@ -483,8 +491,8 @@
+ // one past the gallery's edge; the boards have 6 px.
+ void StylesPreviewWindow_Base::SetCardsWidth()
+ {
+-    m_xStylesView->set_item_width(StyleItemController::CARD_WIDTH
+-                                  + StyleItemController::CARD_GAP);
++    m_xStylesView->set_item_width(lcl_cpx(StyleItemController::CARD_WIDTH)
++                                  + lcl_cpx(StyleItemController::CARD_GAP));
+ }
+ 
+ IMPL_LINK(StylesPreviewWindow_Base, Selected, weld::IconView&, rIconView, void)
+@@ -599,23 +607,24 @@
+     rRenderContext.Push(vcl::PushFlags::LINECOLOR | vcl::PushFlags::FILLCOLOR
+                         | vcl::PushFlags::FONT | vcl::PushFlags::TEXTCOLOR);
+     rRenderContext.SetAntialiasing(rRenderContext.GetAntialiasing() | AntialiasingFlags::Enable);
+-    const tools::Rectangle aCard(Point(0, 0), Size(CARD_WIDTH, CARD_HEIGHT));
++    const tools::Rectangle aCard(Point(0, 0), Size(lcl_cpx(CARD_WIDTH), lcl_cpx(CARD_HEIGHT)));
+     rRenderContext.SetLineColor();
+     if (bCurrent)
+     {
+         rRenderContext.SetFillColor(rSettings.GetAccentColor());
+-        rRenderContext.DrawRect(aCard, 5, 5);
++        rRenderContext.DrawRect(aCard, lcl_cpx(5), lcl_cpx(5));
+         rRenderContext.SetFillColor(aPaper);
+-        rRenderContext.DrawRect(tools::Rectangle(Point(2, 2), Size(CARD_WIDTH - 4, CARD_HEIGHT - 4)), 3, 3);
++        rRenderContext.DrawRect(tools::Rectangle(Point(lcl_cpx(2), lcl_cpx(2)), Size(lcl_cpx(CARD_WIDTH) - lcl_cpx(4), lcl_cpx(CARD_HEIGHT) - lcl_cpx(4))), lcl_cpx(3), lcl_cpx(3));
+     }
+     else
+     {
+         Color aEdge(aPaper);
+         aEdge.Merge(COL_BLACK, 230);
+         rRenderContext.SetFillColor(aEdge);
+-        rRenderContext.DrawRect(aCard, 5, 5);
++        rRenderContext.DrawRect(aCard, lcl_cpx(5), lcl_cpx(5));
+         rRenderContext.SetFillColor(aPaper);
+-        rRenderContext.DrawRect(tools::Rectangle(Point(1, 1), Size(CARD_WIDTH - 2, CARD_HEIGHT - 2)), 4, 4);
++        const tools::Long nEdge = std::max<tools::Long>(1, lcl_cpx(1));
++        rRenderContext.DrawRect(tools::Rectangle(Point(nEdge, nEdge), Size(lcl_cpx(CARD_WIDTH) - 2 * nEdge, lcl_cpx(CARD_HEIGHT) - 2 * nEdge)), lcl_cpx(4), lcl_cpx(4));
+     }
+ 
+     // "Aa" in the style's font, colour, weight and slant, its size kept
+@@ -633,7 +642,7 @@
+         {
+             Size aPixel(rRenderContext.LogicToPixel(Size(0, pHeightItem->GetHeight()),
+                                                     MapMode(pShell->GetMapUnit())));
+-            aPixel.setHeight(std::clamp<tools::Long>(aPixel.Height(), 12, 18));
++            aPixel.setHeight(std::clamp<tools::Long>(aPixel.Height(), lcl_cpx(12), lcl_cpx(18)));
+             aSample = GetFontFromItems(pFontItem, aPixel, pItemSet);
+             aSample.SetUnderline(LINESTYLE_NONE);
+             aSample.SetStrikeout(STRIKEOUT_NONE);
+@@ -647,10 +656,10 @@
+     aSample.SetTransparent(true);
+     rRenderContext.SetFont(aSample);
+     rRenderContext.SetTextColor(aSampleColor);
+-    rRenderContext.DrawText(Point(8, 6), u"Aa"_ustr);
++    rRenderContext.DrawText(Point(lcl_cpx(8), lcl_cpx(6)), u"Aa"_ustr);
+ 
+     vcl::Font aLabel(rSettings.GetAppFont());
+-    aLabel.SetFontSize(Size(0, 11));
++    aLabel.SetFontSize(Size(0, lcl_cpx(11)));
+     aLabel.SetWeight(WEIGHT_NORMAL);
+     aLabel.SetItalic(ITALIC_NONE);
+     aLabel.SetAlignment(ALIGN_TOP);
+@@ -658,8 +667,8 @@
+     rRenderContext.SetFont(aLabel);
+     rRenderContext.SetTextColor(aQuiet);
+     rRenderContext.DrawText(
+-        tools::Rectangle(Point(8, CARD_HEIGHT - 6 - rRenderContext.GetTextHeight()),
+-                         Size(CARD_WIDTH - 14, rRenderContext.GetTextHeight())),
++        tools::Rectangle(Point(lcl_cpx(8), lcl_cpx(CARD_HEIGHT) - lcl_cpx(6) - rRenderContext.GetTextHeight()),
++                         Size(lcl_cpx(CARD_WIDTH) - lcl_cpx(14), rRenderContext.GetTextHeight())),
+         lcl_cardLabel(m_aStyleName), DrawTextFlags::Left | DrawTextFlags::EndEllipsis);
+     rRenderContext.Pop();
+ }
+@@ -674,7 +683,7 @@
+         return aFound->second;
+ 
+     VclPtr<VirtualDevice> pImg = VclPtr<VirtualDevice>::Create(DeviceFormat::WITH_ALPHA);
+-    pImg->SetOutputSizePixel(Size(StyleItemController::CARD_WIDTH, StyleItemController::CARD_HEIGHT));
++    pImg->SetOutputSizePixel(Size(lcl_cpx(StyleItemController::CARD_WIDTH), lcl_cpx(StyleItemController::CARD_HEIGHT)));
+     pImg->SetBackground(Wallpaper(COL_TRANSPARENT));
+     pImg->Erase();
+     StyleItemController aStyleController(rStyle);
+@@ -894,10 +903,10 @@
+                     || pChild->GetType() == WindowType::SCROLLBARBOX)
+                     pChild->Hide();
+             }
+-            pView->set_width_request(nCount * (StyleItemController::CARD_WIDTH
+-                                               + StyleItemController::CARD_GAP)
+-                                     + StyleItemController::CARD_GAP);
+-            pView->set_height_request(StyleItemController::CARD_HEIGHT + 10);
++            pView->set_width_request(nCount * (lcl_cpx(StyleItemController::CARD_WIDTH)
++                                               + lcl_cpx(StyleItemController::CARD_GAP))
++                                     + lcl_cpx(StyleItemController::CARD_GAP));
++            pView->set_height_request(lcl_cpx(StyleItemController::CARD_HEIGHT) + lcl_cpx(10));
+             ApplyCardsBackground();
+         }
+     }
+--- a/vcl/source/control/tabctrl.cxx
++++ b/vcl/source/control/tabctrl.cxx
+@@ -46,6 +46,7 @@
+ #include <vcl/decoview.hxx>
+ 
+ #include <algorithm>
++#include <cmath>
+ #include <deque>
+ #include <unordered_map>
+ #include <vector>
+@@ -156,6 +157,18 @@
+     return _rStyle.GetTabTextColor();
+ }
+ 
++// Wild OS: the ribbon's sizes are the boards' pixels at 100 %; on a scaled
++// screen (a 4K laptop at 250 %) they grow with everything else.
++static tools::Long lcl_wpx(const vcl::Window* pWindow, double fPixels)
++{
++    return std::lround(fPixels * pWindow->GetDPIScaleFactor());
++}
++
++static double lcl_wpxf(const vcl::Window* pWindow, double fPixels)
++{
++    return fPixels * pWindow->GetDPIScaleFactor();
++}
++
+ void TabControl::ImplInitSettings( bool bBackground )
+ {
+     Control::ImplInitSettings();
+@@ -587,7 +600,7 @@
+         if (auto pNotebookbar = dynamic_cast<const NotebookbarTabControlBase*>(this);
+             pNotebookbar && pNotebookbar->IsWildOS())
+         {
+-            const tools::Long nTop = NotebookbarTabControlBase::WILDOS_ROW_HEIGHT;
++            const tools::Long nTop = lcl_wpx(this, NotebookbarTabControlBase::WILDOS_ROW_HEIGHT);
+             return (nWidth > 0 && nHeight - nTop - 1 > 0)
+                 ? tools::Rectangle(Point(0, nTop), Size(nWidth, nHeight - nTop - 1))
+                 : tools::Rectangle();
+@@ -2408,10 +2421,10 @@
+         if (!HasFocus())
+             return;
+         tools::Rectangle aRing(Point(0, 0), GetOutputSizePixel());
+-        aRing.shrink(2);
++        aRing.shrink(lcl_wpx(this, 2));
+         rRenderContext.SetFillColor();
+         rRenderContext.SetLineColor(rColor);
+-        rRenderContext.DrawRect(aRing, 4, 4);
++        rRenderContext.DrawRect(aRing, lcl_wpx(this, 4), lcl_wpx(this, 4));
+         rRenderContext.SetLineColor();
+     }
+ 
+@@ -2438,9 +2451,9 @@
+         OutputDevice* pDev = const_cast<WildOSFileButton*>(this)->GetOutDev();
+         pDev->Push(vcl::PushFlags::FONT);
+         pDev->SetFont(LabelFont(1.0, WEIGHT_SEMIBOLD));
+-        const tools::Long nWidth = pDev->GetCtrlTextWidth(GetText()) + 24;
++        const tools::Long nWidth = pDev->GetCtrlTextWidth(GetText()) + lcl_wpx(this, 24);
+         pDev->Pop();
+-        return Size(nWidth, WILDOS_FIELD_HEIGHT);
++        return Size(nWidth, lcl_wpx(this, WILDOS_FIELD_HEIGHT));
+     }
+ 
+     virtual void Paint(vcl::RenderContext& rRenderContext, const tools::Rectangle&) override
+@@ -2457,7 +2470,7 @@
+         Begin(rRenderContext);
+         const tools::Rectangle aRect(Point(0, 0), GetOutputSizePixel());
+         rRenderContext.SetFillColor(lcl_mix(rAccent, rWindow.IsDark() ? COL_WHITE : COL_BLACK, fShift));
+-        rRenderContext.DrawRect(aRect, 6, 6);
++        rRenderContext.DrawRect(aRect, lcl_wpx(this, 6), lcl_wpx(this, 6));
+         rRenderContext.SetFont(LabelFont(1.0, WEIGHT_SEMIBOLD));
+         rRenderContext.SetTextColor(aOnAccent);
+         rRenderContext.DrawText(aRect, GetText(),
+@@ -2480,7 +2493,7 @@
+ 
+     virtual Size GetOptimalSize() const override
+     {
+-        return Size(WILDOS_SEARCH_WIDTH, WILDOS_FIELD_HEIGHT);
++        return Size(lcl_wpx(this, WILDOS_SEARCH_WIDTH), lcl_wpx(this, WILDOS_FIELD_HEIGHT));
+     }
+ 
+     virtual void Paint(vcl::RenderContext& rRenderContext, const tools::Rectangle&) override
+@@ -2494,23 +2507,24 @@
+         Begin(rRenderContext);
+         const Size aSize(GetOutputSizePixel());
+         rRenderContext.SetFillColor(lcl_mix(aRow, rInk, fFill));
+-        rRenderContext.DrawRect(tools::Rectangle(Point(0, 0), aSize), 6, 6);
++        rRenderContext.DrawRect(tools::Rectangle(Point(0, 0), aSize), lcl_wpx(this, 6), lcl_wpx(this, 6));
+ 
+         // A 13 px magnifier, 10 px in.
+-        const double fX = 15.5, fY = aSize.Height() / 2.0 - 1.0;
++        const double fX = lcl_wpxf(this, 15.5), fY = aSize.Height() / 2.0 - lcl_wpxf(this, 1.0);
++        const double fLine = lcl_wpxf(this, 1.4);
+         rRenderContext.SetLineColor(aQuiet);
+         rRenderContext.SetFillColor();
+         rRenderContext.DrawPolyLine(
+-            basegfx::utils::createPolygonFromCircle(basegfx::B2DPoint(fX, fY), 4.5), 1.4);
++            basegfx::utils::createPolygonFromCircle(basegfx::B2DPoint(fX, fY), lcl_wpxf(this, 4.5)), fLine);
+         basegfx::B2DPolygon aHandle;
+-        aHandle.append(basegfx::B2DPoint(fX + 3.4, fY + 3.4));
+-        aHandle.append(basegfx::B2DPoint(fX + 6.5, fY + 6.5));
+-        rRenderContext.DrawPolyLine(aHandle, 1.4);
++        aHandle.append(basegfx::B2DPoint(fX + lcl_wpxf(this, 3.4), fY + lcl_wpxf(this, 3.4)));
++        aHandle.append(basegfx::B2DPoint(fX + lcl_wpxf(this, 6.5), fY + lcl_wpxf(this, 6.5)));
++        rRenderContext.DrawPolyLine(aHandle, fLine);
+ 
+         rRenderContext.SetFont(LabelFont(0.96, WEIGHT_NORMAL));
+         rRenderContext.SetTextColor(aQuiet);
+         rRenderContext.DrawText(
+-            tools::Rectangle(Point(31, 0), Size(aSize.Width() - 41, aSize.Height())), GetText(),
++            tools::Rectangle(Point(lcl_wpx(this, 31), 0), Size(aSize.Width() - lcl_wpx(this, 41), aSize.Height())), GetText(),
+             DrawTextFlags::Left | DrawTextFlags::VCenter | DrawTextFlags::EndEllipsis);
+         DrawFocusRing(rRenderContext, rStyle.GetAccentColor());
+         rRenderContext.Pop();
+@@ -2654,13 +2668,13 @@
+     {
+         if (m_pShortcuts)
+             m_pShortcuts->Hide();
+-        tools::Long nX = WILDOS_ROW_PADDING;
++        tools::Long nX = lcl_wpx(this, WILDOS_ROW_PADDING);
+         if (m_pWildOSFile)
+         {
+             const Size aSize(m_pWildOSFile->GetOptimalSize());
+-            m_pWildOSFile->SetPosSizePixel(Point(nX, (WILDOS_ROW_HEIGHT - aSize.Height()) / 2),
++            m_pWildOSFile->SetPosSizePixel(Point(nX, (lcl_wpx(this, WILDOS_ROW_HEIGHT) - aSize.Height()) / 2),
+                                            aSize);
+-            nX += aSize.Width() + WILDOS_START_GAP;
++            nX += aSize.Width() + lcl_wpx(this, WILDOS_START_GAP);
+         }
+ 
+         // Measured in the current tab's weight for every tab, so the row
+@@ -2677,9 +2691,9 @@
+             if (!item.m_bVisible)
+                 continue;
+             const tools::Long nTabWidth
+-                = GetOutDev()->GetCtrlTextWidth(item.maFormatText) + 2 * WILDOS_TAB_PADDING;
+-            tools::Rectangle aNewRect(Point(nX, (WILDOS_ROW_HEIGHT - WILDOS_TAB_HEIGHT) / 2),
+-                                      Size(nTabWidth, WILDOS_TAB_HEIGHT));
++                = GetOutDev()->GetCtrlTextWidth(item.maFormatText) + 2 * lcl_wpx(this, WILDOS_TAB_PADDING);
++            tools::Rectangle aNewRect(Point(nX, (lcl_wpx(this, WILDOS_ROW_HEIGHT) - lcl_wpx(this, WILDOS_TAB_HEIGHT)) / 2),
++                                      Size(nTabWidth, lcl_wpx(this, WILDOS_TAB_HEIGHT)));
+             if (mbSmallInvalidate && item.maRect != aNewRect)
+                 mbSmallInvalidate = false;
+             item.maRect = aNewRect;
+@@ -2690,11 +2704,11 @@
+         if (m_pWildOSSearch)
+         {
+             const Size aSize(m_pWildOSSearch->GetOptimalSize());
+-            m_pWildOSSearch->SetPosSizePixel(Point(nWidth - WILDOS_ROW_PADDING - aSize.Width(),
+-                                                   (WILDOS_ROW_HEIGHT - aSize.Height()) / 2),
++            m_pWildOSSearch->SetPosSizePixel(Point(nWidth - lcl_wpx(this, WILDOS_ROW_PADDING) - aSize.Width(),
++                                                   (lcl_wpx(this, WILDOS_ROW_HEIGHT) - aSize.Height()) / 2),
+                                              aSize);
+             // In a narrow window the field gives way to the tabs.
+-            m_pWildOSSearch->Show(nWidth - WILDOS_ROW_PADDING - aSize.Width() >= nX + WILDOS_START_GAP);
++            m_pWildOSSearch->Show(nWidth - lcl_wpx(this, WILDOS_ROW_PADDING) - aSize.Width() >= nX + lcl_wpx(this, WILDOS_START_GAP));
+         }
+         return true;
+     }
+@@ -2781,7 +2795,7 @@
+     // The flat page sits straight under the row with a hairline below it,
+     // not inset in a tab pane's frame.
+     if (m_bWildOS)
+-        aSize.AdjustHeight(WILDOS_ROW_HEIGHT + 1 - (m_nHeaderHeight + TAB_OFFSET * 2));
++        aSize.AdjustHeight(lcl_wpx(this, WILDOS_ROW_HEIGHT) + 1 - (m_nHeaderHeight + TAB_OFFSET * 2));
+     return aSize;
+ }
+ 
+@@ -2806,14 +2820,14 @@
+     rRenderContext.SetAntialiasing(rRenderContext.GetAntialiasing() | AntialiasingFlags::Enable);
+     rRenderContext.SetLineColor();
+     rRenderContext.SetFillColor(lcl_wildosRowColor(rStyle));
+-    rRenderContext.DrawRect(tools::Rectangle(Point(0, 0), Size(aSize.Width(), WILDOS_ROW_HEIGHT)));
++    rRenderContext.DrawRect(tools::Rectangle(Point(0, 0), Size(aSize.Width(), lcl_wpx(this, WILDOS_ROW_HEIGHT))));
+     rRenderContext.SetFillColor(rWindow);
+     rRenderContext.DrawRect(tools::Rectangle(
+-        Point(0, WILDOS_ROW_HEIGHT), Size(aSize.Width(), aSize.Height() - WILDOS_ROW_HEIGHT)));
++        Point(0, lcl_wpx(this, WILDOS_ROW_HEIGHT)), Size(aSize.Width(), aSize.Height() - lcl_wpx(this, WILDOS_ROW_HEIGHT))));
+     rRenderContext.SetFillColor(lcl_mix(rWindow, rInk, 0.08));
+     rRenderContext.DrawRect(tools::Rectangle(Point(0, aSize.Height() - 1), Size(aSize.Width(), 1)));
+     if (TabPage* pPage = GetTabPage(mnCurPageId))
+-        lcl_wildosDividers(*this, pPage, rRenderContext, WILDOS_ROW_HEIGHT, aSize.Height() - 6);
++        lcl_wildosDividers(*this, pPage, rRenderContext, lcl_wpx(this, WILDOS_ROW_HEIGHT), aSize.Height() - lcl_wpx(this, 6));
+ 
+     const Point aPointer(GetPointerPosPixel());
+     for (const auto& item : mpTabCtrlData->maItemList)
+@@ -2842,8 +2856,8 @@
+         rRenderContext.SetFillColor(rAccent);
+         rRenderContext.DrawRect(
+             tools::Rectangle(Point(item.maRect.Left() + (item.maRect.GetWidth() - nTextWidth) / 2,
+-                                   item.maRect.Bottom() + 1 - WILDOS_UNDERLINE_GAP - WILDOS_UNDERLINE),
+-                             Size(nTextWidth, WILDOS_UNDERLINE)),
++                                   item.maRect.Bottom() + 1 - lcl_wpx(this, WILDOS_UNDERLINE_GAP) - lcl_wpx(this, WILDOS_UNDERLINE)),
++                             Size(nTextWidth, lcl_wpx(this, WILDOS_UNDERLINE))),
+             1, 1);
+ 
+         if (HasFocus())
+@@ -2851,10 +2865,10 @@
+             rRenderContext.SetFillColor();
+             rRenderContext.SetLineColor(rAccent);
+             tools::Rectangle aRing(item.maRect);
+-            aRing.shrink(2);
+-            rRenderContext.DrawRect(aRing, 5, 5);
+-            aRing.shrink(1);
+-            rRenderContext.DrawRect(aRing, 4, 4);
++            aRing.shrink(lcl_wpx(this, 2));
++            rRenderContext.DrawRect(aRing, lcl_wpx(this, 5), lcl_wpx(this, 5));
++            aRing.shrink(lcl_wpx(this, 1));
++            rRenderContext.DrawRect(aRing, lcl_wpx(this, 4), lcl_wpx(this, 4));
+             rRenderContext.SetLineColor();
+         }
+     }
+--- a/vcl/source/window/builder.cxx
++++ b/vcl/source/window/builder.cxx
+@@ -1955,7 +1955,13 @@
+ 
+             if (!aCommand.isEmpty() && m_xFrame.is())
+             {
+-                pToolBox->InsertItem(aCommand, m_xFrame, nBits, extractSizeRequest(rMap));
++                // Wild OS: a .ui gives an item's width (the font name box) in
++                // pixels at 100 %, so it grows with a scaled screen like the
++                // rest of the toolbox.
++                Size aRequest(extractSizeRequest(rMap));
++                const float fScale = pToolBox->GetDPIScaleFactor();
++                aRequest = Size(aRequest.Width() * fScale, aRequest.Height() * fScale);
++                pToolBox->InsertItem(aCommand, m_xFrame, nBits, aRequest);
+                 nItemId = pToolBox->GetItemId(aCommand);
+             }
+             else
+--- a/vcl/source/window/layout.cxx
++++ b/vcl/source/window/layout.cxx
+@@ -385,7 +385,7 @@
+ bool VclBox::set_property(const OUString &rKey, const OUString &rValue)
+ {
+     if (rKey == "spacing")
+-        set_spacing(rValue.toInt32());
++        set_spacing(rValue.toInt32() * GetDPIScaleFactor());
+     else if (rKey == "homogeneous")
+         set_homogeneous(toBool(rValue));
+     else
+--- a/vcl/source/window/window2.cxx
++++ b/vcl/source/window/window2.cxx
+@@ -1627,17 +1627,17 @@
+     else if (rKey == "margin-start" || rKey == "margin-left")
+     {
+         assert(rKey == "margin-start" && "margin-left deprecated in favor of margin-start");
+-        set_margin_start(rValue.toInt32());
++        set_margin_start(rValue.toInt32() * GetDPIScaleFactor());
+     }
+     else if (rKey == "margin-end" || rKey == "margin-right")
+     {
+         assert(rKey == "margin-end" && "margin-right deprecated in favor of margin-end");
+-        set_margin_end(rValue.toInt32());
++        set_margin_end(rValue.toInt32() * GetDPIScaleFactor());
+     }
+     else if (rKey == "margin-top")
+-        set_margin_top(rValue.toInt32());
++        set_margin_top(rValue.toInt32() * GetDPIScaleFactor());
+     else if (rKey == "margin-bottom")
+-        set_margin_bottom(rValue.toInt32());
++        set_margin_bottom(rValue.toInt32() * GetDPIScaleFactor());
+     else if (rKey == "hscrollbar-policy")
+     {
+         WinBits nBits = GetStyle();

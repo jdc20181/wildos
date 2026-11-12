@@ -54,7 +54,7 @@ T.Switch {
             radius: 6.5
             y: 5.5
             x: control.checked ? track.width - width - 5 : 5.5
-            color: control.checked ? Style.textOnAccent : Style.toggleOffKnob
+            color: control.checked ? Style.accentDot : Style.toggleOffKnob
             Behavior on x {
                 NumberAnimation { duration: Style.motionFast; easing.type: Style.easeStandard }
             }

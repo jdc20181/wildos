@@ -61,7 +61,7 @@ PageFlick {
                 anchors.verticalCenter: parent.verticalCenter
                 text: tile.text
                 size: 14.5
-                font.weight: Font.DemiBold
+                font.weight: UI.Style.weightSemiBold
             }
         }
     }

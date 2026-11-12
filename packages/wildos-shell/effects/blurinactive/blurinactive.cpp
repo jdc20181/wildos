@@ -53,16 +53,26 @@ struct Strength {
 // offsets it can use before the blur shows blocks or diagonal lines; these
 // stay inside the ranges KWin's blur effect uses (BlurEffect::
 // initBlurStrengthValues). The dim grows with the blur, but stays light
-// enough that the windows behind can still be read when looked at.
+// enough that the windows behind can still be read when looked at. The
+// lightest is a single pass, for people who only want the window in use to
+// stand out a little.
 static constexpr Strength s_strengths[] = {
-    {2, 1.5f, 0.08},
-    {2, 3.0f, 0.11},
+    {1, 1.5f, 0.05},
+    {2, 2.0f, 0.09},
     {3, 3.0f, 0.14},
     {3, 5.0f, 0.17},
     {4, 6.0f, 0.20},
 };
 
 static const QString s_configGroup = QStringLiteral("Effect-wildos_blurinactive");
+
+// A blurred window's outline fades as it blurs. The outline reaches past
+// the window, further than a repaint of a window without a shadow covers.
+static void repaintWithOutline(EffectWindow *w)
+{
+    w->addRepaintFull();
+    effects->addRepaint(w->frameGeometry().adjusted(-8, -8, 8, 8).toAlignedRect());
+}
 
 BlurInactiveEffect::BlurInactiveEffect()
 {
@@ -91,8 +101,14 @@ BlurInactiveEffect::BlurInactiveEffect()
         if (m_focus == w) {
             // KWin hands focus to the next window as this one goes; wait for
             // that rather than blurring everything for a frame.
-            m_focus = nullptr;
-            QMetaObject::invokeMethod(this, &BlurInactiveEffect::updateTargets, Qt::QueuedConnection);
+            m_focus = WildOS::focusAfterClosing(w);
+            QMetaObject::invokeMethod(
+                this,
+                [this] {
+                    m_focus = WildOS::focusAfterActivation(effects->activeWindow(), m_focus);
+                    updateTargets();
+                },
+                Qt::QueuedConnection);
         }
     });
     connect(effects, &EffectsHandler::windowDeleted, this, &BlurInactiveEffect::forget);
@@ -112,6 +128,7 @@ BlurInactiveEffect::~BlurInactiveEffect()
     for (auto &[w, state] : m_windows) {
         disconnect(state->damaged);
         disconnect(state->resized);
+        w->setData(WildOS::BlurProgressRole, QVariant());
     }
     m_windows.clear();
     m_downsample.reset();
@@ -161,6 +178,13 @@ bool BlurInactiveEffect::shouldBlur(EffectWindow *w) const
     if (!WildOS::isWorkWindow(w) || w->isFullScreen() || w->keepAbove()) {
         return false;
     }
+    // Whatever has the keyboard is never blurred, even if the window in
+    // use was worked out wrong: typing into a blurred window is worse than
+    // a sharp one too many.
+    EffectWindow *active = effects->activeWindow();
+    if (active && WildOS::isWorkWindow(active) && WildOS::belongTogether(w, active)) {
+        return false;
+    }
     return !WildOS::belongTogether(w, m_focus);
 }
 
@@ -197,7 +221,7 @@ void BlurInactiveEffect::updateTargets()
         }
         if (it->second->target != target) {
             it->second->target = target;
-            w->addRepaintFull();
+            repaintWithOutline(w);
         }
     }
 }
@@ -242,6 +266,7 @@ void BlurInactiveEffect::prePaintScreen(ScreenPrePaintData &data, std::chrono::m
             } else if (state->progress > state->target) {
                 state->progress = std::max(state->target, state->progress - step);
             }
+            w->setData(WildOS::BlurProgressRole, state->progress);
         }
         m_lastPresent = presentTime;
     }
@@ -254,7 +279,7 @@ void BlurInactiveEffect::postPaintScreen()
     for (auto it = m_windows.begin(); it != m_windows.end();) {
         State &state = *it->second;
         if (state.progress != state.target) {
-            it->first->addRepaintFull();
+            repaintWithOutline(it->first);
             moving = true;
         }
         // Painting is the one place the compositor's context is known to be
@@ -262,6 +287,7 @@ void BlurInactiveEffect::postPaintScreen()
         if (state.progress <= 0.0 && state.target <= 0.0) {
             disconnect(state.damaged);
             disconnect(state.resized);
+            it->first->setData(WildOS::BlurProgressRole, QVariant());
             it = m_windows.erase(it);
         } else {
             ++it;

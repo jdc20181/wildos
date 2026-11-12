@@ -292,7 +292,7 @@ PageScroll {
 
                 background: Rectangle {
                     radius: UI.Style.radiusSm
-                    color: tile.current ? UI.Style.accentAlpha(0.16, 0.12)
+                    color: tile.current ? UI.Style.fillSelected(0.16, 0.12)
                          : tile.hovered ? UI.Style.tone(0.10) : UI.Style.tone(0.07)
                     border.width: tile.current ? 2 : 1
                     border.color: tile.current ? UI.Style.accent : UI.Style.tone(0.25)
@@ -317,7 +317,7 @@ PageScroll {
                             horizontalAlignment: Text.AlignHCenter
                             text: tile.modelData.title
                             size: 30
-                            font.weight: Font.Light
+                            font.weight: UI.Style.weightLight
                         }
 
                         UI.Label {
@@ -770,7 +770,7 @@ PageScroll {
                     anchors.centerIn: parent
                     text: marker.modelData.number
                     size: 110
-                    font.weight: Font.Light
+                    font.weight: UI.Style.weightLight
                 }
             }
         }
@@ -836,7 +836,7 @@ PageScroll {
             text: choice.text
             size: 13
             horizontalAlignment: Text.AlignHCenter
-            font.weight: choice.current ? Font.DemiBold : Font.Normal
+            font.weight: choice.current ? UI.Style.weightSemiBold : UI.Style.weightRegular
             color: choice.current ? UI.Style.ink : UI.Style.inkAlpha(0.85, 0.80)
         }
     }

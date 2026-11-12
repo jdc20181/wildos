@@ -84,7 +84,7 @@ Item {
                     Layout.fillWidth: true
                     text: card.title
                     size: 20
-                    font.weight: Font.DemiBold
+                    font.weight: UI.Style.weightSemiBold
                     Accessible.role: Accessible.Heading
                 }
 
@@ -174,7 +174,7 @@ Item {
                         UI.Label {
                             text: card.keepText
                             size: 15
-                            font.weight: Font.DemiBold
+                            font.weight: UI.Style.weightSemiBold
                         }
 
                         UI.Label {

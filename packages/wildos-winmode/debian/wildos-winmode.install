@@ -5,6 +5,7 @@ winmode/dbusutil.py usr/lib/wildos/winmode/winmode
 winmode/firewall.py usr/lib/wildos/winmode/winmode
 winmode/guestlink.py usr/lib/wildos/winmode/winmode
 winmode/hostinfo.py usr/lib/wildos/winmode/winmode
+winmode/isocheck.py usr/lib/wildos/winmode/winmode
 winmode/launchers.py usr/lib/wildos/winmode/winmode
 winmode/lifecycle.py usr/lib/wildos/winmode/winmode
 winmode/paths.py usr/lib/wildos/winmode/winmode
@@ -12,6 +13,7 @@ winmode/qga.py usr/lib/wildos/winmode/winmode
 winmode/rdp.py usr/lib/wildos/winmode/winmode
 winmode/system.py usr/lib/wildos/winmode/winmode
 winmode/theme.py usr/lib/wildos/winmode/winmode
+winmode/usb.py usr/lib/wildos/winmode/winmode
 winmode/virsh.py usr/lib/wildos/winmode/winmode
 winmode/windows.py usr/lib/wildos/winmode/winmode
 winmode/documents.py usr/lib/wildos/winmode/winmode
@@ -21,6 +23,7 @@ bin/winmoded usr/libexec/wildos
 bin/wildos-winmode usr/bin
 build/wild-guest.exe usr/share/wildos/winmode/guest
 guest/setup.ps1 usr/share/wildos/winmode/guest
+guest/tune.ps1 usr/share/wildos/winmode/guest
 guest/opengl.ps1 usr/share/wildos/winmode/guest
 data/mimeapps.list usr/share/wildos/winmode
 data/org.wildos.WindowsMode1.conf usr/share/dbus-1/system.d

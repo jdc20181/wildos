@@ -86,7 +86,7 @@ T.AbstractButton {
             anchors.horizontalCenter: parent.horizontalCenter
             y: icon.y + icon.height + 14
             text: control.text
-            font.weight: Font.Medium
+            font.weight: UI.Style.weightMedium
         }
     }
 }

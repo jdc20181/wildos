@@ -82,12 +82,14 @@ XML = """
     </method>
     <method name="OpenDownloadPage"><arg type="s" direction="out"/></method>
     <method name="Firmware"><arg type="s" direction="out"/></method>
+    <method name="ShowSetupProgress"/>
     <signal name="Changed"/>
   </interface>
 </node>
 """
 
 NOT_YET = "This isn't available yet."
+REMOVING = "Windows mode is being removed."
 # How long a launch waits for a new connection's session to be up.
 SESSION_WAIT = 90
 # Seconds after sign-in before Windows is started ahead of time.
@@ -110,6 +112,23 @@ LAUNCH_WATCH_MS = 1500
 LAUNCH_WATCH_POLLS = 80
 LAUNCH_GONE_POLLS = 3
 SECRET_ATTRS = ["service", "org.wildos.WindowsMode1", "account"]
+# The Office apps a setup with Office brings, as boards 9.13 and 9.14 name
+# them, by their Start entries' ids.
+OFFICE_APPS = [("word", "Word"), ("excel", "Excel"), ("powerpoint", "PowerPoint"), ("outlook", "Outlook")]
+
+
+class Answer:
+    """Stands in for a D-Bus caller's Deferred when the agent asks itself:
+    then(value) gets the answer, on the main loop."""
+
+    def __init__(self, then):
+        self.then = then
+
+    def done(self, value):
+        GLib.idle_add(lambda: (self.then(value), False)[1])
+
+    def error(self, message):
+        self.done(message)
 
 
 def log(*parts):
@@ -142,7 +161,8 @@ def wake_key(came_from, via):
 # sign-in, restoring from disk, and opening the connection to a Windows that
 # is already awake.
 DEFAULT_WAKE = {
-    "stopped/new connection": 60,
+    # Measured on an XPS 13 9310: 82 s to Remote Desktop, 108 s to Word.
+    "stopped/new connection": 90,
     "saved/new connection": 15,
     "paused/new connection": 8,
     "running/new connection": 8,
@@ -154,7 +174,7 @@ def slow_reason(lifecycle, name):
     knows: how Windows was when the app was opened. Empty when nothing is
     known, and wildos-rdp says it plainly in its own words."""
     if lifecycle in ("Stopped", "NotInstalled", None):
-        return (f"Windows mode is starting from the beginning, which takes longer than waking it. "
+        return (f"Windows is starting up from off, which takes a minute or two and only happens now and then. "
                 f"{name} will open as soon as it's ready.")
     if lifecycle == "Saved":
         return f"Windows mode is being brought back from where it was saved. {name} will open as soon as it's ready."
@@ -236,6 +256,7 @@ class Agent:
         # The sign-in-only connection after Windows starts ahead of time.
         self.preparing = None
         self.waking = False
+        self.removing = False
         self.launches = {}
         self.last_launch = None
         self.last_app = None
@@ -250,6 +271,14 @@ class Agent:
         self.installed_since_refresh = False
         self.history = config.read_json(os.path.join(config.user_data_dir(), "history.json"), {}) or {}
         self.wake_times = config.read_json(os.path.join(config.user_data_dir(), "wake-times.json"), {}) or {}
+        # Times "Show progress" was asked for (the setup notification, or
+        # Start's "Setting up" button): the taskbar's Windows mode item opens
+        # its panel each time this goes up.
+        self.progress_requests = 0
+        # Notifications with buttons, by id: what each button does.
+        self.notification_actions = {}
+        session.signal_subscribe("org.freedesktop.Notifications", "org.freedesktop.Notifications", None,
+                                 "/org/freedesktop/Notifications", None, Gio.DBusSignalFlags.NONE, self.notification_signal)
         # The windows already open when the "Starting Windows" card went up.
         self.starting = None
         self.starting_timer = None
@@ -285,7 +314,7 @@ class Agent:
             "CheckUpdates": (lambda sender: NOT_YET, "s", False),
             "OpenDesktop": (self.m_open_desktop, "s", False),
             "Repair": (lambda sender: NOT_YET, "s", False),
-            "Remove": (lambda sender: NOT_YET, "s", False),
+            "Remove": (self.m_remove, "s", False),
             "StartSetup": (self.m_start_setup, "s", False),
             "PauseSetup": (lambda sender, defer: self.setup_control("pause", "", defer), "s", False),
             "ResumeSetup": (lambda sender, defer: self.setup_control("resume", "", defer), "s", False),
@@ -293,6 +322,7 @@ class Agent:
             "ChooseIso": (lambda sender, path, defer: self.setup_control("iso", path, defer), "s", False),
             "OpenDownloadPage": (self.m_open_download_page, "s", False),
             "Firmware": (self.m_firmware, "s", False),
+            "ShowSetupProgress": (self.m_show_setup_progress, None, False),
         })
         system.signal_subscribe(config.BUS_NAME, config.HOST_INTERFACE, None, config.OBJECT_PATH, None,
                                 Gio.DBusSignalFlags.NONE, self.host_signal)
@@ -323,7 +353,7 @@ class Agent:
         self.session_end = xsmp.Client(session, self.windows_open, self.ask_before_leaving, log)
 
     def prestart(self):
-        if self.host.get("kept"):
+        if self.host.get("kept") or self.removing:
             return
         def done(reply):
             if isinstance(reply, GLib.Error):
@@ -555,7 +585,12 @@ class Agent:
         self.changed()
 
     def app_for(self, window):
-        image = window.get("image") if isinstance(window, dict) else None
+        if not isinstance(window, dict):
+            return None
+        by_aumid = launchers.app_id_for_aumid(window.get("aumid"), self.registry)
+        if by_aumid:
+            return by_aumid
+        image = window.get("image")
         if not image:
             return None
         return "" if launchers.is_shell(image) else launchers.app_id_for_image(image, self.registry)
@@ -604,6 +639,9 @@ class Agent:
         With wildos-rdp the app's window is on screen at once, with the
         loading W, and becomes the app when Windows shows it (boards 9.11 to
         9.13); the "Starting Windows" card is then not needed."""
+        if self.removing:
+            done(REMOVING)
+            return
         started = time.monotonic()
         self.end_preparing()
         window = self.open_app_window(app_id, name, path)
@@ -876,6 +914,15 @@ class Agent:
                     defer.done("Windows mode couldn't sign in to Windows. Restart the PC, then try again.")
                     return
                 self.conn.stop_now()
+                self.end_preparing()
+                # Asked again while one is still running: either its window
+                # closed and FreeRDP never exited (seen after Windows showed
+                # an error), which used to leave the button doing nothing
+                # until the PC restarted, or it is open behind other windows.
+                # Either way a new one takes the session over in front.
+                if self.desktop.running:
+                    log("the Windows desktop's last connection was still running; starting a new one")
+                    self.desktop.stop_now()
                 args = rdp.desktop_arguments(self.host.get("guest_address"), self.host.get("rdp_port", 3389),
                                              creds["account"], creds.get("domain", ""), drive=self.drive_folder())
                 try:
@@ -886,8 +933,8 @@ class Agent:
                 defer.done("")
             self.credentials(signed)
 
-        if self.desktop.open:
-            return ""
+        if self.removing:
+            return REMOVING
         self.call_json("Wake", done=woke)
         return defer
 
@@ -896,6 +943,7 @@ class Agent:
         KWallet can keep waiting for seconds, so off the main loop) or else
         from the service."""
         account = self.host.get("account", "wild")
+        self.trust_current_windows()
 
         def looked_up(pw):
             if isinstance(pw, str) and pw:
@@ -911,6 +959,85 @@ class Agent:
             looked_up(self.keyring.memory[account])
         else:
             dbusutil.in_thread(self.keyring.get, account, done=looked_up)
+
+    def trust_current_windows(self):
+        """Each setup makes a new Windows with a certificate of its own, which
+        FreeRDP would refuse as changed. The certificate trusted for the
+        last Windows is forgotten once per setup, by the time it finished,
+        before the first connection to the new one."""
+        finished = (self.host.get("setup") or {}).get("finished")
+        if not finished or not self.host.get("guest_address"):
+            return
+        marker = os.path.join(config.user_data_dir(), "certificate-for.json")
+        if (config.read_json(marker, {}) or {}).get("finished") == finished:
+            return
+        if rdp.forget_certificate(self.host["guest_address"], self.host.get("rdp_port", 3389)):
+            log("forgot the certificate of the Windows set up before this one")
+        try:
+            config.write_json(marker, {"finished": finished})
+        except OSError as e:
+            log("certificate:", e)
+
+    def m_remove(self, sender, defer):
+        """Settings' Remove Windows mode: Windows and everything in it go,
+        with its Start entries, file types and saved sign-in, and Windows
+        mode is back to not set up, ready to set up again. The service asks
+        for an administrator's password and does the deleting; documents
+        are in the person's own folders, which Windows only borrowed."""
+        if self.removing:
+            return REMOVING
+        self.removing = True
+        self.changed()
+        self.queue = []
+        self.conn.close()
+        self.desktop.close()
+        self.end_preparing()
+        self.hide_starting()
+
+        def removed(reply):
+            if reply is None or isinstance(reply, GLib.Error):
+                self.removing = False
+                self.refresh_host()
+                defer.done("Windows mode's background service didn't answer. Restart the PC, then try again.")
+                return
+            if reply:
+                self.removing = False
+                self.refresh_host()
+                defer.done(reply)
+                return
+            self.forget_windows()
+            self.removing = False
+            self.refresh_host(lambda: defer.done(""))
+        # The administrator's password is asked for first, and may take a while.
+        self.call("Remove", None, None, removed, timeout=1800)
+        return defer
+
+    def forget_windows(self):
+        """What this person's side kept about the Windows that was removed."""
+        account = self.host.get("account", "wild")
+        try:
+            launchers.remove_all()
+        except OSError as e:
+            log("Start entries:", e)
+        self.registry = {}
+        self.windows = []
+        self.launches = {}
+        self.last_launch = None
+        self.last_app = None
+        self.history = {}
+        self.wake_times = {}
+        self.installers = {}
+        self.installed_since_refresh = False
+        self.refreshed = False
+        for name in ("history.json", "wake-times.json", "launches.jsonl", "certificate-for.json"):
+            try:
+                os.remove(os.path.join(config.user_data_dir(), name))
+            except OSError:
+                pass
+        if self.host.get("guest_address"):
+            rdp.forget_certificate(self.host["guest_address"], self.host.get("rdp_port", 3389))
+        dbusutil.in_thread(self.keyring.forget, account)
+        log("Windows was removed; Windows mode is ready to set up again")
 
     def open_connection(self, creds, wake):
         pending, self.queue = self.queue, []
@@ -965,6 +1092,7 @@ class Agent:
             "left": setup.get("left", ""),
             "paused": bool(setup.get("paused")),
             "problem": setup.get("problem"),
+            "notice": setup.get("notice"),
             "licence": setup.get("licence") or {},
             "options": options,
             "apps": [{"id": i, "name": a["name"], "icon": launchers.PREFIX + i, "open": i in open_ids}
@@ -983,6 +1111,8 @@ class Agent:
             "starting": self.waking or self.starting is not None,
             "openApps": launchers.open_windows(self.windows, self.registry),
             "lastApp": self.app_summary(launchers.last_app(self.registry, self.last_app, self.history)),
+            "progressRequests": self.progress_requests,
+            "removing": self.removing,
         }
 
     def app_summary(self, app_id):
@@ -1075,7 +1205,13 @@ class Agent:
         self.setup_open_files = bool((req.get("options") or {}).get("openFiles", True))
 
         def started(reply):
-            self.refresh_host()
+            # From first run, which goes straight to the desktop (board 9.11):
+            # the notification says what is happening and where to follow it.
+            if reply == "" and req.get("background"):
+                office = bool((req.get("options") or {}).get("office"))
+                self.refresh_host(lambda: self.notify_setting_up(office))
+            else:
+                self.refresh_host()
             defer.done(reply if isinstance(reply, str) else "Windows mode's background service didn't answer.")
         self.call("SetupStart", (json.dumps(req),), "(s)", started, timeout=120)
         return defer
@@ -1156,8 +1292,12 @@ class Agent:
 
         # The connection ends first: it would otherwise reconnect to the
         # restored or restarted Windows by itself (end_connection_if_gone).
+        # So does the whole desktop's, and one stuck after its window closed
+        # goes with it, so a restart of Windows mode clears it.
         if action in ("save", "restart", "shutdown"):
             self.conn.close()
+            self.desktop.close()
+            self.end_preparing()
         self.call_json("Power", (action,), "(s)", finished, timeout=POWER_TIMEOUT)
 
     def reopen_windows(self, within=90):
@@ -1287,20 +1427,93 @@ class Agent:
             finish(False)
         self.documents_now(checked, timeout=8, unanswered=no_service)
 
+    def m_show_setup_progress(self, sender):
+        self.progress_requests += 1
+        self.changed()
+
+    def notify_actions(self, title, body, actions, icon="wildos-windows-app"):
+        """A notification with buttons: actions is [(key, words, then)], the
+        first button left of the second, as Plasma lays them out."""
+        flat = [part for key, words, _ in actions for part in (key, words)]
+
+        def sent(conn, res):
+            try:
+                nid = conn.call_finish(res).unpack()[0]
+            except GLib.Error as e:
+                log("notification:", e.message)
+                return
+            self.notification_actions[nid] = {key: then for key, _, then in actions}
+            log("told:", title)
+
+        self.session.call("org.freedesktop.Notifications", "/org/freedesktop/Notifications", "org.freedesktop.Notifications", "Notify",
+                          GLib.Variant("(susssasa{sv}i)", ("Windows mode", 0, icon, title, body, flat,
+                                                          {"desktop-entry": GLib.Variant("s", "org.wildos.winmode")}, -1)),
+                          GLib.VariantType("(u)"), Gio.DBusCallFlags.NONE, 5000, None, sent)
+
+    def notification_signal(self, conn, sender, path, iface, signal, params):
+        if signal == "ActionInvoked":
+            nid, key = params.unpack()
+            then = self.notification_actions.pop(nid, {}).get(key)
+            if then:
+                then()
+        elif signal == "NotificationClosed":
+            self.notification_actions.pop(params.unpack()[0], None)
+
+    def notify_setting_up(self, office):
+        """Board 9.11. The time is the service's own estimate, which is
+        longer than the boards' 25 minutes until setups have been timed."""
+        left = str((self.host.get("setup") or {}).get("left") or "")
+        when = ("in " + left[0].lower() + left[1:].removesuffix(" left")) if left.startswith("About ") else "soon"
+        what = "Word, Excel, PowerPoint and Outlook" if office else "Windows apps"
+        self.notify_actions("Setting up Windows mode",
+                            f"Carry on using Wild OS. {what} will be ready {when}. Follow along from Windows mode on the taskbar.",
+                            [("show-progress", "Show progress", lambda: self.m_show_setup_progress(None)),
+                             ("ok", "OK", lambda: None)])
+
+    def notify_ready(self, office):
+        """Board 9.14: once, when everything is installed."""
+        def show_start():
+            self.session.call("org.kde.plasmashell", "/PlasmaShell", "org.kde.PlasmaShell", "activateLauncherMenu",
+                              None, None, Gio.DBusCallFlags.NONE, 5000, None, None)
+
+        def open_word():
+            self.m_launch(None, "word", [], Answer(lambda message: message and self.notify(message)))
+
+        apps = [(i, n) for i, n in OFFICE_APPS if i in self.registry] if office else []
+        if apps:
+            # The board's row of app icons waits on the notification popup,
+            # which shows no pictures in the text.
+            names = [n for _, n in apps]
+            listed = names[0] if len(names) == 1 else ", ".join(names[:-1]) + " and " + names[-1]
+            body = (f"{listed} {'is' if len(names) == 1 else 'are'} in Start. "
+                    f"Open {'it' if len(names) == 1 else 'one'} and sign in once with your Microsoft account.")
+        else:
+            body = "Windows apps you install appear in Start."
+        actions = [("show-start", "Show in Start", show_start)]
+        if any(i == "word" for i, _ in apps):
+            actions.append(("open-word", "Open Word", open_word))
+        self.notify_actions("Windows mode is ready", body, actions)
+
     def notify(self, text):
         self.session.call("org.freedesktop.Notifications", "/org/freedesktop/Notifications", "org.freedesktop.Notifications", "Notify",
                           GLib.Variant("(susssasa{sv}i)", ("Windows mode", 0, "wildos-windows-app", "Windows mode", text, [], {}, -1)),
                           None, Gio.DBusCallFlags.NONE, 5000, None, None)
 
     def setup_finished(self):
-        """Windows is ready: its apps get Start entries, and files open in
-        them if the person chose that in setup."""
-        self.options["open_files"] = getattr(self, "setup_open_files", self.options.get("open_files", True))
+        """Windows is ready: its apps get Start entries, files open in them
+        if the person chose that in setup, and one notification says so. The
+        choice is read back from the setup record, so it holds when the
+        agent was started again (a restart) part way through setup."""
+        options = (self.host.get("setup") or {}).get("options") or {}
+        self.options["open_files"] = bool(options.get("openFiles", getattr(self, "setup_open_files", self.options.get("open_files", True))))
         try:
             config.write_json(config.user_config_file(), self.options)
         except OSError:
             pass
-        GLib.timeout_add_seconds(5, lambda: (self.m_refresh(None), False)[1])
+
+        def refreshed(message):
+            self.notify_ready(bool(options.get("office")))
+        GLib.timeout_add_seconds(5, lambda: (self.m_refresh(None, Answer(refreshed)), False)[1])
 
     def m_set_option(self, sender, key, value, defer):
         if key == "openFiles":

@@ -218,7 +218,7 @@ StepPage {
                 UI.Toggle {
                     id: diskSignIn
                     anchors.verticalCenter: parent.verticalCenter
-                    checked: false
+                    checked: FirstBoot.encrypted
                     Accessible.name: "Use my disk password to sign in"
                 }
             }
@@ -346,7 +346,7 @@ StepPage {
 
         UI.Label {
             text: parent.label
-            font.weight: Font.Medium
+            font.weight: UI.Style.weightMedium
         }
 
         ColumnLayout {

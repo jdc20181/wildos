@@ -45,6 +45,8 @@ target_link_libraries(wildos-dialogs PRIVATE
 
 set(LIBEXEC ${CMAKE_INSTALL_PREFIX}/libexec/wildos)
 install(TARGETS wildos-dialogs RUNTIME DESTINATION ${LIBEXEC})
+install(PROGRAMS data/record-package-sources DESTINATION ${LIBEXEC})
+install(FILES data/80wildos-package-sources DESTINATION ${CMAKE_INSTALL_FULL_SYSCONFDIR}/apt/apt.conf.d)
 install(FILES data/org.wildos.security.desktop DESTINATION ${CMAKE_INSTALL_DATADIR}/applications)
 install(FILES data/wildos-dialogs.service DESTINATION ${CMAKE_INSTALL_PREFIX}/lib/systemd/user)
 install(FILES data/plasma-polkit-agent-wildos.conf DESTINATION ${CMAKE_INSTALL_PREFIX}/lib/systemd/user/plasma-polkit-agent.service.d RENAME wildos.conf)

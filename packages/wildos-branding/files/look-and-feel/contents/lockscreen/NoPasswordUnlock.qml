@@ -36,7 +36,7 @@ FocusScope {
             horizontalAlignment: Text.AlignHCenter
             text: screen.userName
             size: 18
-            font.weight: Font.DemiBold
+            font.weight: UI.Style.weightSemiBold
             color: UI.Style.inkOnWallpaper
             bottomPadding: 6
         }

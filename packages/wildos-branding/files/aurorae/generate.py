@@ -3,11 +3,11 @@
 
     python3 generate.py
 
-Writes decoration.svg, the four button SVGs, WildOSrc and metadata.desktop
+Writes decoration.svg, the button SVGs, WildOSrc and metadata.desktop
 for the dark theme into WildOS/ and the light one into WildOSLight/, each in
 its colour scheme's window colour so the title bar and the app read as one
 sheet. wildos-auto-theme puts on the one that matches the colour scheme. The
-drop shadow is shadow-window (0 30px 80px rgba(4,8,24,0.45)); Aurorae turns
+drop shadow is shadow-window (0 30px 80px rgba(10,12,16,0.45)); Aurorae turns
 everything drawn in the padding into the KWin window shadow. It is computed
 here as a Gaussian and embedded as PNG, because the Qt SVG renderer that KWin
 uses has no reliable blur filter. The title bar and edges stay vector so they
@@ -28,31 +28,31 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 VARIANTS = {
     "WildOS": {
         "name": "Wild OS",
-        "title": "#151a2f",
-        "ink": "#eef1f8",
-        "text": "238,241,248",
-        "text_inactive": "179,184,198",
+        "title": "#181a22",
+        "ink": "#ffffff",
+        "text": "255,255,255",
+        "text_inactive": "205,206,208",
         "edge": "#ffffff",
-        "edge_opacity": 0.11,
+        "edge_opacity": 0.093,
         "hover": "#ffffff",
         "shadow_alpha": 0.45,
     },
     "WildOSLight": {
         "name": "Wild OS Light",
-        "title": "#f4f6fb",
-        "ink": "#151b2c",
-        "text": "21,27,44",
-        "text_inactive": "97,102,114",
-        "edge": "#0f1428",
-        "edge_opacity": 0.12,
-        "hover": "#0f1428",
+        "title": "#f3f3f3",
+        "ink": "#1a1a1a",
+        "text": "26,26,26",
+        "text_inactive": "96,96,96",
+        "edge": "#000000",
+        "edge_opacity": 0.073,
+        "hover": "#000000",
         "shadow_alpha": 0.22,
     },
 }
 
 CLOSE_HOVER = "#c4463f"
 CLOSE_PRESSED = "#a63a34"
-SHADOW_RGB = (4, 8, 24)
+SHADOW_RGB = (10, 12, 16)
 SHADOW_Y = 30
 SIGMA = 40.0  # CSS blur radius 80 is a Gaussian with sigma 40
 
@@ -266,7 +266,28 @@ def button_svg(kind):
         body += '<g transform="translate(%s,%s) scale(%s)">%s</g>' % (
             n((w - 11) / 2.0), n(y + (h - 11) / 2.0), n(scale), glyph)
         groups.append('<g id="%s-center">%s</g>' % (state, body))
-    total = len(states) * (h + 4)
+    return sheet(w, h, groups)
+
+
+def close_maximized_svg():
+    """Square close fills for a maximised window.
+
+    A maximised window has square corners, so as on Windows 11 its close
+    hover fills the corner. Aurorae buttons have no maximised state, so Wild
+    OS's aurorae.qml (wildos-shell) puts these under the close button of a
+    maximised window, where they show through outside the rounded hover.
+    They live in a file of their own because KSvg caches which elements a
+    file has, and a cache made from an older close.svg would hide new ones.
+    """
+    groups = []
+    for state, colour in (("hover", CLOSE_HOVER), ("pressed", CLOSE_PRESSED)):
+        y = len(groups) * (TITLE_H + 4)
+        groups.append('<g id="%s-center">%s</g>' % (state, rect(0, y, BUTTON_W, TITLE_H, colour)))
+    return sheet(BUTTON_W, TITLE_H, groups)
+
+
+def sheet(w, h, groups):
+    total = len(groups) * (h + 4)
     return (
         '<?xml version="1.0" encoding="UTF-8"?>\n'
         '<svg xmlns="http://www.w3.org/2000/svg" width="%d" height="%d" viewBox="0 0 %d %d">\n%s\n</svg>\n'
@@ -343,6 +364,7 @@ def main():
         write("decoration.svg", decoration_svg())
         for kind in GLYPHS:
             write(kind + ".svg", button_svg(kind))
+        write("close-maximized.svg", close_maximized_svg())
         write(theme + "rc", RC.format(th=TITLE_H, bw=BUTTON_W, pt=PAD_T, pb=PAD_B, pl=PAD_L, pr=PAD_R,
                                       text=V["text"], text_inactive=V["text_inactive"]))
         write("metadata.desktop", METADATA.format(name=V["name"], id=theme))

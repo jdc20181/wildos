@@ -12,10 +12,16 @@ To the guest:
   {"type":"windows"}                        the session's windows
   {"type":"window","hwnd":n}                one window, unfiltered
   {"type":"launch","path":"C:\\...","args":[...],"cwd":"..."}
-                                            start a program in the session
+                                            start a program in the session: a
+                                            path on a drive, a bare program name,
+                                            or shell:AppsFolder\\<AUMID>; a program
+                                            inside a Store app's package starts
+                                            that app
   {"type":"theme","dark":bool,"accent":"#rrggbb"}
-  {"type":"apps","icons":bool}              Start menu programs, icons as .ico base64
-  {"type":"icon","path":"C:\\..."}          one program's icon
+  {"type":"apps","icons":bool}              Start menu programs and Store apps
+                                            [{name,target,arguments,icon,aumid?}],
+                                            icons as .ico base64
+  {"type":"icon","path":"C:\\..."}          one program's icon (local disks only)
   {"type":"sessions"}
 From the guest:
   {"type":"hello","version":"1","account":"wild","sessions":[n],"boot":"..."}

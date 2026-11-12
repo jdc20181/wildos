@@ -17,7 +17,7 @@ Item {
     property url defaultPicture: "file:///usr/share/wildos/avatar-default.png"
     property bool ring: false
     // The soft drop shadow under the lock and sign-in screens' avatar
-    // (Lock.dc: 0 16px 40px rgba(6,10,28,0.35)).
+    // (Lock.dc: 0 16px 40px rgba(13,15,19,0.35)).
     property bool shadow: false
 
     readonly property bool hasPicture: own.status === Image.Ready || fallback.status === Image.Ready
@@ -30,7 +30,7 @@ Item {
         anchors.fill: parent
         visible: false
         radius: width / 2
-        color: Qt.rgba(6 / 255, 10 / 255, 28 / 255, 0.35)
+        color: Qt.rgba(13 / 255, 15 / 255, 19 / 255, 0.35)
         layer.enabled: avatar.shadow
     }
 
@@ -54,7 +54,7 @@ Item {
         gradient: Gradient {
             orientation: Gradient.Vertical
             GradientStop { position: 0; color: "#3a4a78" }
-            GradientStop { position: 1; color: "#232d4f" }
+            GradientStop { position: 1; color: "#34363a" }
         }
 
         Icon {

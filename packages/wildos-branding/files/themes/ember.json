@@ -12,8 +12,16 @@
     "textOnAccent": "#0f1530",
     "accentText": "#ffb99d",
     "glass": {
-        "colour": "#1c121a",
-        "alpha": 0.86
+        "colour": "#1a1a1e",
+        "alpha": 0.95
+    },
+    "panelGlass": {
+        "colour": "#202025",
+        "alpha": 0.96
+    },
+    "taskbarGlass": {
+        "colour": "#141418",
+        "alpha": 0.92
     },
     "wallpaper": "/usr/share/wallpapers/WildOS-white-dunes",
     "underglow": false,

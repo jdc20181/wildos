@@ -23,7 +23,7 @@ Depends:
  qml6-module-qtquick-shapes,
  qml6-module-qtquick-effects,
  qml6-module-qtquick-window,
- fonts-inter,
+ wildos-fonts,
 Description: Wild OS controls, the shared QML module WildOS.UI
  The buttons, switches, check boxes, fields, drop-downs, menus, tabs,
  title bars, rows, cards, dialogs and icons every Wild OS app, panel

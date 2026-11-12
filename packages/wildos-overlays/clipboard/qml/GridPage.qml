@@ -248,7 +248,7 @@ Item {
                     anchors.bottomMargin: 8
                     text: row.modelData.heading
                     size: 12
-                    font.weight: Font.DemiBold
+                    font.weight: UI.Style.weightSemiBold
                     color: UI.Style.inkAlpha(0.75, 0.70)
                 }
 
@@ -298,7 +298,7 @@ Item {
                 Layout.fillWidth: true
                 horizontalAlignment: Text.AlignHCenter
                 text: page.emoji ? "No emoji found" : "No symbols found"
-                font.weight: Font.DemiBold
+                font.weight: UI.Style.weightSemiBold
             }
             UI.Label {
                 Layout.fillWidth: true

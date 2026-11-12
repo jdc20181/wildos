@@ -41,6 +41,7 @@ class Accessibility : public QObject
     Q_PROPERTY(bool windowEffectsInstalled READ windowEffectsInstalled CONSTANT)
     Q_PROPERTY(bool windowEffectsSupported READ windowEffectsSupported CONSTANT)
     Q_PROPERTY(bool outlineWindows READ outlineWindows NOTIFY changed)
+    Q_PROPERTY(bool outlineFillingScreen READ outlineFillingScreen NOTIFY changed)
     Q_PROPERTY(bool blurBackground READ blurBackground NOTIFY changed)
     Q_PROPERTY(int blurStrength READ blurStrength NOTIFY changed)
     Q_PROPERTY(bool blurDesktop READ blurDesktop NOTIFY changed)
@@ -72,6 +73,7 @@ public:
     bool windowEffectsInstalled() const { return m_windowEffectsInstalled; }
     bool windowEffectsSupported() const { return m_windowEffectsSupported; }
     bool outlineWindows() const { return m_outlineWindows; }
+    bool outlineFillingScreen() const { return m_outlineFillingScreen; }
     bool blurBackground() const { return m_blurBackground; }
     int blurStrength() const { return m_blurStrength; }
     bool blurDesktop() const { return m_blurDesktop; }
@@ -91,6 +93,7 @@ public:
     Q_INVOKABLE void setBounceKeys(bool on);
     Q_INVOKABLE void setBounceKeysDelay(int ms);
     Q_INVOKABLE void setOutlineWindows(bool on);
+    Q_INVOKABLE void setOutlineFillingScreen(bool on);
     Q_INVOKABLE void setBlurBackground(bool on);
     Q_INVOKABLE void setBlurStrength(int step);
     Q_INVOKABLE void setBlurDesktop(bool on);
@@ -131,6 +134,7 @@ private:
     bool m_windowEffectsInstalled = false;
     bool m_windowEffectsSupported = true;
     bool m_outlineWindows = false;
+    bool m_outlineFillingScreen = true;
     bool m_blurBackground = false;
     int m_blurStrength = 3;
     bool m_blurDesktop = true;

@@ -73,6 +73,13 @@ namespace WildOS.Guest
             w["pid"] = (long)pid;
             w["image"] = image;
             w["app"] = app;
+            // A frame-hosted Store app (Calculator, Settings) has its frame
+            // owned by ApplicationFrameHost; the AUMID says which app it is.
+            if (app == "applicationframehost")
+            {
+                string id = HostedAumid(hwnd, pid);
+                if (id != null) w["aumid"] = id;
+            }
             w["title"] = title.ToString();
             w["class"] = cls.ToString();
             w["owner"] = owner.ToInt64();
@@ -81,6 +88,60 @@ namespace WildOS.Guest
             w["width"] = (long)width;
             w["height"] = (long)height;
             return w;
+        }
+
+        // The app drawing inside a packaged app's frame: its window (a
+        // CoreWindow) from a process of its own, whose package names the
+        // app. Windows keeps that window inside the frame only while the
+        // frame is active, and as a top-level window of the same title
+        // otherwise.
+        static string HostedAumid(IntPtr frame, uint framePid)
+        {
+            string found = null;
+            Native.EnumChildWindows(frame, delegate (IntPtr child, IntPtr param)
+            {
+                uint pid;
+                Native.GetWindowThreadProcessId(child, out pid);
+                if (pid != 0 && pid != framePid) found = ProcessAumid(pid);
+                return found == null;
+            }, IntPtr.Zero);
+            if (found != null) return found;
+            string title = Title(frame);
+            if (title.Length == 0) return null;
+            Native.EnumWindows(delegate (IntPtr hwnd, IntPtr param)
+            {
+                var cls = new StringBuilder(64);
+                Native.GetClassName(hwnd, cls, cls.Capacity);
+                if (cls.ToString() != "Windows.UI.Core.CoreWindow" || Title(hwnd) != title) return true;
+                uint pid;
+                Native.GetWindowThreadProcessId(hwnd, out pid);
+                if (pid != 0 && pid != framePid) found = ProcessAumid(pid);
+                return found == null;
+            }, IntPtr.Zero);
+            return found;
+        }
+
+        static string Title(IntPtr hwnd)
+        {
+            var title = new StringBuilder(Math.Max(Native.GetWindowTextLength(hwnd) + 1, 1));
+            Native.GetWindowText(hwnd, title, title.Capacity);
+            return title.ToString();
+        }
+
+        static string ProcessAumid(uint pid)
+        {
+            IntPtr process = Native.OpenProcess(Native.PROCESS_QUERY_LIMITED_INFORMATION, false, pid);
+            if (process == IntPtr.Zero) return null;
+            try
+            {
+                uint length = 256;
+                var id = new StringBuilder((int)length);
+                return Native.GetApplicationUserModelId(process, ref length, id) == 0 && Packages.IsAumid(id.ToString()) ? id.ToString() : null;
+            }
+            finally
+            {
+                Native.CloseHandle(process);
+            }
         }
 
         public static string ImagePath(uint pid)

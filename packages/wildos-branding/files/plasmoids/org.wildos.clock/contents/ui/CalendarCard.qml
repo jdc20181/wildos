@@ -102,7 +102,7 @@ ColumnLayout {
                 Layout.fillWidth: true
                 text: Formats.dayAndMonth(card.today)
                 size: 14
-                font.weight: Font.DemiBold
+                font.weight: UI.Style.weightSemiBold
                 Accessible.role: Accessible.Heading
             }
 
@@ -205,7 +205,7 @@ ColumnLayout {
                 horizontalAlignment: Text.AlignHCenter
                 text: modelData
                 size: 11
-                font.weight: Font.DemiBold
+                font.weight: UI.Style.weightSemiBold
                 color: UI.Style.inkMuted
             }
         }
@@ -249,7 +249,7 @@ ColumnLayout {
                     horizontalAlignment: Text.AlignHCenter
                     text: cell.modelData.n
                     font.features: { "tnum": 1 }
-                    font.weight: cell.modelData.isToday ? Font.DemiBold : Font.Normal
+                    font.weight: cell.modelData.isToday ? UI.Style.weightSemiBold : UI.Style.weightRegular
                     color: cell.modelData.isToday ? UI.Style.textOnAccent
                         : cell.modelData.inMonth ? UI.Style.ink : UI.Style.inkSubtle
                 }

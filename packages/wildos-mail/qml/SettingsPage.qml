@@ -52,7 +52,7 @@ Rectangle {
                 UI.Label {
                     text: qsTr("Settings")
                     size: 16
-                    font.weight: Font.DemiBold
+                    font.weight: UI.Style.weightSemiBold
                 }
             }
 
@@ -64,7 +64,7 @@ Rectangle {
                     Layout.fillWidth: true
                     implicitHeight: 34
                     radius: 6
-                    color: page.section === modelData.id ? UI.Style.accentSelected : navMouse.containsMouse ? UI.Style.surfaceHover : "transparent"
+                    color: page.section === modelData.id ? UI.Style.surfaceSelected : navMouse.containsMouse ? UI.Style.surfaceHover : "transparent"
 
                     MouseArea {
                         id: navMouse
@@ -80,13 +80,13 @@ Rectangle {
                         MailIcon {
                             name: nav.modelData.icon
                             size: 16
-                            color: page.section === nav.modelData.id ? UI.Style.accent : UI.Style.iconInk
+                            color: page.section === nav.modelData.id ? UI.Style.iconInk : UI.Style.iconMuted
                         }
                         UI.Label {
                             Layout.fillWidth: true
                             text: nav.modelData.name
                             size: 13
-                            font.weight: page.section === nav.modelData.id ? Font.DemiBold : Font.Normal
+                            font.weight: page.section === nav.modelData.id ? UI.Style.weightSemiBold : UI.Style.weightRegular
                             elide: Text.ElideRight
                         }
                     }
@@ -120,7 +120,7 @@ Rectangle {
                 UI.Label {
                     text: page.sections.find(s => s.id === page.section).name
                     size: 22
-                    font.weight: Font.DemiBold
+                    font.weight: UI.Style.weightSemiBold
                 }
                 UI.Label {
                     Layout.fillWidth: true
@@ -161,7 +161,7 @@ Rectangle {
                                     UI.Label {
                                         text: accountCard.modelData.email
                                         size: 14
-                                        font.weight: Font.DemiBold
+                                        font.weight: UI.Style.weightSemiBold
                                     }
                                     UI.Label {
                                         Layout.fillWidth: true
@@ -292,7 +292,7 @@ Rectangle {
                             UI.Label {
                                 text: qsTr("Signature for %1").arg(sigCard.modelData.email)
                                 size: 13
-                                font.weight: Font.DemiBold
+                                font.weight: UI.Style.weightSemiBold
                             }
                             QQC.TextArea {
                                 Layout.fillWidth: true
@@ -301,6 +301,7 @@ Rectangle {
                                 wrapMode: TextEdit.Wrap
                                 color: UI.Style.ink
                                 font.family: UI.Style.fontFamily
+                                font.letterSpacing: UI.Style.tracking(UI.Style.px(13))
                                 font.pixelSize: UI.Style.px(13)
                                 placeholderText: qsTr("For example, your name and phone number")
                                 placeholderTextColor: UI.Style.inkPlaceholder
@@ -341,7 +342,7 @@ Rectangle {
                                 UI.Label {
                                     text: modelData.n
                                     size: 26
-                                    font.weight: Font.DemiBold
+                                    font.weight: UI.Style.weightSemiBold
                                 }
                                 UI.Label {
                                     Layout.fillWidth: true

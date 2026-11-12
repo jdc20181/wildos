@@ -110,7 +110,7 @@ StepPage {
 
                     width: parent.width
                     height: 52 + (open ? form.implicitHeight + 16 : 0)
-                    color: open ? UI.Style.accentAlpha(0.10, 0.08) : row.hovered && row.enabled ? UI.Style.surfaceHover : "transparent"
+                    color: open ? UI.Style.fillSubtle(0.10, 0.08) : row.hovered && row.enabled ? UI.Style.surfaceHover : "transparent"
 
                     Rectangle {
                         visible: entry.index > 0
@@ -178,7 +178,7 @@ StepPage {
                             Layout.fillWidth: true
                             text: entry.net.ssid
                             size: 14
-                            font.weight: entry.open || entry.net.active ? Font.DemiBold : Font.Normal
+                            font.weight: entry.open || entry.net.active ? UI.Style.weightSemiBold : UI.Style.weightRegular
                         }
 
                         UI.Spinner {

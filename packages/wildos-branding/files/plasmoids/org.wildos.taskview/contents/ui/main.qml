@@ -49,9 +49,9 @@ PlasmoidItem {
 
         Rectangle {
             anchors.centerIn: parent
-            width: 46
-            height: 46
-            radius: 13
+            width: 40
+            height: 40
+            radius: 8
             color: button.containsMouse ? UI.Style.surfaceHover : "transparent"
             Behavior on color {
                 ColorAnimation { duration: UI.Style.hoverDuration }

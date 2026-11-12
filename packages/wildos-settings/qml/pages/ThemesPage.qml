@@ -93,7 +93,7 @@ PageScroll {
                             Layout.fillWidth: true
                             text: card.modelData.name
                             size: 13
-                            font.weight: card.selected ? Font.DemiBold : Font.Medium
+                            font.weight: card.selected ? UI.Style.weightSemiBold : UI.Style.weightMedium
                         }
 
                         Rectangle {

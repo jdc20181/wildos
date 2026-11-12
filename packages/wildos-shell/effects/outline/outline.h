@@ -60,6 +60,7 @@ private:
 
     void track(EffectWindow *w);
     bool outlined(EffectWindow *w) const;
+    bool fillsScreen(EffectWindow *w) const;
     Shape shapeFor(EffectWindow *w) const;
     QRectF ringRect(EffectWindow *w, const QRectF &frame) const;
     void repaintRing(EffectWindow *w);
@@ -77,6 +78,9 @@ private:
     std::chrono::milliseconds m_lastPresent = std::chrono::milliseconds::zero();
     bool m_animating = false;
     qreal m_duration = 150;
+    // Off leaves maximised windows, and others that fill the screen, with
+    // no outline. Full screen windows never have one.
+    bool m_fillingScreen = true;
 
     QVector4D m_accent;
     QVector4D m_line;

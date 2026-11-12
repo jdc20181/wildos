@@ -1,0 +1,8 @@
+files/apt/80wildos-restore-points etc/apt/apt.conf.d/
+files/kernel/zz-wildos-restore-points etc/kernel/postrm.d/
+files/polkit/org.wildos.recovery.policy usr/share/polkit-1/actions/
+files/systemd/*.service files/systemd/*.timer usr/lib/systemd/system/
+files/systemd/swap-file-creator.service.d usr/lib/systemd/system/
+files/dracut/91wildos-restore usr/lib/dracut/modules.d/
+files/grub/15_wildos_recovery usr/lib/wildos/grub.d/
+files/generator/wildos-safe-mode usr/lib/systemd/user-generators/

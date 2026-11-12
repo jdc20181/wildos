@@ -5,21 +5,22 @@
 # A target is a UNO command (Bold, for .uno:Bold) or a LibreOffice image path
 # with the size it is drawn at (svx/res/doc_modified_no.png@16). An icon is a
 # file in svg/ (drawn on the design boards or by us) or lucide/ (adapted from
-# Lucide). Tones: fg (default, the text colour), accent for the actions the
-# boards draw in blue, muted for the sidebar strip and status bar, and red,
-# yellow, green where the colour carries meaning.
+# Lucide). Tones: fg (default, the text colour), accent (no longer used: the
+# design keeps the accent for controls, so ribbon icons follow the text),
+# muted for the sidebar strip and status bar, and red, yellow, green where
+# the colour carries meaning.
 
 # Clipboard
-Paste                       paste               accent
-Cut                         cut                 accent
-Copy                        copy                accent
-PasteSpecial                paste-special       accent
-PasteSpecialMenu            paste-special       accent
-PasteUnformatted            paste-text          accent
-PasteOnlyText               paste-text          accent
-PasteOnlyValue              paste-values        accent
-PasteOnlyFormula            paste-formula       accent
-PasteTransposed             paste-transposed    accent
+Paste                       paste               fg
+Cut                         cut                 fg
+Copy                        copy                fg
+PasteSpecial                paste-special       fg
+PasteSpecialMenu            paste-special       fg
+PasteUnformatted            paste-text          fg
+PasteOnlyText               paste-text          fg
+PasteOnlyValue              paste-values        fg
+PasteOnlyFormula            paste-formula       fg
+PasteTransposed             paste-transposed    fg
 FormatPaintbrush            lucide/paintbrush
 SelectAll                   lucide/text-select
 Undo                        lucide/undo-2
@@ -169,55 +170,55 @@ WrapText                    wrap-text
 Hyphenate                   hyphenation
 
 # Insert
-InsertGraphic               picture             accent
+InsertGraphic               picture             fg
 GraphicDialog               picture
-InsertTable                 table               accent
+InsertTable                 table               fg
 TableDialog                 lucide/table-properties
-InsertObjectChart           chart               accent
-BasicShapes                 lucide/shapes       accent
+InsertObjectChart           chart               fg
+BasicShapes                 lucide/shapes       fg
 InsertDraw                  lucide/shapes
-BasicShapes.rectangle           shape-rectangle        accent
-BasicShapes.round-rectangle     shape-round-rectangle  accent
-BasicShapes.quadrat             shape-square           accent
-BasicShapes.round-quadrat       lucide/square          accent
-BasicShapes.circle              lucide/circle          accent
-BasicShapes.ellipse             shape-ellipse          accent
-BasicShapes.circle-pie          shape-pie              accent
-BasicShapes.isosceles-triangle  lucide/triangle        accent
-BasicShapes.right-triangle      shape-right-triangle   accent
-BasicShapes.trapezoid           shape-trapezoid        accent
-BasicShapes.diamond             lucide/diamond         accent
-BasicShapes.parallelogram       shape-parallelogram    accent
-BasicShapes.pentagon            lucide/pentagon        accent
-BasicShapes.hexagon             lucide/hexagon         accent
-BasicShapes.octagon             lucide/octagon         accent
-BasicShapes.cross               shape-cross            accent
-BasicShapes.ring                shape-ring             accent
-BasicShapes.block-arc           shape-block-arc        accent
-BasicShapes.can                 lucide/cylinder        accent
-BasicShapes.cube                lucide/box             accent
-BasicShapes.paper               shape-paper            accent
-BasicShapes.frame               shape-frame            accent
+BasicShapes.rectangle           shape-rectangle        fg
+BasicShapes.round-rectangle     shape-round-rectangle  fg
+BasicShapes.quadrat             shape-square           fg
+BasicShapes.round-quadrat       lucide/square          fg
+BasicShapes.circle              lucide/circle          fg
+BasicShapes.ellipse             shape-ellipse          fg
+BasicShapes.circle-pie          shape-pie              fg
+BasicShapes.isosceles-triangle  lucide/triangle        fg
+BasicShapes.right-triangle      shape-right-triangle   fg
+BasicShapes.trapezoid           shape-trapezoid        fg
+BasicShapes.diamond             lucide/diamond         fg
+BasicShapes.parallelogram       shape-parallelogram    fg
+BasicShapes.pentagon            lucide/pentagon        fg
+BasicShapes.hexagon             lucide/hexagon         fg
+BasicShapes.octagon             lucide/octagon         fg
+BasicShapes.cross               shape-cross            fg
+BasicShapes.ring                shape-ring             fg
+BasicShapes.block-arc           shape-block-arc        fg
+BasicShapes.can                 lucide/cylinder        fg
+BasicShapes.cube                lucide/box             fg
+BasicShapes.paper               shape-paper            fg
+BasicShapes.frame               shape-frame            fg
 Line                        line
-HyperlinkDialog             lucide/link         accent
+HyperlinkDialog             lucide/link         fg
 EditHyperlink               lucide/link-2
 OpenHyperlinkOnCursor       lucide/external-link
 RemoveHyperlink             lucide/unlink
-InsertBookmark              lucide/bookmark     accent
-InsertReferenceField        lucide/square-arrow-out-up-right accent
-InsertPageHeader            lucide/panel-top    accent
-InsertPageFooter            lucide/panel-bottom accent
-PageNumberWizard            lucide/hash         accent
-EditHeaderAndFooter         lucide/panels-top-bottom accent
-Text                        text-box            accent
-DrawText                    text-box            accent
+InsertBookmark              lucide/bookmark     fg
+InsertReferenceField        lucide/square-arrow-out-up-right fg
+InsertPageHeader            lucide/panel-top    fg
+InsertPageFooter            lucide/panel-bottom fg
+PageNumberWizard            lucide/hash         fg
+EditHeaderAndFooter         lucide/panels-top-bottom fg
+Text                        text-box            fg
+DrawText                    text-box            fg
 AddTextBox                  text-box
-InsertFieldCtrl             lucide/text-cursor-input accent
+InsertFieldCtrl             lucide/text-cursor-input fg
 InsertField                 lucide/text-cursor-input
-InsertSection               lucide/rows-2       accent
-CharmapControl              lucide/omega        accent
+InsertSection               lucide/rows-2       fg
+CharmapControl              lucide/omega        fg
 InsertSymbol                lucide/omega
-InsertObjectStarMath        lucide/square-radical accent
+InsertObjectStarMath        lucide/square-radical fg
 InsertFormula               function
 InsertDateField             lucide/calendar
 InsertDateFieldVar          lucide/calendar
@@ -235,7 +236,7 @@ InsertSparkline             lucide/activity
 InsertSheetFromFile         lucide/file-input
 
 # Comments
-InsertAnnotation            lucide/message-square-plus accent
+InsertAnnotation            lucide/message-square-plus fg
 ShowAnnotations             lucide/message-square
 ShowAllNotes                lucide/message-square
 ShowNote                    lucide/message-square
@@ -249,14 +250,14 @@ DeleteAllNotes              lucide/message-square-x
 FormatAllNotes              lucide/message-square-more
 
 # Layout
-PageMargin                  margins             accent
-Margins                     margins             accent
-Orientation                 orientation         accent
-AttributePageSize           page-size           accent
-PageColumnType              lucide/columns-2    accent
+PageMargin                  margins             fg
+Margins                     margins             fg
+Orientation                 orientation         fg
+AttributePageSize           page-size           fg
+PageColumnType              lucide/columns-2    fg
 FormatColumns               lucide/columns-3
-PageDialog                  lucide/file-cog     accent
-PageFormatDialog            lucide/file-cog     accent
+PageDialog                  lucide/file-cog     fg
+PageFormatDialog            lucide/file-cog     fg
 TitlePageDialog             lucide/file-text
 LineNumberingDialog         lucide/list-ordered
 InsertPagebreak             page-break
@@ -264,7 +265,7 @@ InsertColumnBreak           lucide/columns-2
 InsertBreak                 lucide/separator-horizontal
 InsertRowBreak              lucide/separator-horizontal
 DeleteAllBreaks             lucide/eraser
-WrapMenu                    wrap-on             accent
+WrapMenu                    wrap-on             fg
 WrapOff                     wrap-off
 WrapOn                      wrap-on
 WrapIdeal                   wrap-on
@@ -329,9 +330,9 @@ GrafTransparence            lucide/blend
 GraphicFilterToolbox        lucide/wand-sparkles
 
 # Tables
-InsertCell                  insert-cells        accent
+InsertCell                  insert-cells        fg
 DeleteCell                  delete-cells
-FormatCellDialog            table               accent
+FormatCellDialog            table               fg
 InsertRowsBefore            insert-row-above
 InsertRowsAfter             insert-row-below
 InsertColumnsBefore         insert-col-left
@@ -365,7 +366,7 @@ TableSort                   sort
 TableEvents                 lucide/zap
 UnsetCellsReadOnly          lucide/lock-open
 OptimizeTable               col-width
-AutoFormat                  lucide/wand-sparkles accent
+AutoFormat                  lucide/wand-sparkles fg
 
 # Sheets, cells and numbers
 Insert                      plus
@@ -396,9 +397,9 @@ NumberFormatDecimal         lucide/hash
 NumberFormatStandard        lucide/letter-text
 NumberFormatDate            lucide/calendar
 NumberFormatScientific      lucide/square-letter-e
-Accent1CellStyles           cell-style          accent
-Accent2CellStyles           cell-style          accent
-Accent3CellStyles           cell-style          accent
+Accent1CellStyles           cell-style          fg
+Accent2CellStyles           cell-style          fg
+Accent3CellStyles           cell-style          fg
 GoodCellStyles              lucide/circle-check green
 NeutralCellStyles           lucide/circle       yellow
 BadCellStyles               lucide/circle-x     red
@@ -406,22 +407,22 @@ WarningCellStyles           lucide/triangle-alert yellow
 ErrorCellStyles             lucide/octagon-x    red
 NoteCellStyles              lucide/sticky-note
 FootnoteCellStyles          cell-style
-Protect                     lucide/lock         accent
-ToolProtectionDocument      lucide/shield       accent
+Protect                     lucide/lock         fg
+ToolProtectionDocument      lucide/shield       fg
 ProtectTraceChangeMode      lucide/lock-keyhole
 
 # Data
-DataSort                    sort                accent
+DataSort                    sort                fg
 SortAscending               lucide/arrow-down-a-z
 SortDescending              lucide/arrow-down-z-a
-DataFilterAutoFilter        filter              accent
+DataFilterAutoFilter        filter              fg
 DataFilterStandardFilter    lucide/list-filter
 DataFilterSpecialFilter     lucide/list-filter-plus
 DataFilterRemoveFilter      lucide/filter-x
-DataDataPilotRun            lucide/table-properties accent
-TextToColumns               lucide/table-columns-split accent
-HandleDuplicateRecords      lucide/copy-x       accent
-Validation                  lucide/shield-check accent
+DataDataPilotRun            lucide/table-properties fg
+TextToColumns               lucide/table-columns-split fg
+HandleDuplicateRecords      lucide/copy-x       fg
+Validation                  lucide/shield-check fg
 DataSubTotals               lucide/square-sigma
 DataConsolidate             lucide/merge
 GoalSeekDialog              lucide/target
@@ -430,13 +431,13 @@ DefineDBName                lucide/database
 DataAreaRefresh             lucide/database-zap
 DefineName                  lucide/tag
 InsertName                  lucide/tags
-FunctionDialog              function            accent
-AutoSum                     autosum             accent
+FunctionDialog              function            fg
+AutoSum                     autosum             fg
 Group                       lucide/group
 Ungroup                     lucide/ungroup
 ShowDetail                  lucide/square-plus
 HideDetail                  lucide/square-minus
-ConditionalFormatMenu       lucide/paint-roller accent
+ConditionalFormatMenu       lucide/paint-roller fg
 ConditionalFormatDialog     lucide/paint-roller
 ColorScaleFormatDialog      lucide/palette
 DataBarFormatDialog         lucide/chart-bar
@@ -450,51 +451,51 @@ ColumnOperations            lucide/columns-3
 RowOperations               lucide/rows-3
 
 # References and review
-InsertMultiIndex            lucide/table-of-contents accent
+InsertMultiIndex            lucide/table-of-contents fg
 UpdateCurIndex              lucide/refresh-cw
 UpdateAllIndexes            lucide/refresh-cw
 UpdateFields                lucide/refresh-cw
-UpdateAll                   lucide/refresh-ccw  accent
+UpdateAll                   lucide/refresh-ccw  fg
 EditCurIndex                lucide/pencil-line
 RemoveTableOf               lucide/list-x
-InsertFootnote              footnote            accent
+InsertFootnote              footnote            fg
 InsertEndnote               endnote
 FootnoteDialog              lucide/settings-2
 EndnoteDialog               lucide/settings-2
-InsertAuthoritiesEntry      lucide/quote        accent
-InsertCaptionDialog         lucide/captions     accent
-InsertIndexesEntry          lucide/tag          accent
-SpellingAndGrammarDialog    lucide/spell-check  accent
-SpellDialog                 lucide/spell-check  accent
+InsertAuthoritiesEntry      lucide/quote        fg
+InsertCaptionDialog         lucide/captions     fg
+InsertIndexesEntry          lucide/tag          fg
+SpellingAndGrammarDialog    lucide/spell-check  fg
+SpellDialog                 lucide/spell-check  fg
 SpellOnline                 lucide/spell-check-2
 ThesaurusDialog             lucide/book-open-text
 WordCountDialog             lucide/whole-word
-TrackChanges                lucide/file-pen-line accent
-TraceChangeMode             lucide/file-pen-line accent
+TrackChanges                lucide/file-pen-line fg
+TraceChangeMode             lucide/file-pen-line fg
 TrackChangesBar             lucide/file-pen-line
 ShowTrackedChanges          lucide/diff
-AcceptTrackedChanges        lucide/list-checks  accent
-AcceptChanges               lucide/list-checks  accent
+AcceptTrackedChanges        lucide/list-checks  fg
+AcceptChanges               lucide/list-checks  fg
 AcceptTrackedChange         lucide/check        green
 RejectTrackedChange         lucide/x            red
 NextTrackedChange           lucide/arrow-down
 PreviousTrackedChange       lucide/arrow-up
-CompareDocuments            lucide/git-compare  accent
+CompareDocuments            lucide/git-compare  fg
 
 # Find
-FocusToFindbar              find                accent
-FindBar                     find                accent
+FocusToFindbar              find                fg
+FindBar                     find                fg
 RecSearch                   find
-SearchDialog                replace             accent
+SearchDialog                replace             fg
 UpSearch                    lucide/chevron-up
 DownSearch                  lucide/chevron-down
 ExitSearch                  lucide/x
 
 # View and navigation
-PrintLayout                 lucide/file-text    accent
-BrowseView                  lucide/globe        accent
-NormalViewMode              lucide/sheet        accent
-PagebreakMode               lucide/file-spreadsheet accent
+PrintLayout                 lucide/file-text    fg
+BrowseView                  lucide/globe        fg
+NormalViewMode              lucide/sheet        fg
+PagebreakMode               lucide/file-spreadsheet fg
 Ruler                       lucide/ruler
 ControlCodes                lucide/pilcrow
 ShowWhitespace              lucide/space
@@ -518,7 +519,7 @@ ZoomMinus                   lucide/zoom-out
 ZoomPage                    lucide/file-scan
 ZoomPageWidth               lucide/move-horizontal
 PreviewZoom                 lucide/zoom-in
-FullScreen                  lucide/maximize     accent
+FullScreen                  lucide/maximize     fg
 ShowSinglePage              page-single         muted
 ShowTwoPages                page-two            muted
 ShowMultiplePages           page-two            muted
@@ -706,10 +707,24 @@ svx/res/a11y_check_issues_found.png@16              lucide/accessibility yellow
 svx/res/zoom_page_statusbar.png@14                  lucide/scan         muted
 svx/res/slidezoomin_10.png@10                       plus                muted
 svx/res/slidezoomout_10.png@10                      minus               muted
-svx/res/slidezoombutton_10.png@10                   slider-thumb        accent
+svx/res/slidezoombutton_10.png@10                   slider-thumb        fg
 sw/res/emptypage.png@12x16                          page-single         muted
-sw/res/emptypage_a.png@12x16                        page-single         accent
+sw/res/emptypage_a.png@12x16                        page-single         fg
 sw/res/twopages.png@25x16                           page-two            muted
-sw/res/twopages_a.png@25x16                         page-two            accent
+sw/res/twopages_a.png@25x16                         page-two            fg
 sw/res/doublepage.png@24x16                         lucide/book-open    muted
-sw/res/doublepage_a.png@24x16                       lucide/book-open    accent
+sw/res/doublepage_a.png@24x16                       lucide/book-open    fg
+
+# Design v3 ribbon additions
+Watermark                   lucide/droplet
+BibliographyComponent       lucide/library-big
+LanguageMenu                lucide/languages
+
+# Document type images (the Recent list in the File menu): each file shows
+# its app's tile, as on the OfficeFileMenu board.
+res/sx03251.png@16    app:write
+res/sx03162.png@16    app:write
+res/sx03255.png@16    app:write
+res/sx03163.png@16    app:write
+res/sx03250.png@16    app:tables
+res/sx03254.png@16    app:tables

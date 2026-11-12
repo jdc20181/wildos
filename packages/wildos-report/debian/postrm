@@ -1,0 +1,9 @@
+#!/bin/sh
+set -e
+
+# Back to security-misc's core pattern once this package's is gone.
+if [ "$1" = remove ] && [ -d /run/systemd/system ]; then
+    systemctl restart systemd-sysctl.service >/dev/null 2>&1 || true
+fi
+
+#DEBHELPER#

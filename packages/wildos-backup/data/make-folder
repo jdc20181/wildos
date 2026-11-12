@@ -1,0 +1,65 @@
+#!/bin/sh
+# Makes the "WildOS Backup" folder on a backup drive whose top folder
+# belongs to root (an ext4 drive formatted on another Linux PC), owned by
+# the person who asked, run as root through pkexec by Backup's setup.
+#
+#   make-folder MOUNT_POINT
+#
+# It only acts on the mount point of a removable or hot-plugged drive (or a
+# loop device) that UDisks mounted, makes only that one folder there and
+# gives only that folder to the caller. Nothing else on the drive changes.
+set -eu
+
+fail() {
+    echo "make-folder: $*" >&2
+    exit 2
+}
+
+[ $# -eq 1 ] || fail "usage: make-folder MOUNT_POINT"
+uid=${PKEXEC_UID:-}
+case "$uid" in
+    ''|*[!0-9]*) fail "must be run through pkexec" ;;
+esac
+[ "$uid" -ne 0 ] || fail "not for root"
+
+mount=$1
+case "$mount" in
+    /media/*|/run/media/*) ;;
+    *) fail "$mount is not where UDisks mounts drives" ;;
+esac
+case "$mount" in
+    */../*|*/..|*/./*|*/.) fail "$mount is not a plain path" ;;
+esac
+[ -d "$mount" ] && [ ! -L "$mount" ] || fail "$mount is not a folder"
+
+source=$(findmnt -n -o SOURCE --mountpoint "$mount" 2>/dev/null) || fail "$mount is not a mount point"
+[ -b "$source" ] || fail "$mount is not on a drive"
+
+# The whole disk the filesystem is on decides: plugged in by USB, marked
+# removable or hot-plugged, or a loop device. The PC's own disks are none.
+disk=$(lsblk -no PKNAME "$source" 2>/dev/null | head -n 1)
+[ -n "$disk" ] && disk=/dev/$disk || disk=$source
+info=$(lsblk -dno TYPE,RM,HOTPLUG,TRAN "$disk" 2>/dev/null) || fail "can't tell what drive $mount is on"
+set -- $info
+type=${1:-}
+removable=${2:-0}
+hotplug=${3:-0}
+transport=${4:-}
+if [ "$type" != loop ] && [ "$removable" != 1 ] && [ "$hotplug" != 1 ] && [ "$transport" != usb ]; then
+    fail "$mount is on a disk inside this PC"
+fi
+
+folder="$mount/WildOS Backup"
+if [ -L "$folder" ]; then
+    fail "$folder is a link"
+fi
+if [ -e "$folder" ] && [ ! -d "$folder" ]; then
+    fail "$folder is a file"
+fi
+gid=$(getent passwd "$uid" | cut -d: -f4)
+[ -n "$gid" ] || fail "no such user $uid"
+mkdir -p -m 700 "$folder"
+# Never through a link put there meanwhile.
+[ ! -L "$folder" ] || fail "$folder is a link"
+chown -h "$uid:$gid" "$folder"
+chmod 700 "$folder"

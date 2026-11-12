@@ -1,0 +1,9 @@
+[Global]
+IconName=wildos-report
+Comment=Report a problem
+DesktopEntry=org.wildos.report
+
+[Event/crashed]
+Name=An app closed unexpectedly
+Comment=An app crashed, with the offer to report it
+Action=Popup

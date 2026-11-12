@@ -59,7 +59,7 @@ StepPage {
 
             UI.Label {
                 text: "Display language"
-                font.weight: Font.Medium
+                font.weight: UI.Style.weightMedium
             }
 
             UI.ComboBox {
@@ -89,7 +89,7 @@ StepPage {
 
             UI.Label {
                 text: "Time zone"
-                font.weight: Font.Medium
+                font.weight: UI.Style.weightMedium
             }
 
             UI.ComboBox {
@@ -147,7 +147,7 @@ StepPage {
 
             UI.Label {
                 text: "How things will look"
-                font.weight: Font.DemiBold
+                font.weight: UI.Style.weightSemiBold
             }
 
             GridLayout {

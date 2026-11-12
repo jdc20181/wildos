@@ -84,7 +84,7 @@ T.AbstractButton {
                         width: parent.width
                         text: card.app ? card.app.name : ""
                         size: 14.5
-                        font.weight: Font.DemiBold
+                        font.weight: UI.Style.weightSemiBold
                     }
 
                     UI.Label {

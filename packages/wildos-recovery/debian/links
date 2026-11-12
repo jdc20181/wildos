@@ -1,0 +1,3 @@
+# A link rather than a file in /etc/grub.d, as wildos-base does, so the
+# entry goes when the package goes.
+usr/lib/wildos/grub.d/15_wildos_recovery etc/grub.d/15_wildos_recovery

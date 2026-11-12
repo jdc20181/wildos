@@ -7,11 +7,13 @@ import org.kde.plasma.core as PlasmaCore
 import org.kde.kitemmodels as KItemModels
 import org.kde.plasma.private.systemtray as SystemTray
 import org.kde.plasma.private.devicenotifier as DeviceNotifier
+import org.wildos.shell as WildOS
 
 // The Windows 11 style corner of the taskbar: the arrow that opens the hidden
 // app icons, a few running apps' icons inline, and a "safely remove" icon
 // while a USB drive is in use. App icons are the status icons apps publish
-// (StatusNotifierItems), read through Plasma's own model. Plasma's widgets
+// (StatusNotifierItems), read through Plasma's own model. A cup shows while
+// a hot corner keeps the computer awake. Plasma's widgets
 // (display settings, disks and the like) are never shown here.
 PlasmoidItem {
     id: tray
@@ -132,7 +134,10 @@ PlasmoidItem {
 
     Plasmoid.backgroundHints: PlasmaCore.Types.NoBackground
     Plasmoid.title: "App icons"
-    Plasmoid.status: items.count > 0 || mountedDrives.count > 0 ? PlasmaCore.Types.ActiveStatus : PlasmaCore.Types.PassiveStatus
+    // Hidden, not Passive, when there is nothing to show: the panel then
+    // leaves the empty tray out, so it adds no gap between the divider and
+    // Wi-Fi, volume and battery.
+    Plasmoid.status: items.count > 0 || mountedDrives.count > 0 || WildOS.KeepAwake.active ? PlasmaCore.Types.ActiveStatus : PlasmaCore.Types.HiddenStatus
     toolTipMainText: ""
     toolTipSubText: ""
 

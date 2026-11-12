@@ -32,7 +32,7 @@ Rectangle {
         anchors.verticalCenterOffset: -0.5
         text: chip.text
         size: 11
-        font.weight: Font.Medium
+        font.weight: Style.weightMedium
         color: Style.ink
     }
 }

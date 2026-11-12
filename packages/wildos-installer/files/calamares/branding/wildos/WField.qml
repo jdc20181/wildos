@@ -24,8 +24,9 @@ ColumnLayout {
         text: field.label
         color: UI.Style.ink
         font.family: UI.Style.fontFamily
+        font.letterSpacing: UI.Style.tracking(13)
         font.pixelSize: 13
-        font.weight: Font.Medium
+        font.weight: UI.Style.weightMedium
     }
 
     UI.TextField {
@@ -43,6 +44,7 @@ ColumnLayout {
         text: field.error !== "" ? field.error : field.hint
         color: field.error !== "" ? UI.Style.danger : UI.Style.inkMuted
         font.family: UI.Style.fontFamily
+        font.letterSpacing: UI.Style.tracking(12)
         font.pixelSize: 12
         wrapMode: Text.WordWrap
     }

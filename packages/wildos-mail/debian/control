@@ -12,6 +12,8 @@ Build-Depends:
  libcamel1.2-dev,
  libedataserver1.2-dev,
  libecal2.0-dev,
+ libebook1.2-dev,
+ libsqlite3-dev,
  liblitehtml-dev,
 Standards-Version: 4.7.0
 Rules-Requires-Root: no
@@ -23,7 +25,7 @@ Depends:
  ${misc:Depends},
  evolution-data-server-camel-providers,
  evolution-data-server-core,
- wildos-ui (>= 0.1.2),
+ wildos-ui (>= 0.1.3),
  evolution-data-server-common,
  qml6-module-qtcore,
  qml6-module-qtquick,
@@ -42,3 +44,7 @@ Description: Wild OS Mail
  Also Wild OS Calendar, on evolution-data-server's calendar service: day,
  week and month views, Google, iCloud, CalDAV and web calendars,
  invitations answered from Mail, and reminders as notifications.
+ .
+ People and Tasks sit beside them in the same window: contacts and task
+ lists kept on the PC and synced with the same Google, iCloud and CardDAV
+ or CalDAV accounts.

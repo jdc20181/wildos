@@ -1,0 +1,23 @@
+[Desktop Entry]
+Type=Application
+Name=Capture
+GenericName=Screenshots and screen recording
+Comment=Capture an area, a window or the whole screen, mark it up, or record it
+Icon=wildos-capture
+Exec=/usr/bin/wildos-screenshot
+Terminal=false
+Categories=Qt;Utility;Graphics;
+Keywords=screenshot;snip;snipping tool;print screen;capture;record;screen recording;mark up;annotate;
+StartupNotify=false
+Actions=Record;
+# Win+Shift+S and Print Screen, as in Windows 11; Win+Shift+R records.
+X-KDE-Shortcuts=Meta+Shift+S,Print
+X-KDE-DBUS-Restricted-Interfaces=org.kde.KWin.ScreenShot2
+X-KDE-Wayland-Interfaces=zkde_screencast_unstable_v1
+X-DBUS-StartupType=Unique
+X-DBUS-ServiceName=org.wildos.screenshot
+
+[Desktop Action Record]
+Name=Record the screen
+Exec=/usr/bin/wildos-screenshot --record
+X-KDE-Shortcuts=Meta+Shift+R

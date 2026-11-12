@@ -42,7 +42,9 @@ Item {
         visible: bar.tinted
         topLeftRadius: bar.maximised ? 0 : Style.windowRadius - 1
         topRightRadius: topLeftRadius
-        color: Style.dark ? Qt.rgba(6 / 255, 8 / 255, 20 / 255, 0.30) : Qt.rgba(30 / 255, 40 / 255, 70 / 255, 0.04)
+        // A neutral shade on Mica: black, not navy, so the title bar keeps
+        // the window's own tint.
+        color: Style.dark ? Qt.rgba(0, 0, 0, 0.18) : Qt.rgba(0, 0, 0, 0.03)
     }
 
     MouseArea {

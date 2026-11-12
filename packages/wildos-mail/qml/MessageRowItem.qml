@@ -5,7 +5,7 @@ import WildOS.UI as UI
 
 // One message in the list (MailMicrosoft.dc): the sender's initials, name,
 // subject and time, and a line of preview. Unread mail is bold with its
-// subject and time in the accent and a bar at the left edge.
+// a small accent bar at the left edge; the text stays plain ink.
 Item {
     id: row
 
@@ -52,7 +52,7 @@ Item {
         anchors.leftMargin: 6
         anchors.rightMargin: 6
         radius: 6
-        color: row.current ? UI.Style.accentSelected : mouse.containsMouse ? UI.Style.surfaceHover : "transparent"
+        color: row.current ? UI.Style.surfaceSelected : mouse.containsMouse ? UI.Style.surfaceHover : "transparent"
 
         Rectangle {
             visible: row.unread
@@ -226,7 +226,7 @@ Item {
                     Layout.fillWidth: true
                     text: row.draft ? qsTr("[Draft] ") + row.from : row.from
                     size: 13.5
-                    font.weight: row.unread ? Font.DemiBold : Font.Normal
+                    font.weight: row.unread ? UI.Style.weightSemiBold : UI.Style.weightRegular
                     color: row.draft ? UI.Style.danger : UI.Style.ink
                     elide: Text.ElideRight
                 }
@@ -265,14 +265,14 @@ Item {
                     text: row.marked(row.subject)
                     textFormat: Text.StyledText
                     size: 13
-                    font.weight: row.unread ? Font.DemiBold : Font.Normal
-                    color: row.unread ? UI.Style.accent : UI.Style.ink
+                    font.weight: row.unread ? UI.Style.weightSemiBold : UI.Style.weightRegular
+                    color: UI.Style.ink
                     elide: Text.ElideRight
                 }
                 UI.Label {
                     text: row.time
                     size: 12
-                    color: row.unread ? UI.Style.accent : UI.Style.inkMuted
+                    color: UI.Style.inkMuted
                 }
             }
 

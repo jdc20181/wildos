@@ -382,7 +382,7 @@ FocusScope {
                     id: label
                     anchors.centerIn: parent
                     size: 12
-                    font.weight: chip.active ? Font.DemiBold : Font.Normal
+                    font.weight: chip.active ? UI.Style.weightSemiBold : UI.Style.weightRegular
                     color: chip.active ? UI.Style.textOnAccent : UI.Style.ink
                     text: chip.modelData.label
                 }
@@ -475,7 +475,7 @@ FocusScope {
                     anchors.bottomMargin: 2
                     height: 16
                     size: 12
-                    font.weight: Font.DemiBold
+                    font.weight: UI.Style.weightSemiBold
                     color: UI.Style.inkMuted
                     text: entry.modelData.title
                 }
@@ -516,7 +516,7 @@ FocusScope {
                     UI.Label {
                         width: parent.width
                         size: entry.isBest ? 14 : 13
-                        font.weight: entry.isBest ? Font.DemiBold : Font.Medium
+                        font.weight: entry.isBest ? UI.Style.weightSemiBold : UI.Style.weightMedium
                         color: entry.isSelected ? UI.Style.inkStrong : UI.Style.ink
                         text: entry.modelData.title
                     }
@@ -590,7 +590,7 @@ FocusScope {
                     topPadding: 8
                     horizontalAlignment: Text.AlignHCenter
                     size: 17
-                    font.weight: Font.DemiBold
+                    font.weight: UI.Style.weightSemiBold
                     text: search.current ? search.current.title : ""
                 }
 
@@ -694,7 +694,7 @@ FocusScope {
                 width: Math.min(implicitWidth, body.width - 40)
                 horizontalAlignment: Text.AlignHCenter
                 size: 15
-                font.weight: Font.DemiBold
+                font.weight: UI.Style.weightSemiBold
                 text: "No results for ‘" + search.launcher.query + "’"
             }
 

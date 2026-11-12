@@ -9,6 +9,7 @@
 #include <freerdp/client/channels.h>
 #include <freerdp/client/cliprdr.h>
 #include <freerdp/client/cmdline.h>
+#include <freerdp/client/disp.h>
 #include <freerdp/codec/color.h>
 #include <freerdp/codec/region.h>
 #include <freerdp/gdi/gdi.h>
@@ -20,6 +21,7 @@
 
 #include <QElapsedTimer>
 
+#include <algorithm>
 #include <cstring>
 #include <vector>
 
@@ -143,6 +145,21 @@ struct ClientCallbacks {
         const UINT32 device = self->m_scale >= 1.6 ? 180 : self->m_scale >= 1.2 ? 140 : 100;
         (void)freerdp_settings_set_uint32(settings, FreeRDP_DesktopScaleFactor, percent);
         (void)freerdp_settings_set_uint32(settings, FreeRDP_DeviceScaleFactor, device);
+        if (freerdp_settings_get_bool(settings, FreeRDP_RemoteApplicationMode)) {
+            // A screen plugged in or taken away later reaches Windows
+            // through this channel, without reconnecting.
+            (void)freerdp_settings_set_bool(settings, FreeRDP_SupportDisplayControl, TRUE);
+            // The connection now stays open while no app is, and Windows is
+            // paused then. FreeRDP gives up on a connection whose data goes
+            // unanswered for 9 s, so every pause dropped it and the next app
+            // waited for a reconnection. An hour covers Automatic's 15
+            // minutes paused (a save to disk ends the connection first);
+            // tested: a 3 minute pause, and the session was Active at once.
+            (void)freerdp_settings_set_uint32(settings, FreeRDP_TcpAckTimeout, 60 * 60 * 1000);
+            if (self->m_layout.size() > 1 && !applyLayout(settings, self->m_layout)) {
+                return FALSE;
+            }
+        }
         if (freerdp_settings_get_uint32(settings, FreeRDP_KeyboardLayout) == 0) {
             if (const uint32_t layout = keymap::windowsLayout()) {
                 (void)freerdp_settings_set_uint32(settings, FreeRDP_KeyboardLayout, layout);
@@ -162,6 +179,52 @@ struct ClientCallbacks {
         (void)freerdp_settings_set_bool(settings, FreeRDP_GfxAVC444, FALSE);
         (void)freerdp_settings_set_bool(settings, FreeRDP_GfxAVC444v2, FALSE);
         return TRUE;
+    }
+
+    // Each monitor in its own pixels at its own scale. FreeRDP only sends
+    // the scales (the monitors' attributes) when told it has them.
+    static bool applyLayout(rdpSettings *settings, const QList<Monitor> &layout)
+    {
+        if (!freerdp_settings_set_pointer_len(settings, FreeRDP_MonitorDefArray, nullptr, size_t(layout.size()))) {
+            return false;
+        }
+        for (qsizetype i = 0; i < layout.size(); ++i) {
+            auto *m = static_cast<rdpMonitor *>(freerdp_settings_get_pointer_array_writable(settings, FreeRDP_MonitorDefArray, size_t(i)));
+            if (!m) {
+                return false;
+            }
+            const Monitor &from = layout[i];
+            *m = rdpMonitor{};
+            m->x = from.rect.x();
+            m->y = from.rect.y();
+            m->width = from.rect.width();
+            m->height = from.rect.height();
+            m->is_primary = i == 0;
+            m->orig_screen = UINT32(i);
+            m->attributes.physicalWidth = UINT32(std::max(0, from.millimetres.width()));
+            m->attributes.physicalHeight = UINT32(std::max(0, from.millimetres.height()));
+            m->attributes.orientation = ORIENTATION_LANDSCAPE;
+            m->attributes.desktopScaleFactor = monitors::desktopScale(from.scale);
+            m->attributes.deviceScaleFactor = monitors::deviceScale(from.scale);
+        }
+        const QRect all = monitors::bounds(layout);
+        return freerdp_settings_set_uint32(settings, FreeRDP_MonitorCount, UINT32(layout.size()))
+               && freerdp_settings_set_bool(settings, FreeRDP_UseMultimon, TRUE)
+               && freerdp_settings_set_bool(settings, FreeRDP_SpanMonitors, FALSE)
+               && freerdp_settings_set_bool(settings, FreeRDP_HasMonitorAttributes, TRUE)
+               && freerdp_settings_set_uint32(settings, FreeRDP_MonitorAttributeFlags, 0)
+               && freerdp_settings_set_bool(settings, FreeRDP_SupportMonitorLayoutPdu, TRUE)
+               && freerdp_settings_set_uint32(settings, FreeRDP_DesktopWidth, UINT32(all.width()))
+               && freerdp_settings_set_uint32(settings, FreeRDP_DesktopHeight, UINT32(all.height()));
+    }
+
+    static UINT displayControlCaps(DispClientContext *disp, UINT32 monitors, UINT32, UINT32)
+    {
+        auto *self = static_cast<Client *>(disp->custom);
+        qInfo("wildos-rdp: Windows takes monitor layouts (up to %u monitors)", unsigned(monitors));
+        self->m_dispReady = true;
+        Q_EMIT self->displayControlReady();
+        return CHANNEL_RC_OK;
     }
 
     static BOOL postConnect(freerdp *instance)
@@ -273,6 +336,13 @@ struct ClientCallbacks {
             }
             std::lock_guard lock(self->m_channels);
             self->m_gfx = gfx;
+        } else if (strcmp(e->name, DISP_DVC_CHANNEL_NAME) == 0) {
+            freerdp_client_OnChannelConnectedEventHandler(ctx, e);
+            auto *disp = static_cast<DispClientContext *>(e->pInterface);
+            disp->custom = self;
+            disp->DisplayControlCaps = displayControlCaps;
+            std::lock_guard lock(self->m_channels);
+            self->m_disp = disp;
         } else {
             freerdp_client_OnChannelConnectedEventHandler(ctx, e);
         }
@@ -291,6 +361,13 @@ struct ClientCallbacks {
             {
                 std::lock_guard lock(self->m_channels);
                 self->m_gfx = nullptr;
+            }
+            freerdp_client_OnChannelDisconnectedEventHandler(ctx, e);
+        } else if (strcmp(e->name, DISP_DVC_CHANNEL_NAME) == 0) {
+            {
+                std::lock_guard lock(self->m_channels);
+                self->m_disp = nullptr;
+                self->m_dispReady = false;
             }
             freerdp_client_OnChannelDisconnectedEventHandler(ctx, e);
         } else {
@@ -705,6 +782,44 @@ void Client::setDisplay(const QSize &physical, double scale)
     m_scale = scale;
 }
 
+void Client::setLayout(const QList<Monitor> &layout)
+{
+    m_layout = layout;
+    m_origin = layout.size() > 1 ? monitors::bounds(layout).topLeft() : QPoint();
+}
+
+bool Client::sendLayout(const QList<Monitor> &layout)
+{
+    if (layout.isEmpty()) {
+        return false;
+    }
+    std::lock_guard lock(m_channels);
+    if (!m_disp || !m_dispReady || !m_disp->SendMonitorLayout) {
+        return false;
+    }
+    QList<DISPLAY_CONTROL_MONITOR_LAYOUT> out;
+    for (qsizetype i = 0; i < layout.size(); ++i) {
+        const Monitor &m = layout[i];
+        DISPLAY_CONTROL_MONITOR_LAYOUT l = {};
+        l.Flags = i == 0 ? DISPLAY_CONTROL_MONITOR_PRIMARY : 0;
+        l.Left = m.rect.x();
+        l.Top = m.rect.y();
+        l.Width = UINT32(m.rect.width());
+        l.Height = UINT32(m.rect.height());
+        l.PhysicalWidth = UINT32(std::max(0, m.millimetres.width()));
+        l.PhysicalHeight = UINT32(std::max(0, m.millimetres.height()));
+        l.Orientation = ORIENTATION_LANDSCAPE;
+        l.DesktopScaleFactor = monitors::desktopScale(m.scale);
+        l.DeviceScaleFactor = monitors::deviceScale(m.scale);
+        out.append(l);
+    }
+    if (m_disp->SendMonitorLayout(m_disp, UINT32(out.size()), out.data()) != CHANNEL_RC_OK) {
+        return false;
+    }
+    m_origin = layout.size() > 1 ? monitors::bounds(layout).topLeft() : QPoint();
+    return true;
+}
+
 QSize Client::desktopSize() const
 {
     return QSize(int(freerdp_settings_get_uint32(m_context->settings, FreeRDP_DesktopWidth)),
@@ -979,7 +1094,7 @@ void Client::refresh(const QRect &area)
     if (!m_running || !m_context->update || !m_context->update->RefreshRect) {
         return;
     }
-    const QRect r = area.intersected(QRect(QPoint(0, 0), desktopSize()));
+    const QRect r = area.translated(-m_origin).intersected(QRect(QPoint(0, 0), desktopSize()));
     if (r.isEmpty()) {
         return;
     }

@@ -68,7 +68,7 @@ Item {
         // dark screen.
         Rectangle {
             anchors.fill: parent
-            color: "#05070d"
+            color: "#000000"
         }
 
         Image {
@@ -91,7 +91,7 @@ Item {
         Rectangle {
             anchors.fill: parent
             visible: !root.played
-            color: Qt.rgba(8 / 255, 12 / 255, 30 / 255, 0.22)
+            color: Qt.rgba(15 / 255, 17 / 255, 21 / 255, 0.22)
         }
 
         // Installed with the sign-in screen by the same package.

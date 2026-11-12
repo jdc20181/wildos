@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Brave spelling languages
+Comment=Gives Brave the spelling languages chosen in Settings
+Exec=/usr/libexec/wildos/wildos-brave-spelling
+NoDisplay=true
+OnlyShowIn=KDE;
+X-KDE-autostart-phase=2

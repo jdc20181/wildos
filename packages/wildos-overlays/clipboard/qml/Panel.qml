@@ -87,7 +87,7 @@ Window {
     Rectangle {
         anchors.fill: parent
         radius: 16
-        color: UI.Style.glass(16, 20, 38, 0.84, 0.88)
+        color: UI.Style.glass(23, 25, 29, 0.84, 0.88)
         border.width: 1
         border.color: UI.Style.borderGlass
     }

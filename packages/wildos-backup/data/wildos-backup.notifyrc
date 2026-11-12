@@ -1,0 +1,14 @@
+[Global]
+IconName=wildos-backup
+Comment=Backup
+DesktopEntry=org.wildos.backup
+
+[Event/finished]
+Name=Backup finished
+Comment=A backup to the backup drive finished
+Action=Popup
+
+[Event/failed]
+Name=Backup didn't finish
+Comment=A backup couldn't finish, and says why
+Action=Popup

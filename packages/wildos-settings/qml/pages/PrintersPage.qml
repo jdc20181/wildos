@@ -256,7 +256,7 @@ PageScroll {
                         Layout.fillWidth: true
                         text: page.printer ? page.printer.info : ""
                         size: 18
-                        font.weight: Font.DemiBold
+                        font.weight: UI.Style.weightSemiBold
                     }
 
                     UI.Label {

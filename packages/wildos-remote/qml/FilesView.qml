@@ -23,9 +23,10 @@ Item {
         }
     }
 
+    // Solid, as it covers the terminal under it.
     Rectangle {
         anchors.fill: parent
-        color: "#0b0f1c"
+        color: UI.Style.windowOpaque
     }
 
     ColumnLayout {
@@ -106,9 +107,9 @@ Item {
             Layout.fillWidth: true
             Layout.preferredHeight: Math.min(transferColumn.implicitHeight + 28, 220)
             radius: 12
-            color: UI.Style.tone(0.035)
+            color: UI.Style.surfaceRaised
             border.width: 1
-            border.color: UI.Style.tone(0.08)
+            border.color: UI.Style.borderSubtle
             Column {
                 id: transferColumn
                 x: 16
@@ -121,7 +122,7 @@ Item {
                     UI.Label {
                         text: view.files ? view.files.transferTitle : ""
                         size: 14
-                        font.weight: Font.Bold
+                        font.weight: UI.Style.weightBold
                     }
                     Row {
                         anchors.right: parent.right
@@ -158,7 +159,7 @@ Item {
                             width: 14
                             height: 14
                             path: transfer.modelData.upload ? RemoteIcons.upload : RemoteIcons.download
-                            color: transfer.modelData.state === "failed" ? UI.Style.danger : "#5fd39a"
+                            color: transfer.modelData.state === "failed" ? UI.Style.danger : UI.Style.success
                         }
                         UI.Label {
                             x: 28
@@ -178,7 +179,7 @@ Item {
                                 width: parent.width * Math.max(0, Math.min(1, transfer.modelData.progress))
                                 height: parent.height
                                 radius: 2
-                                color: transfer.modelData.state === "done" ? "#5fd39a" : transfer.modelData.state === "failed" ? UI.Style.danger : "#8fb4ff"
+                                color: transfer.modelData.state === "done" ? UI.Style.success : transfer.modelData.state === "failed" ? UI.Style.danger : UI.Style.accent
                             }
                         }
                         UI.Label {
@@ -324,6 +325,9 @@ Item {
         property bool loading: false
         property string error
         property color tint: "#8fb4ff"
+        // As on the host cards: this PC's glyph is plain ink, the server's
+        // keeps its colour, deepened to 62% on light glass.
+        readonly property color glyphColour: !remote ? UI.Style.iconInk : UI.Style.dark ? tint : Qt.rgba(tint.r * 0.62, tint.g * 0.62, tint.b * 0.62, 1)
         property var selection: []
         property int anchorIndex: -1
         signal openFolder(string name)
@@ -340,9 +344,9 @@ Item {
         }
 
         radius: 12
-        color: UI.Style.tone(0.035)
+        color: UI.Style.surfaceRaised
         border.width: 1
-        border.color: UI.Style.tone(0.08)
+        border.color: UI.Style.borderSubtle
 
         function choose(index, name, mods) {
             if (mods & Qt.ShiftModifier && anchorIndex >= 0) {
@@ -382,7 +386,7 @@ Item {
                         anchors.centerIn: parent
                         name: pane.remote ? "terminal" : "monitor"
                         size: 14
-                        color: pane.tint
+                        color: pane.glyphColour
                     }
                 }
                 Row {
@@ -392,7 +396,7 @@ Item {
                     UI.Label {
                         text: pane.title
                         size: 14
-                        font.weight: Font.Bold
+                        font.weight: UI.Style.weightBold
                     }
                     UI.Label {
                         text: pane.path
@@ -414,7 +418,7 @@ Item {
                     anchors.bottom: parent.bottom
                     width: parent.width
                     height: 1
-                    color: UI.Style.tone(0.07)
+                    color: UI.Style.divider
                 }
             }
             Item {
@@ -427,7 +431,7 @@ Item {
                     anchors.bottom: parent.bottom
                     width: parent.width
                     height: 1
-                    color: UI.Style.tone(0.07)
+                    color: UI.Style.divider
                 }
             }
             ListView {
@@ -444,14 +448,14 @@ Item {
                     readonly property bool chosen: pane.selection.indexOf(modelData.name) >= 0
                     width: ListView.view.width
                     height: 38
-                    color: chosen ? UI.Style.tone(0.09) : rowMouse.containsMouse ? UI.Style.tone(0.04) : "transparent"
+                    color: chosen ? UI.Style.surfaceSelected : rowMouse.containsMouse ? UI.Style.surfaceHover : "transparent"
                     UI.Glyph {
                         x: 16
                         anchors.verticalCenter: parent.verticalCenter
                         width: 15
                         height: 15
                         path: fileRow.modelData.dir ? RemoteIcons.folder : RemoteIcons.file
-                        color: fileRow.modelData.dir ? "#ffc46a" : UI.Style.iconMuted
+                        color: fileRow.modelData.dir ? (UI.Style.dark ? "#ffc46a" : "#9e7941") : UI.Style.iconMuted
                     }
                     UI.Label {
                         x: 40

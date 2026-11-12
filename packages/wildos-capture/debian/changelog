@@ -1,0 +1,31 @@
+wildos-capture (0.1.3) trixie; urgency=medium
+
+  * Report a problem in the Options menu opens Report a problem with Capture
+    chosen.
+  * wildos-capture --to FILE takes one screenshot and writes it to FILE
+    only, for Report a problem's "Add a screenshot"; cancelling leaves
+    FILE.cancelled instead.
+
+ -- Wild OS Developers <dev@wildos.io>  Wed, 11 Nov 2026 22:52:01 +0000
+
+wildos-capture (0.1.2) trixie; urgency=medium
+
+  * Capture's own icon has its soft shadow.
+
+ -- Wild OS Developers <dev@wildos.io>  Wed, 11 Nov 2026 20:43:52 +0000
+
+wildos-capture (0.1.1) trixie; urgency=medium
+
+  * Stopping a recording no longer closes Capture before it says where
+    the recording went.
+  * A screenshot of an area is exactly the size shown under it.
+
+ -- Wild OS Developers <dev@wildos.io>  Wed, 11 Nov 2026 18:00:33 +0000
+
+wildos-capture (0.1.0) trixie; urgency=medium
+
+  * Initial release: Capture, the Wild OS screenshot and screen recording
+    app, moved out of wildos-overlays with a new toolbar and an editor that
+    opens after every capture.
+
+ -- Wild OS Developers <dev@wildos.io>  Wed, 11 Nov 2026 20:00:00 +0000

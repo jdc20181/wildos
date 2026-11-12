@@ -3,7 +3,7 @@
 class Rail;
 class Client;
 
-// For the automated Windows mode test (docs/windows-mode-plan.md,
+// For the automated Windows mode test (the release checks under
 // Hardening): driven by environment variables, it types into and clicks
 // the first app window through the same input path a person's keyboard
 // and mouse take, and saves each window's pixels as Windows sent them.

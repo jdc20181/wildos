@@ -106,7 +106,7 @@ Item {
                     : dialog.step === "local" ? qsTr("A new calendar on this PC")
                     : qsTr("You're all set")
                 size: 22
-                font.weight: Font.DemiBold
+                font.weight: UI.Style.weightSemiBold
                 wrapMode: Text.WordWrap
             }
 
@@ -149,7 +149,7 @@ Item {
                             UI.Label {
                                 text: tile.modelData.name
                                 size: 13
-                                font.weight: Font.DemiBold
+                                font.weight: UI.Style.weightSemiBold
                             }
                             UI.Label {
                                 Layout.fillWidth: true

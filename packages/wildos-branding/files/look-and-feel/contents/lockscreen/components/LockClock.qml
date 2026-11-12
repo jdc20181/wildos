@@ -3,7 +3,9 @@ import QtQuick.Effects
 import WildOS.UI as UI
 
 // The date over a large time, as on the lock screen, both in the regional
-// format; the time leaves out AM and PM, as Windows does here. The time
+// format and the clock chosen in Settings (the sign-in screen, which cannot
+// read a person's settings, keeps the regional format's own); the time
+// leaves out AM and PM, as Windows does here. The time
 // box is exactly 136px tall like the design's line-height: 1, so the glyphs
 // are shifted up by half the font's extra leading.
 Item {
@@ -41,8 +43,9 @@ Item {
             anchors.horizontalCenter: parent.horizontalCenter
             text: Qt.locale("en_GB").toString(clock.now, clock.dateFormat)
             font.family: UI.Style.fontFamily
+            font.letterSpacing: UI.Style.tracking(UI.Style.px(22))
             font.pixelSize: UI.Style.px(22)
-            font.weight: Font.Normal
+            font.weight: UI.Style.weightRegular
             color: UI.Style.inkOnWallpaper
         }
 
@@ -58,11 +61,11 @@ Item {
                 id: timeLabel
                 anchors.horizontalCenter: parent.horizontalCenter
                 y: (136 - timeMetrics.height) / 2
-                text: Qt.locale().toString(clock.now, Qt.locale().timeFormat(Locale.ShortFormat)).replace(Qt.locale().amText, "").replace(Qt.locale().pmText, "").trim()
-                font.family: "Inter Display"
+                text: UI.TimeFormat.withoutMarker(clock.now)
+                font.family: UI.Style.fontFamily
                 renderType: Text.CurveRendering
                 font.pixelSize: 136
-                font.weight: Font.ExtraLight
+                font.weight: UI.Style.weightLight
                 font.letterSpacing: -0.04 * 136
                 color: UI.Style.inkOnWallpaper
             }

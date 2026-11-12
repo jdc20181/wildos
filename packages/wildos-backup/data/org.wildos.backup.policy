@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE policyconfig PUBLIC "-//freedesktop//DTD PolicyKit Policy Configuration 1.0//EN"
+ "http://www.freedesktop.org/standards/PolicyKit/1/policyconfig.dtd">
+<policyconfig>
+  <vendor>Wild OS</vendor>
+  <vendor_url>https://wildos.io</vendor_url>
+  <!-- Windows mode's disk belongs to root. The person signed in at the
+       PC may back it up without a password; anyone else must be an
+       administrator. The helper only ever reads that one file, and only
+       while Windows is shut down. -->
+  <action id="org.wildos.backup.windows-disk">
+    <description>Back up Windows mode</description>
+    <message>Backup needs to read Windows mode's disk to back it up.</message>
+    <icon_name>wildos-backup</icon_name>
+    <defaults>
+      <allow_any>auth_admin</allow_any>
+      <allow_inactive>auth_admin</allow_inactive>
+      <allow_active>yes</allow_active>
+    </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/libexec/wildos-backup/windows-disk</annotate>
+  </action>
+  <!-- A drive whose top folder belongs to root (formatted on another Linux
+       PC): Backup makes its own folder there, owned by the person, once an
+       administrator agrees. Only that folder, only on a removable drive. -->
+  <action id="org.wildos.backup.make-folder">
+    <description>Make Backup's folder on a drive</description>
+    <message>Backup needs permission to make its folder on this drive.</message>
+    <icon_name>wildos-backup</icon_name>
+    <defaults>
+      <allow_any>auth_admin</allow_any>
+      <allow_inactive>auth_admin</allow_inactive>
+      <allow_active>auth_admin_keep</allow_active>
+    </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/libexec/wildos-backup/make-folder</annotate>
+  </action>
+</policyconfig>

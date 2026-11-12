@@ -1,0 +1,14 @@
+#!/bin/sh
+# Installer step (shellprocess@nocow), right after the subvolumes are
+# mounted and before anything is copied in: no copy-on-write for Windows
+# mode's disk images and firmware state. Copy-on-write images fragment
+# badly and double every write. The swap file is left to Calamares, which
+# sets it up itself and fails if its folder is already set this way.
+# Nothing to do when the new root is not Btrfs.
+set -eu
+root=$1
+for d in "$root/var/lib/wildos/winmode" "$root/var/lib/libvirt"; do
+    if [ -d "$d" ] && [ "$(stat -f -c %T "$d")" = btrfs ]; then
+        chattr +C "$d"
+    fi
+done

@@ -1,5 +1,5 @@
-# Brave is the default browser. PDFs stay in Okular even though Brave also
-# claims them.
+# Brave is the default browser. PDFs open in Wild OS PDF even though Brave
+# also claims them.
 [Default Applications]
 x-scheme-handler/http=brave-browser.desktop
 x-scheme-handler/https=brave-browser.desktop
@@ -7,7 +7,96 @@ text/html=brave-browser.desktop
 application/xhtml+xml=brave-browser.desktop
 x-scheme-handler/about=brave-browser.desktop
 x-scheme-handler/unknown=brave-browser.desktop
-application/pdf=org.kde.okular.desktop
+application/pdf=org.wildos.pdf.desktop
+
+# Songs and playlists open in Wild OS Music.
+audio/mpeg=org.wildos.music.desktop
+audio/mp3=org.wildos.music.desktop
+audio/x-mp3=org.wildos.music.desktop
+audio/flac=org.wildos.music.desktop
+audio/x-flac=org.wildos.music.desktop
+audio/ogg=org.wildos.music.desktop
+audio/x-vorbis+ogg=org.wildos.music.desktop
+audio/vorbis=org.wildos.music.desktop
+audio/x-opus+ogg=org.wildos.music.desktop
+audio/opus=org.wildos.music.desktop
+audio/mp4=org.wildos.music.desktop
+audio/x-m4a=org.wildos.music.desktop
+audio/m4a=org.wildos.music.desktop
+audio/aac=org.wildos.music.desktop
+audio/x-aac=org.wildos.music.desktop
+audio/wav=org.wildos.music.desktop
+audio/x-wav=org.wildos.music.desktop
+audio/vnd.wave=org.wildos.music.desktop
+audio/aiff=org.wildos.music.desktop
+audio/x-aiff=org.wildos.music.desktop
+audio/x-ms-wma=org.wildos.music.desktop
+audio/x-ape=org.wildos.music.desktop
+audio/x-wavpack=org.wildos.music.desktop
+audio/x-musepack=org.wildos.music.desktop
+audio/x-mpegurl=org.wildos.music.desktop
+audio/mpegurl=org.wildos.music.desktop
+application/vnd.apple.mpegurl=org.wildos.music.desktop
+
+# Videos open in Wild OS Videos.
+video/mp4=org.wildos.videos.desktop
+video/x-m4v=org.wildos.videos.desktop
+video/quicktime=org.wildos.videos.desktop
+video/x-matroska=org.wildos.videos.desktop
+video/webm=org.wildos.videos.desktop
+video/x-msvideo=org.wildos.videos.desktop
+video/avi=org.wildos.videos.desktop
+video/msvideo=org.wildos.videos.desktop
+video/x-ms-wmv=org.wildos.videos.desktop
+video/x-ms-asf=org.wildos.videos.desktop
+video/x-flv=org.wildos.videos.desktop
+video/mpeg=org.wildos.videos.desktop
+video/x-mpeg=org.wildos.videos.desktop
+video/x-mpeg2=org.wildos.videos.desktop
+video/mp2t=org.wildos.videos.desktop
+video/vnd.mpegurl=org.wildos.videos.desktop
+video/3gpp=org.wildos.videos.desktop
+video/3gpp2=org.wildos.videos.desktop
+video/ogg=org.wildos.videos.desktop
+video/x-ogm+ogg=org.wildos.videos.desktop
+video/x-theora+ogg=org.wildos.videos.desktop
+video/dv=org.wildos.videos.desktop
+video/x-matroska-3d=org.wildos.videos.desktop
+video/vnd.avi=org.wildos.videos.desktop
+video/x-flic=org.wildos.videos.desktop
+video/x-nsv=org.wildos.videos.desktop
+video/x-anim=org.wildos.videos.desktop
+application/x-matroska=org.wildos.videos.desktop
+
+# Archives open in Wild OS Archive.
+application/zip=org.wildos.archive.desktop
+application/x-zip-compressed=org.wildos.archive.desktop
+application/x-7z-compressed=org.wildos.archive.desktop
+application/vnd.rar=org.wildos.archive.desktop
+application/x-rar=org.wildos.archive.desktop
+application/x-rar-compressed=org.wildos.archive.desktop
+application/x-tar=org.wildos.archive.desktop
+application/x-gtar=org.wildos.archive.desktop
+application/x-compressed-tar=org.wildos.archive.desktop
+application/x-bzip-compressed-tar=org.wildos.archive.desktop
+application/x-bzip2-compressed-tar=org.wildos.archive.desktop
+application/x-xz-compressed-tar=org.wildos.archive.desktop
+application/x-zstd-compressed-tar=org.wildos.archive.desktop
+application/x-lzma-compressed-tar=org.wildos.archive.desktop
+application/x-lzip-compressed-tar=org.wildos.archive.desktop
+application/x-tarz=org.wildos.archive.desktop
+application/gzip=org.wildos.archive.desktop
+application/x-gzip=org.wildos.archive.desktop
+application/x-bzip=org.wildos.archive.desktop
+application/x-bzip2=org.wildos.archive.desktop
+application/x-xz=org.wildos.archive.desktop
+application/zstd=org.wildos.archive.desktop
+application/x-zstd=org.wildos.archive.desktop
+application/x-lzma=org.wildos.archive.desktop
+application/x-lzip=org.wildos.archive.desktop
+application/x-cpio=org.wildos.archive.desktop
+application/vnd.ms-cab-compressed=org.wildos.archive.desktop
+application/x-lha=org.wildos.archive.desktop
 
 # Email links open in Wild OS Mail.
 x-scheme-handler/mailto=org.wildos.mail.desktop

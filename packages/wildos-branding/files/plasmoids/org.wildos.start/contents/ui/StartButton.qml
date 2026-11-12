@@ -97,9 +97,9 @@ MouseArea {
     // hovering gives the same light fill as the app buttons beside it.
     Rectangle {
         anchors.centerIn: parent
-        width: 46
-        height: 46
-        radius: 13
+        width: 40
+        height: 40
+        radius: 8
         color: button.launcher.expanded ? Style.accentTint
              : button.containsMouse ? Style.hover
              : "transparent"

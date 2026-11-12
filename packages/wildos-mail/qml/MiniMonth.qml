@@ -39,7 +39,7 @@ ColumnLayout {
             Layout.fillWidth: true
             text: Formats.monthAndYear(mini.month)
             size: 13
-            font.weight: Font.DemiBold
+            font.weight: UI.Style.weightSemiBold
         }
         UI.IconButton {
             iconName: "chevron-left"
@@ -72,7 +72,7 @@ ColumnLayout {
                 horizontalAlignment: Text.AlignHCenter
                 text: Formats.names().dayName((index + mini.firstDay) % 7, Locale.ShortFormat).charAt(0).toUpperCase()
                 size: 11
-                font.weight: Font.DemiBold
+                font.weight: UI.Style.weightSemiBold
                 color: UI.Style.inkSubtle
             }
         }
@@ -99,7 +99,7 @@ ColumnLayout {
                     width: parent.width - (cell.rangeStart ? 2 : 0) - (cell.rangeEnd ? 2 : 0)
                     height: 28
                     radius: cell.rangeStart || cell.rangeEnd ? 14 : 0
-                    color: UI.Style.accentSelected
+                    color: UI.Style.surfaceSelected
                 }
                 Rectangle {
                     anchors.centerIn: parent
@@ -112,7 +112,7 @@ ColumnLayout {
                     anchors.centerIn: parent
                     text: cell.day.getDate()
                     size: 12
-                    font.weight: cell.today || cell.inRange ? Font.DemiBold : Font.Normal
+                    font.weight: cell.today || cell.inRange ? UI.Style.weightSemiBold : UI.Style.weightRegular
                     color: cell.today ? UI.Style.textOnAccent : cell.inMonth ? UI.Style.ink : UI.Style.inkSubtle
                 }
                 MouseArea {

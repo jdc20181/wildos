@@ -9,3 +9,5 @@ lucide/ holds icons from Lucide 1.71.0 (https://lucide.dev), unchanged
 except that tools/gen-icons.py draws them with the boards' 1.8 stroke and
 Wild OS colours. Lucide is under the ISC licence, with the icons it took
 from Feather under the MIT licence; both are in lucide/LICENSE.
+droplet, languages and library-big come from lucide-static 0.460.0, with
+the same licence.

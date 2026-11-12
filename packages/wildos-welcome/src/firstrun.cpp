@@ -8,12 +8,14 @@
 #include <QCoreApplication>
 #include <QCryptographicHash>
 #include <QDBusConnection>
+#include <QDBusInterface>
 #include <QDBusMessage>
 #include <QDBusReply>
 #include <QDateTime>
 #include <QDir>
 #include <QFile>
 #include <QJsonDocument>
+#include <QJsonObject>
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
 #include <QProcess>
@@ -181,6 +183,30 @@ void saveWindowsMode(const QVariantMap &plan)
     }
 }
 
+// Step 7's choice (boards 3.9 and 3.10), made in the setup session before
+// this account existed: the request goes to Windows mode's agent as this
+// account, which owns Windows mode from then on, and setup runs in the
+// background (9.11). Every thread was chosen there too, but turning that on
+// needs the administrator, so it asks here.
+void startWindowsMode(const QString &request)
+{
+    if (QJsonDocument::fromJson(request.toUtf8()).object().value(QStringLiteral("options")).toObject().value(QStringLiteral("hyperThreading")).toBool()) {
+        QProcess::startDetached(QStringLiteral("pkexec"), {QStringLiteral("/usr/libexec/wildos/settings-cpu-threads"), QStringLiteral("on")});
+    }
+    QDBusInterface agent(QStringLiteral("org.wildos.WindowsMode1"), QStringLiteral("/org/wildos/WindowsMode1"), QStringLiteral("org.wildos.WindowsMode1"),
+                         QDBusConnection::sessionBus());
+    agent.setTimeout(120000);
+    const QDBusReply<QString> reply = agent.call(QStringLiteral("StartSetup"), request);
+    if (!reply.isValid() || !reply.value().isEmpty()) {
+        const QString why = reply.isValid() ? reply.value() : QStringLiteral("Windows mode's background service didn't answer.");
+        qWarning("Windows mode didn't start setting up: %s", qPrintable(reply.isValid() ? reply.value() : reply.error().message()));
+        // Said where it shows, since nothing else on screen would.
+        QProcess::startDetached(QStringLiteral("notify-send"), {QStringLiteral("--app-name=Windows mode"), QStringLiteral("--icon=wildos-windows-app"),
+                                                               QStringLiteral("Windows mode didn't start setting up"),
+                                                               why + QStringLiteral(" Set it up any time in Settings, under Windows apps.")});
+    }
+}
+
 QString planFile()
 {
     return QStandardPaths::writableLocation(QStandardPaths::GenericStateLocation) + QStringLiteral("/wildos-welcome/first-run.json");
@@ -211,9 +237,15 @@ int apply()
     const QVariantMap programs = plan.value(QStringLiteral("programs")).toMap();
     startPrograms(programs.value(QStringLiteral("programs")).toList());
     saveWindowsMode(programs.value(QStringLiteral("windowsMode")).toMap());
+    const QString windowsMode = plan.value(QStringLiteral("windowsMode")).toString();
 
     auto *setup = new Setup(qApp);
-    setup->apply(plan.value(QStringLiteral("home")).toMap(), [setup] {
+    setup->apply(plan.value(QStringLiteral("home")).toMap(), [setup, windowsMode] {
+        // Once the taskbar is up, so its Windows mode item and the
+        // notification have somewhere to show.
+        if (!windowsMode.isEmpty()) {
+            startWindowsMode(windowsMode);
+        }
         setup->finish();
         // A scheme switch finishes in its own process; give it a moment.
         QTimer::singleShot(3000, qApp, &QCoreApplication::quit);

@@ -16,11 +16,8 @@ Build-Depends:
  liblayershellqtinterface-dev,
  libkf6windowsystem-dev,
  libkf6guiaddons-dev,
- libkf6notifications-dev,
  libkf6dbusaddons-dev,
  libkf6config-dev,
- libkf6purpose-dev,
- libkpipewire-dev,
  unicode-data,
  unicode-cldr-core,
 Standards-Version: 4.7.0
@@ -45,20 +42,15 @@ Depends:
  qml6-module-qtquick-window,
  qml6-module-qtqml-workerscript,
  fonts-noto-color-emoji,
- libkf6purpose-bin,
-Description: Wild OS pop-ups: screenshots, clipboard history and emoji
+Description: Wild OS pop-ups: clipboard history and emoji
  The overlays Windows people reach for by shortcut:
  .
-  * Win+Shift+S and Print Screen: the Wild OS screenshot toolbar, with
-    rectangle, window, full screen and freehand captures, screen
-    recording and a delay. Captures go to the clipboard and to
-    Pictures/Screenshots, with a toast to mark them up or share them.
   * Win+V and Win+full stop: one panel for clipboard history (Klipper's,
     with pins that survive a restart), emoji and symbols, pasted straight
     into the app you were using.
-  * The QML pieces the shell uses for its toasts and on-screen displays:
-    placing a window on a screen edge above everything, and Caps Lock and
-    Num Lock state.
+  * The QML pieces the shell and Capture use for their toasts, on-screen
+    displays and overlays: placing a window on a screen edge above
+    everything, and Caps Lock and Num Lock state.
  .
  The clipboard history uses the private QML module of Plasma's clipboard
  widget, so it is tied to the Plasma version named in the dependencies.

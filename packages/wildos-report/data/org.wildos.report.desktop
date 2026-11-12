@@ -1,0 +1,15 @@
+[Desktop Entry]
+Type=Application
+Name=Report a problem
+GenericName=Problem reporter
+Comment=Tell us what went wrong, with personal details removed
+Exec=wildos-report %u
+Icon=wildos-report
+Terminal=false
+StartupNotify=true
+StartupWMClass=wildos-report
+Categories=Qt;System;Utility;
+Keywords=bug;report;problem;crash;issue;feedback;error;broken;not working;fault;help;
+MimeType=x-scheme-handler/wildos-report;
+X-DBUS-StartupType=Unique
+X-DBUS-ServiceName=org.wildos.report

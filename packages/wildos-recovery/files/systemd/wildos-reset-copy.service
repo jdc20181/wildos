@@ -1,0 +1,11 @@
+[Unit]
+Description=Keep the reset copy at the newest Wild OS release
+After=network-online.target
+Wants=network-online.target
+ConditionPathExists=!/run/initramfs/live
+
+[Service]
+Type=oneshot
+Nice=19
+IOSchedulingClass=idle
+ExecStart=/usr/libexec/wildos/reset-copy update

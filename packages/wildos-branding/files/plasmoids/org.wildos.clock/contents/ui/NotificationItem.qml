@@ -73,7 +73,7 @@ CardButton {
     radius: Metrics.itemRadius
     clickable: hasDefault && !runningJob
     baseColor: toast ? "transparent" : tinted ? UI.Style.accentSoft : UI.Style.surfaceControl
-    hoverColor: toast ? UI.Style.tone(0.04) : tinted ? UI.Style.accentAlpha(0.16, 0.13) : UI.Style.surfaceHover
+    hoverColor: toast ? UI.Style.tone(0.04) : tinted ? UI.Style.fillSelected(0.16, 0.13) : UI.Style.surfaceHover
     accessibleName: title + ". " + body.text.replace(/<[^>]*>/g, "")
     onClicked: defaultActionInvoked()
 
@@ -165,7 +165,7 @@ CardButton {
                     UI.Label {
                         Layout.fillWidth: true
                         text: item.title
-                        font.weight: Font.DemiBold
+                        font.weight: UI.Style.weightSemiBold
                     }
 
                     UI.Label {

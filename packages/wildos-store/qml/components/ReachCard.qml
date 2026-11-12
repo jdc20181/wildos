@@ -53,7 +53,7 @@ Rectangle {
                 width: parent.width - badge.width - 10
                 text: card.title
                 size: 15
-                font.weight: Font.Bold
+                font.weight: UI.Style.weightBold
             }
         }
 

@@ -33,7 +33,7 @@ PageScroll {
                 UI.Label {
                     text: "Theme"
                     size: 14
-                    font.weight: Font.DemiBold
+                    font.weight: UI.Style.weightSemiBold
                     Accessible.role: Accessible.Heading
                 }
 
@@ -47,9 +47,9 @@ PageScroll {
                     Repeater {
                         model: [
                             // Each theme's page ground, as UI.Style draws it.
-                            { name: "Dark", scheme: "WildOS", swatch: ["#0f1326"] },
+                            { name: "Dark", scheme: "WildOS", swatch: ["#16181c"] },
                             { name: "Light", scheme: "WildOSLight", swatch: ["#eef1f7"] },
-                            { name: "Automatic", scheme: "", swatch: ["#eef1f7", "#0f1326"] }
+                            { name: "Automatic", scheme: "", swatch: ["#eef1f7", "#16181c"] }
                         ]
 
                         Item {
@@ -109,7 +109,7 @@ PageScroll {
                                     UI.Label {
                                         anchors.verticalCenter: parent.verticalCenter
                                         text: theme.modelData.name
-                                        font.weight: card.checked ? Font.DemiBold : Font.Normal
+                                        font.weight: card.checked ? UI.Style.weightSemiBold : UI.Style.weightRegular
                                     }
                                 }
                             }
@@ -125,7 +125,7 @@ PageScroll {
                 UI.Label {
                     text: "Accent colour"
                     size: 14
-                    font.weight: Font.DemiBold
+                    font.weight: UI.Style.weightSemiBold
                     Accessible.role: Accessible.Heading
                 }
 

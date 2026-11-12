@@ -1,3 +1,69 @@
+wildos-files (0.1.8) trixie; urgency=medium
+
+  * Renaming in place works like Explorer: the arrow keys move within the
+    name and never end the rename, and the name keeps its normal colour
+    while selected. Enter or clicking away keeps it, Escape undoes it.
+  * Open containing folder in Pictures, and Show in folder in other apps,
+    work for files with spaces in their names and bring Files to the front.
+
+ -- Wild OS Developers <dev@wildos.io>  Thu, 12 Nov 2026 08:26:26 +0000
+
+wildos-files (0.1.7) trixie; urgency=medium
+
+  * Show in folder works again, in Brave downloads, file dialogs, Capture
+    and other apps. Kicksecure's stand-in for the old LXQt file manager had
+    been taking the request first and dropping it; it now stands aside while
+    Files is installed.
+  * Apps asking Files to show a location are limited to local files and
+    folders that exist. A file is always shown selected in its folder, never
+    opened, and addresses on other computers or with hidden characters are
+    ignored.
+
+ -- Wild OS Developers <dev@wildos.io>  Thu, 12 Nov 2026 00:15:00 +0000
+
+wildos-files (0.1.6) trixie; urgency=medium
+
+  * Report a problem in the More menu opens Report a problem with Files chosen.
+
+ -- Wild OS Developers <dev@wildos.io>  Thu, 12 Nov 2026 00:10:00 +0000
+
+wildos-files (0.1.5) trixie; urgency=medium
+
+  * Right-clicking an archive (ZIP, 7z, RAR, TAR, GZ and the like) offers
+    Extract here, which unpacks it beside itself in Archive: into a folder
+    named after it, or straight in when it holds a single folder.
+  * Compress... beside Compress to ZIP file opens Archive's New archive
+    with what is selected, to pick the name, ZIP or 7z, and the folder.
+
+ -- Wild OS Developers <dev@wildos.io>  Wed, 11 Nov 2026 23:02:55 +0000
+
+wildos-files (0.1.4) trixie; urgency=medium
+
+  * This computer always shows the desktop computer icon, on laptops too.
+
+ -- Wild OS Developers <dev@wildos.io>  Wed, 11 Nov 2026 21:25:54 +0000
+
+wildos-files (0.1.3) trixie; urgency=medium
+
+  * This computer in the address bar is drawn as a laptop on laptops.
+
+ -- Wild OS Developers <dev@wildos.io>  Wed, 11 Nov 2026 16:10:00 +0000
+
+wildos-files (0.1.2) trixie; urgency=medium
+
+  * Modified times follow the 12-hour or 24-hour clock chosen in
+    Settings > Date and time.
+
+ -- Wild OS Developers <dev@wildos.io>  Wed, 11 Nov 2026 14:31:15 +0000
+
+wildos-files (0.1.1) trixie; urgency=medium
+
+  * Windows' recycle bin and folder settings in the folders shared with
+    Windows mode, thumbnail caches and folder setting files stay hidden even
+    with hidden items shown, like Windows' protected system files.
+
+ -- Wild OS Developers <dev@wildos.io>  Wed, 11 Nov 2026 14:03:33 +0000
+
 wildos-files (0.1.0) trixie; urgency=medium
 
   * Initial release.

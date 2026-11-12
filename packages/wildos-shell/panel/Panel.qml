@@ -193,11 +193,12 @@ Item {
                 radius: root.pillRadius
                 color: UI.Style.taskbarFloating
                 border.width: 1
-                border.color: UI.Style.dark ? Qt.rgba(1, 1, 1, 0.12) : Qt.rgba(30 / 255, 40 / 255, 70 / 255, 0.09)
+                border.color: UI.Style.dark ? Qt.rgba(1, 1, 1, 0.12) : Qt.rgba(46 / 255, 48 / 255, 52 / 255, 0.09)
             }
             // The inset 0 1px 0 highlight along the top, inside the border.
+            // Light pills only: on dark Mica it reads as a glass tell.
             Rectangle {
-                visible: !root.docked
+                visible: !root.docked && !UI.Style.dark
                 x: root.pillRadius
                 y: 1
                 width: parent.width - root.pillRadius * 2
@@ -216,7 +217,7 @@ Item {
                 visible: root.docked
                 width: parent.width
                 height: 1
-                color: UI.Style.dark ? Qt.rgba(1, 1, 1, 0.10) : Qt.rgba(30 / 255, 40 / 255, 70 / 255, 0.10)
+                color: UI.Style.dark ? Qt.rgba(1, 1, 1, 0.10) : Qt.rgba(46 / 255, 48 / 255, 52 / 255, 0.10)
             }
         }
     }
@@ -635,7 +636,7 @@ Item {
     // Show desktop, as on Windows: the last 8 px of the bar, down to the
     // screen's corner pixel, so a flick of the pointer into the corner finds
     // it. Clicking minimises every window and clicking again brings the same
-    // windows back (the org.wildos.showdesktop KWin script, also on Win+D).
+    // windows back (the wildos_gestures KWin effect, also on Win+D).
     // With peek on, resting the pointer there fades the windows out until it
     // moves away, and a click while peeking minimises them. Settings >
     // Personalisation > Taskbar turns both on and off (wildosrc [Taskbar]).
@@ -719,11 +720,11 @@ Item {
             y: Math.round((root.pillHeight - height) / 2)
             width: 1
             height: 24
-            color: UI.Style.dark ? Qt.rgba(1, 1, 1, 0.35) : Qt.rgba(30 / 255, 40 / 255, 70 / 255, 0.35)
+            color: UI.Style.dark ? Qt.rgba(1, 1, 1, 0.35) : Qt.rgba(46 / 255, 48 / 255, 52 / 255, 0.35)
         }
     }
 
-    // The same as Win+D: runs the org.wildos.showdesktop KWin script's
+    // The same as Win+D: runs the wildos_gestures KWin effect's
     // shortcut through the global shortcut service.
     function toggleDesktop(): var {
         return DBus.SessionBus.asyncCall({

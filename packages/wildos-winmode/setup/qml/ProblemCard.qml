@@ -2,7 +2,7 @@ import QtQuick
 import QtQuick.Effects
 import QtQuick.Layouts
 import WildOS.UI as UI
-import WildOS.WinMode.Backend
+import WildOS.WinMode.Setup
 
 // 9.7, when setup can't go ahead (WinModeProblems.dc): 420 wide, radius
 // 16, a 44px tile, a 17px title, plain words on what is wrong and what to
@@ -78,7 +78,7 @@ Item {
                 id: title
                 Layout.fillWidth: true
                 size: 17
-                font.weight: Font.DemiBold
+                font.weight: UI.Style.weightSemiBold
                 wrapMode: Text.Wrap
                 elide: Text.ElideNone
                 Accessible.role: Accessible.Heading

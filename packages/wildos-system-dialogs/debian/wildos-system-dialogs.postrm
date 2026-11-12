@@ -13,4 +13,8 @@ if [ "$1" = remove ] || [ "$1" = abort-install ] || [ "$1" = disappear ]; then
         --divert "$helper.kde" "$helper"
 fi
 
+if [ "$1" = purge ]; then
+    rm -f /var/lib/wildos/package-sources /var/lib/wildos/package-sources.new
+fi
+
 #DEBHELPER#

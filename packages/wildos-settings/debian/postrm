@@ -11,6 +11,12 @@ if [ "$1" = "remove" ] || [ "$1" = "purge" ] || [ "$1" = "abort-install" ]; then
     nft delete table inet wildos_kill_switch 2>/dev/null || true
 fi
 
+if [ "$1" = "remove" ] || [ "$1" = "purge" ]; then
+    # Written by settings-brave-spelling; without Settings nothing keeps it
+    # in step with Typing.
+    rm -f /etc/brave/policies/managed/wildos-spelling.json
+fi
+
 if [ "$1" = "purge" ]; then
     rm -f /etc/wildos/vpn-kill-switch /var/lib/wildos/network-dns-defaulted
 fi

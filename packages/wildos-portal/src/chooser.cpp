@@ -8,6 +8,7 @@
 #include <QFileInfo>
 #include <QMimeDatabase>
 #include <QRegularExpression>
+#include <QSettings>
 #include <QStandardPaths>
 
 namespace
@@ -76,6 +77,52 @@ QString filterLabel(const Portal::Filter &filter)
     }
     return QStringLiteral("%1 (%2)").arg(name.isEmpty() ? QStringLiteral("Files") : name, shown.join(QStringLiteral(", ")));
 }
+
+// What the files on offer are, from the types the app lists: "pictures",
+// "videos" or "music" when every type is one of those, "files" otherwise.
+// It picks the folder a first Open starts in and keeps a picture picker's
+// last folder apart from a document picker's.
+QString purposeOf(const Portal::Filters &filters)
+{
+    static QMimeDatabase db;
+    QString purpose;
+    for (const Portal::Filter &filter : filters) {
+        if (matchesAll(filter)) {
+            continue;
+        }
+        for (const Portal::FilterRule &rule : filter.rules) {
+            QString mime = rule.type == 1 ? rule.pattern : db.mimeTypeForFile(QStringLiteral("x") + rule.pattern.mid(1), QMimeDatabase::MatchExtension).name();
+            const QString kind = mime.startsWith(QLatin1String("image/")) ? QStringLiteral("pictures")
+                : mime.startsWith(QLatin1String("video/"))                ? QStringLiteral("videos")
+                : mime.startsWith(QLatin1String("audio/"))                ? QStringLiteral("music")
+                                                                          : QStringLiteral("files");
+            if (!purpose.isEmpty() && purpose != kind) {
+                return QStringLiteral("files");
+            }
+            purpose = kind;
+        }
+    }
+    return purpose.isEmpty() ? QStringLiteral("files") : purpose;
+}
+
+// The last folder each app (and any app) opened or saved in, per kind of
+// file, so the dialog reopens where the person left off, as on Windows.
+QString recentFoldersFile()
+{
+    return QStandardPaths::writableLocation(QStandardPaths::GenericStateLocation) + QStringLiteral("/wildos/file-dialog-folders.ini");
+}
+
+// Apps with no folder of their own to suggest send their working folder,
+// which is Home or / for anything started from the desktop: that is no
+// choice, so the remembered folder wins over it.
+bool meaningfulStart(const QUrl &url)
+{
+    if (!url.isValid() || !url.isLocalFile()) {
+        return url.isValid();
+    }
+    const QString path = QDir::cleanPath(url.toLocalFile());
+    return path != QDir::rootPath() && path != QDir::cleanPath(QDir::homePath());
+}
 }
 
 Chooser::Chooser(const Request &request, QObject *parent)
@@ -87,6 +134,28 @@ Chooser::Chooser(const Request &request, QObject *parent)
         m_request.filters.append({QStringLiteral("All files"), {{0, QStringLiteral("*")}}});
     }
     m_currentFilter = m_request.filters.isEmpty() ? -1 : std::clamp(m_request.currentFilter, 0, int(m_request.filters.size()) - 1);
+    // Some apps (Spectacle) suggest "name.png" but leave the first type in
+    // their list selected, so Save as type said AVIF over a PNG name. The
+    // suggested name's extension decides when the selected type lacks it.
+    if (m_request.mode == Save && m_currentFilter >= 0) {
+        const QString lower = m_request.name.toLower();
+        const auto fits = [&lower](const Portal::Filter &f) {
+            for (const QString &suffix : suffixesOf(f)) {
+                if (lower.endsWith(suffix)) {
+                    return true;
+                }
+            }
+            return false;
+        };
+        if (!fits(m_request.filters.at(m_currentFilter))) {
+            for (int i = 0; i < m_request.filters.size(); ++i) {
+                if (fits(m_request.filters.at(i))) {
+                    m_currentFilter = i;
+                    break;
+                }
+            }
+        }
+    }
     for (const Portal::Choice &c : std::as_const(m_request.choices)) {
         m_chosen.insert(c.id, c.initial.isEmpty() && c.options.isEmpty() ? QStringLiteral("false") : c.initial);
     }
@@ -99,16 +168,86 @@ Chooser::Chooser(const Request &request, QObject *parent)
         m_folder->setFilter(m_request.filters.at(m_currentFilter));
     }
 
-    QUrl start = m_request.folder;
-    // An app started from / (or any folder that cannot be saved in) would
-    // open Save there; Windows starts in Documents instead.
-    const bool saving = m_request.mode == Save || m_request.mode == SaveFiles;
-    if (!start.isValid() || (start.isLocalFile() && (!QFileInfo(start.toLocalFile()).isDir() || (saving && !QFileInfo(start.toLocalFile()).isWritable())))) {
-        const QString documents = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation);
-        start = QUrl::fromLocalFile(QFileInfo(documents).isDir() ? documents : QDir::homePath());
-    }
-    m_folder->openUrl(start);
+    m_purpose = m_request.mode == Folder || m_request.mode == SaveFiles ? QStringLiteral("folders") : purposeOf(m_request.filters);
+    m_folder->openUrl(startFolder());
     m_initialName = displayName(m_request.name);
+}
+
+QString Chooser::recentKey() const
+{
+    return (m_request.mode == Save || m_request.mode == SaveFiles ? QStringLiteral("save-") : QStringLiteral("open-")) + m_purpose;
+}
+
+// Where the dialog opens: the folder the app asks for when it names one,
+// else where this app last opened or saved this kind of file, else where
+// any app did, else the folder for the kind (Pictures for pictures), as
+// Windows does. Save never starts where it cannot save.
+QUrl Chooser::startFolder() const
+{
+    const bool saving = m_request.mode == Save || m_request.mode == SaveFiles;
+    const auto usable = [saving](const QUrl &url) {
+        if (!url.isValid()) {
+            return false;
+        }
+        if (!url.isLocalFile()) {
+            return true;
+        }
+        const QFileInfo info(url.toLocalFile());
+        return info.isDir() && (!saving || info.isWritable());
+    };
+    if (meaningfulStart(m_request.folder) && usable(m_request.folder)) {
+        return m_request.folder;
+    }
+
+    const QSettings recent(recentFoldersFile(), QSettings::IniFormat);
+    QStringList groups;
+    if (!m_request.appId.isEmpty()) {
+        groups << m_request.appId;
+    }
+    groups << QStringLiteral("any-app");
+    for (const QString &group : std::as_const(groups)) {
+        const QString path = recent.value(group + QLatin1Char('/') + recentKey()).toString();
+        if (!path.isEmpty() && usable(QUrl::fromLocalFile(path))) {
+            return QUrl::fromLocalFile(path);
+        }
+    }
+
+    QStandardPaths::StandardLocation location = QStandardPaths::DocumentsLocation;
+    if (m_purpose == QLatin1String("pictures")) {
+        location = QStandardPaths::PicturesLocation;
+    } else if (m_purpose == QLatin1String("videos")) {
+        location = QStandardPaths::MoviesLocation;
+    } else if (m_purpose == QLatin1String("music")) {
+        location = QStandardPaths::MusicLocation;
+    }
+    for (const QString &path : {QStandardPaths::writableLocation(location), QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation)}) {
+        if (usable(QUrl::fromLocalFile(path))) {
+            return QUrl::fromLocalFile(path);
+        }
+    }
+    // An app started from / and offered as is would open there.
+    return usable(m_request.folder) ? m_request.folder : QUrl::fromLocalFile(QDir::homePath());
+}
+
+void Chooser::rememberFolder(const QList<QUrl> &urls)
+{
+    if (urls.isEmpty() || !urls.first().isLocalFile()) {
+        return;
+    }
+    // Files are remembered by the folder they are in, and a chosen folder
+    // by the one it sits in, so the next pick starts beside it.
+    const QString folder = QFileInfo(QDir::cleanPath(urls.first().toLocalFile())).absolutePath();
+    // Sandboxed apps get files through the document portal's mount, which
+    // means nothing to the next dialog.
+    if (folder.startsWith(QStandardPaths::writableLocation(QStandardPaths::RuntimeLocation) + QLatin1Char('/')) || !QFileInfo(folder).isDir()) {
+        return;
+    }
+    QDir().mkpath(QFileInfo(recentFoldersFile()).absolutePath());
+    QSettings recent(recentFoldersFile(), QSettings::IniFormat);
+    if (!m_request.appId.isEmpty()) {
+        recent.setValue(m_request.appId + QLatin1Char('/') + recentKey(), folder);
+    }
+    recent.setValue(QStringLiteral("any-app/") + recentKey(), folder);
 }
 
 QString Chooser::mode() const
@@ -243,6 +382,36 @@ QString Chooser::suffixFor(int filter) const
     }
     const QStringList suffixes = suffixesOf(m_request.filters.at(filter));
     return suffixes.isEmpty() ? QString() : suffixes.constFirst();
+}
+
+QString Chooser::swapSuffix(const QString &name, int from, int to) const
+{
+    const QString next = suffixFor(to);
+    if (next.isEmpty() || from < 0 || from >= m_request.filters.size()) {
+        return name;
+    }
+    for (const QString &old : suffixesOf(m_request.filters.at(from))) {
+        if (name.endsWith(old, Qt::CaseInsensitive) && name.size() > old.size()) {
+            return name.left(name.size() - old.size()) + next;
+        }
+    }
+    return name;
+}
+
+int Chooser::suffixStart(const QString &name) const
+{
+    static QMimeDatabase db;
+    // The app's own patterns can name extensions the MIME database does
+    // not know, so they are tried first.
+    if (m_currentFilter >= 0) {
+        for (const QString &suffix : suffixesOf(m_request.filters.at(m_currentFilter))) {
+            if (name.endsWith(suffix, Qt::CaseInsensitive) && name.size() > suffix.size()) {
+                return int(name.size() - suffix.size());
+            }
+        }
+    }
+    const QString suffix = db.suffixForFileName(name);
+    return suffix.isEmpty() || name.size() <= suffix.size() + 1 ? -1 : int(name.size() - suffix.size() - 1);
 }
 
 bool Chooser::hasKnownSuffix(const QString &name) const
@@ -520,6 +689,7 @@ void Chooser::finish(const QList<QUrl> &urls)
         return;
     }
     m_done = true;
+    rememberFolder(urls);
     QStringList uris;
     for (const QUrl &url : urls) {
         uris.append(url.toString(QUrl::FullyEncoded));

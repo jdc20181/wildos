@@ -8,7 +8,7 @@
 // Wild OS tool is installed and starting it (the text menu's Emoji row
 // opens the emoji panel), and the window menu a right click on a title bar
 // opens, which Wild OS's KWin plugin draws and serves on the session bus,
-// and a person's password hint.
+// a person's password hint and whether there is a fingerprint reader.
 class System : public QObject
 {
     Q_OBJECT
@@ -25,4 +25,9 @@ public:
     // The hint a person set with their password (Welcome, Settings), shown
     // by the sign-in and lock screens after a wrong attempt.
     Q_INVOKABLE QString passwordHint(const QString &userName = {}) const;
+    // A fingerprint reader fprintd can use. The sign-in screen runs as its
+    // own user and can't see whose finger is enrolled, so it offers the
+    // reader whenever there is one, unless Sign-in options has "Sign in and
+    // unlock" off.
+    Q_INVOKABLE bool fingerprintReader() const;
 };

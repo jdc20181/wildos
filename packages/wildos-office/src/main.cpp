@@ -148,6 +148,7 @@ int main(int argc, char *argv[])
     // one taskbar button.
     app.setDesktopFileName(tables ? QStringLiteral("libreoffice-calc") : QStringLiteral("libreoffice-writer"));
     app.setWindowIcon(QIcon::fromTheme(tables ? QStringLiteral("org.wildos.tables") : QStringLiteral("org.wildos.write")));
+    Office::followSpellingLanguage();
 
     if (opening) {
         QStringList arguments;

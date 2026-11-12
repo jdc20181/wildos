@@ -7,6 +7,7 @@ files/plasmoids/* usr/share/plasma/plasmoids/
 files/libexec/* usr/libexec/wildos/
 files/plymouth/wildos/* usr/share/plymouth/themes/wildos/
 files/icons/WildOS/* usr/share/icons/WildOS/
+files/icons/WildOS-dark/* usr/share/icons/WildOS-dark/
 files/dracut/* etc/dracut.conf.d/
 files/systemd/* usr/lib/systemd/system/
 files/systemd-user/* usr/lib/systemd/user/
@@ -17,6 +18,8 @@ files/kwin/tabbox/* usr/share/kwin/tabbox/
 files/kwin/effects/* usr/share/kwin/effects/
 files/kvantum/WildOS/* usr/share/Kvantum/WildOS/
 files/kvantum/WildOSLight/* usr/share/Kvantum/WildOSLight/
+files/kvantum/WildOSOffice/* usr/share/Kvantum/WildOSOffice/
+files/kvantum/WildOSOfficeLight/* usr/share/Kvantum/WildOSOfficeLight/
 files/aurorae/WildOS/* usr/share/aurorae/themes/WildOS/
 files/aurorae/WildOSLight/* usr/share/aurorae/themes/WildOSLight/
 files/skel/.config etc/skel/
@@ -24,3 +27,4 @@ files/polkit/* usr/share/polkit-1/actions/
 files/grub/45_wildos_theme.cfg etc/default/grub.d/
 files/pam-configs/* usr/share/pam-configs/
 files/sounds/wildos usr/share/sounds/
+icons/apps/fluent-ui-system-icons.txt usr/share/wildos-branding/licences/

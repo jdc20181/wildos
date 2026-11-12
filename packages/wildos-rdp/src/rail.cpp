@@ -155,12 +155,111 @@ Rail::Rail(Client *client, double scale, QObject *parent)
                                           QStringLiteral("org.freedesktop.Notifications"), QStringLiteral("ActionInvoked"), this,
                                           SLOT(notificationAction(uint, QString)));
     connect(client, &Client::pointerImage, this, [this](const QImage &image, const QPoint &hotspot) {
-        QPixmap pixmap = QPixmap::fromImage(image);
-        pixmap.setDevicePixelRatio(m_scale);
-        setCursorAll(QCursor(pixmap, int(std::lround(hotspot.x() / m_scale)), int(std::lround(hotspot.y() / m_scale))));
+        m_pointerImage = image;
+        m_pointerHotspot = hotspot;
+        setPointer();
     });
-    connect(client, &Client::pointerHidden, this, [this] { setCursorAll(QCursor(Qt::BlankCursor)); });
-    connect(client, &Client::pointerDefault, this, [this] { setCursorAll(QCursor(Qt::ArrowCursor)); });
+    connect(client, &Client::pointerHidden, this, [this] {
+        m_pointerImage = QImage();
+        setCursorAll(QCursor(Qt::BlankCursor));
+    });
+    connect(client, &Client::pointerDefault, this, [this] {
+        m_pointerImage = QImage();
+        setCursorAll(QCursor(Qt::ArrowCursor));
+    });
+    connect(client, &Client::displayControlReady, this, [this] {
+        // A screen changed while Windows could not be told, or the
+        // connection came back with the layout it started with.
+        if (!m_wanted.isEmpty() && !monitors::same(m_wanted, m_layout)) {
+            relayout(m_wanted);
+        }
+    });
+}
+
+void Rail::setPointer()
+{
+    if (m_pointerImage.isNull()) {
+        return;
+    }
+    // Windows draws the pointer for the monitor it is on there, which is
+    // the monitor of the window it is over.
+    const double scale = m_pointerScale > 0 ? m_pointerScale : m_scale;
+    QPixmap pixmap = QPixmap::fromImage(m_pointerImage);
+    pixmap.setDevicePixelRatio(scale);
+    setCursorAll(QCursor(pixmap, int(std::lround(m_pointerHotspot.x() / scale)), int(std::lround(m_pointerHotspot.y() / scale))));
+}
+
+void Rail::pointerOver(double scale)
+{
+    if (std::abs(scale - m_pointerScale) < 0.01) {
+        return;
+    }
+    m_pointerScale = scale;
+    setPointer();
+}
+
+bool Rail::layoutCurrent() const
+{
+    if (!m_wanted.isEmpty() && !monitors::same(m_wanted, m_layout)) {
+        return false;
+    }
+    const QList<QScreen *> screens = QGuiApplication::screens();
+    if (screens.size() != m_layout.size()) {
+        return false;
+    }
+    for (const QScreen *s : screens) {
+        if (monitors::named(m_layout, s->name()) < 0) {
+            return false;
+        }
+    }
+    return true;
+}
+
+int Rail::monitorFor(const QScreen *screen) const
+{
+    if (!screen) {
+        return m_layout.isEmpty() ? -1 : 0;
+    }
+    return monitors::named(m_layout, screen->name());
+}
+
+double Rail::scaleFor(const QRect &frame) const
+{
+    const int i = monitors::at(m_layout, frame);
+    return i >= 0 ? m_layout[i].scale : m_scale;
+}
+
+double Rail::scaleForScreen(const QScreen *screen) const
+{
+    const int i = monitorFor(screen);
+    return i >= 0 ? m_layout[i].scale : m_scale;
+}
+
+void Rail::relayout(const QList<Monitor> &layout)
+{
+    m_wanted = layout;
+    if (layout.isEmpty()) {
+        return;
+    }
+    if (monitors::same(layout, m_layout)) {
+        // Nothing Windows would notice; a screen swapped for one just like
+        // it still has its own name here.
+        m_layout = layout;
+        return;
+    }
+    if (!m_client->sendLayout(layout)) {
+        qInfo("wildos-rdp: the screens changed (%s); Windows is told when it can take a new layout", qPrintable(monitors::describe(layout)));
+        return;
+    }
+    qInfo("wildos-rdp: Windows' monitors now %s", qPrintable(monitors::describe(layout)));
+    m_layout = layout;
+    // Windows moves the windows of a monitor that went onto one that is
+    // left; each then goes to the monitor of the screen it is on here.
+    QTimer::singleShot(1500, this, [this] {
+        for (RailWindow *w : std::as_const(m_windows)) {
+            w->followScreen();
+        }
+    });
 }
 
 Rail::~Rail()
@@ -530,8 +629,10 @@ void Rail::order(const RailOrder &o)
         w->setFrame(QRect(s.offset, s.size));
         if (w->isPopup()) {
             if (RailWindow *parent = qobject_cast<RailWindow *>(w->transientParent())) {
+                // Measured on the parent's monitor, where the parent is.
+                const double scale = parent->scale();
                 const QPoint delta = s.offset - parent->frame().topLeft();
-                w->setPosition(parent->position() + QPoint(int(std::lround(delta.x() / m_scale)), int(std::lround(delta.y() / m_scale))));
+                w->setPosition(parent->position() + QPoint(int(std::lround(delta.x() / scale)), int(std::lround(delta.y() / scale))));
             }
         }
     }
@@ -737,8 +838,9 @@ void Rail::realize(quint32 id)
     log(id, QStringLiteral("shown as %1 (%2)").arg(popup ? QStringLiteral("a popup") : QStringLiteral("a window"), w->appId()));
     if (popup) {
         w->setTransientParent(parent);
+        const double scale = parent->scale();
         const QPoint delta = s.offset - parent->frame().topLeft();
-        w->setGeometry(QRect(parent->position() + QPoint(int(std::lround(delta.x() / m_scale)), int(std::lround(delta.y() / m_scale))),
+        w->setGeometry(QRect(parent->position() + QPoint(int(std::lround(delta.x() / scale)), int(std::lround(delta.y() / scale))),
                              w->logicalSize(s.size)));
         showAs(w, s.showState);
         return;
@@ -1376,6 +1478,13 @@ void Rail::connectionLost()
 void Rail::connectionBack()
 {
     m_lostAt.invalidate();
+    // A reconnection starts from the layout the first connection had;
+    // the one for the screens now follows once Windows can take it.
+    const QList<Monitor> first = m_client->connectLayout();
+    if (!first.isEmpty()) {
+        m_layout = first;
+        m_client->layoutReset();
+    }
     const QSet<quint32> hidden = std::exchange(m_hiddenByLoss, {});
     for (quint32 id : hidden) {
         if (RailWindow *w = m_windows.value(id); w && !m_closing.contains(id)) {

@@ -3,10 +3,11 @@
 %:
 	dh $@
 
-# Installed as /etc/pam.d/kde; kept as pam-kde in the source so it is not
-# mistaken for a KDE file.
+# Installed as /etc/pam.d/kde and kde-fingerprint; kept as pam-kde* in the
+# source so they are not mistaken for KDE files.
 execute_after_dh_install:
 	mv debian/wildos-desktop/etc/pam.d/pam-kde debian/wildos-desktop/etc/pam.d/kde
+	mv debian/wildos-desktop/etc/pam.d/pam-kde-fingerprint debian/wildos-desktop/etc/pam.d/kde-fingerprint
 	# Brave: what is switched off and the default search engine (policies;
 	# the search one is recommended, so people can change it), and the
 	# launcher.
@@ -22,4 +23,5 @@ execute_after_dh_fixperms:
 	chmod 0755 debian/wildos-desktop/usr/libexec/wildos/wildos-app-names \
 		debian/wildos-desktop/usr/libexec/wildos/wildos-strings \
 		debian/wildos-desktop/usr/libexec/wildos/update-checks \
+		debian/wildos-desktop/usr/libexec/wildos/fingerprint-turn \
 		debian/wildos-desktop/usr/bin/brave-browser-stable

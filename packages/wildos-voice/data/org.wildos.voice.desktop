@@ -1,0 +1,15 @@
+[Desktop Entry]
+Type=Application
+Name=Voice
+GenericName=Voice recorder
+Comment=Record voice notes and meetings, with markers and transcripts made on this PC
+Exec=wildos-voice %F
+Icon=wildos-voice
+Terminal=false
+StartupNotify=true
+StartupWMClass=wildos-voice
+Categories=Qt;AudioVideo;Audio;Recorder;
+MimeType=audio/ogg;audio/x-opus+ogg;audio/opus;
+Keywords=voice;recorder;record;sound recorder;dictaphone;memo;voice memo;microphone;mic;transcript;transcribe;dictation;meeting;notes;
+X-DBUS-StartupType=Unique
+X-DBUS-ServiceName=org.wildos.voice

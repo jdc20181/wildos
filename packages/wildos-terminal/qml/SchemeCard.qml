@@ -132,7 +132,7 @@ T.AbstractButton {
         UI.Label {
             anchors.verticalCenter: parent.verticalCenter
             text: card.scheme.name
-            font.weight: card.checked ? Font.DemiBold : Font.Normal
+            font.weight: card.checked ? UI.Style.weightSemiBold : UI.Style.weightRegular
         }
 
         UI.Label {

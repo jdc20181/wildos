@@ -1,0 +1,113 @@
+#!/bin/sh
+# Start-up recovery in the start-up menu (wildos-recovery):
+#
+# - Counts starts. GRUB has no arithmetic, so wildos_tries is a string, "",
+#   "1" or "2", kept in grubenv on the unencrypted /boot. wildos-boot-ok
+#   clears it once a session reaches the desktop. On the third start in a
+#   row without that, start-up recovery starts instead.
+# - Holding Shift while the PC starts also starts recovery. Esc still shows
+#   the menu.
+# - "Start-up recovery" boots the reset copy kept inside the encrypted disk,
+#   with its own kernel and initramfs from /boot/wildos-recovery. Nothing of
+#   the installed system runs.
+# - On Btrfs, "Restore points" lists each restore point whose kernel is
+#   still on /boot, to start it on a layer in memory.
+set -e
+
+. "$pkgdatadir/grub-mkconfig_lib"
+
+dir=$(make_system_path_relative_to_its_root /boot | sed 's,/*$,,')
+prepare=$(prepare_grub_to_access_device "$GRUB_DEVICE_BOOT" | grub_add_tab)
+fstype=$(findmnt -no FSTYPE / 2>/dev/null || true)
+fsuuid=${GRUB_DEVICE_UUID:-}
+luks=$(awk '!/^#/ && $2 ~ /^UUID=/ {sub("UUID=", "", $2); print $2; exit}' /etc/crypttab 2>/dev/null || true)
+args="$GRUB_CMDLINE_LINUX quiet splash loglevel=3 rd.udev.log_level=3 vt.global_cursor_default=0"
+
+lang=$(sed -n 's/^LANG=\([^.]*\).*/\1/p' /etc/default/locale 2>/dev/null | head -n 1)
+layout=$(sed -n 's/^XKBLAYOUT="\{0,1\}\([^",]*\).*/\1/p' /etc/default/keyboard 2>/dev/null | head -n 1)
+case "$layout" in
+gb) keymap=uk ;;
+*) keymap=$layout ;;
+esac
+
+case "$fstype" in
+btrfs) livedir="@reset/LiveOS" ;;
+*) livedir="var/lib/wildos/reset/LiveOS" ;;
+esac
+
+have_recovery=
+if [ -f /boot/wildos-recovery/vmlinuz ] && [ -f /boot/wildos-recovery/initrd.img ] \
+    && [ -f /var/lib/wildos/reset/LiveOS/squashfs.img ] && [ -n "$fsuuid" ]; then
+    have_recovery=1
+fi
+
+# wildos_why is set by /usr/libexec/wildos/recovery-boot: Settings asked for
+# start-up recovery once (Restart now, Reset).
+device_id=$(grub_get_device_id "$GRUB_DEVICE")
+echo 'insmod keystatus'
+echo 'set wildos_reason="${wildos_why}"'
+echo 'if [ -n "${wildos_why}" ]; then'
+echo '	set wildos_why='
+echo '	save_env wildos_why'
+echo 'fi'
+# Safe mode (start-up recovery > More options): Wild OS's safe graphics
+# entry, with NVIDIA's modules kept out and startup apps skipped
+# (wildos-safe-mode generator).
+echo 'if [ "${wildos_reason}" = "safe" ]; then'
+echo "	set default=\"wildos-safe-graphics-$device_id\""
+echo '	set wildos_safe="wildos.safe=1 module_blacklist=nvidia,nvidia_drm,nvidia_modeset,nvidia_uvm"'
+echo '	export wildos_safe'
+if [ -n "$have_recovery" ]; then
+    echo 'elif [ -n "${wildos_reason}" ]; then'
+    echo '	set default="wildos-recovery"'
+fi
+echo 'fi'
+# Remove everything wipes the disk the recovery system came from, so that
+# start copies it into memory first.
+echo 'if [ "${wildos_reason}" = "reset-everything" ]; then'
+echo '	set wildos_ram="rd.live.ram=1"'
+echo 'fi'
+echo 'if [ "${wildos_tries}" = "2" ]; then'
+echo '	set wildos_tries='
+echo '	save_env wildos_tries'
+echo '	set wildos_reason=failed'
+if [ -n "$have_recovery" ]; then
+    echo '	set default="wildos-recovery"'
+else
+    # No recovery system yet: show the menu, with the previous kernel.
+    echo '	set timeout_style=menu'
+    echo '	set timeout=-1'
+fi
+echo 'elif [ "${wildos_tries}" = "1" ]; then'
+echo '	set wildos_tries=2'
+echo '	save_env wildos_tries'
+echo 'else'
+echo '	set wildos_tries=1'
+echo '	save_env wildos_tries'
+echo 'fi'
+
+if [ -n "$have_recovery" ]; then
+    echo 'if keystatus --shift; then'
+    echo '	set default="wildos-recovery"'
+    echo '	set wildos_reason=shift'
+    echo 'fi'
+    echo 'export wildos_reason'
+    echo 'export wildos_ram'
+    gettext_printf "Found start-up recovery: %s\n" "/boot/wildos-recovery" >&2
+    extra=
+    if [ -n "$luks" ]; then extra="$extra rd.luks.uuid=$luks rd.luks.options=discard"; fi
+    if [ -n "$keymap" ]; then extra="$extra rd.vconsole.keymap=$keymap"; fi
+    if [ -n "$lang" ]; then extra="$extra wildos.lang=$lang"; fi
+    echo "menuentry 'Start-up recovery' --class wildos-recovery --class gnu-linux --class os \$menuentry_id_option 'wildos-recovery' {"
+    echo "	load_video"
+    echo "	insmod gzio"
+    printf '%s\n' "$prepare"
+    echo "	linux	$dir/wildos-recovery/vmlinuz root=live:UUID=$fsuuid rd.live.image rd.live.overlay.overlayfs=1 rd.live.dir=$livedir$extra wildos.mode=recovery wildos.recovery=\${wildos_reason} \${wildos_ram} $args"
+    echo "	initrd	$dir/wildos-recovery/initrd.img"
+    echo "}"
+fi
+
+# Btrfs restore points, newest first, each with its own kernel.
+if [ "$fstype" = btrfs ] && [ -r /.snapshots/index.json ] && command -v python3 >/dev/null; then
+    python3 -I /usr/libexec/wildos/restore-points-menu "$dir" "$fsuuid" "$args" || true
+fi

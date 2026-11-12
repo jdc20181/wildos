@@ -3,12 +3,17 @@ import QtQuick.Layouts
 import WildOS.Settings
 import WildOS.UI as UI
 
-// Sign-in options, after Windows 11: changing the password (current one
-// first, then the new one twice and an optional hint), signing in
+// Sign-in options (SignInOptions.dc): the ways to sign in (fingerprint,
+// password, security key), where a fingerprint is used, then signing in
 // automatically when the computer starts, restarting apps after signing
 // in, and the way to the screen lock. Turning automatic sign-in on asks for
 // your own password, so the system can keep the key that opens your saved
 // passwords (KWallet) when nobody types one.
+//
+// With no fingerprint reader the Fingerprint row and "Use your fingerprint
+// for" are left out rather than greyed, and come back when one is plugged
+// in. The disk at start-up always takes the password: it is unlocked before
+// any reader or account exists.
 PageScroll {
     id: page
 
@@ -66,6 +71,46 @@ PageScroll {
         id: notice
     }
 
+    Connections {
+        target: Fingerprint
+        function onFailed(what, reason) {
+            if (what === "remove") {
+                notice.show("The fingerprint wasn't removed", reason, true);
+            } else if (what === "use") {
+                notice.show("Fingerprint use wasn't changed", reason, true);
+            } else if (!setupDialog.visible && what !== "password") {
+                notice.show("The fingerprint wasn't saved", reason, true);
+            }
+        }
+    }
+
+    function changedText(iso) {
+        if (!iso) {
+            return "Sign in with your account's password";
+        }
+        const parts = iso.split("-");
+        const changed = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+        const now = new Date();
+        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        if (changed.getTime() === today.getTime()) {
+            return "Last changed today";
+        }
+        const month = Qt.locale("en_GB").monthName(changed.getMonth(), Locale.LongFormat);
+        return changed.getFullYear() === now.getFullYear() ? "Last changed in " + month : "Last changed in " + month + " " + changed.getFullYear();
+    }
+
+    function fingerprintText() {
+        if (!Fingerprint.available) {
+            return "This PC's fingerprint reader doesn't work with Wild OS yet";
+        }
+        if (Fingerprint.windowsKey) {
+            return "This reader still holds a key from Windows Hello, so Wild OS can't use it";
+        }
+        const count = Fingerprint.fingers.length;
+        return "Reader found" + (Fingerprint.place.length > 0 ? ": " + Fingerprint.place : "") + ". "
+            + (count === 0 ? "No fingers added yet." : count === 1 ? "1 finger added." : count + " fingers added.");
+    }
+
     // The saved passwords notification (wildos-setup-wallet) opens this
     // page with Navigator.request "wallet".
     function takeRequest() {
@@ -75,7 +120,12 @@ PageScroll {
         }
     }
 
-    Component.onCompleted: takeRequest()
+    Component.onCompleted: {
+        takeRequest();
+        // A reader can be plugged in, or fingers changed elsewhere, while
+        // Settings is open.
+        Fingerprint.reload();
+    }
 
     Connections {
         target: Navigator
@@ -98,10 +148,33 @@ PageScroll {
             Column {
                 width: parent.width
 
+                // A reader that libfprint can't drive still gets the row,
+                // so nobody wonders where the setting went.
                 UI.SettingRow {
-                    iconName: "lock"
+                    visible: Fingerprint.available || Fingerprint.unsupported
+                    leading: PathIcon {
+                        name: "fingerprint"
+                        size: 20
+                    }
+                    title: "Fingerprint"
+                    description: page.fingerprintText()
+
+                    UI.Button {
+                        anchors.verticalCenter: parent.verticalCenter
+                        visible: Fingerprint.available && !Fingerprint.windowsKey
+                        text: Fingerprint.fingers.length === 0 ? "Set up" : "Manage"
+                        enabled: Fingerprint.busy === ""
+                        onClicked: Fingerprint.fingers.length === 0 ? setupDialog.open() : manageDialog.open()
+                    }
+                }
+
+                UI.SettingRow {
+                    leading: PathIcon {
+                        name: "key-round"
+                        size: 20
+                    }
                     title: "Password"
-                    description: "Sign in with your account's password"
+                    description: page.changedText(Users.me.passwordChanged)
 
                     UI.Button {
                         anchors.verticalCenter: parent.verticalCenter
@@ -109,7 +182,110 @@ PageScroll {
                         onClicked: passwordDialog.open()
                     }
                 }
+
+                UI.SettingRow {
+                    leading: PathIcon {
+                        name: "security-key"
+                        size: 20
+                    }
+                    title: "Security key"
+                    description: "Sign in with a USB or NFC key, like a YubiKey"
+
+                    UI.Button {
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: "Add"
+                        onClicked: keyDialog.open()
+                    }
+                }
             }
+        }
+    }
+
+    ColumnLayout {
+        Layout.fillWidth: true
+        spacing: 10
+        visible: Fingerprint.available && !Fingerprint.windowsKey
+
+        SectionTitle {
+            text: "Use your fingerprint for"
+        }
+
+        UI.Card {
+            Layout.fillWidth: true
+
+            Column {
+                width: parent.width
+
+                UI.SettingRow {
+                    leading: PathIcon {
+                        name: "log-in"
+                        size: 20
+                    }
+                    title: "Sign in and unlock"
+                    description: "At the sign-in screen and when the screen is locked"
+
+                    UI.Toggle {
+                        anchors.verticalCenter: parent.verticalCenter
+                        checked: Fingerprint.signIn
+                        enabled: Fingerprint.switching === ""
+                        Accessible.name: "Use your fingerprint to sign in and unlock"
+                        onToggled: {
+                            Fingerprint.setUse("signin", checked);
+                            checked = Qt.binding(() => Fingerprint.signIn);
+                        }
+                    }
+                }
+
+                UI.SettingRow {
+                    leading: PathIcon {
+                        name: "shield-round"
+                        size: 20
+                    }
+                    title: "Admin prompts"
+                    description: "When an app asks to change system settings"
+
+                    UI.Toggle {
+                        anchors.verticalCenter: parent.verticalCenter
+                        checked: Fingerprint.admin
+                        enabled: Fingerprint.switching === ""
+                        Accessible.name: "Use your fingerprint for admin prompts"
+                        onToggled: {
+                            Fingerprint.setUse("admin", checked);
+                            checked = Qt.binding(() => Fingerprint.admin);
+                        }
+                    }
+                }
+
+                UI.SettingRow {
+                    leading: PathIcon {
+                        name: "hard-drive"
+                        size: 20
+                    }
+                    title: "Disk unlock at start-up"
+                    description: "Always needs your password, so the disk stays encrypted until you type it"
+                    status: "Password only"
+                }
+            }
+        }
+    }
+
+    RowLayout {
+        Layout.fillWidth: true
+        visible: Fingerprint.available && !Fingerprint.windowsKey
+        spacing: 10
+
+        PathIcon {
+            name: "lock-round"
+            size: 14
+            strokeWidth: 2
+            color: UI.Style.inkMuted
+        }
+
+        UI.Label {
+            Layout.fillWidth: true
+            text: "Your fingerprint is stored as a pattern on this PC (or on the reader itself), never as a picture, and never leaves it."
+            size: 12.5
+            color: UI.Style.inkMuted
         }
     }
 
@@ -178,6 +354,94 @@ PageScroll {
         }
     }
 
+    FingerprintSetup {
+        id: setupDialog
+    }
+
+    // The fingers set up so far. fprintd files each under a finger's name,
+    // but nobody was asked which finger it was, so they are numbered.
+    UI.Dialog {
+        id: manageDialog
+
+        title: "Your fingerprints"
+        text: "Each one signs you in on its own. Remove any you no longer use; your password always works."
+        onAboutToShow: Fingerprint.reload()
+
+        Repeater {
+            model: Fingerprint.fingers
+
+            RowLayout {
+                required property string modelData
+                required property int index
+
+                Layout.fillWidth: true
+                spacing: 12
+
+                PathIcon {
+                    name: "fingerprint"
+                    size: 20
+                }
+
+                UI.Label {
+                    Layout.fillWidth: true
+                    text: "Fingerprint " + (index + 1)
+                    size: 14
+                }
+
+                UI.Button {
+                    text: "Remove"
+                    busy: Fingerprint.busy === modelData
+                    enabled: Fingerprint.busy === ""
+                    Accessible.name: "Remove fingerprint " + (index + 1)
+                    onClicked: Fingerprint.remove(modelData)
+                }
+            }
+        }
+
+        Connections {
+            target: Fingerprint
+            function onChanged() {
+                if (manageDialog.visible && Fingerprint.fingers.length === 0) {
+                    manageDialog.close();
+                }
+            }
+        }
+
+        buttons: [
+            UI.Button {
+                text: "Add another finger"
+                visible: Fingerprint.fingers.length < 10
+                enabled: Fingerprint.busy === ""
+                onClicked: {
+                    manageDialog.close();
+                    setupDialog.open();
+                }
+            },
+            UI.Button {
+                text: "Close"
+                kind: "primary"
+                onClicked: manageDialog.close()
+            }
+        ]
+    }
+
+    // pam_u2f isn't part of Wild OS yet, so there is nothing to add a key
+    // to; the row is here so the page reads as the design does.
+    UI.Dialog {
+        id: keyDialog
+
+        title: "Security keys aren't ready yet"
+        text: "Wild OS can't sign in with a USB or NFC security key yet. Your password, and your fingerprint if you set one up, keep working as they do now."
+
+        buttons: [
+            UI.Button {
+                text: "OK"
+                kind: "primary"
+                onClicked: keyDialog.close()
+            }
+        ]
+    }
+
     UI.Dialog {
         id: walletDialog
 
@@ -189,7 +453,7 @@ PageScroll {
             ? "Your saved passwords use a different password from your account. Type both, and Wild OS moves them to your account password so they open when you sign in."
             : page.autoOn
                 ? "This computer signs you in automatically, so your saved passwords need your password once. After this they open by themselves at every start."
-                : "Type your account password so your saved passwords open when you sign in."
+                : "Type your account password to open your saved passwords. They open by themselves whenever you sign in with your password."
         onAboutToShow: {
             error = "";
             needsOther = false;

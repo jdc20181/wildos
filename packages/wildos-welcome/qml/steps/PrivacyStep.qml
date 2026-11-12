@@ -14,6 +14,13 @@ StepPage {
     signal next()
     signal back()
 
+    // The last step (no step 7 on this PC): Continue reads Finish.
+    property bool last: false
+    // Step 7's checks are still running, so whether there is one isn't
+    // known yet.
+    property bool waiting: false
+    readonly property bool finishing: FirstBoot.state === "finishing" || FirstBoot.state === "signing-in"
+
     title: "Your privacy"
     subtitle: "Here is everything that could leave this computer, in plain English. Change any of it later in Settings."
     note: Privacy.error
@@ -50,7 +57,7 @@ StepPage {
                         Layout.fillWidth: true
                         text: "No account, no advertising ID, no tracking"
                         size: 14
-                        font.weight: Font.DemiBold
+                        font.weight: UI.Style.weightSemiBold
                     }
 
                     UI.Label {
@@ -121,8 +128,10 @@ StepPage {
         },
         UI.Button {
             id: continueButton
-            text: "Continue"
+            text: page.last ? "Finish" : "Continue"
             kind: "primary"
+            busy: page.waiting || page.finishing
+            enabled: !page.waiting && !page.finishing
             onClicked: page.next()
         }
     ]

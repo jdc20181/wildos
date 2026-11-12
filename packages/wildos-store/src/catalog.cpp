@@ -1,5 +1,7 @@
 #include "catalog.h"
 
+#include "clockformat.h"
+
 #include "flatpakbackend.h"
 #include "packagekitbackend.h"
 #include "storeapp.h"
@@ -1776,7 +1778,7 @@ void Catalog::checkPartDone(bool ok)
     }
     m_checking = false;
     m_checkResult = m_checkOk ? QStringLiteral("ok") : QStringLiteral("failed");
-    m_checkedAt = QLocale::system().toString(QTime::currentTime(), QLocale::ShortFormat);
+    m_checkedAt = ClockFormat::time(QTime::currentTime());
     Q_EMIT checkChanged();
 }
 

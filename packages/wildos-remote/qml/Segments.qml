@@ -22,8 +22,9 @@ Rectangle {
     FontMetrics {
         id: metrics
         font.family: UI.Style.fontFamily
+        font.letterSpacing: UI.Style.tracking(UI.Style.px(14))
         font.pixelSize: UI.Style.px(14)
-        font.weight: Font.DemiBold
+        font.weight: UI.Style.weightSemiBold
     }
     implicitHeight: 38
     radius: 10
@@ -66,7 +67,7 @@ Rectangle {
                     anchors.centerIn: parent
                     text: seg.modelData.text
                     size: 14
-                    font.weight: seg.current ? Font.DemiBold : Font.Medium
+                    font.weight: seg.current ? UI.Style.weightSemiBold : UI.Style.weightMedium
                     color: seg.current ? UI.Style.ink : UI.Style.inkMuted
                 }
                 MouseArea {

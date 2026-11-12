@@ -12,11 +12,13 @@ namespace WildOS.Guest
     {
         // wild-guest.exe --service   the Windows service (setup.ps1 registers it)
         // wild-guest.exe --session   the session helper (the service starts it)
-        // wild-guest.exe --start B64  start a program, then end: the first
-        //                            program of a RemoteApp connection, with
-        //                            its path and arguments as base64 JSON
-        //                            ({"path","args","cwd"}), since FreeRDP's
-        //                            /app option cannot carry commas or quotes
+        // wild-guest.exe --start B64  start a program, then stay with no window
+        //                            so the connection does (KeepConnection):
+        //                            the first program of a RemoteApp
+        //                            connection, with its path and arguments
+        //                            as base64 JSON ({"path","args","cwd"}),
+        //                            since FreeRDP's /app option cannot carry
+        //                            commas or quotes
         // wild-guest.exe --console   the service in the foreground, for testing
         //
         // Built as a windowed program with no window, so nothing it does

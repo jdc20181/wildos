@@ -81,7 +81,7 @@ UI.AppWindow {
                     Layout.fillWidth: true
                     text: card.title
                     size: 14
-                    font.weight: Font.DemiBold
+                    font.weight: UI.Style.weightSemiBold
                 }
 
                 UI.Label {
@@ -124,7 +124,7 @@ UI.AppWindow {
                 UI.Label {
                     anchors.verticalCenter: parent.verticalCenter
                     text: win.clash.windowTitle
-                    font.weight: Font.Medium
+                    font.weight: UI.Style.weightMedium
                     color: win.active ? UI.Style.ink : UI.Style.inkMuted
                 }
             }
@@ -147,7 +147,7 @@ UI.AppWindow {
                 Layout.fillWidth: true
                 text: win.clash.heading
                 size: 18
-                font.weight: Font.DemiBold
+                font.weight: UI.Style.weightSemiBold
                 wrapMode: Text.Wrap
                 elide: Text.ElideNone
             }

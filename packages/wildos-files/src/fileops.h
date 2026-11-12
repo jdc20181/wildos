@@ -126,6 +126,12 @@ public:
 
     // The file menu (DialogFileMenu.dc.html), see fileextras.cpp.
     Q_INVOKABLE void compress(const QList<QUrl> &urls);
+    // Archive (wildos-archive): Compress... opens its New archive with the
+    // selection, Extract here unpacks archives beside themselves.
+    Q_INVOKABLE bool canUseArchive() const;
+    Q_INVOKABLE bool areArchives(const QList<QUrl> &urls) const;
+    Q_INVOKABLE void compressWith(const QList<QUrl> &urls);
+    Q_INVOKABLE void extractHere(const QList<QUrl> &urls);
     Q_INVOKABLE bool canWriteIn(const QUrl &folder) const;
     Q_INVOKABLE QVariantList sendTargets(const QList<QUrl> &urls) const;
     Q_INVOKABLE void sendTo(const QList<QUrl> &urls, const QString &kind, const QUrl &target);
@@ -162,6 +168,7 @@ private:
     explicit FileOps(QObject *parent = nullptr);
     KJobUiDelegate *delegate();
     void reportLaunch(KJob *job);
+    void askToRun(const QUrl &url);
     void watchJob(KJob *job, const QString &verb);
     void transfer(const QList<QUrl> &urls, const QUrl &folder, bool move);
     QString uniqueName(const QUrl &folder, const QString &base, const QString &suffix) const;

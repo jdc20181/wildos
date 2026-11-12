@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="46" height="92" viewBox="0 0 46 92">
+<g id="hover-center"><rect x="0" y="0" width="46" height="42" fill="#c4463f"/></g>
+<g id="pressed-center"><rect x="0" y="46" width="46" height="42" fill="#a63a34"/></g>
+</svg>

@@ -68,6 +68,20 @@ def dumpxml(domain, inactive=False):
     return run("dumpxml", domain, *(["--inactive"] if inactive else []), timeout=10)
 
 
+def disk_files(domain):
+    """The files behind the definition's hard disks."""
+    try:
+        root = ET.fromstring(dumpxml(domain, inactive=True))
+    except ET.ParseError:
+        return []
+    out = []
+    for disk in root.findall("devices/disk"):
+        source = disk.find("source")
+        if disk.get("type") == "file" and disk.get("device") == "disk" and source is not None and source.get("file"):
+            out.append(source.get("file"))
+    return out
+
+
 def channel_path(domain, name):
     """The host socket libvirt made for a virtio-serial channel, while the
     domain runs."""
@@ -86,19 +100,6 @@ def channel_path(domain, name):
 def agent_command(domain, command, timeout=10):
     out = run("qemu-agent-command", domain, json.dumps(command), "--timeout", str(timeout), timeout=timeout + 5)
     return json.loads(out) if out else {}
-
-
-def memory_stats(domain):
-    try:
-        out = run("dommemstat", domain, timeout=10)
-    except VirshError:
-        return {}
-    stats = {}
-    for line in out.splitlines():
-        parts = line.split()
-        if len(parts) == 2 and parts[1].isdigit():
-            stats[parts[0]] = int(parts[1]) * 1024
-    return stats
 
 
 def defined_memory(domain, inactive=True):

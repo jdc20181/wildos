@@ -75,7 +75,7 @@ ColumnLayout {
             // The empty card is EmptyStates.dc's (15 px); the list is
             // Flyouts.dc's (14 px).
             size: card.empty ? 15 : 14
-            font.weight: Font.DemiBold
+            font.weight: UI.Style.weightSemiBold
             Accessible.role: Accessible.Heading
         }
 
@@ -219,7 +219,7 @@ ColumnLayout {
             horizontalAlignment: Text.AlignHCenter
             text: "You're all caught up"
             size: 15
-            font.weight: Font.DemiBold
+            font.weight: UI.Style.weightSemiBold
         }
 
         UI.Label {

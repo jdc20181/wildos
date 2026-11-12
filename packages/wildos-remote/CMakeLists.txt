@@ -33,6 +33,15 @@ add_custom_command(
     COMMAND ${WAYLAND_SCANNER} client-header ${INHIBIT_XML} ${CMAKE_CURRENT_BINARY_DIR}/keyboard-shortcuts-inhibit-unstable-v1-client-protocol.h
     COMMAND ${WAYLAND_SCANNER} private-code ${INHIBIT_XML} ${CMAKE_CURRENT_BINARY_DIR}/keyboard-shortcuts-inhibit-unstable-v1-protocol.c
     DEPENDS ${INHIBIT_XML})
+# All my monitors puts each monitor's window full screen on its own screen
+# through xdg-shell itself (App::fullScreenOn).
+set(XDG_SHELL_XML ${WAYLAND_PROTOCOLS}/stable/xdg-shell/xdg-shell.xml)
+add_custom_command(
+    OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/xdg-shell-client-protocol.h
+           ${CMAKE_CURRENT_BINARY_DIR}/xdg-shell-protocol.c
+    COMMAND ${WAYLAND_SCANNER} client-header ${XDG_SHELL_XML} ${CMAKE_CURRENT_BINARY_DIR}/xdg-shell-client-protocol.h
+    COMMAND ${WAYLAND_SCANNER} private-code ${XDG_SHELL_XML} ${CMAKE_CURRENT_BINARY_DIR}/xdg-shell-protocol.c
+    DEPENDS ${XDG_SHELL_XML})
 
 qt_standard_project_setup(REQUIRES 6.8)
 
@@ -73,6 +82,8 @@ qt_add_qml_module(wildos-remote
         src/windowframe.cpp src/windowframe.h
         ${CMAKE_CURRENT_BINARY_DIR}/keyboard-shortcuts-inhibit-unstable-v1-client-protocol.h
         ${CMAKE_CURRENT_BINARY_DIR}/keyboard-shortcuts-inhibit-unstable-v1-protocol.c
+        ${CMAKE_CURRENT_BINARY_DIR}/xdg-shell-client-protocol.h
+        ${CMAKE_CURRENT_BINARY_DIR}/xdg-shell-protocol.c
 )
 
 target_include_directories(wildos-remote PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src ${CMAKE_CURRENT_BINARY_DIR})

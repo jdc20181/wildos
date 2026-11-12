@@ -1,0 +1,19 @@
+{
+    "KPackageStructure": "Plasma/Wallpaper",
+    "KPlugin": {
+        "Authors": [
+            {
+                "Email": "dev@wildos.io",
+                "Name": "Wild OS"
+            }
+        ],
+        "Description": "A picture with the Wild OS W at the centre, lit by the taskbar underglow's flowing spectrum",
+        "Icon": "preferences-desktop-wallpaper",
+        "Id": "org.wildos.warp",
+        "License": "GPL-3.0-or-later",
+        "Name": "Warp",
+        "Version": "0.1.0",
+        "Website": "https://wildos.io"
+    },
+    "X-Plasma-MainScript": "ui/main.qml"
+}

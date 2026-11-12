@@ -115,7 +115,7 @@ Item {
                     anchors.rightMargin: 6
                     anchors.verticalCenter: parent.verticalCenter
                     text: place.name
-                    font.weight: place.current ? Font.Medium : Font.Normal
+                    font.weight: place.current ? UI.Style.weightMedium : UI.Style.weightRegular
                 }
 
                 UI.IconButton {

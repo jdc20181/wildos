@@ -25,6 +25,26 @@ Item {
     // otherwise sit on top of the game or video.
     property var covered: []
 
+    // Signing in, KWin is up before the start-up screen (ksplash) and the
+    // taskbar exists underneath it, so on its own the line would show over
+    // that screen and through the fade. It waits until the start-up screen
+    // has gone and the desktop has faded in, then fades in itself. When
+    // the script starts on a desktop already showing (KWin restarted, the
+    // script reloaded) there is no start-up screen and it shows straight
+    // away.
+    property bool splashSeen: false
+    property bool splashUp: false
+    property bool ready: false
+
+    function isSplash(w: var): bool {
+        return !w.deleted && (w.resourceClass === "ksplashqml" || w.resourceName === "ksplashqml");
+    }
+
+    Timer {
+        id: readyTimer
+        onTriggered: root.ready = true
+    }
+
     function onCurrentDesktop(w: var): bool {
         return w.onAllDesktops || w.desktops.indexOf(KWin.Workspace.currentDesktop) >= 0;
     }
@@ -64,6 +84,17 @@ Item {
         if (!sameList(over, covered)) {
             covered = over;
         }
+        const splash = windows.some(isSplash);
+        if (splash && !splashUp) {
+            splashSeen = true;
+            ready = false;
+            readyTimer.stop();
+        } else if (!splash && splashUp) {
+            // After the desktop's own fade in.
+            readyTimer.interval = 700;
+            readyTimer.restart();
+        }
+        splashUp = splash;
     }
 
     Timer {
@@ -126,6 +157,7 @@ Item {
         delegate: Glow {
             dock: modelData
             covered: root.covered.indexOf(modelData) >= 0
+            ready: root.ready
             title: root.glowTitle
         }
     }
@@ -135,5 +167,11 @@ Item {
             watch(w);
         }
         refresh();
+        // Started with the session, before any start-up screen: give it a
+        // moment to appear. Started on a running desktop: show now.
+        if (!splashUp) {
+            readyTimer.interval = KWin.Workspace.stackingOrder.some(w => w.dock) ? 0 : 4000;
+            readyTimer.start();
+        }
     }
 }

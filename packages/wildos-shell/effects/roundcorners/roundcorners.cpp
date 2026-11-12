@@ -41,7 +41,7 @@ static constexpr qreal s_edgeWidth = 1.0;
 static constexpr qreal s_shadowAlpha = 0.45;
 static constexpr qreal s_shadowSigma = 40.0;
 static constexpr qreal s_shadowOffsetY = 30.0;
-static const QVector4D s_shadowColour(4 / 255.0, 8 / 255.0, 24 / 255.0, s_shadowAlpha);
+static const QVector4D s_shadowColour(10 / 255.0, 12 / 255.0, 16 / 255.0, s_shadowAlpha);
 
 static const QString s_auroraeLibrary = QStringLiteral("org.kde.kwin.aurorae");
 static const QString s_wildosTheme = QStringLiteral("__aurorae__svg__WildOS");

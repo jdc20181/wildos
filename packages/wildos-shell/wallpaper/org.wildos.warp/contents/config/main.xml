@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<kcfg xmlns="http://www.kde.org/standards/kcfg/1.0"
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xsi:schemaLocation="http://www.kde.org/standards/kcfg/1.0
+      http://www.kde.org/standards/kcfg/1.0/kcfg.xsd">
+  <kcfgfile name=""/>
+
+  <group name="General">
+    <!-- A picture file or a wallpaper package folder, the same key and
+         values as org.kde.image, so Settings writes both alike. -->
+    <entry name="Image" type="String">
+      <default>file:///usr/share/wallpapers/WildOS-warp</default>
+    </entry>
+  </group>
+</kcfg>

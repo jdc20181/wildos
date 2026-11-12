@@ -25,6 +25,7 @@ Depends:
  hunspell-en-gb,
  hunspell-en-us,
  wildos-ui (>= 0.1.2),
+ wildos-branding (>= 0.1.10),
  qml6-module-qtcore,
  qml6-module-qtquick,
  qml6-module-qtquick-controls,

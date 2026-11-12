@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QObject>
+#include <QProcess>
 #include <QQmlEngine>
 #include <QStringList>
 #include <QVariantList>
@@ -59,11 +60,14 @@ Q_SIGNALS:
 
 private:
     void save();
+    void followInBrave();
     void readWords();
     QString personalFile() const;
     QStringList personalWords() const;
 
     Sonnet::Settings *m_settings;
+    QProcess *m_brave = nullptr;
+    bool m_braveAgain = false;
     QVariantList m_dictionaries;
     QStringList m_words;
 };

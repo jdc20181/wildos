@@ -19,6 +19,7 @@ QtObject {
     // Keys the script prints for people, in the order the page shows them.
     // time and kernel are diagnostics and stay off the page.
     readonly property var known: [
+        { key: "firewall", title: "Firewall", icon: "firewall", sentence: "the firewall" },
         { key: "encryption", title: "Disk encryption", icon: "lock", sentence: "disk encryption" },
         { key: "updates", title: "Security updates", icon: "update", sentence: "security updates" },
         { key: "apps", title: "App protection", icon: "sandbox", sentence: "app protection" },
@@ -62,7 +63,7 @@ QtObject {
 
     // The page leads with the three tiles the design shows; any other
     // protection joins them only while it needs a look.
-    readonly property var leading: ["network", "encryption", "updates"]
+    readonly property var leading: ["firewall", "encryption", "updates"]
     readonly property var tiles: leading.map(key => items.find(item => item.key === key)).filter(item => item !== undefined)
         .concat(attention.filter(item => !leading.includes(item.key)))
     readonly property bool allOn: checked && attention.length === 0
@@ -86,7 +87,7 @@ QtObject {
                 return n > 0 ? Format.plural(n, "update", "updates") + " waiting" : "Updates waiting";
             }
             if (v === "unknown") {
-                return "Not checked for over a week";
+                return updatesNeverChecked ? "Not checked yet" : "Not checked for over a week";
             }
             return "Not used in the live session";
         case "devices":
@@ -110,7 +111,7 @@ QtObject {
         const v = status[item.key];
         switch (item.key) {
         case "updates":
-            return v === "unknown" ? "updates have not been checked for over a week"
+            return v === "unknown" ? (updatesNeverChecked ? "updates have not been checked yet" : "updates have not been checked for over a week")
                 : Format.plural(Math.max(1, count("updates_security")), "security update is", "security updates are") + " waiting";
         case "network":
             return count("network_services") > 0
@@ -122,6 +123,9 @@ QtObject {
     }
 
     readonly property bool updatesWaiting: status.updates === "waiting"
+    // A new install has no list of updates until its first check, which is
+    // not the same as a list gone a week without a refresh.
+    readonly property bool updatesNeverChecked: status.updates === "unknown" && count("updates_checked") === 0
 
     // "Check now" on Privacy and Home. The status tool only reads what is on
     // the machine, so a real check first refreshes the list of updates (the
@@ -206,7 +210,9 @@ QtObject {
                 return { text: Format.plural(Math.max(1, count("updates_security")), "security update is", "security updates are") + " ready to install. They fix problems that could let someone into this computer.", action: "updates" };
             }
             if (v === "unknown") {
-                return { text: "Wild OS has not been able to check for updates for over a week, so it cannot tell whether any are waiting.", action: "check" };
+                return { text: updatesNeverChecked
+                    ? "Wild OS has not checked for updates yet, so it cannot tell whether any are waiting."
+                    : "Wild OS has not been able to check for updates for over a week, so it cannot tell whether any are waiting.", action: "check" };
             }
             return { text: "Updates are installed once Wild OS is on this computer.", action: "" };
         case "apps":
@@ -229,6 +235,11 @@ QtObject {
                 return { text: "This computer's firmware does not offer Secure Boot, so there is nothing to turn on.", action: "" };
             }
             return { text: "Secure Boot checks that nothing has tampered with Wild OS before it starts. It is switched on in the computer's firmware settings, not in Wild OS.", action: "firmware" };
+        case "firewall":
+            if (v === "on") {
+                return { text: "The firewall turns away anything another computer sends that this one did not ask for. Everything you start can still reach the internet.", action: "" };
+            }
+            return { text: "The firewall did not load when this computer started, so other computers can reach anything that listens on the network. Restart to load it again; choosing a protection level in Privacy and security also loads it.", action: "restart" };
         case "network":
             if (v === "on") {
                 return { text: "Nothing on this computer accepts connections from other computers.", action: "" };
@@ -253,6 +264,7 @@ QtObject {
     readonly property string headline: !checked ? "Wild OS could not check your protection"
         : allOn ? "Your computer is protected"
         : attention.length === 1 && attention[0].key === "updates" && updatesWaiting ? "Security updates are waiting"
+        : attention.length === 1 && attention[0].key === "updates" ? (updatesNeverChecked ? "Updates not checked yet" : "Updates not checked lately")
         : "Some protection needs a look"
 
     function description(checkedAt) {

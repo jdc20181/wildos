@@ -4,3 +4,7 @@ usr/share/sounds/wildos/stereo/dialog-error.oga usr/share/sounds/wildos/stereo/d
 usr/share/sounds/wildos/stereo/dialog-question.oga usr/share/sounds/wildos/stereo/dialog-warning-auth.oga
 usr/share/sounds/wildos/stereo/message.oga usr/share/sounds/wildos/stereo/message-new-email.oga
 usr/share/sounds/wildos/stereo/screen-capture.oga usr/share/sounds/wildos/stereo/camera-shutter.oga
+usr/share/icons/WildOS/16x16 usr/share/icons/WildOS-dark/16x16
+usr/share/icons/WildOS/scalable usr/share/icons/WildOS-dark/scalable
+usr/share/icons/Fluent-yellow/scalable/places/user-trash.svg usr/share/icons/WildOS/scalable/places/user-trash.svg
+usr/share/icons/Fluent-yellow/scalable/places/user-trash-full.svg usr/share/icons/WildOS/scalable/places/user-trash-full.svg

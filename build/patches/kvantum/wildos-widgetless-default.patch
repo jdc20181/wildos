@@ -1,0 +1,31 @@
+--- a/Kvantum/style/Kvantum.cpp
++++ b/Kvantum/style/Kvantum.cpp
+@@ -9899,11 +9899,15 @@
+ 
+         const QPushButton *pb = qobject_cast<const QPushButton*>(widget);
+         bool isDefaultBtn(false);
++        /* Wild OS: with no QPushButton to ask, as when LibreOffice draws its
++           own buttons through the style, the option's DefaultButton flag
++           says which button is the default. */
++        const bool optDefault = !pb && opt && (opt->features & QStyleOptionButton::DefaultButton);
+         if (!hspec_.normal_default_pushbutton
+-            && (option->state & State_Enabled) && pb && pb->isDefault())
++            && (option->state & State_Enabled) && ((pb && pb->isDefault()) || optDefault))
+         {
+           isDefaultBtn = true;
+-          QFont f(pb->font());
++          QFont f(pb ? pb->font() : painter->font());
+           f.setWeight(lspec.boldness);
+           painter->save();
+           painter->setFont(f);
+@@ -10448,7 +10452,9 @@
+                           (lspec.bottom-lspec.top)/2);
+         }
+ 
+-        if (pb && pb->isDefault() && (option->state & State_Enabled))
++        if (((pb && pb->isDefault())
++             || (!pb && opt && (opt->features & QStyleOptionButton::DefaultButton)))
++            && (option->state & State_Enabled))
+         {
+           QString di = "button-default-indicator";
+           if (!((opt->features & QStyleOptionButton::Flat) && status.startsWith(KL1("normal"))))

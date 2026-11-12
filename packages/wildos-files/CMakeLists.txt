@@ -57,3 +57,4 @@ target_link_libraries(wildos-files PRIVATE
 install(TARGETS wildos-files RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 install(FILES data/org.wildos.files.desktop DESTINATION ${CMAKE_INSTALL_DATADIR}/applications)
 install(FILES data/org.wildos.Files.service data/org.wildos.files.FileManager1.service DESTINATION ${CMAKE_INSTALL_DATADIR}/dbus-1/services)
+install(FILES data/fm-shim-wildos-files.conf DESTINATION lib/systemd/user/fm-shim.service.d RENAME 50-wildos-files.conf)

@@ -1,0 +1,12 @@
+#!/usr/bin/make -f
+
+%:
+	dh $@
+
+override_dh_auto_configure:
+	dh_auto_configure -- -Wno-dev -DCMAKE_BUILD_TYPE=Release
+
+# The units are switched on per person by the app, once they set a backup
+# up; enabling them for every account would run backups nobody asked for.
+override_dh_installsystemduser:
+	dh_installsystemduser --no-enable

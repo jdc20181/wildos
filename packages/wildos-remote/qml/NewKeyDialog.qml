@@ -29,7 +29,7 @@ UI.Dialog {
     UI.Label {
         text: qsTr("Name")
         size: 13
-        font.weight: Font.DemiBold
+        font.weight: UI.Style.weightSemiBold
     }
     UI.TextField {
         id: label
@@ -40,7 +40,7 @@ UI.Dialog {
         Layout.topMargin: 6
         text: qsTr("Passphrase")
         size: 13
-        font.weight: Font.DemiBold
+        font.weight: UI.Style.weightSemiBold
     }
     UI.TextField {
         id: passphrase

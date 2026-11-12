@@ -110,7 +110,7 @@ Window {
         UI.Label {
             text: parent.heading
             size: 15
-            font.weight: Font.DemiBold
+            font.weight: UI.Style.weightSemiBold
             color: UI.Style.inkOnWallpaper
         }
 

@@ -1,0 +1,9 @@
+// An administrator sitting at the PC can read the system log anyway, with
+// their password; asking for it again just to see the log in a report that
+// they then review in full would be a prompt nobody learns from.
+polkit.addRule(function (action, subject) {
+    if (action.id == "org.wildos.report.read-logs" &&
+            subject.local && subject.active && subject.isInGroup("sudo")) {
+        return polkit.Result.YES;
+    }
+});

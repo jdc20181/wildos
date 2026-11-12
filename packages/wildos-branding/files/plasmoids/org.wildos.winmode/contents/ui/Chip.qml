@@ -76,6 +76,7 @@ MouseArea {
                 // A ring of the bar's colour around the dot keeps it apart
                 // from the mark's stroke underneath.
                 Rectangle {
+                    visible: chip.winmode.level !== "settingup"
                     x: 20 + 3 - width
                     y: 20 + 2 - height
                     width: 12
@@ -88,6 +89,26 @@ MouseArea {
                         level: chip.winmode.level
                     }
                 }
+
+                // Setting up (board 9.11): a 14 px ring that fills with
+                // setup's progress, on a disc of the bar's colour 1.5 px
+                // wider, 4 px out from the mark's corner.
+                Rectangle {
+                    visible: chip.winmode.level === "settingup"
+                    x: 20 + 4 - width
+                    y: 20 + 3 - height
+                    width: 17
+                    height: 17
+                    radius: width / 2
+                    color: Tones.bar
+
+                    ProgressRing {
+                        anchors.centerIn: parent
+                        size: 14
+                        thickness: 2.4
+                        value: chip.winmode.setupPercent / 100
+                    }
+                }
             }
 
             ColumnLayout {
@@ -96,7 +117,7 @@ MouseArea {
                 UI.Label {
                     text: "Windows mode"
                     size: 12
-                    font.weight: Font.DemiBold
+                    font.weight: UI.Style.weightSemiBold
                     lineHeight: 1.2
                 }
 

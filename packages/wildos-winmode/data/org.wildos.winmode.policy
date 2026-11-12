@@ -17,4 +17,30 @@
       <allow_active>yes</allow_active>
     </defaults>
   </action>
+  <!-- Settings' "Use in Windows" switch on a USB device. Windows gets the
+       device itself, not just its files, so it takes an administrator.
+       Giving one back and the remembered devices going to Windows on
+       their own afterwards need nothing. -->
+  <action id="org.wildos.winmode.usb">
+    <description>Give a USB device to Windows</description>
+    <message>Let Windows use this USB device? It goes to Windows whenever Windows mode is running.</message>
+    <icon_name>wildos-windows-app</icon_name>
+    <defaults>
+      <allow_any>no</allow_any>
+      <allow_inactive>no</allow_inactive>
+      <allow_active>auth_admin_keep</allow_active>
+    </defaults>
+  </action>
+  <!-- Settings' "Remove Windows mode": deletes Windows and everything
+       installed in it, so it takes an administrator every time. -->
+  <action id="org.wildos.winmode.remove">
+    <description>Remove Windows mode</description>
+    <message>Remove Windows mode? Windows and the programs in it are deleted.</message>
+    <icon_name>wildos-windows-app</icon_name>
+    <defaults>
+      <allow_any>no</allow_any>
+      <allow_inactive>no</allow_inactive>
+      <allow_active>auth_admin</allow_active>
+    </defaults>
+  </action>
 </policyconfig>

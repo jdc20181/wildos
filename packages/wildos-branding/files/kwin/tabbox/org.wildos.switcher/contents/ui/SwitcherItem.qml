@@ -67,7 +67,7 @@ Item {
             width: header.width - appIcon.width - header.spacing
             anchors.verticalCenter: parent.verticalCenter
             text: item.title
-            font.weight: Font.Medium
+            font.weight: UI.Style.weightMedium
         }
     }
 

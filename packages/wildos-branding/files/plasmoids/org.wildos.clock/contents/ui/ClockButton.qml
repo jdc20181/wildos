@@ -61,7 +61,7 @@ MouseArea {
                 id: time
                 Layout.alignment: Qt.AlignRight
                 text: Formats.time(button.clock.now, WildOS.TaskbarStyle.clockSeconds)
-                font.weight: Font.Medium
+                font.weight: UI.Style.weightMedium
                 font.features: { "tnum": 1 }
             }
 

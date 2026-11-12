@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Name=PDF
+GenericName=PDF reader
+Comment=Read, fill in and sign PDF files
+Exec=wildos-pdf %f
+Icon=wildos-pdf
+Terminal=false
+StartupNotify=true
+StartupWMClass=wildos-pdf
+Categories=Qt;Office;Viewer;
+MimeType=application/pdf;
+Keywords=pdf;reader;viewer;form;sign;signature;annotate;highlight;acrobat;

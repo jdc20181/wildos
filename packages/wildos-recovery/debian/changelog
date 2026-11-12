@@ -1,0 +1,33 @@
+wildos-recovery (0.1.1) trixie; urgency=medium
+
+  * Reset Wild OS is on. Keep my files ends at the sign-in screen with your
+    account, password and files. The start-up files it made could not
+    unlock the disk, so the PC stopped at a black screen.
+  * Remove everything is on, in Settings and in start-up recovery. It wipes
+    the disk from a copy of Wild OS in memory and opens the installer,
+    and the new install keeps start-up recovery.
+  * After a reset, start-up recovery and the restore points stay in the
+    start-up menu.
+  * Moving off the recommended choice in start-up recovery stops its
+    countdown.
+  * Repair start-up checks that the PC can start from what it made.
+  * Choose an earlier version reads right with one restore point.
+
+ -- Wild OS Developers <dev@wildos.io>  Thu, 12 Nov 2026 12:00:00 +0000
+
+wildos-recovery (0.1.0) trixie; urgency=medium
+
+  * Restore points: one is taken before every update and driver install,
+    and on demand from Settings > System > Recovery. Going back puts the
+    system, drivers and apps back as they were, with their own kernel,
+    while your files, Wi-Fi, passwords and Windows mode stay as they are.
+    Today's version is kept as a restore point too.
+  * New installs keep the system on Btrfs, where a restore point is a
+    snapshot; earlier installs get file copies on ext4.
+  * Start-up recovery appears after two starts that never reach the
+    desktop, or with Shift held: start or restore the earlier version, try
+    again, safe mode, reset, repair tools and report a problem.
+  * A signed copy of the release is kept on the PC for start-up recovery
+    and, in an update, Reset Wild OS.
+
+ -- Wild OS Developers <dev@wildos.io>  Thu, 12 Nov 2026 01:00:00 +0000

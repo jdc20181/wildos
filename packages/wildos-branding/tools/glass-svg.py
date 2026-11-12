@@ -21,14 +21,15 @@ import sys
 from pathlib import Path
 
 # From the Wild OS Design System tokens.
-GLASS_BAR = ((12, 16, 32), 0.55)      # glass-bar: taskbar
-GLASS_PANEL = ((16, 20, 38), 0.76)    # glass-panel: Start, flyouts, tooltips
-BORDER = ((255, 255, 255), 0.12)      # border-glass: the 1px edge
-HIGHLIGHT = ((255, 255, 255), 0.10)   # the inset top highlight on the taskbar
+GLASS_BAR = ((24, 26, 34), 0.92)      # glass-bar: the floating taskbar (Mica)
+GLASS_PANEL = ((35, 37, 41), 0.96)    # glass-panel: Start, flyouts, tooltips (Mica)
+BORDER = ((255, 255, 255), 0.12)      # the taskbar's 1px edge
+PANEL_BORDER = ((255, 255, 255), 0.093)  # border-glass on Mica: the panels' 1px edge
+HIGHLIGHT = ((255, 255, 255), 0.10)   # an inset top highlight; none on dark Mica
 
 # (fill, radius, content padding, top highlight)
 FRAMES = {
-    "widgets/panel-background.svg": (GLASS_BAR, 20, 8, True),
+    "widgets/panel-background.svg": (GLASS_BAR, 20, 8, False),
     "dialogs/background.svg": (GLASS_PANEL, 22, 14, False),
     "widgets/tooltip.svg": (GLASS_PANEL, 12, 10, False),
 }
@@ -78,7 +79,7 @@ def corner(r, which):
 def frame(colour, r, pad, highlight):
     s = r
     fill = paint(colour)
-    edge = paint(BORDER)
+    edge = paint(PANEL_BORDER if colour == GLASS_PANEL else BORDER)
     hi = paint(HIGHLIGHT)
     out = []
 

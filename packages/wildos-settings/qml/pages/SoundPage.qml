@@ -625,7 +625,7 @@ PageScroll {
                     Layout.fillWidth: true
                     text: card.info.title
                     size: 13
-                    font.weight: Font.DemiBold
+                    font.weight: UI.Style.weightSemiBold
                 }
 
                 UI.Label {
@@ -824,7 +824,7 @@ PageScroll {
             anchors.fill: parent
             visible: app.group.windows
             radius: 8
-            color: "#2b3556"
+            color: "#3b3d41"
 
             Grid {
                 anchors.centerIn: parent

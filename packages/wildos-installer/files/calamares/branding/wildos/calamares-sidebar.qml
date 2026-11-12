@@ -21,7 +21,7 @@ Rectangle {
 
     // Calamares takes the panel's width from here (see setDimension()).
     implicitWidth: 260
-    color: Qt.rgba(6 / 255, 8 / 255, 20 / 255, 0.28)
+    color: Qt.rgba(9 / 255, 11 / 255, 15 / 255, 0.28)
     topLeftRadius: 20
     bottomLeftRadius: 20
 
@@ -69,9 +69,9 @@ Rectangle {
             Text {
                 text: qsTr("Install Wild OS")
                 color: "#eef1f8"
-                font.family: "Inter"
+                font.family: "Albert Sans"
                 font.pixelSize: 17
-                font.weight: Font.DemiBold
+                font.weight: UI.Style.weightSemiBold
                 Layout.fillWidth: true
                 elide: Text.ElideRight
             }
@@ -120,9 +120,9 @@ Rectangle {
                                 visible: !row.isDone
                                 text: row.index + 1
                                 color: row.isCurrent ? "#0f1530" : "#eef1f8"
-                                font.family: "Inter"
+                                font.family: "Albert Sans"
                                 font.pixelSize: 11
-                                font.weight: row.isCurrent ? Font.Bold : Font.Normal
+                                font.weight: row.isCurrent ? UI.Style.weightBold : UI.Style.weightRegular
                             }
                             WIcon {
                                 anchors.centerIn: parent
@@ -140,9 +140,9 @@ Rectangle {
                             text: row.modelData.label
                             elide: Text.ElideRight
                             color: row.isCurrent ? "#eef1f8" : Qt.rgba(232 / 255, 236 / 255, 248 / 255, row.isDone ? 0.8 : 0.75)
-                            font.family: "Inter"
+                            font.family: "Albert Sans"
                             font.pixelSize: 13
-                            font.weight: row.isCurrent ? Font.DemiBold : Font.Normal
+                            font.weight: row.isCurrent ? UI.Style.weightSemiBold : UI.Style.weightRegular
                         }
                     }
                 }
@@ -208,6 +208,7 @@ Rectangle {
                 text: link.text
                 color: link.hovered ? "#ffffff" : UI.Style.accentText
                 font.family: UI.Style.fontFamily
+                font.letterSpacing: UI.Style.tracking(13)
                 font.pixelSize: 13
             }
         }

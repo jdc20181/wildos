@@ -77,7 +77,7 @@ Item {
                 text: qsTr("Groups")
                 size: 12
                 color: UI.Style.inkSubtle
-                font.weight: Font.Medium
+                font.weight: UI.Style.weightMedium
                 leftPadding: 10
                 topPadding: 14
                 bottomPadding: 6
@@ -109,7 +109,7 @@ Item {
                 text: qsTr("Tools")
                 size: 12
                 color: UI.Style.inkSubtle
-                font.weight: Font.Medium
+                font.weight: UI.Style.weightMedium
                 leftPadding: 10
                 topPadding: 14
                 bottomPadding: 6
@@ -159,7 +159,7 @@ Item {
         anchors.margins: 14
         anchors.rightMargin: 15
         height: footText.implicitHeight + 28
-        radius: 10
+        radius: 12
         color: UI.Style.surfaceRest
         border.width: 1
         border.color: UI.Style.borderSubtle
@@ -170,7 +170,7 @@ Item {
             width: 18
             height: 18
             path: RemoteIcons.noSync
-            color: UI.Style.accent
+            color: UI.Style.iconInk
             strokeWidth: 1.8
         }
         Column {
@@ -183,7 +183,7 @@ Item {
                 width: parent.width
                 text: qsTr("No cloud sync")
                 size: 13
-                font.weight: Font.DemiBold
+                font.weight: UI.Style.weightSemiBold
             }
             UI.Label {
                 width: parent.width
@@ -209,7 +209,7 @@ Item {
 
         height: 36
         radius: UI.Style.radiusSm
-        color: current ? UI.Style.accentSoft : mouse.containsMouse ? UI.Style.surfaceHover : "transparent"
+        color: current ? UI.Style.surfaceSelected : mouse.containsMouse ? UI.Style.surfaceHover : "transparent"
         Accessible.role: Accessible.Button
         Accessible.name: text
 
@@ -220,7 +220,7 @@ Item {
             name: row.iconName
             size: 17
             strokeWidth: 1.8
-            color: row.current ? UI.Style.accent : UI.Style.iconMuted
+            color: row.current ? UI.Style.iconInk : UI.Style.iconMuted
         }
         UI.Glyph {
             visible: row.glyph.length > 0
@@ -230,7 +230,7 @@ Item {
             height: 17
             path: row.glyph
             strokeWidth: 1.8
-            color: row.current ? UI.Style.accent : UI.Style.iconMuted
+            color: row.current ? UI.Style.iconInk : UI.Style.iconMuted
         }
         UI.Label {
             x: 38
@@ -238,7 +238,7 @@ Item {
             width: parent.width - 80
             text: row.text
             size: 14
-            font.weight: row.current ? Font.DemiBold : Font.Medium
+            font.weight: row.current ? UI.Style.weightSemiBold : UI.Style.weightMedium
             color: row.muted ? UI.Style.inkMuted : UI.Style.ink
         }
         UI.Label {

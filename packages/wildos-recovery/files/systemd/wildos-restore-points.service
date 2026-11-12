@@ -1,0 +1,14 @@
+[Unit]
+Description=Finish going back to a restore point, and tidy restore points
+After=local-fs.target
+ConditionKernelCommandLine=!wildos.snapshot
+ConditionPathExists=!/run/initramfs/live
+
+[Service]
+Type=oneshot
+Nice=19
+IOSchedulingClass=idle
+ExecStart=/usr/libexec/wildos/restore-points boot
+
+[Install]
+WantedBy=multi-user.target

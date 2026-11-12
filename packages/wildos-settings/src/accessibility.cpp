@@ -65,6 +65,7 @@ void Accessibility::refresh()
     m_bounceKeys = AccessCore::bounceKeys();
     m_bounceKeysDelay = AccessCore::bounceKeysDelay();
     m_outlineWindows = AccessCore::outlineWindows();
+    m_outlineFillingScreen = AccessCore::outlineFillingScreen();
     m_blurBackground = AccessCore::blurBackground();
     m_blurStrength = AccessCore::blurStrength();
     m_blurDesktop = AccessCore::blurDesktop();
@@ -185,6 +186,13 @@ void Accessibility::setOutlineWindows(bool on)
 {
     AccessCore::setOutlineWindows(on);
     m_outlineWindows = on;
+    Q_EMIT changed();
+}
+
+void Accessibility::setOutlineFillingScreen(bool on)
+{
+    AccessCore::setOutlineFillingScreen(on);
+    m_outlineFillingScreen = on;
     Q_EMIT changed();
 }
 

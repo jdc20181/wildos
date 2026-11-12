@@ -1,5 +1,7 @@
 #include "prompts.h"
 
+#include "clockformat.h"
+
 #include <KConfigGroup>
 #include <KService>
 #include <KSharedConfig>
@@ -72,11 +74,11 @@ KConfigGroup restartConfig()
     return KSharedConfig::openConfig(Prompts::configFile())->group(QStringLiteral("Restart"));
 }
 
-// "Tonight at 23:00", "Tomorrow at 12:00", in the clock of the regional
-// format chosen in Settings.
+// "Tonight at 23:00", "Tomorrow at 12:00", in the regional format chosen in
+// Settings, on the 12 or 24-hour clock if one is chosen there.
 QString describe(const QDateTime &when, const QDateTime &now)
 {
-    const QString time = QLocale::system().toString(when.time(), QLocale::ShortFormat);
+    const QString time = ClockFormat::time(when.time());
     const int days = now.date().daysTo(when.date());
     const bool night = when.time().hour() >= 18 || when.time().hour() < 5;
     if (days == 0) {

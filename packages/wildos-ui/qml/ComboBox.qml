@@ -15,7 +15,9 @@ import QtQuick.Templates as T
 // are the defaults), read `currentValue`, and set the choice from the
 // backend with `currentIndex: model.findIndex(o => o.value === backend.value)`.
 // Not indexOfValue(): a binding doesn't see the list it searches, so it ran
-// once before the list was loaded and left the box blank.
+// once before the list was loaded and left the box blank. An entry with
+// `divider: true` has a hairline above it in the list, to group choices; it
+// stays an ordinary choice for the keyboard.
 T.ComboBox {
     id: control
 
@@ -51,8 +53,9 @@ T.ComboBox {
     FontMetrics {
         id: metrics
         font.family: Style.fontFamily
+        font.letterSpacing: Style.tracking(Style.fontBodySm)
         font.pixelSize: Style.fontBodySm
-        font.weight: Font.DemiBold
+        font.weight: Style.weightSemiBold
     }
 
     background: Rectangle {
@@ -95,9 +98,12 @@ T.ComboBox {
         required property int index
         required property var model
         readonly property bool current: control.currentIndex === index
+        readonly property bool divider: Array.isArray(control.model) && (control.model[index]?.divider ?? false)
 
         width: ListView.view ? ListView.view.width : implicitWidth
-        implicitHeight: Math.max(Style.menuItemHeight, implicitContentHeight + 12)
+        implicitHeight: Math.max(Style.menuItemHeight, implicitContentHeight + 12) + topInset
+        topInset: divider ? 9 : 0
+        topPadding: topInset
         highlighted: control.highlightedIndex === index
         hoverEnabled: true
         padding: 0
@@ -105,6 +111,16 @@ T.ComboBox {
         Accessible.role: Accessible.ListItem
         Accessible.name: text
         Accessible.selected: current
+
+        // As MenuSeparator draws it, in the gap above the row.
+        Rectangle {
+            visible: option.divider
+            x: 8
+            y: 4
+            width: option.width - 16
+            height: 1
+            color: Style.tone(0.10)
+        }
 
         background: Rectangle {
             radius: Style.radiusSm
@@ -124,7 +140,7 @@ T.ComboBox {
         contentItem: Label {
             leftPadding: 14
             text: option.text
-            font.weight: option.current ? Font.DemiBold : Font.Normal
+            font.weight: option.current ? Style.weightSemiBold : Style.weightRegular
         }
     }
 

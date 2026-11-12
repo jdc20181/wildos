@@ -152,7 +152,7 @@ QSGNode *DesktopView::updatePaintNode(QSGNode *old, UpdatePaintNodeData *)
             shown = m_image.scaled(small, Qt::IgnoreAspectRatio, Qt::SmoothTransformation)
                         .scaled(m_image.size() / 2, Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
             QPainter p(&shown);
-            p.fillRect(shown.rect(), QColor(8, 12, 28, 110));
+            p.fillRect(shown.rect(), QColor(0, 0, 0, 110));
         }
         node->setTexture(window()->createTextureFromImage(shown));
         m_dirty = false;

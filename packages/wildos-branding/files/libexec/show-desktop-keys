@@ -1,7 +1,7 @@
 #!/bin/sh
 # Moves Win+D from KWin's Show Desktop, which slides the windows off the
 # screen, to the Wild OS one, which minimises them into the taskbar
-# (org.wildos.showdesktop). New accounts get this from their shortcut file;
+# (the wildos_gestures KWin effect). New accounts get this from their shortcut file;
 # accounts made before it are changed once, from the session's autostart.
 # The shortcut service holds its settings in memory and writes them back, so
 # the change goes through it rather than into the file.

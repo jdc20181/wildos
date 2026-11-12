@@ -6,6 +6,7 @@
 #include <QDBusObjectPath>
 #include <QDBusReply>
 #include <QDBusVariant>
+#include <QFile>
 #include <QProcess>
 #include <QStandardPaths>
 
@@ -67,4 +68,29 @@ QString System::passwordHint(const QString &userName) const
     get << QStringLiteral("org.freedesktop.Accounts.User") << QStringLiteral("PasswordHint");
     const QDBusReply<QDBusVariant> hint = QDBusConnection::systemBus().call(get, QDBus::Block, 1000);
     return hint.isValid() ? hint.value().variant().toString().trimmed() : QString();
+}
+
+bool System::fingerprintReader() const
+{
+    // The signin= line wildos-desktop's fingerprint-turn reads; off means
+    // the sign-in screen turns an empty password down.
+    QFile conf(QStringLiteral("/etc/wildos/fingerprint.conf"));
+    if (conf.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        bool on = true;
+        while (!conf.atEnd()) {
+            const QByteArray line = conf.readLine().trimmed();
+            const qsizetype equals = line.indexOf('=');
+            if (equals > 0 && line.left(equals).trimmed() == "signin") {
+                on = line.mid(equals + 1).trimmed() != "off";
+            }
+        }
+        if (!on) {
+            return false;
+        }
+    }
+    // fprintd starts on demand and looks for readers as it starts.
+    const QDBusMessage call = QDBusMessage::createMethodCall(QStringLiteral("net.reactivated.Fprint"), QStringLiteral("/net/reactivated/Fprint/Manager"),
+                                                             QStringLiteral("net.reactivated.Fprint.Manager"), QStringLiteral("GetDefaultDevice"));
+    const QDBusReply<QDBusObjectPath> device = QDBusConnection::systemBus().call(call, QDBus::Block, 3000);
+    return device.isValid();
 }

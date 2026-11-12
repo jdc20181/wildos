@@ -4,7 +4,7 @@ import QtQuick.Templates as T
 import WildOS.Store
 import WildOS.UI as UI
 
-// The boards' feature card: a photograph, or the deep navy card it falls
+// The boards' feature card: a photograph, or the deep grey card it falls
 // back to, darkened towards the bottom, with app icons at the top and an
 // eyebrow, a title and a line of text at the bottom in white.
 T.AbstractButton {
@@ -63,8 +63,8 @@ T.AbstractButton {
                 visible: card.shadeFromLeft
                 gradient: Gradient {
                     orientation: Gradient.Horizontal
-                    GradientStop { position: 0.0; color: Qt.rgba(8 / 255, 10 / 255, 24 / 255, 0.9) }
-                    GradientStop { position: 0.75; color: Qt.rgba(8 / 255, 10 / 255, 24 / 255, 0.1) }
+                    GradientStop { position: 0.0; color: Qt.rgba(12 / 255, 14 / 255, 18 / 255, 0.9) }
+                    GradientStop { position: 0.75; color: Qt.rgba(12 / 255, 14 / 255, 18 / 255, 0.1) }
                 }
             }
 
@@ -72,8 +72,8 @@ T.AbstractButton {
                 anchors.fill: parent
                 visible: !card.shadeFromLeft
                 gradient: Gradient {
-                    GradientStop { position: 0.3; color: Qt.rgba(8 / 255, 10 / 255, 24 / 255, 0) }
-                    GradientStop { position: 1.0; color: Qt.rgba(8 / 255, 10 / 255, 24 / 255, card.shadeStrength) }
+                    GradientStop { position: 0.3; color: Qt.rgba(12 / 255, 14 / 255, 18 / 255, 0) }
+                    GradientStop { position: 1.0; color: Qt.rgba(12 / 255, 14 / 255, 18 / 255, card.shadeStrength) }
                 }
             }
 
@@ -147,7 +147,7 @@ T.AbstractButton {
                 visible: card.eyebrow.length > 0
                 text: card.eyebrow.toUpperCase()
                 size: 11.5
-                font.weight: Font.Bold
+                font.weight: UI.Style.weightBold
                 font.letterSpacing: 0.92
                 color: Metrics.onPhotoAlpha(0.75)
             }
@@ -156,7 +156,7 @@ T.AbstractButton {
                 width: parent.width
                 text: card.title
                 size: card.titleSize
-                font.weight: Font.Bold
+                font.weight: UI.Style.weightBold
                 font.letterSpacing: -0.015 * card.titleSize
                 lineHeight: 1.15
                 color: Metrics.onPhoto

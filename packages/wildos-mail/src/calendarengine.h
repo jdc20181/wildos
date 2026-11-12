@@ -47,6 +47,9 @@ class CalendarEngine : public QObject
     Q_PROPERTY(QString timeZoneId READ timeZoneId WRITE setTimeZoneId NOTIFY timeZoneChanged)
 
 public:
+    // True while a refresh asked of the accounts is still running, held for
+    // at least a moment so a quick one still shows the icon turning.
+    Q_PROPERTY(bool syncing READ syncing NOTIFY syncingChanged)
     static CalendarEngine *instance();
     static CalendarEngine *create(QQmlEngine *, QJSEngine *);
     ~CalendarEngine() override;
@@ -117,6 +120,9 @@ public:
     // Events whose title, place or notes contain the text, a year either
     // side of today: answered with searchDone.
     Q_INVOKABLE void search(const QString &text);
+    // The next events with someone in them, as organiser or guest, over
+    // the next three months: answered with upcomingFound, at most limit.
+    Q_INVOKABLE void upcomingWith(const QString &address, int limit);
 
     Q_INVOKABLE void addLocalCalendar(const QString &name, const QString &color);
     Q_INVOKABLE void addWebCalendar(const QString &name, const QString &url, const QString &color);
@@ -129,6 +135,12 @@ public:
     Q_INVOKABLE void addCalDavAccount(const QString &name, const QString &url, const QString &user, const QString &password);
     Q_INVOKABLE void removeAccount(const QString &uid);
     Q_INVOKABLE void refresh();
+    bool syncing() const { return m_syncing > 0 || m_syncHold.isActive(); }
+    // Counts a refresh in and out; the callback ends it.
+    void startRefresh(EClient *client);
+    static void onRefreshed(GObject *, GAsyncResult *result, gpointer);
+    int m_syncing = 0;
+    QTimer m_syncHold;
 
     // An invitation in a message (MailMsInvite.dc): what it's for, and
     // the answer. me is the address it came to.
@@ -150,6 +162,7 @@ public:
 Q_SIGNALS:
     void readyChanged();
     void calendarsChanged();
+    void syncingChanged();
     void rangeChanged();
     void eventsChanged();
     void timeZoneChanged();
@@ -157,6 +170,7 @@ Q_SIGNALS:
     void saved(const QString &key);
     void dayLoaded(const QDate &day, const QVariantList &events);
     void searchDone(const QString &text, const QVariantList &results);
+    void upcomingFound(const QString &address, const QVariantList &events);
     void accountAdded(const QString &uid);
     void accountFailed(const QString &message);
     void invitationAnswered(const QString &uid, const QString &status, const QString &reply, const QString &organizer, const QString &title);

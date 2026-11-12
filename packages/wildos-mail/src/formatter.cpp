@@ -179,7 +179,7 @@ QString Formatter::html() const
     }
     QString body = m_document->textDocument()->toHtml();
     // Qt writes its own head and a body style naming the app's font; mail
-    // gets a plain document in Inter with a system fallback.
+    // gets a plain document in Albert Sans with a system fallback.
     const int start = body.indexOf(QLatin1String("<body"));
     const int open = body.indexOf(QLatin1Char('>'), start);
     const int close = body.lastIndexOf(QLatin1String("</body>"));
@@ -189,7 +189,7 @@ QString Formatter::html() const
     // Qt's own style properties mean nothing to other mail programs.
     static const QRegularExpression qtStyle(QStringLiteral(R"(\s*-qt-[a-z-]+:[^;"]*;?)"));
     body.remove(qtStyle);
-    return QStringLiteral("<html><head><meta charset=\"utf-8\"></head><body style=\"font-family: Inter, 'Segoe UI', Arial, sans-serif; font-size: 11pt;\">")
+    return QStringLiteral("<html><head><meta charset=\"utf-8\"></head><body style=\"font-family: 'Albert Sans', 'Segoe UI', Arial, sans-serif; font-size: 11pt;\">")
         + body + QStringLiteral("</body></html>");
 }
 

@@ -124,7 +124,7 @@ UI.AppWindow {
             UI.Label {
                 anchors.verticalCenter: parent.verticalCenter
                 text: "Task Manager"
-                font.weight: Font.Medium
+                font.weight: UI.Style.weightMedium
                 color: window.active ? UI.Style.ink : UI.Style.inkMuted
             }
         }

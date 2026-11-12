@@ -170,6 +170,7 @@ FocusScope {
     FontMetrics {
         id: metrics
         font.family: UI.Style.fontFamily
+        font.letterSpacing: UI.Style.tracking(UI.Style.px(13))
         font.pixelSize: UI.Style.px(13)
     }
 
@@ -201,9 +202,10 @@ FocusScope {
         anchors.rightMargin: 6
         anchors.verticalCenter: parent.verticalCenter
         color: UI.Style.inkField
-        selectionColor: UI.Style.accentSelected
+        selectionColor: UI.Style.textSelection
         selectedTextColor: UI.Style.ink
         font.family: UI.Style.fontFamily
+        font.letterSpacing: UI.Style.tracking(UI.Style.px(13))
         font.pixelSize: UI.Style.px(13)
         clip: true
         selectByMouse: true

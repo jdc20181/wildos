@@ -18,6 +18,7 @@ RowLayout {
         text: control.checked ? qsTr("On") : qsTr("Off")
         color: UI.Style.inkMuted
         font.family: UI.Style.fontFamily
+        font.letterSpacing: UI.Style.tracking(12)
         font.pixelSize: 12
     }
 

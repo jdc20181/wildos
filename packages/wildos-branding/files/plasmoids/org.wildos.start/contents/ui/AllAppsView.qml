@@ -108,7 +108,7 @@ FocusScope {
                 anchors.bottom: parent.bottom
                 anchors.bottomMargin: 6
                 size: 12
-                font.weight: Font.DemiBold
+                font.weight: UI.Style.weightSemiBold
                 color: UI.Style.inkMuted
                 text: parent.section
             }
@@ -216,7 +216,7 @@ FocusScope {
                 anchors.right: parent.right
                 anchors.rightMargin: 12
                 anchors.verticalCenter: parent.verticalCenter
-                font.weight: Font.Medium
+                font.weight: UI.Style.weightMedium
                 text: appRow.name
             }
 

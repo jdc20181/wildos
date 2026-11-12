@@ -154,7 +154,7 @@ UI.AppWindow {
                     spacing: 8
                     UI.Label {
                         text: qsTr("Start")
-                        font.weight: Font.Medium
+                        font.weight: UI.Style.weightMedium
                         color: window.active ? UI.Style.ink : UI.Style.inkMuted
                     }
                     UI.Label {
@@ -204,7 +204,7 @@ UI.AppWindow {
                             anchors.verticalCenter: parent.verticalCenter
                             text: Office.appName
                             size: 20
-                            font.weight: Font.DemiBold
+                            font.weight: UI.Style.weightSemiBold
                         }
                     }
 
@@ -248,7 +248,7 @@ UI.AppWindow {
                                 width: parent.width
                                 text: Office.formatName
                                 size: 12.5
-                                font.weight: Font.DemiBold
+                                font.weight: UI.Style.weightSemiBold
                             }
                             UI.Label {
                                 width: parent.width
@@ -279,7 +279,7 @@ UI.AppWindow {
                         Layout.fillWidth: true
                         text: qsTr("Start something new")
                         size: 22
-                        font.weight: Font.DemiBold
+                        font.weight: UI.Style.weightSemiBold
                     }
                     UI.SearchField {
                         id: search
@@ -412,7 +412,7 @@ UI.AppWindow {
                     UI.Label {
                         text: qsTr("New from template")
                         size: 22
-                        font.weight: Font.DemiBold
+                        font.weight: UI.Style.weightSemiBold
                     }
                     UI.Label {
                         width: parent.width
@@ -445,7 +445,7 @@ UI.AppWindow {
                         topPadding: 12
                         text: qsTr("Your templates")
                         size: 16
-                        font.weight: Font.DemiBold
+                        font.weight: UI.Style.weightSemiBold
                     }
                     Flow {
                         visible: Office.userTemplates.length > 0
@@ -528,7 +528,7 @@ UI.AppWindow {
             anchors.verticalCenter: parent.verticalCenter
             text: tab.modelData.name
             size: tab.active ? 16 : 13
-            font.weight: tab.active ? Font.DemiBold : Font.Normal
+            font.weight: tab.active ? UI.Style.weightSemiBold : UI.Style.weightRegular
             color: tab.active ? UI.Style.ink : tabMouse.containsMouse ? UI.Style.ink : UI.Style.inkMuted
         }
         MouseArea {

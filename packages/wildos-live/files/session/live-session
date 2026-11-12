@@ -17,6 +17,29 @@ desktop() {
 mode=$(tr ' ' '\n' < /proc/cmdline | sed -n 's/^wildos\.mode=//p' | tail -n 1)
 once="${XDG_RUNTIME_DIR:-/tmp}/wildos-installer-opened"
 
+# Start-up recovery (wildos-recovery): this image started from the reset
+# copy inside an installed PC's encrypted disk. Its recovery screens come up
+# alone in KWin, with the installed PC's keyboard layout, and never the
+# desktop.
+if [ "$mode" = recovery ] && [ -x /usr/libexec/wildos/recovery-session ]; then
+    layout=gb
+    for keyboard in /run/initramfs/live/@/etc/default/keyboard /run/initramfs/live/etc/default/keyboard; do
+        if [ -r "$keyboard" ]; then
+            layout=$(sed -n 's/^XKBLAYOUT="\{0,1\}\([^",]*\).*/\1/p' "$keyboard" | head -n 1)
+            break
+        fi
+    done
+    layout=${layout:-gb}
+    layouts=$layout
+    if [ "$layout" != us ]; then layouts="$layout,us"; fi
+    mkdir -p "$HOME/.config"
+    printf '[Layout]\nUse=true\nLayoutList=%s\n' "$layouts" > "$HOME/.config/kxkbrc"
+    export XDG_SESSION_TYPE=wayland XDG_CURRENT_DESKTOP=KDE QT_QPA_PLATFORMTHEME=kde
+    exec /usr/lib/x86_64-linux-gnu/libexec/plasma-dbus-run-session-if-needed \
+        kwin_wayland --drm --xwayland --locale1 --no-lockscreen --no-global-shortcuts --no-kactivities \
+        --exit-with-session /usr/libexec/wildos/recovery-session
+fi
+
 if [ "$mode" = install ] && [ ! -e "$once" ]; then
     : > "$once"
     # Belt and braces with the sddm.service drop-in: never take the screen

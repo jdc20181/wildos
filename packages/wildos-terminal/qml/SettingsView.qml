@@ -154,7 +154,7 @@ Item {
                             id: crumbText
                             text: crumb.modelData.title
                             size: 28
-                            font.weight: Font.DemiBold
+                            font.weight: UI.Style.weightSemiBold
                             font.letterSpacing: -0.28
                             color: crumb.last || crumbButton.hovered ? UI.Style.ink : UI.Style.inkMuted
                         }

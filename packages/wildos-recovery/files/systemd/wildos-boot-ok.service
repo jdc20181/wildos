@@ -1,0 +1,19 @@
+[Unit]
+Description=Count this start as good once a desktop is up
+Documentation=file:///usr/share/doc/wildos-recovery/
+# Start-up recovery appears after two starts in a row that never reached a
+# desktop. This clears the count once one does, or when the PC is shut down
+# cleanly from the sign-in screen.
+After=systemd-logind.service
+ConditionPathExists=/boot/grub/grubenv
+ConditionKernelCommandLine=!wildos.mode=recovery
+ConditionKernelCommandLine=!wildos.snapshot
+
+[Service]
+Type=simple
+RemainAfterExit=yes
+ExecStart=/usr/libexec/wildos/recovery-boot watch
+ExecStop=/usr/libexec/wildos/recovery-boot stop
+
+[Install]
+WantedBy=graphical.target

@@ -8,15 +8,12 @@ include(GNUInstallDirs)
 find_package(ECM REQUIRED NO_MODULE)
 list(APPEND CMAKE_MODULE_PATH ${ECM_MODULE_PATH})
 
-find_package(Qt6 6.8 REQUIRED COMPONENTS Core Gui Widgets DBus Qml Quick QuickControls2 Concurrent WaylandClient)
+find_package(Qt6 6.8 REQUIRED COMPONENTS Core Gui Widgets DBus Qml Quick QuickControls2 WaylandClient)
 find_package(KF6WindowSystem REQUIRED)
 find_package(KF6GuiAddons REQUIRED)
-find_package(KF6Notifications REQUIRED)
 find_package(KF6DBusAddons REQUIRED)
 find_package(KF6Config REQUIRED)
-find_package(KF6Purpose REQUIRED)
 find_package(LayerShellQt REQUIRED)
-find_package(KPipeWire REQUIRED)
 find_package(PlasmaWaylandProtocols REQUIRED)
 find_package(WaylandScanner REQUIRED)
 find_package(Wayland REQUIRED COMPONENTS Client)
@@ -50,40 +47,14 @@ install(FILES
     DESTINATION ${OVERLAYS_QML_DIR})
 
 # Ctrl+V on behalf of the clipboard and emoji panel, through KWin's fake
-# input; and the screen recording stream from KWin's screencast protocol.
+# input.
 add_library(wildosoverlays-wayland STATIC common/fakekeyboard.cpp common/fakekeyboard.h)
 qt6_generate_wayland_protocol_client_sources(wildosoverlays-wayland FILES
     ${PLASMA_WAYLAND_PROTOCOLS_DIR}/fake-input.xml
-    ${PLASMA_WAYLAND_PROTOCOLS_DIR}/zkde-screencast-unstable-v1.xml
 )
 target_include_directories(wildosoverlays-wayland PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/common ${CMAKE_CURRENT_BINARY_DIR})
 target_link_libraries(wildosoverlays-wayland PUBLIC Qt6::Gui Qt6::WaylandClient Wayland::Client)
 set_target_properties(wildosoverlays-wayland PROPERTIES POSITION_INDEPENDENT_CODE ON)
-
-# Win+Shift+S.
-qt_add_executable(wildos-screenshot screenshot/main.cpp)
-file(GLOB SCREENSHOT_QML RELATIVE ${CMAKE_CURRENT_SOURCE_DIR} screenshot/qml/*.qml)
-foreach(file ${SCREENSHOT_QML})
-    get_filename_component(name ${file} NAME)
-    set_source_files_properties(${file} PROPERTIES QT_RESOURCE_ALIAS ${name})
-endforeach()
-qt_add_qml_module(wildos-screenshot
-    URI WildOS.Screenshot
-    QML_FILES ${SCREENSHOT_QML}
-    SOURCES
-        screenshot/screenshotapp.cpp screenshot/screenshotapp.h
-        screenshot/grabber.cpp screenshot/grabber.h
-        screenshot/recorder.cpp screenshot/recorder.h
-        screenshot/sharer.cpp screenshot/sharer.h
-        screenshot/frozenimage.cpp screenshot/frozenimage.h
-)
-target_include_directories(wildos-screenshot PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/screenshot)
-target_link_libraries(wildos-screenshot PRIVATE
-    Qt6::Widgets Qt6::DBus Qt6::Qml Qt6::Quick Qt6::QuickControls2 Qt6::Concurrent
-    KF6::Notifications KF6::DBusAddons KF6::GuiAddons KF6::WindowSystem KF6::ConfigCore KF6::Purpose
-    K::KPipeWireRecord
-    wildosoverlays-wayland
-)
 
 # Win+V and Win+full stop.
 add_custom_command(
@@ -119,14 +90,12 @@ target_link_libraries(wildos-clipboard PRIVATE
     wildosoverlays-wayland
 )
 
-install(TARGETS wildos-screenshot wildos-clipboard RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+install(TARGETS wildos-clipboard RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 install(FILES
-    data/org.wildos.screenshot.desktop
     data/org.wildos.clipboard.desktop
     DESTINATION ${CMAKE_INSTALL_DATADIR}/applications)
 install(FILES data/org.wildos.clipboard-autostart.desktop
     DESTINATION ${CMAKE_INSTALL_SYSCONFDIR}/xdg/autostart RENAME org.wildos.clipboard.desktop)
-install(FILES data/wildos-screenshot.notifyrc DESTINATION ${CMAKE_INSTALL_DATADIR}/knotifications6)
 install(FILES data/klipperrc DESTINATION ${CMAKE_INSTALL_SYSCONFDIR}/xdg)
 # Plasma reads the on-screen display from its shell package only; this shim
 # there loads the Wild OS one from the look-and-feel package.

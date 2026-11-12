@@ -26,6 +26,17 @@ const friendlyNames = {
 // until then was given.
 const pinsBeforeOffice = ["org.wildos.mail.desktop", "org.wildos.files.desktop", "org.wildos.calendar.desktop", "brave-browser.desktop", "mullvad-browser.desktop", "org.wildos.store.desktop", "org.wildos.settings.desktop", "org.wildos.terminal.desktop", "org.kde.kcalc.desktop", "org.kde.kwrite.desktop", "org.kde.okular.desktop", "org.kde.gwenview.desktop", "org.keepassxc.KeePassXC.desktop"];
 
+// A default pin that takes over from an app pinned before it: an account
+// that still has the old one pinned gets the new one in its place, once.
+// The Text editor was drawn as the generic notes app until Notes came.
+const replacesPin = {
+    "org.wildos.notes.desktop": "org.kde.kwrite.desktop",
+};
+
+// Default pins only new accounts get: an account made before one of these
+// was added keeps its pins as they are, and the pin is counted as offered.
+const newAccountPins = ["org.wildos.music.desktop", "org.wildos.videos.desktop"];
+
 // Apps that make up the system itself. Windows does not offer to uninstall
 // these from Start either.
 const coreApps = ["org.wildos.files", "org.wildos.store", "org.kde.dolphin", "org.kde.discover", "systemsettings", "org.wildos.settings", "org.wildos.terminal", "org.kde.konsole"];

@@ -77,7 +77,13 @@ UI.AppWindow {
         nameField.text = chooser.initialName;
         nameField.forceActiveFocus();
         if (saving) {
-            nameField.selectAll();
+            // Typing a new name keeps the extension, as on Windows.
+            const dot = chooser.suffixStart(nameField.text);
+            if (dot > 0) {
+                nameField.select(0, dot);
+            } else {
+                nameField.selectAll();
+            }
         }
     }
 
@@ -166,7 +172,7 @@ UI.AppWindow {
                 UI.Label {
                     anchors.verticalCenter: parent.verticalCenter
                     text: win.chooser.title
-                    font.weight: Font.Medium
+                    font.weight: UI.Style.weightMedium
                     color: win.active ? UI.Style.ink : UI.Style.inkMuted
                 }
             }
@@ -363,7 +369,14 @@ UI.AppWindow {
                     model: win.chooser.filters
                     currentIndex: win.chooser.currentFilter
                     Accessible.name: win.chooser.typeLabel
-                    onActivated: index => win.chooser.currentFilter = index
+                    onActivated: index => {
+                        const from = win.chooser.currentFilter;
+                        win.chooser.currentFilter = index;
+                        if (win.saving) {
+                            nameField.text = win.chooser.swapSuffix(nameField.text, from, index);
+                            win.fileName = nameField.text;
+                        }
+                    }
                     Connections {
                         target: win.chooser
                         function onCurrentFilterChanged() {

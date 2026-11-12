@@ -1,0 +1,12 @@
+wildos-fluent-icons (0.1.1) trixie; urgency=medium
+
+  * Brave keeps its own logo instead of Fluent's redrawn one.
+
+ -- Wild OS Developers <dev@wildos.io>  Wed, 11 Nov 2026 17:32:31 +0000
+
+wildos-fluent-icons (0.1.0) trixie; urgency=medium
+
+  * Folders, This computer and the Recycle Bin come from the Fluent icon
+    theme by vinceliuice, with yellow folders, light and dark.
+
+ -- Wild OS Developers <dev@wildos.io>  Wed, 11 Nov 2026 14:30:00 +0000

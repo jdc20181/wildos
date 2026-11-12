@@ -5,7 +5,7 @@ import QtQuick.Templates as T
 // Wild OS menus: right-click menus everywhere, drop-down menus off command
 // bar buttons, the power and account menus. Drawn as the right-click menu
 // artboards draw every one of them (MenusShell.dc, MenusApps.dc): radius
-// 12, rgba(16,20,38,0.86), a 0.12 edge and a 0 20px 50px shadow, 6px of
+// 12, rgba(23,25,29,0.86), a 0.12 edge and a 0 20px 50px shadow, 6px of
 // padding, 34px rows with 7px corners (icon column at 10, label at 38,
 // shortcuts and submenus on the right). Opens with the lock screen
 // GlassMenu's short fade and scale.
@@ -37,7 +37,7 @@ T.Menu {
     property var quickActions: []
     property var built: []
     // The panel, for the one surface whose artboard draws its menu
-    // differently (the desktop, DesktopIcons.dc: r12, rgba(16,20,38,0.82)
+    // differently (the desktop, DesktopIcons.dc: r12, rgba(23,25,29,0.82)
     // with a 40px backdrop blur, 0.12 edge). Submenus inherit all of it.
     property real panelRadius: Style.radiusMd
     property color panelColor: Style.glassContextMenu

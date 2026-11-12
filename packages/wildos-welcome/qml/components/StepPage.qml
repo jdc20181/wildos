@@ -52,7 +52,7 @@ Item {
                     Layout.fillWidth: true
                     text: page.title
                     size: 28
-                    font.weight: Font.DemiBold
+                    font.weight: UI.Style.weightSemiBold
                     font.letterSpacing: -0.28
                     Accessible.role: Accessible.Heading
                 }

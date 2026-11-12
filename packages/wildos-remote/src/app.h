@@ -2,6 +2,7 @@
 
 #include <QObject>
 #include <QQmlEngine>
+#include <QQuickWindow>
 #include <QUrl>
 
 // What the home window asks of the rest of Remote: opening terminals, and
@@ -39,6 +40,11 @@ public:
     Q_INVOKABLE void sendKey(const QString &keyPath, const QString &hostId);
     Q_INVOKABLE void copyText(const QString &text);
     Q_INVOKABLE QString homePath() const;
+    // Full screen on the screen named, for All my monitors. Qt asks the
+    // compositor for full screen on the screen a window is already on,
+    // whatever screen it was given, so every monitor's window filled the
+    // first screen. False when the window or screen can't be found.
+    Q_INVOKABLE bool fullScreenOn(QQuickWindow *window, const QString &screenName);
 
     QUrl testScript() const;
     Q_INVOKABLE void testShot(const QString &name);

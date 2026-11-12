@@ -5,6 +5,11 @@
 #include <PolkitQt1/Subject>
 
 #include <QCoreApplication>
+#include <QDBusConnection>
+#include <QDBusObjectPath>
+#include <QDBusPendingCallWatcher>
+#include <QDBusPendingReply>
+#include <QFile>
 #include <QThread>
 
 #include <grp.h>
@@ -194,6 +199,9 @@ void Agent::begin(const Request &request)
     connect(thread, &QThread::finished, thread, &QObject::deleteLater);
     thread->start();
 
+    m_info.clear();
+    m_autoFinger = true;
+    checkFingerprint();
     startSession();
 }
 
@@ -201,31 +209,39 @@ void Agent::startSession()
 {
     dropSession();
     m_prompted = false;
+    m_listening = false;
+    m_fingerEnd = FingerEnd::None;
     if (m_people.isEmpty()) {
         setError(QStringLiteral("No account on this computer can allow this."));
         return;
     }
     const Person &who = m_people.at(m_person);
     m_session = new PolkitQt1::Agent::Session(PolkitQt1::UnixUserIdentity(who.uid), m_request.cookie, m_request.result, this);
-    connect(m_session, &PolkitQt1::Agent::Session::request, this, [this](const QString &, bool) {
+    connect(m_session, &PolkitQt1::Agent::Session::request, this, [this](const QString &, bool echo) {
         m_prompted = true;
+        m_promptEcho = echo;
         if (m_hasPending) {
             m_hasPending = false;
             m_session->setResponse(m_pending);
             m_pending.clear();
             m_prompted = false;
+        } else {
+            listen();
         }
     });
     connect(m_session, &PolkitQt1::Agent::Session::completed, this, &Agent::onCompleted);
     connect(m_session, &PolkitQt1::Agent::Session::showError, this, [this](const QString &text) {
-        setError(text.trimmed());
+        onMessage(text.trimmed(), true);
     });
     connect(m_session, &PolkitQt1::Agent::Session::showInfo, this, [this](const QString &text) {
-        setError(text.trimmed());
+        onMessage(text.trimmed(), false);
     });
     m_session->initiate();
 }
 
+// Deleting the session sends its helper SIGTERM (polkit's finalize), and
+// with it goes a pam_fprintd still waiting for a finger; fprintd releases
+// the reader when the helper's bus connection closes.
 void Agent::dropSession()
 {
     if (m_session) {
@@ -235,10 +251,143 @@ void Agent::dropSession()
     }
 }
 
+// Answers polkit's password question with an empty password, which the
+// wildos-fingerprint PAM profile takes as "use my finger", while leaving
+// the field free to type in.
+void Agent::listen()
+{
+    if (!m_session || !m_prompted || m_promptEcho || !m_autoFinger || !fingerprint() || m_busy || m_hasPending || m_waitSeconds > 0 || m_demo) {
+        return;
+    }
+    m_prompted = false;
+    m_listening = true;
+    m_fingerEnd = FingerEnd::None;
+    m_listenClock.start();
+    m_info = QStringLiteral("Touch the fingerprint reader, or type your password.");
+    m_session->setResponse(QString());
+    Q_EMIT stateChanged();
+}
+
+// A fresh session for a typed password; the one waiting on the reader goes.
+void Agent::stopListening()
+{
+    m_autoFinger = false;
+    if (!m_listening) {
+        return;
+    }
+    m_info.clear();
+    m_error.clear();
+    startSession();
+    Q_EMIT stateChanged();
+}
+
+void Agent::typing()
+{
+    if (m_active && !m_demo) {
+        stopListening();
+    }
+}
+
 void Agent::setError(const QString &text)
 {
     m_error = text;
+    m_info.clear();
     Q_EMIT stateChanged();
+}
+
+// pam_fprintd speaks for the reader: "Place your right index finger on the
+// fingerprint reader", "Swipe ... across", "Failed to match fingerprint",
+// "Verification timed out". Its asks are instructions, not errors, and its
+// words are fprintd's.
+void Agent::onMessage(const QString &text, bool error)
+{
+    if (!text.contains(QLatin1String("finger"), Qt::CaseInsensitive) && !text.contains(QLatin1String("Verification"))) {
+        setError(text);
+        return;
+    }
+    const bool swipe = text.contains(QLatin1String("swipe"), Qt::CaseInsensitive);
+    if (text.contains(QLatin1String("timed out"), Qt::CaseInsensitive)) {
+        m_fingerEnd = FingerEnd::TimedOut;
+        m_error = QStringLiteral("No finger was read in time. Type your password, or leave it empty and try again.");
+        m_info.clear();
+    } else if (text.contains(QLatin1String("match"), Qt::CaseInsensitive)) {
+        m_fingerEnd = FingerEnd::NoMatch;
+        m_error = QStringLiteral("That fingerprint wasn't recognised. Try again.");
+        m_info.clear();
+    } else if (!error) {
+        // After a finger that didn't match, pam_fprintd asks again at once;
+        // the mismatch stays on screen until the next touch.
+        m_info = m_listening ? (swipe ? QStringLiteral("Swipe your finger across the fingerprint reader, or type your password.")
+                                      : QStringLiteral("Touch the fingerprint reader, or type your password."))
+            : swipe ? QStringLiteral("Swipe your finger across the fingerprint reader.")
+                    : QStringLiteral("Touch the fingerprint reader.");
+    } else {
+        // The reader gave up (unplugged, or no touch in time).
+        m_fingerEnd = FingerEnd::Broken;
+        m_error = QStringLiteral("The fingerprint reader didn't answer. Type your password instead.");
+        m_info.clear();
+    }
+    Q_EMIT stateChanged();
+}
+
+// Only your own fingers can be looked up: fprintd asks polkit before it
+// tells anyone about another account's. A person chosen from the list who
+// is not you just types their password. Adding or removing a finger is
+// asked for while Settings holds the reader, so a finger can't answer that
+// one.
+// Settings > Accounts > Sign-in options' "Admin prompts" switch, the admin=
+// line fingerprint-turn also reads. Off, the PAM side turns the empty
+// password down, so listening for a finger would only cost a failed try.
+static bool fingerprintForAdmin()
+{
+    QFile conf(QStringLiteral("/etc/wildos/fingerprint.conf"));
+    if (!conf.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        return true;
+    }
+    bool on = true;
+    while (!conf.atEnd()) {
+        const QByteArray line = conf.readLine().trimmed();
+        const qsizetype equals = line.indexOf('=');
+        if (equals > 0 && line.left(equals).trimmed() == "admin") {
+            on = line.mid(equals + 1).trimmed() != "off";
+        }
+    }
+    return on;
+}
+
+void Agent::checkFingerprint()
+{
+    m_fingerprint = false;
+    Q_EMIT personChanged();
+    if (m_request.actionId.startsWith(QLatin1String("net.reactivated.fprint.")) || !fingerprintForAdmin()) {
+        return;
+    }
+    const QString service = QStringLiteral("net.reactivated.Fprint");
+    const QDBusMessage manager = QDBusMessage::createMethodCall(service, QStringLiteral("/net/reactivated/Fprint/Manager"),
+                                                                QStringLiteral("net.reactivated.Fprint.Manager"), QStringLiteral("GetDefaultDevice"));
+    auto watcher = new QDBusPendingCallWatcher(QDBusConnection::systemBus().asyncCall(manager, 5000), this);
+    const int serial = m_serial;
+    connect(watcher, &QDBusPendingCallWatcher::finished, this, [this, watcher, service, serial] {
+        watcher->deleteLater();
+        const QDBusPendingReply<QDBusObjectPath> device = *watcher;
+        if (device.isError() || serial != m_serial) {
+            return;
+        }
+        QDBusMessage list = QDBusMessage::createMethodCall(service, device.value().path(), QStringLiteral("net.reactivated.Fprint.Device"),
+                                                          QStringLiteral("ListEnrolledFingers"));
+        list << QString();
+        auto listed = new QDBusPendingCallWatcher(QDBusConnection::systemBus().asyncCall(list, 5000), this);
+        connect(listed, &QDBusPendingCallWatcher::finished, this, [this, listed, serial] {
+            listed->deleteLater();
+            const QDBusPendingReply<QStringList> fingers = *listed;
+            if (serial == m_serial && !fingers.isError() && !fingers.value().isEmpty()) {
+                m_fingerprint = true;
+                Q_EMIT personChanged();
+                // Polkit may have asked for the password already.
+                listen();
+            }
+        });
+    });
 }
 
 void Agent::onCompleted(bool gained)
@@ -253,9 +402,32 @@ void Agent::onCompleted(bool gained)
         finish();
         return;
     }
+    // A finger nobody was asked for is not a wrong password. No touch in
+    // time: listen again, unless the reader gave that answer at once,
+    // which would only spin. Fingers that didn't match after
+    // pam_fprintd's own tries, or a reader that failed: the password, or
+    // an empty one with Yes to try again.
+    if (m_listening) {
+        m_listening = false;
+        m_info.clear();
+        if (m_fingerEnd == FingerEnd::TimedOut && m_listenClock.elapsed() >= 5000) {
+            m_error.clear();
+        } else {
+            m_autoFinger = false;
+            if (m_fingerEnd == FingerEnd::NoMatch) {
+                m_error = QStringLiteral("That fingerprint wasn't recognised. Type your password, or leave it empty and select Yes to try again.");
+            } else if (m_fingerEnd == FingerEnd::TimedOut) {
+                m_error = QStringLiteral("The fingerprint reader didn't answer. Type your password instead.");
+            }
+        }
+        Q_EMIT stateChanged();
+        startSession();
+        return;
+    }
     ++m_failures;
     m_busy = false;
     m_hasPending = false;
+    m_info.clear();
     if (m_failures >= triesBeforeNo) {
         if (m_request.result) {
             m_request.result->setCompleted();
@@ -279,6 +451,8 @@ void Agent::onCompleted(bool gained)
 void Agent::finish()
 {
     dropSession();
+    m_listening = false;
+    m_autoFinger = false;
     m_wait.stop();
     m_active = false;
     m_busy = false;
@@ -302,6 +476,7 @@ void Agent::choose(int index)
     m_person = index;
     m_failures = 0;
     m_error.clear();
+    m_info.clear();
     Q_EMIT personChanged();
     Q_EMIT stateChanged();
     if (!m_demo) {
@@ -325,8 +500,17 @@ void Agent::submit(const QString &password)
         }
         return;
     }
+    // The finger is already being listened for; a typed password takes
+    // over from it.
+    if (m_listening) {
+        if (password.isEmpty()) {
+            return;
+        }
+        stopListening();
+    }
     m_busy = true;
     m_error.clear();
+    m_info.clear();
     Q_EMIT stateChanged();
     if (m_session && m_prompted) {
         m_prompted = false;

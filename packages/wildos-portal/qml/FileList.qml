@@ -118,7 +118,7 @@ FocusScope {
                     text: cell.label
                     size: 12
                     color: UI.Style.inkMuted
-                    font.weight: cell.sorted ? Font.Medium : Font.Normal
+                    font.weight: cell.sorted ? UI.Style.weightMedium : UI.Style.weightRegular
                 }
 
                 UI.Icon {

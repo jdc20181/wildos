@@ -104,7 +104,7 @@ QLinearGradient wlt()
 
 QFont font(double px, int weight = QFont::Normal)
 {
-    QFont f(QStringLiteral("Inter"));
+    QFont f(QStringLiteral("Albert Sans"));
     f.setPixelSize(int(std::lround(px)));
     f.setWeight(QFont::Weight(weight));
     return f;
@@ -327,13 +327,13 @@ QRectF LoadingView::buttonRect(Hit which, const QSizeF &size) const
 
 void LoadingView::paintTitleBar(QPainter &p, const QSizeF &size, double chipOpacity) const
 {
-    p.fillRect(QRectF(0, 0, size.width(), titleBar), rgba(6, 8, 20, 0.55));
+    p.fillRect(QRectF(0, 0, size.width(), titleBar), rgba(9, 11, 15, 0.55));
     double x = 14;
     if (!m_icon.isNull()) {
         m_icon.paint(&p, QRect(int(x), 11, 18, 18));
     }
     x += 18 + 10;
-    const QFont name = font(13, QFont::Medium);
+    const QFont name = font(13, 480);
     p.setFont(name);
     p.setPen(QColor(0xee, 0xf1, 0xf8));
     const double nameWidth = QFontMetricsF(name).horizontalAdvance(m_app);
@@ -493,7 +493,7 @@ void LoadingView::paint(QPainter &p, const QSizeF &size, bool background, bool f
     QPainterPath frame;
     frame.addRoundedRect(QRectF(QPointF(0, 0), size).adjusted(0.5, 0.5, -0.5, -0.5), 12, 12);
     if (background) {
-        p.fillPath(frame, rgba(16, 20, 38, 0.94));
+        p.fillPath(frame, rgba(23, 25, 29, 0.94));
     }
     p.save();
     p.setClipPath(frame);
@@ -510,7 +510,7 @@ void LoadingView::paint(QPainter &p, const QSizeF &size, bool background, bool f
         p.scale(1, ry / rx);
         QRadialGradient g(QPointF(0, 0), rx);
         g.setColorAt(0, rgba(61, 91, 201, 0.20));
-        g.setColorAt(0.6, rgba(16, 20, 38, 0));
+        g.setColorAt(0.6, rgba(23, 25, 29, 0));
         p.fillRect(QRectF(-rx, -rx, 2 * rx, 2 * rx), g);
         p.restore();
     }
@@ -535,7 +535,7 @@ void LoadingView::paint(QPainter &p, const QSizeF &size, bool background, bool f
     p.translate(-body.center());
 
     const bool isSlow = slow();
-    const QFont titleFont = font(22, QFont::Medium);
+    const QFont titleFont = font(22, 480);
     const QFont bodyFont = font(14);
     const double titleHeight = 27;
     double contentHeight = 150 - 40 + 26 + titleHeight + 10;

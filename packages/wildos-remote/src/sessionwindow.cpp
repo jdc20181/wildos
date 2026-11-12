@@ -29,7 +29,8 @@ namespace
 {
 constexpr int inset = 6;
 constexpr int grip = 5;
-const QColor terminalBackground(11, 15, 28);
+// Remote.colorscheme's background, so the frame and the terminal meet unseen.
+const QColor terminalBackground(18, 19, 23);
 }
 
 SessionTab::SessionTab(const QVariantMap &host, QObject *parent)

@@ -46,7 +46,7 @@ FocusScope {
         tint: UI.Style.glassOnWallpaperField
         borderColor: field.activeFocus && !pill.busy ? UI.Style.accentBorderStrong : UI.Style.borderOnWallpaperField
         radius: height / 2
-        blurRadius: 30
+        blurRadius: 64
     }
 
     T.TextField {
@@ -85,6 +85,7 @@ FocusScope {
             text: field.placeholderText
             color: field.placeholderTextColor
             font.family: UI.Style.fontFamily
+            font.letterSpacing: UI.Style.tracking(field.font.pixelSize)
             font.pixelSize: field.font.pixelSize
             elide: Text.ElideRight
         }

@@ -25,6 +25,14 @@ org.wildos.launchEnabled=true
 windowapertureEnabled=false
 org.wildos.peekfadeEnabled=true
 
+# Mica, as on Windows 11: the wallpaper behind glass is blurred until no shapes
+# show, only a soft gradient of its colours, under a mostly opaque tint
+# (WildOS.UI's Style). The contrast effect above adds Mica's slight lift in
+# saturation. KWin's noise would show as grain on the smooth gradient.
+[Effect-blur]
+BlurStrength=12
+NoiseStrength=0
+
 # The Wild OS window switcher, with a plain dim behind it instead of KWin
 # fading the other windows.
 [TabBox]

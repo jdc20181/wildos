@@ -35,7 +35,7 @@ Item {
         anchors.fill: parent
         backdrop: chip.backdrop
         tint: UI.Style.glassOnWallpaper
-        blurRadius: 24
+        blurRadius: 64
     }
 
     Row {

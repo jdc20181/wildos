@@ -1,0 +1,58 @@
+#!/bin/sh
+# Runs as root after systemd-coredump has recorded a crash (ExecStopPost of
+# systemd-coredump@.service, see wildos-report.conf). It leaves a short note
+# in the crashed program's account's runtime folder, which the account's
+# wildos-report-crash.path picks up to show "<App> closed unexpectedly".
+# The note holds the program's name and path, the signal and the time;
+# nothing from the program's memory. Notes live in /run/user, so they are
+# gone at sign-out.
+#
+#   report-crash-note UNIT        UNIT is systemd-coredump@<n>.service
+set -u
+
+unit=${1:-}
+case "$unit" in systemd-coredump@*.service) ;; *) exit 0 ;; esac
+
+fields=COREDUMP_UID,COREDUMP_GID,COREDUMP_PID,COREDUMP_COMM,COREDUMP_EXE,COREDUMP_SIGNAL_NAME,COREDUMP_TIMESTAMP
+record=
+tries=0
+while [ -z "$record" ] && [ "$tries" -lt 10 ]; do
+    record=$(journalctl --no-pager -q -o export --output-fields="$fields" -n 1 \
+        "_SYSTEMD_UNIT=$unit" MESSAGE_ID=fc2e22bc6ee647b6b90729ab34a250b1 2>/dev/null | tr -d '\r')
+    [ -n "$record" ] || sleep 0.2
+    tries=$((tries + 1))
+done
+[ -n "$record" ] || exit 0
+
+value() {
+    printf '%s\n' "$record" | sed -n "s/^$1=//p" | head -n 1
+}
+uid=$(value COREDUMP_UID)
+gid=$(value COREDUMP_GID)
+case "$uid$gid" in *[!0-9]*|'') exit 0 ;; esac
+# People's accounts only: system services have nobody to tell.
+[ "$uid" -ge 1000 ] && [ "$uid" -lt 60000 ] || exit 0
+[ -d "/run/user/$uid" ] || exit 0
+
+# The program's name comes from the program, so only plain characters pass.
+clean() {
+    printf '%s' "$1" | tr -cd 'A-Za-z0-9._+/ -' | cut -c1-200
+}
+comm=$(clean "$(value COREDUMP_COMM)")
+exe=$(clean "$(value COREDUMP_EXE)")
+signal=$(clean "$(value COREDUMP_SIGNAL_NAME)")
+pid=$(value COREDUMP_PID | tr -cd '0-9')
+stamp=$(value COREDUMP_TIMESTAMP | tr -cd '0-9')
+[ -n "$stamp" ] || stamp=$(date +%s%6N)
+name="$stamp-${pid:-0}"
+
+note=$(printf 'comm=%s\nexe=%s\nsignal=%s\npid=%s\ntime=%s\n' "$comm" "$exe" "$signal" "$pid" "$stamp")
+
+# Written as the account itself, so a link planted in its own folder can
+# never send root's write anywhere else.
+exec setpriv --reuid="$uid" --regid="$gid" --clear-groups -- sh -c '
+    umask 077
+    top="/run/user/$1/wildos-report"
+    mkdir -p "$top/crashes" || exit 0
+    printf "%s" "$3" > "$top/.$2" && mv -f "$top/.$2" "$top/crashes/$2.crash"
+' sh "$uid" "$name" "$note"

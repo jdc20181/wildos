@@ -67,7 +67,7 @@ Item {
             width: header.width - appIcon.width - header.spacing
             anchors.verticalCenter: parent.verticalCenter
             text: card.window ? card.window.caption : ""
-            font.weight: Font.Medium
+            font.weight: UI.Style.weightMedium
         }
     }
 

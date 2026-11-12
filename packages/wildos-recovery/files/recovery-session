@@ -1,0 +1,7 @@
+#!/bin/sh
+# The recovery system's session (wildos-live, wildos.mode=recovery): the
+# recovery app, alone in KWin. If it ever closes, it comes back, so the PC
+# is never left at an empty screen.
+until /usr/libexec/wildos/wildos-recovery; do
+    sleep 1
+done

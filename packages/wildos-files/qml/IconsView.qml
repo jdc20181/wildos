@@ -7,7 +7,7 @@ import WildOS.UI as UI
 
 // Every layout from the View menu except Details and Content, as on
 // Windows: extra large, large and medium icons (the design's 100 by 108
-// tiles with 58px icons and a 2px gap), small icons in rows, a list that
+// tiles with 58px icons and an 8px gap), small icons in rows, a list that
 // flows down in columns, and tiles with the type and size. This computer's
 // drives show as wide tiles with a space bar in Tiles.
 FocusScope {
@@ -97,8 +97,10 @@ FocusScope {
         width: parent.width - 28
         height: parent.height - y - (icons.flowDown ? 8 : 0)
         flow: icons.flowDown ? GridView.FlowTopToBottom : GridView.FlowLeftToRight
-        cellWidth: icons.tileWidth + 2
-        cellHeight: icons.tileHeight + 2
+        // 8 px between tiles, so a selected tile's highlight keeps clear of
+        // its neighbours.
+        cellWidth: icons.tileWidth + 8
+        cellHeight: icons.tileHeight + 8
         clip: true
         model: icons.folder
         boundsBehavior: Flickable.StopAtBounds

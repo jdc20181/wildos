@@ -116,8 +116,9 @@ WPage {
                     text: (page.windows ? qsTr("Windows") : qsTr("Other system")) + " " + page.gb(page.plan.otherSize || 0)
                     color: UI.Style.ink
                     font.family: UI.Style.fontFamily
+                    font.letterSpacing: UI.Style.tracking(12)
                     font.pixelSize: 12
-                    font.weight: Font.DemiBold
+                    font.weight: UI.Style.weightSemiBold
                 }
             }
             Rectangle {
@@ -135,8 +136,9 @@ WPage {
                     text: qsTr("Wild OS %1").arg(page.gb(page.plan.wildosSize || 0)) + (page.encrypted ? qsTr(", encrypted") : "")
                     color: UI.Style.textOnAccent
                     font.family: UI.Style.fontFamily
+                    font.letterSpacing: UI.Style.tracking(12)
                     font.pixelSize: 12
-                    font.weight: Font.DemiBold
+                    font.weight: UI.Style.weightSemiBold
                 }
             }
         }
@@ -184,6 +186,7 @@ WPage {
                             text: modelData.label
                             color: UI.Style.inkMuted
                             font.family: UI.Style.fontFamily
+                            font.letterSpacing: UI.Style.tracking(13)
                             font.pixelSize: 13
                         }
                         Text {
@@ -194,6 +197,7 @@ WPage {
                             textFormat: Text.StyledText
                             color: UI.Style.ink
                             font.family: UI.Style.fontFamily
+                            font.letterSpacing: UI.Style.tracking(14)
                             font.pixelSize: 14
                             wrapMode: Text.WordWrap
                         }
@@ -236,6 +240,7 @@ WPage {
                       : qsTr("Takes about 10 minutes. Keep the computer plugged in; you can keep using this trial while it installs.")
                 color: Qt.rgba(232 / 255, 236 / 255, 248 / 255, 0.85)
                 font.family: UI.Style.fontFamily
+                font.letterSpacing: UI.Style.tracking(13)
                 font.pixelSize: 13
                 lineHeight: 1.5
                 wrapMode: Text.WordWrap

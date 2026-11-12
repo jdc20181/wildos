@@ -69,7 +69,7 @@ Item {
         UI.Label {
             id: title
             width: parent.width
-            font.weight: Font.Medium
+            font.weight: UI.Style.weightMedium
             text: Helpers.withoutExtension(row.model.display)
         }
 

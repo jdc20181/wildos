@@ -47,9 +47,9 @@ TONES = {
         "green": ("#8fd6a8", None),
     },
     "light": {
-        "fg": ("#151b2c", None),
+        "fg": ("#1d1f23", None),
         "accent": ("#3563d8", None),
-        "muted": ("#151b2c", "0.66"),
+        "muted": ("#1d1f23", "0.66"),
         "red": ("#c5372c", None),
         "yellow": ("#9a6400", None),
         "green": ("#2f7a1f", None),
@@ -228,6 +228,19 @@ def render(root, size, tone, palette):
     return "<svg %s>%s</svg>\n" % (head, body)
 
 
+def app_icon(app, size):
+    """An app's tile icon, as drawn, at one size."""
+    path = os.path.join(HERE, "..", "data", "org.wildos.%s.svg" % app)
+    if not os.path.exists(path):
+        sys.exit("icons.txt: no app icon %s (%s)" % (app, path))
+    with open(path, encoding="utf-8") as f:
+        text = f.read()
+    width, height = size
+    head = re.sub(r'\s(width|height)="[^"]*"', "", text[:text.index(">") + 1])
+    head = head.replace("<svg ", '<svg width="%d" height="%d" ' % (width, height), 1)
+    return head + text[text.index(">") + 1:]
+
+
 def build(outdir):
     entries = read_mapping()
     sources = {}
@@ -236,6 +249,12 @@ def build(outdir):
         palette = TONES[theme]
         files = {}
         for target, icon, tone in entries:
+            if icon.startswith("app:"):
+                # A document's own app icon, in its colours (the Recent
+                # list and file type images): data/org.wildos.<app>.svg.
+                for path, size in outputs(target):
+                    files[path] = app_icon(icon[4:], size)
+                continue
             if icon not in sources:
                 sources[icon] = load_source(icon)
             for path, size in outputs(target):

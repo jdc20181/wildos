@@ -12,9 +12,10 @@
     "textOnAccent": "#0f1530",
     "accentText": "#11625b",
     "glass": {
-        "colour": "#fafbfe",
-        "alpha": 0.82
+        "colour": "#f3f3f3",
+        "alpha": 0.96
     },
+    "taskbarGlass": {"colour": "#eeeeee", "alpha": 0.94},
     "wallpaper": "/usr/share/wallpapers/WildOS-snowdonia",
     "moreWallpapers": [
         "/usr/share/wallpapers/WildOS-llandudno",

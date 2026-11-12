@@ -13,12 +13,14 @@ find_package(KF6WindowSystem REQUIRED)
 include(engine.cmake)
 pkg_check_modules(WAYLAND REQUIRED IMPORTED_TARGET wayland-client)
 pkg_get_variable(WAYLAND_PROTOCOLS wayland-protocols pkgdatadir)
+find_package(PlasmaWaylandProtocols REQUIRED)
 find_program(WAYLAND_SCANNER wayland-scanner REQUIRED)
 
-# Client code for the two protocols wayland.cpp speaks to the compositor.
+# Client code for the protocols wayland.cpp speaks to the compositor.
 set(PROTOCOLS
     ${WAYLAND_PROTOCOLS}/stable/xdg-shell/xdg-shell.xml
-    ${WAYLAND_PROTOCOLS}/staging/xdg-toplevel-icon/xdg-toplevel-icon-v1.xml)
+    ${WAYLAND_PROTOCOLS}/staging/xdg-toplevel-icon/xdg-toplevel-icon-v1.xml
+    ${PLASMA_WAYLAND_PROTOCOLS_DIR}/kde-output-device-v2.xml)
 set(PROTOCOL_SOURCES)
 foreach(xml ${PROTOCOLS})
     get_filename_component(name ${xml} NAME_WE)
@@ -42,6 +44,7 @@ qt_add_executable(wildos-rdp
     src/selftest.cpp src/selftest.h
     src/wayland.cpp src/wayland.h
     src/kwin.cpp src/kwin.h
+    src/screens.cpp src/screens.h
     ${PROTOCOL_SOURCES}
 )
 target_include_directories(wildos-rdp PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
@@ -56,3 +59,14 @@ target_link_libraries(wildos-rdp PRIVATE
 install(TARGETS wildos-rdp RUNTIME DESTINATION ${CMAKE_INSTALL_LIBEXECDIR}/wildos)
 # Puts each Windows app where it was last time; enabled by default.
 install(DIRECTORY kwin/org.wildos.rdp.place DESTINATION ${CMAKE_INSTALL_DATADIR}/kwin/scripts)
+
+# How Windows' monitors are laid out for this desktop's screens; runs in the
+# package build, needing no display.
+option(BUILD_TESTING "Build the tests" ON)
+if(BUILD_TESTING)
+    enable_testing()
+    find_package(Qt6 6.8 REQUIRED COMPONENTS Test)
+    qt_add_executable(monitors-test tests/monitors-test.cpp)
+    target_link_libraries(monitors-test PRIVATE Qt6::Test wildos-rdp-engine)
+    add_test(NAME monitors COMMAND monitors-test)
+endif()

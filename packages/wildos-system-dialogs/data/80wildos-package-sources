@@ -1,0 +1,3 @@
+// Keeps where each installed package version came from, for the permission
+// prompt, while apt's lists still say (wildos-system-dialogs).
+DPkg::Post-Invoke { "if [ -x /usr/libexec/wildos/record-package-sources ]; then /usr/libexec/wildos/record-package-sources || true; fi"; };

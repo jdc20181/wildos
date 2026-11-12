@@ -13,8 +13,10 @@ UI.AppWindow {
 
     property bool composing: false
     property bool showSettings: false
-    // Which tab the rail shows: "mail" or "calendar".
+    // Which tab the rail shows: mail, calendar, people or tasks.
     property string section: "mail"
+    readonly property string sectionName: section === "calendar" ? qsTr("Calendar") : section === "people" ? qsTr("People")
+        : section === "tasks" ? qsTr("Tasks") : qsTr("Mail")
 
     width: 1384
     height: 802
@@ -22,7 +24,7 @@ UI.AppWindow {
     // Tall enough for every step of adding an account without scrolling.
     minimumHeight: 640
     visible: true
-    title: section === "calendar" ? qsTr("Calendar") : qsTr("Mail")
+    title: sectionName
 
     // From main.cpp: Calendar's own launcher, or a reminder's Open.
     function showCalendar(key, day) {
@@ -30,6 +32,27 @@ UI.AppWindow {
         if (key && key.length > 0) {
             Qt.callLater(() => calendarLoader.item.showEvent(key, day));
         }
+    }
+    // From main.cpp: People or Tasks from the command line, or a task's
+    // reminder.
+    function showSection(name) {
+        if (["mail", "calendar", "people", "tasks"].indexOf(name) >= 0) {
+            section = name;
+        }
+    }
+    // People's and Tasks' accounts are Calendar's.
+    function manageAccounts() {
+        section = "calendar";
+        Qt.callLater(() => calendarLoader.item.showAccounts());
+    }
+    // A message from People's recent email or a flagged-email task.
+    function showMessage(key) {
+        const parts = key.split("\x1f");
+        section = "mail";
+        showSettings = false;
+        composing = false;
+        MailEngine.openFolder(parts[0], parts[1]);
+        MailEngine.selected = key;
     }
     // Mail's Google accounts, for Calendar's bar offering their calendars.
     readonly property var googleAccounts: MailEngine.accounts.filter(a => a.auth === "google")
@@ -227,7 +250,7 @@ UI.AppWindow {
         UI.TitleBar {
             id: titleBar
             Layout.fillWidth: true
-            title: window.section === "calendar" ? qsTr("Calendar") : qsTr("Mail")
+            title: window.sectionName
             tinted: true
             frame: window.frame
 
@@ -239,12 +262,17 @@ UI.AppWindow {
                     anchors.centerIn: parent
                     width: Math.min(520, parent.width - 160)
                     height: 32
-                    placeholderText: window.section === "calendar" ? qsTr("Search events") : qsTr("Search mail and people")
+                    placeholderText: window.section === "calendar" ? qsTr("Search events") : window.section === "people" ? qsTr("Search people")
+                        : window.section === "tasks" ? qsTr("Search tasks") : qsTr("Search mail and people")
                     onTextChanged: searchTimer.restart()
                     onEscapePressed: {
                         text = "";
                         if (window.section === "calendar") {
                             calendarLoader.item.clearSearch();
+                        } else if (window.section === "people") {
+                            peopleLoader.item.clearSearch();
+                        } else if (window.section === "tasks") {
+                            tasksLoader.item.clearSearch();
                         } else {
                             MailEngine.clearSearch();
                         }
@@ -253,6 +281,10 @@ UI.AppWindow {
                         searchTimer.stop();
                         if (window.section === "calendar") {
                             calendarLoader.item.search(text);
+                        } else if (window.section === "people") {
+                            peopleLoader.item.search(text);
+                        } else if (window.section === "tasks") {
+                            tasksLoader.item.search(text);
                         } else {
                             MailEngine.search(text);
                         }
@@ -264,6 +296,10 @@ UI.AppWindow {
                     onTriggered: {
                         if (window.section === "calendar") {
                             calendarLoader.item.search(search.text);
+                        } else if (window.section === "people") {
+                            peopleLoader.item.search(search.text);
+                        } else if (window.section === "tasks") {
+                            tasksLoader.item.search(search.text);
                         } else if (search.text.trim().length > 0) {
                             MailEngine.search(search.text);
                         } else {
@@ -280,6 +316,10 @@ UI.AppWindow {
                     onClicked: {
                         if (window.section === "calendar") {
                             calendarLoader.item.toggleSettings();
+                            return;
+                        }
+                        if (window.section === "people" || window.section === "tasks") {
+                            window.manageAccounts();
                             return;
                         }
                         window.composing = false;
@@ -386,6 +426,52 @@ UI.AppWindow {
                 }
             }
 
+            // People and Tasks, made the first time their tabs are chosen.
+            Loader {
+                id: peopleLoader
+                active: window.section === "people" || item !== null
+                visible: window.section === "people"
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                sourceComponent: PeoplePage {
+                    mailAccounts: window.googleAccounts
+                    onAddGoogleAccount: function (email) {
+                        window.calendarSignIn = email;
+                        GoogleSignIn.startCalendar(email);
+                    }
+                    onEmailTo: function (address) {
+                        window.section = "mail";
+                        window.compose({ to: [address] });
+                    }
+                    onNewEventWith: function (address) {
+                        window.section = "calendar";
+                        Qt.callLater(() => calendarLoader.item.newEvent(address ? { attendees: [address] } : {}));
+                    }
+                    onOpenMessage: function (key) {
+                        window.showMessage(key);
+                    }
+                    onShareByEmail: function (file, name) {
+                        window.section = "mail";
+                        window.compose({ subject: name });
+                        composePane.composer.addAttachment(file);
+                    }
+                    onManageAccounts: window.manageAccounts()
+                }
+            }
+            Loader {
+                id: tasksLoader
+                active: window.section === "tasks" || item !== null
+                visible: window.section === "tasks"
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                sourceComponent: TasksPage {
+                    onOpenMessage: function (key) {
+                        window.showMessage(key);
+                    }
+                    onManageAccounts: window.manageAccounts()
+                }
+            }
+
             ColumnLayout {
                 visible: window.section === "mail"
                 Layout.fillWidth: true
@@ -424,7 +510,7 @@ UI.AppWindow {
                                     anchors.centerIn: parent
                                     text: tab.modelData.name
                                     size: 13
-                                    font.weight: tab.active ? Font.DemiBold : Font.Normal
+                                    font.weight: tab.active ? UI.Style.weightSemiBold : UI.Style.weightRegular
                                     color: tab.active ? UI.Style.ink : UI.Style.inkMuted
                                 }
                                 Rectangle {
@@ -568,6 +654,7 @@ UI.AppWindow {
                                 iconOnly: true
                                 iconName: "refresh"
                                 tip: qsTr("Check for new mail")
+                                spinning: MailEngine.syncing
                                 onClicked: MailEngine.refresh()
                             }
                         }
@@ -617,6 +704,11 @@ UI.AppWindow {
                                 text: qsTr("Keyboard shortcuts")
                                 iconName: "font"
                                 onClicked: shortcutsDialog.open()
+                            }
+                            CommandButton {
+                                text: qsTr("Report a problem")
+                                iconName: "warning"
+                                onClicked: Qt.openUrlExternally("wildos-report:mail")
                             }
                             CommandButton {
                                 text: qsTr("Send feedback")
@@ -798,13 +890,13 @@ UI.AppWindow {
                             name: "mail"
                             size: 56
                             strokeWidth: 1.2
-                            color: UI.Style.accent
+                            color: UI.Style.iconMuted
                         }
                         UI.Label {
                             Layout.alignment: Qt.AlignHCenter
                             text: qsTr("Bring your mail to Wild OS")
                             size: 22
-                            font.weight: Font.DemiBold
+                            font.weight: UI.Style.weightSemiBold
                         }
                         UI.Label {
                             Layout.fillWidth: true

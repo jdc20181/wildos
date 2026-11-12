@@ -133,6 +133,10 @@ Item {
                 dialog.error = qsTr("Outlook and Microsoft 365 accounts need Microsoft's own sign-in, which is coming in an update.");
                 return;
             }
+            if (found.provider === "proton") {
+                dialog.error = qsTr("Proton Mail only lets other mail apps in through Proton Mail Bridge, which needs a paid Proton plan. Mail can't use Bridge yet, so read Proton mail in your browser for now.");
+                return;
+            }
             dialog.settings = found;
             if (found.provider === "gmail") {
                 dialog.startGoogle();
@@ -197,7 +201,7 @@ Item {
                         : dialog.step === "details" ? qsTr("You're signed in")
                         : qsTr("You're all set")
                     size: 22
-                    font.weight: Font.DemiBold
+                    font.weight: UI.Style.weightSemiBold
                     wrapMode: Text.WordWrap
                 }
 
@@ -217,7 +221,7 @@ Item {
                     UI.Label {
                         text: qsTr("Email address")
                         size: 13
-                        font.weight: Font.Medium
+                        font.weight: UI.Style.weightMedium
                     }
                     UI.TextField {
                         id: email
@@ -297,7 +301,7 @@ Item {
                                     Layout.fillWidth: true
                                     text: tile.modelData.name
                                     size: 13
-                                    font.weight: Font.DemiBold
+                                    font.weight: UI.Style.weightSemiBold
                                     elide: Text.ElideRight
                                 }
                                 UI.Label {
@@ -351,7 +355,7 @@ Item {
                                     Layout.fillWidth: true
                                     text: email.text.trim()
                                     size: 13
-                                    font.weight: Font.DemiBold
+                                    font.weight: UI.Style.weightSemiBold
                                     elide: Text.ElideRight
                                 }
                                 UI.Label {
@@ -412,7 +416,7 @@ Item {
                     UI.Label {
                         text: dialog.settings.provider === "other" ? qsTr("Password") : qsTr("App password")
                         size: 13
-                        font.weight: Font.Medium
+                        font.weight: UI.Style.weightMedium
                     }
                     UI.TextField {
                         id: password
@@ -466,7 +470,7 @@ Item {
                         Layout.topMargin: 6
                         text: qsTr("Incoming mail (IMAP)")
                         size: 13
-                        font.weight: Font.DemiBold
+                        font.weight: UI.Style.weightSemiBold
                     }
                     UI.TextField {
                         id: imapHost
@@ -489,7 +493,7 @@ Item {
                         Layout.topMargin: 6
                         text: qsTr("Outgoing mail (SMTP)")
                         size: 13
-                        font.weight: Font.DemiBold
+                        font.weight: UI.Style.weightSemiBold
                     }
                     UI.TextField {
                         id: smtpHost
@@ -520,12 +524,12 @@ Item {
                         UI.Label {
                             text: qsTr("Username")
                             size: 13
-                            font.weight: Font.DemiBold
+                            font.weight: UI.Style.weightSemiBold
                         }
                         UI.Label {
                             text: qsTr("Password")
                             size: 13
-                            font.weight: Font.DemiBold
+                            font.weight: UI.Style.weightSemiBold
                         }
                         UI.TextField {
                             id: user
@@ -565,7 +569,7 @@ Item {
                     UI.Label {
                         text: qsTr("Your name, as people see it")
                         size: 13
-                        font.weight: Font.Medium
+                        font.weight: UI.Style.weightMedium
                     }
                     UI.TextField {
                         id: fullName
@@ -574,7 +578,7 @@ Item {
                     UI.Label {
                         text: qsTr("What to call this account in Mail")
                         size: 13
-                        font.weight: Font.Medium
+                        font.weight: UI.Style.weightMedium
                     }
                     UI.TextField {
                         id: accountName

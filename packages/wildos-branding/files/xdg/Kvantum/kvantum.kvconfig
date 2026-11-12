@@ -1,2 +1,6 @@
 [General]
 theme=WildOS
+
+[Applications]
+# Write and Tables, whose ribbon has denser buttons and drop-downs.
+WildOSOffice=soffice.bin

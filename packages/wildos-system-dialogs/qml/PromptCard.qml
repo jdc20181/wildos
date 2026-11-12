@@ -6,7 +6,7 @@ import WildOS.UI as UI
 // One system prompt as SystemPrompts.dc draws them: dialog glass at radius
 // 14 with a 0.12 edge and the 0 30px 80px shadow; a 40px picture beside a
 // 16px title and a 13px line or two (20 / 22 padding, 16 apart); a footer
-// band (rgba(6,8,20,0.18), hairline above, 12 / 22 padding) with the
+// band (rgba(9,11,15,0.18), hairline above, 12 / 22 padding) with the
 // buttons at the right, the safe or main choice last.
 Item {
     id: card
@@ -65,7 +65,7 @@ Item {
                     Layout.fillWidth: true
                     text: card.title
                     size: 16
-                    font.weight: Font.DemiBold
+                    font.weight: UI.Style.weightSemiBold
                     wrapMode: Text.Wrap
                     elide: Text.ElideNone
                     Accessible.role: Accessible.Heading

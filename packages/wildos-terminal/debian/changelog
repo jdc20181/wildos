@@ -1,3 +1,10 @@
+wildos-terminal (0.1.1) trixie; urgency=medium
+
+  * No navy left: surfaces, glass, shadows and the logo tile use the
+    same neutral greys as the rest of Wild OS.
+
+ -- Wild OS Developers <dev@wildos.io>  Wed, 11 Nov 2026 22:40:26 +0000
+
 wildos-terminal (0.1.0) trixie; urgency=medium
 
   * Initial release.

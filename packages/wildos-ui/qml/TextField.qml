@@ -34,10 +34,11 @@ T.TextField {
     rightPadding: (large ? 14 : 12) + (trailingRow.width > 0 ? trailingRow.width + 6 : 0)
     verticalAlignment: TextInput.AlignVCenter
     color: Style.inkField
-    selectionColor: Style.accentSelected
+    selectionColor: Style.textSelection
     selectedTextColor: Style.ink
     placeholderTextColor: Style.inkPlaceholder
     font.family: Style.fontFamily
+    font.letterSpacing: Style.tracking(Style.px(large ? 14 : 13))
     font.pixelSize: Style.px(large ? 14 : 13)
     echoMode: revealable && !revealed ? TextInput.Password : TextInput.Normal
     passwordCharacter: "•"

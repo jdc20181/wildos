@@ -39,7 +39,7 @@ T.AbstractButton {
             x: 14
             anchors.verticalCenter: parent.verticalCenter
             name: link.iconName
-            size: 22
+            size: 20
             strokeWidth: 1.8
             color: link.iconColor
         }
@@ -56,7 +56,8 @@ T.AbstractButton {
             UI.Label {
                 width: parent.width
                 text: link.title
-                font.weight: Font.Medium
+                size: 13.5
+                font.weight: UI.Style.weightSemiBold
             }
 
             UI.Label {

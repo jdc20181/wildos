@@ -1,3 +1,98 @@
+wildos-desktop (0.1.14) trixie; urgency=medium
+
+  * Depend on wildos-recovery: restore points, start-up recovery and
+    Reset Wild OS.
+
+ -- Wild OS Developers <dev@wildos.io>  Thu, 12 Nov 2026 01:00:00 +0000
+
+wildos-desktop (0.1.13) trixie; urgency=medium
+
+  * Depend on wildos-backup, Backup, encrypted backups of your files to
+    your own drive.
+
+ -- Wild OS Developers <dev@wildos.io>  Thu, 12 Nov 2026 02:19:30 +0000
+
+wildos-desktop (0.1.12) trixie; urgency=medium
+
+  * Depend on wildos-voice, Voice, the new voice recorder.
+
+ -- Wild OS Developers <dev@wildos.io>  Thu, 12 Nov 2026 00:20:00 +0000
+
+wildos-desktop (0.1.11) trixie; urgency=medium
+
+  * Depend on wildos-report, Report a problem.
+
+ -- Wild OS Developers <dev@wildos.io>  Thu, 12 Nov 2026 00:10:00 +0000
+
+wildos-desktop (0.1.10) trixie; urgency=medium
+
+  * Depend on wildos-archive, Archive, the new archive manager, and no
+    longer recommend Ark, which it takes over from.
+
+ -- Wild OS Developers <dev@wildos.io>  Wed, 11 Nov 2026 23:02:55 +0000
+
+wildos-desktop (0.1.9) trixie; urgency=medium
+
+  * No navy left: surfaces, glass, shadows and the logo tile use the
+    same neutral greys as the rest of Wild OS.
+
+ -- Wild OS Developers <dev@wildos.io>  Wed, 11 Nov 2026 22:40:26 +0000
+
+wildos-desktop (0.1.8) trixie; urgency=medium
+
+  * Depend on wildos-videos, Videos, the new video player.
+
+ -- Wild OS Developers <dev@wildos.io>  Wed, 11 Nov 2026 23:30:00 +0000
+
+wildos-desktop (0.1.7) trixie; urgency=medium
+
+  * Fingerprint sign-in follows the two switches in Settings > Accounts >
+    Sign-in options, kept in /etc/wildos/fingerprint.conf: "Sign in and
+    unlock" for the sign-in and lock screens, "Admin prompts" for sudo
+    and administrator prompts. With a switch off, only the password works
+    there; the password always works everywhere.
+
+ -- Wild OS Developers <dev@wildos.io>  Wed, 11 Nov 2026 23:00:00 +0000
+
+wildos-desktop (0.1.6) trixie; urgency=medium
+
+  * Depend on wildos-music, Music, the new music player.
+
+ -- Wild OS Developers <dev@wildos.io>  Wed, 11 Nov 2026 22:00:00 +0000
+
+wildos-desktop (0.1.5) trixie; urgency=medium
+
+  * Depend on wildos-notes, Notes, the new notes app.
+
+ -- Wild OS Developers <dev@wildos.io>  Wed, 11 Nov 2026 20:00:00 +0000
+
+wildos-desktop (0.1.4) trixie; urgency=medium
+
+  * Fingerprint readers work: fprintd and its PAM module come with the
+    desktop. With a finger enrolled, the lock screen unlocks with a touch,
+    and the sign-in screen, sudo and administrator prompts take an empty
+    password as "use my finger" (pam-configs/wildos-fingerprint and
+    fingerprint-turn). A typed password goes through the usual checks
+    untouched, so a broken reader never locks anyone out, and a locked
+    account stays locked.
+  * /etc/pam.d/kde-fingerprint without pam_kwallet5, which asked for a
+    password nobody could type and held the unlock after a good touch.
+
+ -- Wild OS Developers <dev@wildos.io>  Wed, 11 Nov 2026 18:30:00 +0000
+
+wildos-desktop (0.1.3) trixie; urgency=medium
+
+  * Depend on wildos-capture, Capture, which now takes screenshots and
+    recordings on Print Screen in place of the tool in wildos-overlays.
+
+ -- Wild OS Developers <dev@wildos.io>  Wed, 11 Nov 2026 20:00:00 +0000
+
+wildos-desktop (0.1.2) trixie; urgency=medium
+
+  * Depend on wildos-pdf, PDF, which opens PDFs from now on.
+
+ -- Wild OS Developers <dev@wildos.io>  Wed, 11 Nov 2026 18:00:00 +0000
+
 wildos-desktop (0.1.1) trixie; urgency=medium
 
   * Depend on libcanberra-pulse, so the start-up sound plays through

@@ -230,7 +230,8 @@ Item {
     Rectangle {
         id: fill
         anchors.fill: parent
-        radius: Style.buttonRadius
+        anchors.margins: Style.highlightInset
+        radius: Style.highlightRadius
         color: task.pressed ? Style.pressed
              : task.hovered || task.menuOpen || task.dropTarget ? (task.isActive ? Style.focusedHover : Style.hover)
              : task.demandsAttention ? Style.attention
@@ -246,7 +247,8 @@ Item {
     Rectangle {
         id: glow
         anchors.fill: parent
-        radius: Style.buttonRadius
+        anchors.margins: Style.highlightInset
+        radius: Style.highlightRadius
         color: Style.startingGlow
         opacity: 0
         visible: task.starting && !task.reducedMotion
@@ -364,8 +366,9 @@ Item {
             text: !task.smartLauncher ? "" : task.smartLauncher.count > 99 ? "99+" : String(task.smartLauncher.count)
             color: Style.textOnAccent
             font.family: Style.fontFamily
+            font.letterSpacing: Style.tracking(Style.px(10))
             font.pixelSize: Style.px(10)
-            font.weight: Font.DemiBold
+            font.weight: UI.Style.weightSemiBold
         }
     }
 

@@ -1,0 +1,15 @@
+{
+    "KPlugin": {
+        "Authors": [{ "Email": "dev@wildos.io", "Name": "Wild OS" }],
+        "Category": "System Information",
+        "Description": "Shows whether updates are waiting, and installs them",
+        "Icon": "system-software-update",
+        "Id": "org.wildos.updates",
+        "License": "GPL-3.0-or-later",
+        "Name": "Updates",
+        "Version": "0.1.0",
+        "Website": "https://wildos.io"
+    },
+    "KPackageStructure": "Plasma/Applet",
+    "X-Plasma-API-Minimum-Version": "6.0"
+}

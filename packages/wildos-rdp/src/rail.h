@@ -12,6 +12,7 @@
 #include <QPointer>
 #include <QTimer>
 
+class QScreen;
 class RailWindow;
 
 // The windows of the one RemoteApp session: one RailWindow per Windows
@@ -25,9 +26,31 @@ public:
     Rail(Client *client, double scale, QObject *parent = nullptr);
     ~Rail() override;
 
-    // The scale Windows draws at: Windows' pixels per desktop unit.
+    // The scale Windows draws at on its primary monitor: Windows' pixels
+    // per desktop unit, for anything not yet on a monitor.
     double scale() const { return m_scale; }
     void setScale(double scale) { m_scale = scale; }
+
+    // Windows' monitors as Windows has them, the primary first.
+    const QList<Monitor> &layout() const { return m_layout; }
+    void setLayout(const QList<Monitor> &layout) { m_layout = layout; }
+    // The screens changed: Windows is given their new layout, and every
+    // window goes to the monitor of the screen it is on now.
+    void relayout(const QList<Monitor> &layout);
+    // The monitor for a screen here; -1 when Windows has none for it (a
+    // screen plugged in while Windows could not be told).
+    int monitorFor(const QScreen *screen) const;
+    // Whether Windows has a monitor for exactly the screens there are now.
+    // Not while a screen just went or came and the new layout has yet to
+    // reach Windows: a window moved then lands in a layout Windows is about
+    // to replace, and is not rescaled for its new monitor.
+    bool layoutCurrent() const;
+    // The scale Windows draws a window at, by the monitor it is on there.
+    double scaleFor(const QRect &frame) const;
+    double scaleForScreen(const QScreen *screen) const;
+    // The pointer is over a window Windows draws at this scale; its
+    // pictures of the pointer are at that scale too.
+    void pointerOver(double scale);
 
     // Shows a loading window for an app, at once or after `delayMs` if the
     // app has not opened by then. `program` is the app's program (a Windows
@@ -131,6 +154,13 @@ private:
 
     Client *m_client;
     double m_scale;
+    QList<Monitor> m_layout;
+    // The layout for the screens now, when Windows has not taken it yet.
+    QList<Monitor> m_wanted;
+    double m_pointerScale = 0;
+    QImage m_pointerImage;
+    QPoint m_pointerHotspot;
+    void setPointer();
     QHash<quint32, RailWindow *> m_windows;
     // Windows' windows that are known but not on screen (hidden, or a
     // popup still without a window to belong to).

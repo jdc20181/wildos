@@ -1,7 +1,7 @@
 #!/usr/bin/make -f
 
 MCS = mcs -langversion:5 -target:winexe -platform:anycpu -optimize+ -warnaserror+ \
-	-r:System.ServiceProcess.dll -r:System.Core.dll
+	-r:System.ServiceProcess.dll -r:System.Core.dll -r:System.Xml.dll
 
 %:
 	dh $@

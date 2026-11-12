@@ -2,7 +2,7 @@
 """Draws the desktop theme's popup frame, desktoptheme/dialogs/background.svg.
 
 Start, the flyouts and every Plasma popup sit on this frame: the design's
-panel glass rgba(16,20,38,0.76) with a 1px edge at white 0.12 and 20px
+panel glass, Mica rgba(35,37,41,0.96), with a 1px edge at white 0.093 and 20px
 corners, plus the shadow the design gives flyouts. Plasma hands the
 "shadow-*" pieces to KWin, which draws them around the popup; each piece
 leaves the popup's own shape clear so the shadow never shows through the
@@ -16,14 +16,14 @@ import os
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 RADIUS = 20
-GLASS = "rgb(16,20,38)"
-GLASS_ALPHA = 0.76
-EDGE_ALPHA = 0.12
-# The design's flyout shadow is 0 40px 100px rgba(4,8,24,0.55). KWin draws
+GLASS = "rgb(35,37,41)"
+GLASS_ALPHA = 0.96
+EDGE_ALPHA = 0.093
+# The design's flyout shadow is 0 40px 100px rgba(10,12,16,0.55). KWin draws
 # a shadow on all four sides at one size, so this keeps its softness and
 # depth over a 40px reach.
 SHADOW = 40
-SHADOW_COLOUR = "rgb(4,8,24)"
+SHADOW_COLOUR = "rgb(10,12,16)"
 SHADOW_ALPHA = 0.30
 RINGS = 20
 

@@ -52,7 +52,7 @@ Rectangle {
             Layout.alignment: Qt.AlignHCenter
             text: qsTr("Select a message to read")
             size: 15
-            font.weight: Font.DemiBold
+            font.weight: UI.Style.weightSemiBold
         }
         UI.Label {
             Layout.alignment: Qt.AlignHCenter
@@ -78,7 +78,7 @@ Rectangle {
             Layout.alignment: Qt.AlignHCenter
             text: qsTr("This message couldn't be opened")
             size: 15
-            font.weight: Font.DemiBold
+            font.weight: UI.Style.weightSemiBold
         }
         UI.Label {
             Layout.fillWidth: true
@@ -125,7 +125,7 @@ Rectangle {
                     Layout.fillWidth: true
                     text: message.subject.length > 0 ? message.subject : qsTr("(No subject)")
                     size: 19
-                    font.weight: Font.DemiBold
+                    font.weight: UI.Style.weightSemiBold
                     wrapMode: Text.WordWrap
                 }
                 Rectangle {
@@ -185,7 +185,7 @@ Rectangle {
                             Layout.fillWidth: true
                             text: message.fromName
                             size: 14
-                            font.weight: Font.DemiBold
+                            font.weight: UI.Style.weightSemiBold
                             elide: Text.ElideRight
 
                             UI.Tooltip {

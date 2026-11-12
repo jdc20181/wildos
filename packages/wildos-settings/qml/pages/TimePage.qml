@@ -30,7 +30,7 @@ PageScroll {
             UI.Label {
                 text: Format.time(page.now)
                 size: 40
-                font.weight: Font.Light
+                font.weight: UI.Style.weightLight
             }
 
             ColumnLayout {
@@ -41,7 +41,7 @@ PageScroll {
                     Layout.fillWidth: true
                     text: Format.longDate(page.now)
                     size: 15
-                    font.weight: Font.DemiBold
+                    font.weight: UI.Style.weightSemiBold
                 }
 
                 UI.Label {

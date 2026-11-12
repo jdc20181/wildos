@@ -87,6 +87,14 @@ FocusScope {
         }
     }
 
+    // A hot corner or gesture opened Start for its app list.
+    function openRequestedView(): void {
+        if (launcher.openAtAllApps) {
+            launcher.openAtAllApps = false;
+            showAllApps();
+        }
+    }
+
     function showHome(): void {
         view = "home";
         if (Nav.keyboard) {
@@ -251,6 +259,7 @@ FocusScope {
             if (menu.launcher.expanded) {
                 menu.centrePopup();
                 menu.reset();
+                menu.openRequestedView();
             } else {
                 powerMenu.close();
                 contextMenu.close();
@@ -502,5 +511,6 @@ FocusScope {
     Component.onCompleted: {
         centrePopup();
         reset();
+        openRequestedView();
     }
 }

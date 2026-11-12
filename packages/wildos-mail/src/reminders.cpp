@@ -105,12 +105,25 @@ void Reminders::show(const EReminderData *data)
     const bool allDay = dtstart && i_cal_time_is_date(dtstart);
     g_clear_object(&dtstart);
 
-    QString body = allDay ? tr("All day") : tr("%1 to %2").arg(Formats::time(s), Formats::time(e));
-    if (s.date() != QDate::currentDate()) {
-        body = Formats::shortDayAndMonth(s.date()) + QStringLiteral(", ") + body;
-    }
-    if (!location.isEmpty()) {
-        body += QStringLiteral(", ") + location;
+    // A task's reminder (Tasks' Remind me) is at a time of its own, not
+    // before a start, so it says when the task is due instead.
+    const bool task = e_cal_component_get_vtype(comp) == E_CAL_COMPONENT_TODO;
+    QString body;
+    if (task) {
+        ICalTime *due = i_cal_component_get_due(icomp);
+        if (due && !i_cal_time_is_null_time(due)) {
+            const QDate d(i_cal_time_get_year(due), i_cal_time_get_month(due), i_cal_time_get_day(due));
+            body = d == QDate::currentDate() ? tr("Due today") : tr("Due %1").arg(Formats::shortDayAndMonth(d));
+        }
+        g_clear_object(&due);
+    } else {
+        body = allDay ? tr("All day") : tr("%1 to %2").arg(Formats::time(s), Formats::time(e));
+        if (s.date() != QDate::currentDate()) {
+            body = Formats::shortDayAndMonth(s.date()) + QStringLiteral(", ") + body;
+        }
+        if (!location.isEmpty()) {
+            body += QStringLiteral(", ") + location;
+        }
     }
 
     QDBusMessage call = QDBusMessage::createMethodCall(service, path, service, QStringLiteral("Notify"));
@@ -118,14 +131,14 @@ void Reminders::show(const EReminderData *data)
                                  QStringLiteral("snooze"), tr("Snooze for 5 minutes"),
                                  QStringLiteral("dismiss"), tr("Dismiss")};
     const QVariantMap hints = {
-        {QStringLiteral("desktop-entry"), QStringLiteral("org.wildos.calendar")},
+        {QStringLiteral("desktop-entry"), task ? QStringLiteral("org.wildos.mail") : QStringLiteral("org.wildos.calendar")},
         {QStringLiteral("category"), QStringLiteral("x-wildos.calendar.reminder")},
         {QStringLiteral("resident"), true},
         {QStringLiteral("urgency"), QVariant::fromValue<uchar>(1)},
     };
     // "Calendar  in 5 minutes" over the event, as the board has it.
-    const QString heading = allDay ? title : tr("%1, %2").arg(title, whenText(start));
-    call << tr("Calendar") << uint(0) << QStringLiteral("org.wildos.calendar") << heading << body.toHtmlEscaped() << actions << hints << int(0);
+    const QString heading = allDay || task ? title : tr("%1, %2").arg(title, whenText(start));
+    call << (task ? tr("Tasks") : tr("Calendar")) << uint(0) << (task ? QStringLiteral("org.wildos.mail") : QStringLiteral("org.wildos.calendar")) << heading << body.toHtmlEscaped() << actions << hints << int(0);
     EReminderData *copy = e_reminder_data_copy(data);
     auto *watcher = new QDBusPendingCallWatcher(QDBusConnection::sessionBus().asyncCall(call), this);
     connect(watcher, &QDBusPendingCallWatcher::finished, this, [this, watcher, copy]() {
@@ -159,8 +172,13 @@ void Reminders::onAction(uint id, const QString &action)
         const ECalComponentAlarmInstance *instance = e_reminder_data_get_instance(rd);
         const QString uid = str(e_cal_component_get_uid(comp));
         const qint64 start = instance ? e_cal_component_alarm_instance_get_occur_start(instance) : 0;
+        const bool task = comp && e_cal_component_get_vtype(comp) == E_CAL_COMPONENT_TODO;
         // Opening it counts as having seen it.
         e_reminder_watcher_dismiss_sync(m_watcher, rd, nullptr, nullptr);
+        if (task) {
+            QProcess::startDetached(QStringLiteral("wildos-mail"), {QStringLiteral("--tasks")});
+            return;
+        }
         QProcess::startDetached(QStringLiteral("wildos-calendar"),
                                 {QStringLiteral("--event"), str(e_reminder_data_get_source_uid(rd)) + QChar(0x1f) + uid,
                                  QStringLiteral("--day"), QDateTime::fromSecsSinceEpoch(start).date().toString(Qt::ISODate)});

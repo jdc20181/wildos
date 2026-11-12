@@ -1,0 +1,169 @@
+Description: Wild OS status bars for Write and Tables
+ The status bars as on the design boards. Write shows the page, the word
+ and character count, the paragraph style at the cursor (a new field) and
+ the language, packed on the left, and the zoom on the right. Tables shows
+ the sheet, the language and the figures for the selection on the left,
+ the sum first and set apart by space rather than semicolons, and the
+ zoom on the right. In English the paragraph style field uses the style
+ gallery's short names (Body text, Quote).
+Author: Wild OS Developers <dev@wildos.io>
+Forwarded: not-needed
+
+--- a/sw/uiconfig/swriter/statusbar/statusbar.xml
++++ b/sw/uiconfig/swriter/statusbar/statusbar.xml
+@@ -18,17 +18,10 @@
+  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
+ -->
+ <statusbar:statusbar xmlns:statusbar="http://openoffice.org/2001/statusbar" xmlns:xlink="http://www.w3.org/1999/xlink">
+- <statusbar:statusbaritem xlink:href=".uno:ModifiedStatus" statusbar:align="center" statusbar:ownerdraw="true" statusbar:mandatory="true" statusbar:width="16"/>
+- <statusbar:statusbaritem xlink:href=".uno:StatePageNumber" statusbar:align="left" statusbar:autosize="true" statusbar:mandatory="true" statusbar:width="54"/>
+- <statusbar:statusbaritem xlink:href=".uno:StateWordCount" statusbar:align="left" statusbar:autosize="true"/>
+- <statusbar:statusbaritem xlink:href=".uno:StateAccessibilityCheck" statusbar:align="left" statusbar:ownerdraw="true" statusbar:width="32"/>
+- <statusbar:statusbaritem xlink:href=".uno:PageStyleName" statusbar:align="left" statusbar:autosize="true" statusbar:width="79"/>
+- <statusbar:statusbaritem xlink:href=".uno:LanguageStatus" statusbar:align="center" statusbar:autosize="true" statusbar:mandatory="false" statusbar:width="100"/>
+- <statusbar:statusbaritem xlink:href=".uno:InsertMode" statusbar:align="center" statusbar:mandatory="false" statusbar:width="55"/>
+- <statusbar:statusbaritem xlink:href=".uno:SelectionMode" statusbar:align="center" statusbar:ownerdraw="true" statusbar:mandatory="false" statusbar:width="32"/>
+- <statusbar:statusbaritem xlink:href=".uno:Signature" statusbar:align="center" statusbar:ownerdraw="true" statusbar:mandatory="false" statusbar:width="16"/>
+- <statusbar:statusbaritem xlink:href=".uno:Size" statusbar:align="left" statusbar:autosize="true" statusbar:mandatory="false" statusbar:ownerdraw="true" statusbar:width="10"/>
+- <statusbar:statusbaritem xlink:href=".uno:ViewLayout" statusbar:align="center" statusbar:ownerdraw="true" statusbar:width="74"/> <!-- 12+6+24+6+26 -->
+- <statusbar:statusbaritem xlink:href=".uno:ZoomSlider" statusbar:align="center" statusbar:ownerdraw="true" statusbar:mandatory="true" statusbar:width="130"/>
+- <statusbar:statusbaritem xlink:href=".uno:Zoom" statusbar:align="center" statusbar:mandatory="true" statusbar:width="35"/>
++ <statusbar:statusbaritem xlink:href=".uno:StatePageNumber" statusbar:align="left" statusbar:mandatory="true" statusbar:width="70" statusbar:offset="20"/>
++ <statusbar:statusbaritem xlink:href=".uno:StateWordCount" statusbar:align="left" statusbar:width="150" statusbar:offset="20"/>
++ <statusbar:statusbaritem xlink:href=".uno:ParaStyle" statusbar:align="left" statusbar:width="60" statusbar:offset="20"/>
++ <statusbar:statusbaritem xlink:href=".uno:LanguageStatus" statusbar:align="left" statusbar:autosize="true" statusbar:mandatory="false" statusbar:width="80"/>
++ <statusbar:statusbaritem xlink:href=".uno:ZoomSlider" statusbar:align="center" statusbar:ownerdraw="true" statusbar:mandatory="true" statusbar:width="160"/>
++ <statusbar:statusbaritem xlink:href=".uno:Zoom" statusbar:align="right" statusbar:mandatory="true" statusbar:width="40"/>
+ </statusbar:statusbar>
+--- a/sc/uiconfig/scalc/statusbar/statusbar.xml
++++ b/sc/uiconfig/scalc/statusbar/statusbar.xml
+@@ -18,16 +18,9 @@
+  *   the License at http://www.apache.org/licenses/LICENSE-2.0 .
+ -->
+ <statusbar:statusbar xmlns:statusbar="http://openoffice.org/2001/statusbar" xmlns:xlink="http://www.w3.org/1999/xlink">
+- <statusbar:statusbaritem xlink:href=".uno:ModifiedStatus" statusbar:align="center" statusbar:ownerdraw="true" statusbar:width="16"/>
+- <statusbar:statusbaritem xlink:href=".uno:StatusDocPos" statusbar:align="left" statusbar:autosize="true" statusbar:width="58"/>
+- <statusbar:statusbaritem xlink:href=".uno:RowColSelCount" statusbar:align="left" statusbar:autosize="true" statusbar:mandatory="false" statusbar:width="58"/>
+- <statusbar:statusbaritem xlink:href=".uno:StatusPageStyle" statusbar:align="left" statusbar:autosize="true" statusbar:width="83"/>
+- <statusbar:statusbaritem xlink:href=".uno:LanguageStatus" statusbar:align="center" statusbar:autosize="true" statusbar:width="100"/>
+- <statusbar:statusbaritem xlink:href=".uno:InsertMode" statusbar:align="center" statusbar:mandatory="false" statusbar:width="55"/>
+- <statusbar:statusbaritem xlink:href=".uno:StatusSelectionMode" statusbar:align="center" statusbar:ownerdraw="true" statusbar:width="32"/>
+- <statusbar:statusbaritem xlink:href=".uno:AutomaticCalculation" statusbar:align="center" statusbar:ownerdraw="true" statusbar:width="16"/>
+- <statusbar:statusbaritem xlink:href=".uno:Signature" statusbar:align="center" statusbar:ownerdraw="true" statusbar:width="16"/>
+- <statusbar:statusbaritem xlink:href=".uno:Size" statusbar:align="center" statusbar:autosize="true" statusbar:mandatory="false" statusbar:ownerdraw="true" statusbar:width="200"/>
+- <statusbar:statusbaritem xlink:href=".uno:ZoomSlider" statusbar:align="center" statusbar:ownerdraw="true" statusbar:width="130"/>
+- <statusbar:statusbaritem xlink:href=".uno:Zoom" statusbar:align="center" statusbar:width="35"/>
++ <statusbar:statusbaritem xlink:href=".uno:StatusDocPos" statusbar:align="left" statusbar:width="70" statusbar:offset="20"/>
++ <statusbar:statusbaritem xlink:href=".uno:LanguageStatus" statusbar:align="left" statusbar:width="80" statusbar:offset="20"/>
++ <statusbar:statusbaritem xlink:href=".uno:Size" statusbar:align="left" statusbar:autosize="true" statusbar:mandatory="false" statusbar:ownerdraw="true" statusbar:width="200"/>
++ <statusbar:statusbaritem xlink:href=".uno:ZoomSlider" statusbar:align="center" statusbar:ownerdraw="true" statusbar:width="160"/>
++ <statusbar:statusbaritem xlink:href=".uno:Zoom" statusbar:align="right" statusbar:width="40"/>
+ </statusbar:statusbar>
+--- a/sw/source/uibase/inc/wordcountctrl.hxx
++++ b/sw/source/uibase/inc/wordcountctrl.hxx
+@@ -31,6 +31,20 @@
+                                                 const SfxPoolItem* pState) override;
+ };
+ 
++/** Wild OS: the paragraph style at the cursor, in English by the names
++    of the style gallery's cards. */
++class SwParaStyleStatusBarControl final : public SfxStatusBarControl
++{
++public:
++    SFX_DECL_STATUSBAR_CONTROL();
++
++    SwParaStyleStatusBarControl(sal_uInt16 nSlotId, sal_uInt16 nId, StatusBar& rStb);
++    virtual ~SwParaStyleStatusBarControl() override;
++
++    virtual void StateChangedAtStatusBarControl(sal_uInt16 nSID, SfxItemState eState,
++                                                const SfxPoolItem* pState) override;
++};
++
+ #endif
+ 
+ /* vim:set shiftwidth=4 softtabstop=4 expandtab: */
+--- a/sw/source/uibase/utlui/wordcountctrl.cxx
++++ b/sw/source/uibase/utlui/wordcountctrl.cxx
+@@ -12,8 +12,13 @@
+ #include <wordcountctrl.hxx>
+ #include <svl/stritem.hxx>
+ #include <vcl/status.hxx>
++#include <vcl/svapp.hxx>
++#include <vcl/settings.hxx>
++#include <sfx2/tplpitem.hxx>
++#include <i18nlangtag/languagetag.hxx>
+ 
+ SFX_IMPL_STATUSBAR_CONTROL(SwWordCountStatusBarControl, SfxStringItem);
++SFX_IMPL_STATUSBAR_CONTROL(SwParaStyleStatusBarControl, SfxTemplateItem);
+ 
+ SwWordCountStatusBarControl::SwWordCountStatusBarControl(
+         sal_uInt16 _nSlotId,
+@@ -42,4 +47,34 @@
+     }
+ }
+ 
++SwParaStyleStatusBarControl::SwParaStyleStatusBarControl(sal_uInt16 _nSlotId, sal_uInt16 _nId,
++                                                         StatusBar& rStb)
++    : SfxStatusBarControl(_nSlotId, _nId, rStb)
++{
++}
++
++SwParaStyleStatusBarControl::~SwParaStyleStatusBarControl() {}
++
++void SwParaStyleStatusBarControl::StateChangedAtStatusBarControl(sal_uInt16 /*nSID*/,
++                                                                 SfxItemState eState,
++                                                                 const SfxPoolItem* pState)
++{
++    const SfxTemplateItem* pItem = eState == SfxItemState::DEFAULT
++                                       ? dynamic_cast<const SfxTemplateItem*>(pState)
++                                       : nullptr;
++    OUString aName;
++    if (pItem)
++    {
++        aName = pItem->GetStyleName();
++        if (Application::GetSettings().GetUILanguageTag().getLanguage() == "en")
++        {
++            if (pItem->GetStyleIdentifier() == "Text body")
++                aName = u"Body text"_ustr;
++            else if (pItem->GetStyleIdentifier() == "Quotations")
++                aName = u"Quote"_ustr;
++        }
++    }
++    GetStatusBar().SetItemText(GetId(), aName);
++}
++
+ /* vim:set shiftwidth=4 softtabstop=4 expandtab: */
+--- a/sw/source/uibase/app/swmodule.cxx
++++ b/sw/source/uibase/app/swmodule.cxx
+@@ -290,6 +290,7 @@
+     SvxSelectionModeControl::RegisterControl(FN_STAT_SELMODE, pMod );
+     XmlSecStatusBarControl::RegisterControl( SID_SIGNATURE, pMod );
+     SwWordCountStatusBarControl::RegisterControl(FN_STAT_WORDCOUNT, pMod);
++    SwParaStyleStatusBarControl::RegisterControl(SID_STYLE_FAMILY2, pMod);
+     sw::AccessibilityStatusBarControl::RegisterControl(FN_STAT_ACCESSIBILITY_CHECK, pMod);
+ 
+     SwBookmarkControl::RegisterControl(FN_STAT_PAGE, pMod );
+--- a/sc/source/ui/view/tabvwsha.cxx
++++ b/sc/source/ui/view/tabvwsha.cxx
+@@ -89,7 +89,11 @@
+     ScMarkData& rMark       = rViewData.GetMarkData();
+     bool bIgnoreError = (rMark.IsMarked() || rMark.IsMultiMarked());
+     bool bFirst = true;
+-    for ( sal_uInt16 nFunc = 0; nFunc < 32; nFunc++ )
++    std::vector<sal_uInt16> aOrder{ SUBTOTAL_FUNC_SUM };
++    for (sal_uInt16 n = 0; n < 32; n++)
++        if (n != SUBTOTAL_FUNC_SUM)
++            aOrder.push_back(n);
++    for (sal_uInt16 nFunc : aOrder)
+     {
+         if ( !(nFuncs & (1U << nFunc)) )
+             continue;
+@@ -169,7 +173,7 @@
+                 bFirst = false;
+             }
+             else
+-                rFuncStr += "; " + aStr;
++                rFuncStr += (comphelper::LibreOfficeKit::isActive() ? u"; "_ustr : u"    "_ustr) + aStr;
+         }
+     }
+ 

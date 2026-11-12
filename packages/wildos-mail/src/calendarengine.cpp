@@ -114,6 +114,9 @@ CalendarEngine *CalendarEngine::create(QQmlEngine *, QJSEngine *)
 CalendarEngine::CalendarEngine(QObject *parent)
     : QObject(parent)
 {
+    m_syncHold.setSingleShot(true);
+    m_syncHold.setInterval(700);
+    connect(&m_syncHold, &QTimer::timeout, this, &CalendarEngine::syncingChanged);
     const QString zoneId = QSettings().value(QStringLiteral("calendar/timeZone")).toString();
     m_zone = zoneId.isEmpty() ? QTimeZone::systemTimeZone() : QTimeZone(zoneId.toUtf8());
     if (!m_zone.isValid()) {
@@ -1359,6 +1362,60 @@ void CalendarEngine::search(const QString &text)
     });
 }
 
+void CalendarEngine::upcomingWith(const QString &address, int limit)
+{
+    const QString who = address.trimmed().toLower();
+    if (who.isEmpty()) {
+        Q_EMIT upcomingFound(address, {});
+        return;
+    }
+    const QDate from = QDate::currentDate();
+    const QDate to = from.addMonths(3);
+    const QString sexp = QStringLiteral("(and (occur-in-time-range? (make-time \"%1\") (make-time \"%2\")) (or (contains? \"attendee\" %3) (contains? \"organizer\" %3)))")
+                             .arg(isoUtc(QDateTime(from, QTime(0, 0), m_zone)), isoUtc(QDateTime(to, QTime(0, 0), m_zone)), quoted(who));
+    QList<QPair<QString, ECalClient *>> clients;
+    for (auto it = m_clients.cbegin(); it != m_clients.cend(); ++it) {
+        if (it.value()) {
+            g_object_ref(it.value());
+            clients << qMakePair(it.key(), it.value());
+        }
+    }
+    auto result = std::make_shared<QList<Instance>>();
+    run([this, clients, sexp, from, to, result]() {
+        for (const auto &[uid, c] : clients) {
+            QSet<QString> uids;
+            GSList *objects = nullptr;
+            if (e_cal_client_get_object_list_sync(c, sexp.toUtf8().constData(), &objects, nullptr, nullptr)) {
+                for (GSList *l = objects; l; l = l->next) {
+                    uids.insert(str(i_cal_component_get_uid(static_cast<ICalComponent *>(l->data))));
+                }
+                g_slist_free_full(objects, g_object_unref);
+            }
+            // Expanded, so a weekly meeting shows its next time, not its first.
+            if (!uids.isEmpty()) {
+                for (const Instance &i : fetch(c, uid, from, to)) {
+                    if (uids.contains(i.uid) && i.end > QDateTime::currentDateTime()) {
+                        *result << i;
+                    }
+                }
+            }
+            g_object_unref(c);
+        }
+    }, [this, address, limit, result]() {
+        std::sort(result->begin(), result->end(), [](const Instance &a, const Instance &b) {
+            return a.start < b.start;
+        });
+        QVariantList rows;
+        for (const Instance &i : std::as_const(*result)) {
+            if (limit > 0 && rows.size() >= limit) {
+                break;
+            }
+            rows << row(i);
+        }
+        Q_EMIT upcomingFound(address, rows);
+    });
+}
+
 void CalendarEngine::setSelected(const QString &calendarUid, bool selected)
 {
     if (!m_registry) {
@@ -1563,8 +1620,32 @@ void CalendarEngine::refresh()
 {
     for (ECalClient *c : std::as_const(m_clients)) {
         if (c) {
-            e_client_refresh(E_CLIENT(c), nullptr, nullptr, nullptr);
+            startRefresh(E_CLIENT(c));
         }
+    }
+}
+
+void CalendarEngine::startRefresh(EClient *client)
+{
+    if (m_syncing++ == 0) {
+        m_syncHold.start();
+        Q_EMIT syncingChanged();
+    }
+    e_client_refresh(client, m_cancel, &CalendarEngine::onRefreshed, nullptr);
+}
+
+void CalendarEngine::onRefreshed(GObject *object, GAsyncResult *result, gpointer)
+{
+    GError *error = nullptr;
+    e_client_refresh_finish(E_CLIENT(object), result, &error);
+    const bool cancelled = g_error_matches(error, G_IO_ERROR, G_IO_ERROR_CANCELLED);
+    g_clear_error(&error);
+    if (cancelled) {
+        return;
+    }
+    CalendarEngine *self = instance();
+    if (--self->m_syncing == 0) {
+        Q_EMIT self->syncingChanged();
     }
 }
 
@@ -1646,7 +1727,12 @@ void CalendarEngine::addCalDavAccount(const QString &name, const QString &addres
     ESource *source = newCollection(name.isEmpty() ? url.host() : name, QStringLiteral("webdav"), user);
     auto *collection = E_SOURCE_COLLECTION(e_source_get_extension(source, E_SOURCE_EXTENSION_COLLECTION));
     e_source_collection_set_calendar_url(collection, url.toString(QUrl::FullyEncoded).toUtf8().constData());
-    e_source_collection_set_contacts_url(collection, url.toString(QUrl::FullyEncoded).toUtf8().constData());
+    // iCloud keeps contacts on a server of their own; People finds them
+    // there with the same app-specific password.
+    const QString contacts = url.host().compare(QLatin1String("caldav.icloud.com"), Qt::CaseInsensitive) == 0
+        ? QStringLiteral("https://contacts.icloud.com/")
+        : url.toString(QUrl::FullyEncoded);
+    e_source_collection_set_contacts_url(collection, contacts.toUtf8().constData());
     auto *auth = E_SOURCE_AUTHENTICATION(e_source_get_extension(source, E_SOURCE_EXTENSION_AUTHENTICATION));
     e_source_authentication_set_user(auth, user.toUtf8().constData());
     e_source_authentication_set_host(auth, url.host().toUtf8().constData());

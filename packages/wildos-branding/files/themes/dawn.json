@@ -12,9 +12,10 @@
     "textOnAccent": "#0f1530",
     "accentText": "#b9cfff",
     "glass": {
-        "colour": "#121628",
-        "alpha": 0.86
+        "colour": "#181a22",
+        "alpha": 0.95
     },
+    "taskbarGlass": {"colour": "#12141c", "alpha": 0.92},
     "wallpaper": "/usr/share/wallpapers/WildOS",
     "moreWallpapers": [
         "/usr/share/wallpapers/WildOS-fog-ridges",

@@ -5,8 +5,8 @@ import WildOS.UI as UI
 
 // Typing, after Windows 11's Time and language > Typing: spell checking,
 // the languages it checks in and the words you have taught it. It covers
-// the apps that check spelling through KDE's Sonnet; browsers and office
-// suites keep their own spelling settings.
+// the apps that check spelling through KDE's Sonnet. Brave, Write and Tables
+// take their spelling languages from here too.
 PageScroll {
     id: page
 

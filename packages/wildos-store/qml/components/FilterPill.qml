@@ -36,7 +36,7 @@ T.AbstractButton {
         horizontalAlignment: Text.AlignHCenter
         text: pill.text
         size: 13.5
-        font.weight: pill.selected ? Font.DemiBold : Font.Medium
+        font.weight: pill.selected ? UI.Style.weightSemiBold : UI.Style.weightMedium
         color: pill.selected ? UI.Style.textOnAccent : UI.Style.ink
     }
 }

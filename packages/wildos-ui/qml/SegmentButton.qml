@@ -39,7 +39,7 @@ T.TabButton {
         text: control.text
         size: 13
         horizontalAlignment: Text.AlignHCenter
-        font.weight: control.checked ? Font.DemiBold : Font.Normal
+        font.weight: control.checked ? Style.weightSemiBold : Style.weightRegular
         color: control.checked || control.lit ? Style.ink : Style.inkAlpha(0.75, 0.70)
     }
 }

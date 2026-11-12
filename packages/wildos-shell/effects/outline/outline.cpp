@@ -8,6 +8,7 @@
 
 #include "../focus/focus.h"
 
+#include <core/output.h>
 #include <core/pixelgrid.h>
 #include <core/rendertarget.h>
 #include <core/renderviewport.h>
@@ -110,7 +111,9 @@ OutlineEffect::OutlineEffect()
     connect(effects, &EffectsHandler::windowClosed, this, [this](EffectWindow *w) {
         repaintRing(w);
         if (m_focus == w) {
-            m_focus = nullptr;
+            // Back to the window a closing dialog belongs to, as KWin does,
+            // without a frame with no ring at all in between.
+            setFocus(WildOS::focusAfterClosing(w));
         }
     });
     connect(effects, &EffectsHandler::windowDeleted, this, [this](EffectWindow *w) {
@@ -174,6 +177,9 @@ void OutlineEffect::reconfigure(ReconfigureFlags flags)
 {
     Q_UNUSED(flags)
     m_duration = animationTime(std::chrono::milliseconds(150));
+    KSharedConfig::Ptr config = KSharedConfig::openConfig(QStringLiteral("kwinrc"));
+    config->reparseConfiguration();
+    m_fillingScreen = config->group(QStringLiteral("Effect-wildos_outline")).readEntry("Maximised", true);
     readColours();
     effects->addRepaintFull();
 }
@@ -184,7 +190,7 @@ void OutlineEffect::readColours()
     config->reparseConfiguration();
     QColor window = readRgb(config->group(QStringLiteral("Colors:Window")), "BackgroundNormal");
     if (!window.isValid()) {
-        window = QColor(21, 26, 47);
+        window = QColor(29, 31, 35);
     }
     QColor accent = readRgb(config->group(QStringLiteral("General")), "AccentColor");
     if (!accent.isValid()) {
@@ -195,7 +201,7 @@ void OutlineEffect::readColours()
     }
     m_accent = straight(readableAccent(accent, window), 1.0);
     if (window.lightnessF() >= 0.5) {
-        m_line = straight(QColor(21, 27, 44), 0.75);
+        m_line = straight(QColor(29, 31, 35), 0.75);
         m_edge = straight(Qt::white, 0.7);
     } else {
         m_line = straight(Qt::white, 0.75);
@@ -208,12 +214,27 @@ bool OutlineEffect::outlined(EffectWindow *w) const
     if (!WildOS::isWorkWindow(w) || w->isDeleted() || w->isMinimized() || w->isFullScreen()) {
         return false;
     }
+    if (!m_fillingScreen && fillsScreen(w)) {
+        return false;
+    }
     // Minimise and restore animations bend the window into the taskbar;
     // an outline that kept its shape would hang in the air.
     if (w->data(WindowMinimizedGrabRole).value<void *>() || w->data(WindowUnminimizedGrabRole).value<void *>()) {
         return false;
     }
     return true;
+}
+
+// Maximised, or sized to cover its screen as games and players in their own
+// full screen mode do without telling KWin.
+bool OutlineEffect::fillsScreen(EffectWindow *w) const
+{
+    const Window *window = w->window();
+    if (window && window->maximizeMode() == MaximizeFull) {
+        return true;
+    }
+    const Output *screen = w->screen();
+    return screen && w->frameGeometry().toAlignedRect().contains(screen->geometry());
 }
 
 OutlineEffect::Shape OutlineEffect::shapeFor(EffectWindow *w) const
@@ -382,7 +403,12 @@ void OutlineEffect::drawWindow(const RenderTarget &renderTarget, const RenderVie
 {
     effects->drawWindow(renderTarget, viewport, w, mask, region, data);
 
-    if (!outlined(w) || data.opacity() <= 0 || !ensureShader()) {
+    // A window blurred in the background loses its outline as it blurs:
+    // a sharp line round a soft window draws the eye away from the window
+    // in use, which is what both settings are for.
+    const qreal opacity = data.opacity() * (1.0 - std::clamp(w->data(WildOS::BlurProgressRole).toReal(), 0.0, 1.0));
+
+    if (!outlined(w) || opacity <= 0 || !ensureShader()) {
         return;
     }
 
@@ -428,8 +454,8 @@ void OutlineEffect::drawWindow(const RenderTarget &renderTarget, const RenderVie
     m_shader->setUniform(m_insetLocation, shape.inset ? 1.0f : 0.0f);
     m_shader->setUniform(m_mainWidthLocation, float(mainWidth));
     m_shader->setUniform(m_edgeWidthLocation, float(s_edgeWidth));
-    m_shader->setUniform(m_mainColourLocation, QVector4D(main.x(), main.y(), main.z(), main.w() * data.opacity()));
-    m_shader->setUniform(m_edgeColourLocation, QVector4D(m_edge.x(), m_edge.y(), m_edge.z(), m_edge.w() * data.opacity()));
+    m_shader->setUniform(m_mainColourLocation, QVector4D(main.x(), main.y(), main.z(), main.w() * opacity));
+    m_shader->setUniform(m_edgeColourLocation, QVector4D(m_edge.x(), m_edge.y(), m_edge.z(), m_edge.w() * opacity));
     m_shader->setUniform(m_devicePixelLocation, float(1.0 / scale));
 
     const bool clipping = region != infiniteRegion();
@@ -455,7 +481,7 @@ bool OutlineEffect::isActive() const
 int OutlineEffect::requestedEffectChainPosition() const
 {
     // Before the background blur (58), so the outline is drawn on top of a
-    // blurred window rather than blurred with it, and before the corner
+    // window as it blurs rather than blurred with it, and before the corner
     // effect (60).
     return 55;
 }

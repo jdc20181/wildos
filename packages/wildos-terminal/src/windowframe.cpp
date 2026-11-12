@@ -9,14 +9,14 @@
 
 namespace
 {
-// shadow-window from the design tokens: 0 30px 80px rgba(4,8,24,0.45). A CSS
+// shadow-window from the design tokens: 0 30px 80px rgba(10,12,16,0.45). A CSS
 // blur of 80px is a Gaussian with a sigma of 40, which has faded to nothing
 // two sigmas out.
 constexpr int shadowOffset = 30;
 constexpr double shadowSigma = 40.0;
 constexpr int shadowReach = 80;
 constexpr double shadowAlpha = 0.45;
-const QColor shadowColour(4, 8, 24);
+const QColor shadowColour(10, 12, 16);
 
 double coverage(double t, double from, double to)
 {

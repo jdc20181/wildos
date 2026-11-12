@@ -6,8 +6,8 @@ import QtQuick.Window
 
 // A Wild OS dialog over a window: a title, a sentence or two, optional body
 // content and buttons that say what they do. The glass is the design's one
-// drawn dialog (WinApp.dc: radius 18, rgba(18,22,40,0.90), a 0.13 edge,
-// 0 40px 110px shadow, dimmed backdrop rgba(6,10,26,0.35)). Buttons sit at
+// drawn dialog (WinApp.dc: radius 18, rgba(25,27,31,0.90), a 0.13 edge,
+// 0 40px 110px shadow, dimmed backdrop rgba(12,14,18,0.35)). Buttons sit at
 // the bottom right with the main action at the right-hand end, as the system
 // dialog boards draw them (Cancel, then Save). The dialog moves primary
 // buttons to the end itself, so callers may declare them in any order; set
@@ -124,7 +124,7 @@ T.Dialog {
                 Layout.fillWidth: true
                 text: control.title
                 size: control.large ? 22 : 18
-                font.weight: Font.DemiBold
+                font.weight: Style.weightSemiBold
                 wrapMode: Text.Wrap
                 elide: Text.ElideNone
             }
@@ -156,7 +156,7 @@ T.Dialog {
             Layout.preferredHeight: control.large ? 76 : 68
             bottomLeftRadius: Style.radiusDialog
             bottomRightRadius: Style.radiusDialog
-            color: control.large ? (Style.dark ? Qt.rgba(4 / 255, 6 / 255, 18 / 255, 0.30) : Style.tone(0.04)) : "transparent"
+            color: control.large ? (Style.dark ? Qt.rgba(7 / 255, 9 / 255, 13 / 255, 0.30) : Style.tone(0.04)) : "transparent"
 
             Rectangle {
                 visible: control.large

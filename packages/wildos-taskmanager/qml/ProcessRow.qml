@@ -87,7 +87,7 @@ T.ItemDelegate {
             height: implicitHeight
             text: row.name + " (" + row.count + ")"
             size: 12
-            font.weight: Font.DemiBold
+            font.weight: UI.Style.weightSemiBold
             color: UI.Style.inkAlpha(0.75, 0.70)
         }
 

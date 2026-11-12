@@ -16,10 +16,10 @@ Item {
     required property var theme
     readonly property bool light: theme.mode === "light"
     readonly property real s: width / 250
-    readonly property color ink: light ? Qt.rgba(20 / 255, 26 / 255, 46 / 255, 0.85) : Qt.rgba(238 / 255, 241 / 255, 248 / 255, 0.9)
-    readonly property color faint: light ? Qt.rgba(20 / 255, 26 / 255, 46 / 255, 0.14) : Qt.rgba(238 / 255, 241 / 255, 248 / 255, 0.22)
+    readonly property color ink: light ? Qt.rgba(29 / 255, 31 / 255, 35 / 255, 0.85) : Qt.rgba(238 / 255, 241 / 255, 248 / 255, 0.9)
+    readonly property color faint: light ? Qt.rgba(29 / 255, 31 / 255, 35 / 255, 0.14) : Qt.rgba(238 / 255, 241 / 255, 248 / 255, 0.22)
     readonly property color taskbar: theme.taskbarGlass && theme.taskbarGlass.a > 0 ? theme.taskbarGlass
-        : light ? Qt.rgba(246 / 255, 248 / 255, 252 / 255, 0.88) : Qt.rgba(14 / 255, 18 / 255, 34 / 255, 0.85)
+        : light ? Qt.rgba(238 / 255, 238 / 255, 238 / 255, 0.94) : Qt.rgba(18 / 255, 20 / 255, 28 / 255, 0.92)
 
     implicitWidth: 250
     implicitHeight: 124

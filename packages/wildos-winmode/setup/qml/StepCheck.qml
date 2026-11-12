@@ -1,11 +1,11 @@
 import QtQuick
+import QtQuick.Dialogs
 import QtQuick.Layouts
 import WildOS.UI as UI
-import WildOS.WinMode.Backend
+import WildOS.WinMode.Setup
 
-// 9.1, Check this PC (WinModeCheck.dc). Every row is a real check: CPUID
-// and /dev/kvm, the memory fitted, the space on the home disk, the
-// connection, and the licence table in the firmware.
+// 9.1, Check this PC (WinModeCheck.dc): the licence card and the checks
+// first run shows too (CheckList), and what happens next.
 Page {
     id: page
 
@@ -13,86 +13,26 @@ Page {
     signal later()
     signal problem(string kind)
 
-    readonly property bool ready: !Setup.checking && Setup.virtualisation === "ok" && Setup.memoryState !== "short" && Setup.spaceOk
+    readonly property bool ready: Setup.requirementsMet
+    // A Windows 11 file the person already has, in place of the download.
+    readonly property bool ownIso: Setup.isoState === "ok"
 
     title: "Set up Windows mode"
     text: "Run Windows programs like Word, Excel and Photoshop in their own windows, next to your other apps. Windows stays hidden in the background and only wakes when you open one."
-    note: page.ready || Setup.checking ? "Windows downloads straight from Microsoft and uses your own licence."
+    // Only a download can be matched to Microsoft's signature, so a file
+    // someone brings is never called genuine, only Windows 11 Pro.
+    note: page.ownIso && page.ready ? "Your file is checked to be Windows 11 Pro. Unlike a download, it can't be checked against Microsoft's signature."
+        : page.ready || Setup.checking ? "Windows downloads straight from Microsoft and uses your own licence."
         : Setup.virtualisation !== "ok" ? "Windows mode can't start until virtualisation is switched on."
         : !Setup.spaceOk ? "Windows mode needs about " + Setup.needLabel + " free to set up."
+        : !Setup.coresOk ? "Windows mode needs a processor with 4 cores or more."
+        : Setup.internet === "offline" ? "Connect to the internet to download Windows."
         : "This PC doesn't have enough memory for Windows mode."
 
-    Banner {
-        tone: Setup.licence === "firmware" ? "success" : Setup.licence === "checking" ? "accent" : "warning"
-        title: {
-            switch (Setup.licence) {
-            case "checking": return "Looking for a Windows licence";
-            case "firmware": return "Windows licence found";
-            case "inuse": return "Windows is still installed on this PC";
-            case "error": return "The licence check didn't finish";
-            default: return "No Windows licence built into this PC";
-            }
-        }
-        text: {
-            switch (Setup.licence) {
-            case "checking": return "Checking this PC's firmware.";
-            case "firmware":
-                return Setup.edition === "pro" ? "Windows 11 Pro is built into this PC, so Windows mode uses it. There is nothing to buy."
-                     : Setup.edition === "home" ? "Windows 11 Home is built into this PC, so Windows mode uses it. There is nothing to buy."
-                     : "A Windows licence is built into this PC, so Windows mode uses it. Windows confirms whether it's Home or Pro while it sets itself up.";
-            case "inuse": return "Its licence is built into this PC. On the next step, choose to use it for Windows mode as well or add a product key.";
-            case "error": return "You can still carry on and enter a product key.";
-            default: return "You can enter a product key on the next step.";
-            }
-        }
-    }
-
-    UI.Card {
-        Layout.fillWidth: true
-
-        ColumnLayout {
-            width: parent.width
-            spacing: 0
-
-            CheckRow {
-                title: "Virtualisation"
-                state: Setup.virtualisation === "ok" ? "ok" : "failed"
-                detail: {
-                    switch (Setup.virtualisation) {
-                    case "ok": return "Switched on in this PC's firmware";
-                    case "unsupported": return "This PC's processor can't run Windows mode";
-                    case "noaccess": return "Only available at the PC's own screen";
-                    default: return "Switched off in this PC's firmware";
-                    }
-                }
-                value: Setup.technology
-            }
-
-            CheckRow {
-                title: "Memory"
-                state: Setup.memoryState === "ok" ? "ok" : Setup.memoryState === "low" ? "warning" : "failed"
-                detail: Setup.memoryState === "short" ? Setup.memoryLabel + ". Windows mode needs at least 8 GB."
-                      : Setup.memoryState === "low" ? Setup.memoryLabel + ". Works, but your PC may slow down while Windows apps are open."
-                      : Setup.memoryLabel + ". Windows mode borrows about 2 GB while you use it"
-                value: Setup.memoryLabel
-            }
-
-            CheckRow {
-                title: "Space"
-                state: Setup.checking && Setup.freeLabel.length === 0 ? "checking" : Setup.spaceOk ? "ok" : "failed"
-                detail: "About " + Setup.needLabel + " needed"
-                value: Setup.freeLabel.length > 0 ? Setup.freeLabel + " free" : ""
-            }
-
-            CheckRow {
-                title: "Internet"
-                state: Setup.internet === "checking" ? "checking" : Setup.internet === "offline" ? "warning" : "ok"
-                detail: Setup.internet === "offline" ? "Connect to download Windows from Microsoft, about 6 GB"
-                      : Setup.internet === "metered" ? "On a metered connection. Windows is about 6 GB"
-                      : "Windows downloads from Microsoft, about 6 GB"
-                value: Setup.internet === "offline" ? "Not connected" : Setup.internet === "checking" ? "" : "Connected"
-            }
-        }
+    CheckList {
+        spacing: page.spacing
+        isoLink: true
+        onIsoRequested: isoDialog.open()
     }
 
     ColumnLayout {
@@ -102,7 +42,7 @@ Page {
         UI.Label {
             text: "What happens next"
             size: 15
-            font.weight: Font.DemiBold
+            font.weight: UI.Style.weightSemiBold
             Accessible.role: Accessible.Heading
         }
 
@@ -112,7 +52,8 @@ Page {
             columnSpacing: 10
 
             Repeater {
-                model: ["Windows downloads from Microsoft", "It installs and activates itself", "We strip out adverts and tracking", "Your apps appear in Start"]
+                model: [page.ownIso ? "Windows comes from your file" : "Windows downloads from Microsoft", "It installs and activates itself",
+                        "We strip out adverts and tracking", "Your apps appear in Start"]
 
                 Rectangle {
                     required property int index
@@ -136,7 +77,7 @@ Page {
                         UI.Label {
                             text: index + 1
                             size: 12
-                            font.weight: Font.DemiBold
+                            font.weight: UI.Style.weightSemiBold
                             color: UI.Style.accentText
                         }
 
@@ -146,11 +87,47 @@ Page {
                             size: 13
                             wrapMode: Text.Wrap
                             elide: Text.ElideNone
-                            lineHeight: 1.4
+                            lineHeightMode: Text.FixedHeight
+                            lineHeight: Math.round(UI.Style.px(size) * 1.4)
                         }
                     }
                 }
             }
+        }
+    }
+
+    FileDialog {
+        id: isoDialog
+        title: "Choose a Windows 11 file"
+        nameFilters: ["Windows 11 files (*.iso *.ISO)"]
+        currentFolder: Setup.downloadsFolder
+        onAccepted: Setup.checkIso(selectedFile)
+    }
+
+    UI.Dialog {
+        id: isoRefused
+        title: "This file can't be used"
+        buttons: [
+            UI.Button {
+                kind: "primary"
+                text: "Choose another file"
+                onClicked: {
+                    isoRefused.close();
+                    isoDialog.open();
+                }
+            },
+            UI.Button {
+                text: "Close"
+                onClicked: isoRefused.close()
+            }
+        ]
+    }
+
+    Connections {
+        target: Setup
+        function onIsoRefused(text) {
+            isoRefused.text = text;
+            isoRefused.open();
         }
     }
 

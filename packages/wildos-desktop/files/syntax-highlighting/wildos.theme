@@ -89,7 +89,7 @@
         },
         "RegionMarker": {
             "text-color": "#8fb4ff",
-            "background-color": "#171c35"
+            "background-color": "#212327"
         },
         "Information": {
             "text-color": "#9fd38a"
@@ -110,12 +110,12 @@
         }
     },
     "editor-colors": {
-        "BackgroundColor": "#11152a",
-        "CodeFolding": "#171c35",
-        "BracketMatching": "#37456a",
-        "CurrentLine": "#171c35",
-        "IconBorder": "#11152a",
-        "IndentationLine": "#262b44",
+        "BackgroundColor": "#191b1f",
+        "CodeFolding": "#212327",
+        "BracketMatching": "#4b4d51",
+        "CurrentLine": "#212327",
+        "IconBorder": "#191b1f",
+        "IndentationLine": "#303236",
         "LineNumbers": "#5f667e",
         "CurrentLineNumber": "#eef1f8",
         "MarkBookmark": "#8fb4ff",
@@ -128,15 +128,15 @@
         "ModifiedLines": "#f2c46b",
         "ReplaceHighlight": "#9fd38a",
         "SavedLines": "#9fd38a",
-        "SearchHighlight": "#37456a",
-        "TextSelection": "#37456a",
-        "Separator": "#262b44",
+        "SearchHighlight": "#4b4d51",
+        "TextSelection": "#4b4d51",
+        "Separator": "#303236",
         "SpellChecking": "#f28b82",
-        "TabMarker": "#262b44",
-        "TemplateBackground": "#171c35",
-        "TemplatePlaceholder": "#171c35",
-        "TemplateFocusedPlaceholder": "#37456a",
-        "TemplateReadOnlyPlaceholder": "#11152a",
-        "WordWrapMarker": "#262b44"
+        "TabMarker": "#303236",
+        "TemplateBackground": "#212327",
+        "TemplatePlaceholder": "#212327",
+        "TemplateFocusedPlaceholder": "#4b4d51",
+        "TemplateReadOnlyPlaceholder": "#191b1f",
+        "WordWrapMarker": "#303236"
     }
 }

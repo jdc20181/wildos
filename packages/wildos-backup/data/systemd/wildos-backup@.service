@@ -1,0 +1,11 @@
+[Unit]
+Description=Back up to the backup drive (%i)
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/wildos-backup --run --%i
+# A backup gives way to whatever the person is doing.
+Nice=10
+IOSchedulingClass=idle
+# Room to answer the notification it leaves at the end.
+TimeoutStopSec=30

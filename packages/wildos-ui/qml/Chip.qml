@@ -40,7 +40,7 @@ Rectangle {
             anchors.verticalCenter: parent.verticalCenter
             text: chip.text
             size: 11
-            font.weight: Font.Medium
+            font.weight: Style.weightMedium
             color: chip.tone.length > 0 ? chip.toneInk : chip.granted ? Style.accentText : Style.inkStatus
         }
     }

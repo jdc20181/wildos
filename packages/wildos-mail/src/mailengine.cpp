@@ -10,6 +10,8 @@
 #include <QThreadPool>
 #include <QUuid>
 
+#include <algorithm>
+
 #include "camelsession.h"
 
 #include <pwd.h>
@@ -223,6 +225,9 @@ MailEngine::MailEngine(QObject *parent)
     , m_folderModel(new FolderModel(this))
     , m_messageModel(new MessageModel(this))
 {
+    m_syncHold.setSingleShot(true);
+    m_syncHold.setInterval(700);
+    connect(&m_syncHold, &QTimer::timeout, this, &MailEngine::syncingChanged);
     Session::instance();
     m_messageModel->folderName = [this](const QString &accountId, const QString &folder) {
         return folderLabel(accountId, folder);
@@ -1098,17 +1103,27 @@ void MailEngine::refresh()
         }
         CamelStore *store = it->store;
         g_object_ref(store);
-        run([store]() {
-            // Asks for each folder's counts; Camel fetches new mail for the
-            // folders it has open.
-            CamelFolderInfo *fi = camel_store_get_folder_info_sync(store, nullptr,
-                                                                   CamelStoreGetFolderInfoFlags(CAMEL_STORE_FOLDER_INFO_RECURSIVE | CAMEL_STORE_FOLDER_INFO_REFRESH),
-                                                                   nullptr, nullptr);
-            if (fi) {
-                camel_folder_info_free(fi);
-            }
-            g_object_unref(store);
-        });
+        if (m_syncing++ == 0) {
+            m_syncHold.start();
+            Q_EMIT syncingChanged();
+        }
+        run(
+            [store]() {
+                // Asks for each folder's counts; Camel fetches new mail for the
+                // folders it has open.
+                CamelFolderInfo *fi = camel_store_get_folder_info_sync(store, nullptr,
+                                                                       CamelStoreGetFolderInfoFlags(CAMEL_STORE_FOLDER_INFO_RECURSIVE | CAMEL_STORE_FOLDER_INFO_REFRESH),
+                                                                       nullptr, nullptr);
+                if (fi) {
+                    camel_folder_info_free(fi);
+                }
+                g_object_unref(store);
+            },
+            [this]() {
+                if (--m_syncing == 0) {
+                    Q_EMIT syncingChanged();
+                }
+            });
     }
     for (const auto &[account, full] : currentFolders()) {
         const QString a = account;
@@ -1713,6 +1728,125 @@ void MailEngine::search(const QString &text)
         if (generation == m_generation) {
             m_messageModel->reset(*rows);
         }
+    });
+}
+
+namespace
+{
+QByteArray sexpString(const QString &text)
+{
+    QByteArray escaped = text.toUtf8();
+    escaped.replace("\\", "\\\\").replace("\"", "\\\"");
+    return "\"" + escaped + "\"";
+}
+}
+
+void MailEngine::findWith(const QString &address, int limit)
+{
+    const QString who = address.trimmed().toLower();
+    if (who.isEmpty()) {
+        Q_EMIT foundWith(address, {});
+        return;
+    }
+    QList<QPair<QString, QString>> folders;
+    for (const Account &a : m_store.accounts()) {
+        for (const FolderEntry &f : m_live.value(a.id).folders) {
+            if (f.role != QLatin1String("trash") && f.role != QLatin1String("junk") && f.role != QLatin1String("drafts")) {
+                folders.append({a.id, f.fullName});
+            }
+        }
+    }
+    auto rows = std::make_shared<QList<MessageRow>>();
+    run([this, folders, who, rows]() {
+        const QByteArray q = sexpString(who);
+        const QByteArray expr = "(match-all (or (header-contains \"from\" " + q + ") (header-contains \"to\" " + q
+            + ") (header-contains \"cc\" " + q + ")))";
+        for (const auto &[accountId, full] : folders) {
+            CamelFolder *folder = folderSync(accountId, full, nullptr);
+            if (!folder) {
+                continue;
+            }
+            GPtrArray *uids = camel_folder_search_by_expression(folder, expr.constData(), nullptr, nullptr);
+            if (!uids) {
+                continue;
+            }
+            for (guint i = 0; i < uids->len; ++i) {
+                if (CamelMessageInfo *mi = camel_folder_get_message_info(folder, static_cast<const char *>(uids->pdata[i]))) {
+                    if (!(camel_message_info_get_flags(mi) & CAMEL_MESSAGE_DELETED)) {
+                        rows->append(rowFrom(accountId, full, mi));
+                    }
+                    g_object_unref(mi);
+                }
+            }
+            camel_folder_search_free(folder, uids);
+        }
+    }, [this, address, limit, rows]() {
+        std::sort(rows->begin(), rows->end(), [](const MessageRow &a, const MessageRow &b) {
+            return a.date > b.date;
+        });
+        QVariantList out;
+        for (const MessageRow &r : std::as_const(*rows)) {
+            if (limit > 0 && out.size() >= limit) {
+                break;
+            }
+            out << QVariantMap{
+                {QStringLiteral("key"), r.key()},
+                {QStringLiteral("subject"), r.subject.isEmpty() ? tr("(No subject)") : r.subject},
+                {QStringLiteral("preview"), r.preview},
+                {QStringLiteral("time"), MessageModel::timeLabel(r.date)},
+                {QStringLiteral("unread"), r.unread},
+            };
+        }
+        Q_EMIT foundWith(address, out);
+    });
+}
+
+void MailEngine::findFlagged()
+{
+    QList<QPair<QString, QString>> folders;
+    for (const Account &a : m_store.accounts()) {
+        for (const FolderEntry &f : m_live.value(a.id).folders) {
+            if (f.role != QLatin1String("trash") && f.role != QLatin1String("junk")) {
+                folders.append({a.id, f.fullName});
+            }
+        }
+    }
+    auto rows = std::make_shared<QList<MessageRow>>();
+    run([this, folders, rows]() {
+        for (const auto &[accountId, full] : folders) {
+            CamelFolder *folder = folderSync(accountId, full, nullptr);
+            if (!folder) {
+                continue;
+            }
+            GPtrArray *uids = camel_folder_search_by_expression(folder, "(match-all (system-flag \"Flagged\"))", nullptr, nullptr);
+            if (!uids) {
+                continue;
+            }
+            for (guint i = 0; i < uids->len; ++i) {
+                if (CamelMessageInfo *mi = camel_folder_get_message_info(folder, static_cast<const char *>(uids->pdata[i]))) {
+                    const guint32 flags = camel_message_info_get_flags(mi);
+                    if ((flags & CAMEL_MESSAGE_FLAGGED) && !(flags & CAMEL_MESSAGE_DELETED)) {
+                        rows->append(rowFrom(accountId, full, mi));
+                    }
+                    g_object_unref(mi);
+                }
+            }
+            camel_folder_search_free(folder, uids);
+        }
+    }, [this, rows]() {
+        std::sort(rows->begin(), rows->end(), [](const MessageRow &a, const MessageRow &b) {
+            return a.date > b.date;
+        });
+        QVariantList out;
+        for (const MessageRow &r : std::as_const(*rows)) {
+            out << QVariantMap{
+                {QStringLiteral("key"), r.key()},
+                {QStringLiteral("subject"), r.subject.isEmpty() ? tr("(No subject)") : r.subject},
+                {QStringLiteral("from"), r.fromName.isEmpty() ? r.fromAddress : r.fromName},
+                {QStringLiteral("date"), r.date},
+            };
+        }
+        Q_EMIT flaggedFound(out);
     });
 }
 

@@ -42,7 +42,7 @@ ColumnLayout {
         horizontalAlignment: Text.AlignHCenter
         text: empty.heading
         size: 15
-        font.weight: Font.DemiBold
+        font.weight: UI.Style.weightSemiBold
     }
 
     UI.Label {

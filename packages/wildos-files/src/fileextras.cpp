@@ -20,6 +20,7 @@
 #include <QDir>
 #include <QDirIterator>
 #include <QFileInfo>
+#include <QMimeDatabase>
 #include <QProcess>
 #include <QStandardPaths>
 #include <QStorageInfo>
@@ -116,6 +117,77 @@ void FileOps::compress(const QList<QUrl> &urls)
         }
     });
     job->start();
+}
+
+bool FileOps::canUseArchive() const
+{
+    return !QStandardPaths::findExecutable(QStringLiteral("wildos-archive")).isEmpty();
+}
+
+bool FileOps::areArchives(const QList<QUrl> &urls) const
+{
+    // The types Archive opens, by their contents first and then by name, so
+    // a .tgz or a .zip with an odd ending is still found.
+    static const QStringList types = {
+        QStringLiteral("application/zip"), QStringLiteral("application/x-7z-compressed"), QStringLiteral("application/vnd.rar"),
+        QStringLiteral("application/x-tar"), QStringLiteral("application/x-compressed-tar"), QStringLiteral("application/x-bzip2-compressed-tar"),
+        QStringLiteral("application/x-bzip-compressed-tar"), QStringLiteral("application/x-xz-compressed-tar"),
+        QStringLiteral("application/x-zstd-compressed-tar"), QStringLiteral("application/x-lzma-compressed-tar"), QStringLiteral("application/gzip"),
+        QStringLiteral("application/x-bzip2"), QStringLiteral("application/x-bzip"), QStringLiteral("application/x-xz"),
+        QStringLiteral("application/zstd"), QStringLiteral("application/x-lzma"), QStringLiteral("application/x-cpio"),
+        QStringLiteral("application/vnd.ms-cab-compressed"), QStringLiteral("application/x-lha"),
+    };
+    if (urls.isEmpty() || !canUseArchive()) {
+        return false;
+    }
+    static QMimeDatabase db;
+    for (const QUrl &url : urls) {
+        if (!url.isLocalFile()) {
+            return false;
+        }
+        const QFileInfo info(url.toLocalFile());
+        if (!info.isFile()) {
+            return false;
+        }
+        const QMimeType mime = db.mimeTypeForFile(info);
+        const bool known = std::any_of(types.cbegin(), types.cend(), [&](const QString &type) {
+            return mime.inherits(type);
+        });
+        if (!known) {
+            return false;
+        }
+    }
+    return true;
+}
+
+void FileOps::compressWith(const QList<QUrl> &urls)
+{
+    QStringList args{QStringLiteral("--compress")};
+    for (const QUrl &url : urls) {
+        if (url.isLocalFile()) {
+            args.append(url.toLocalFile());
+        }
+    }
+    if (!QProcess::startDetached(QStringLiteral("wildos-archive"), args)) {
+        Q_EMIT failed(QStringLiteral("Archive could not be opened."));
+    }
+}
+
+void FileOps::extractHere(const QList<QUrl> &urls)
+{
+    QStringList args{QStringLiteral("--extract-here")};
+    for (const QUrl &url : urls) {
+        if (url.isLocalFile()) {
+            args.append(url.toLocalFile());
+        }
+    }
+    if (!QFileInfo(QFileInfo(urls.value(0).toLocalFile()).absolutePath()).isWritable()) {
+        Q_EMIT failed(QStringLiteral("You cannot save in this folder, so there is nowhere to extract to. Copy the archive somewhere of yours first."));
+        return;
+    }
+    if (!QProcess::startDetached(QStringLiteral("wildos-archive"), args)) {
+        Q_EMIT failed(QStringLiteral("Archive could not be opened."));
+    }
 }
 
 QVariantList FileOps::sendTargets(const QList<QUrl> &urls) const

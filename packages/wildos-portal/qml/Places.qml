@@ -91,7 +91,7 @@ Item {
                             anchors.verticalCenter: parent.verticalCenter
                             width: place.width - 46
                             text: place.modelData.name
-                            font.weight: place.current ? Font.DemiBold : Font.Normal
+                            font.weight: place.current ? UI.Style.weightSemiBold : UI.Style.weightRegular
                         }
                     }
 

@@ -43,6 +43,88 @@ Decoration {
         padding.bottom = auroraeTheme.paddingBottom;
         padding.top    = auroraeTheme.paddingTop;
         root.animate = true;
+        root.addMaximizedCloseFills();
+    }
+    // Wild OS: a maximised window has square corners, so as on Windows 11 its
+    // close button's hover fills the corner. Aurorae buttons have no
+    // maximised state, so when the theme has a close-maximized.svg beside
+    // close.svg with square "hover" and "pressed" fills (Wild OS's does),
+    // they go under the close button of a maximised window and show through
+    // outside its rounded hover. Other themes are left as they are.
+    KSvg.FrameSvg {
+        id: closeSvg
+        property bool supportsMaximized: imagePath !== "" && hasElementPrefix("hover") && hasElementPrefix("pressed")
+        imagePath: auroraeTheme.closeButtonPath.replace(/close\.svgz?$/, "close-maximized.svg")
+    }
+    Component {
+        id: maximizedCloseFill
+        Item {
+            id: fill
+            // Set to the close button, which is also the parent.
+            property Item button
+            objectName: "wildosMaximizedCloseFill"
+            anchors.fill: parent
+            z: -1
+            visible: decoration.client.maximized
+            KSvg.FrameSvgItem {
+                anchors.fill: parent
+                imagePath: closeSvg.imagePath
+                prefix: "hover"
+                // The same states and fade as the button's own hover.
+                opacity: (fill.button.hovered && !fill.button.pressed && !fill.button.toggled) ? 1 : 0
+                Behavior on opacity {
+                    NumberAnimation {
+                        duration: auroraeTheme.animationTime
+                    }
+                }
+            }
+            KSvg.FrameSvgItem {
+                anchors.fill: parent
+                imagePath: closeSvg.imagePath
+                prefix: "pressed"
+                opacity: (fill.button.pressed || fill.button.toggled) ? 1 : 0
+                Behavior on opacity {
+                    NumberAnimation {
+                        duration: auroraeTheme.animationTime
+                    }
+                }
+            }
+        }
+    }
+    function addMaximizedCloseFills() {
+        if (!closeSvg.supportsMaximized) {
+            return;
+        }
+        // Each group holds one Row of buttons, rebuilt when the buttons change.
+        var groups = [leftButtonGroup, rightButtonGroup];
+        for (var g = 0; g < groups.length; g++) {
+            var buttons = groups[g].children[0].children;
+            for (var i = 0; i < buttons.length; i++) {
+                var button = buttons[i];
+                if (button.buttonType !== DecorationOptions.DecorationButtonClose) {
+                    continue;
+                }
+                var present = false;
+                for (var c = 0; c < button.children.length; c++) {
+                    present = present || button.children[c].objectName === "wildosMaximizedCloseFill";
+                }
+                if (!present) {
+                    maximizedCloseFill.createObject(button, {button: button});
+                }
+            }
+        }
+    }
+    Connections {
+        target: leftButtonGroup.children[0]
+        function onChildrenChanged() {
+            Qt.callLater(root.addMaximizedCloseFills);
+        }
+    }
+    Connections {
+        target: rightButtonGroup.children[0]
+        function onChildrenChanged() {
+            Qt.callLater(root.addMaximizedCloseFills);
+        }
     }
     DecorationOptions {
         id: options

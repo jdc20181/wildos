@@ -190,7 +190,7 @@ Window {
                     UI.Label {
                         Layout.fillWidth: true
                         size: 22
-                        font.weight: Font.DemiBold
+                        font.weight: UI.Style.weightSemiBold
                         text: root.state === "done" ? Bridge.appName + " is ready"
                             : root.state === "installing" ? "Installing " + Bridge.appName
                             : root.notWindows ? "This file can't be opened"
@@ -343,7 +343,7 @@ Window {
 
                             UI.Label {
                                 Layout.fillWidth: true
-                                font.weight: Font.DemiBold
+                                font.weight: UI.Style.weightSemiBold
                                 text: root.state === "done" ? "It's in Start"
                                     : root.state === "disabled" ? "Windows apps are turned off"
                                     : root.state === "failed" ? "That didn't work"

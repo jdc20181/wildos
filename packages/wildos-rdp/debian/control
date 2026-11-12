@@ -10,6 +10,7 @@ Build-Depends:
  qt6-base-private-dev,
  libwayland-dev,
  wayland-protocols,
+ plasma-wayland-protocols,
  libkf6config-dev,
  libkf6windowsystem-dev,
  freerdp3-dev (>= 3.32),

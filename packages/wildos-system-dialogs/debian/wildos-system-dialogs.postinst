@@ -1,0 +1,11 @@
+#!/bin/sh
+# Records the sources of what is installed now, while the lists that
+# installed it are current. apt reads its hook (80wildos-package-sources)
+# only when it starts, so the run that installs this package goes without.
+set -e
+
+if [ "$1" = configure ]; then
+    /usr/libexec/wildos/record-package-sources || true
+fi
+
+#DEBHELPER#

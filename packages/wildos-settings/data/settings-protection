@@ -24,6 +24,9 @@ USBGUARD_CONF=/etc/usbguard/usbguard-daemon.conf
 USBGUARD_RULES=/etc/usbguard/rules.d/50-wildos-protection.conf
 CAMERA_BLOCK=/etc/modprobe.d/60-wildos-protection-camera.conf
 TABLE=wildos_protection
+# Written once nft has taken the rules, so security-status (which runs
+# without root and cannot list them) can say the firewall is up.
+FIREWALL_MARK=/run/wildos/firewall
 
 saved_level() {
     level=$(cat "$LEVEL_FILE" 2>/dev/null || true)
@@ -38,6 +41,7 @@ saved_level() {
 # open at Standard and Strict, which is how printers and screens on the
 # network are found. Nothing outgoing is limited at any level.
 firewall() {
+    rm -f "$FIREWALL_MARK"
     nft delete table inet "$TABLE" 2>/dev/null || true
     command -v nft >/dev/null || return 0
     discovery='udp dport 5353 accept'
@@ -58,6 +62,9 @@ table inet $TABLE {
     }
 }
 EOF
+    mkdir -p "$(dirname "$FIREWALL_MARK")"
+    echo "$1" > "$FIREWALL_MARK"
+    chmod 644 "$FIREWALL_MARK"
 }
 
 # Every device attached when Strict is chosen is allowed first, so nothing

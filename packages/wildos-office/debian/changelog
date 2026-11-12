@@ -1,3 +1,39 @@
+wildos-office (0.1.3) trixie; urgency=medium
+
+  * No navy left: surfaces, glass, shadows and the logo tile use the
+    same neutral greys as the rest of Wild OS.
+
+ -- Wild OS Developers <dev@wildos.io>  Wed, 11 Nov 2026 22:40:26 +0000
+
+wildos-office (0.1.2) trixie; urgency=medium
+
+  * Every Write and Tables ribbon tab follows the design: Home gains Grow
+    and Shrink font, Clear formatting, Borders and an Editing group;
+    Insert gains Pages; Layout gains Page, Watermark and Remove breaks;
+    References gains Citations and Index; Review gains Language.
+  * View's Show items are checkboxes, the ribbon folds to its tab row with
+    the chevron at its right, and the style gallery has up, down and
+    expand at its right.
+  * Ribbon icons follow the text colour instead of the accent.
+  * File > Recent shows each file's app icon, folder and date, for Write
+    and Tables files together.
+  * Save as, Save a copy, Open and Export use the Wild OS file dialog.
+  * Print shows its preview on the left with the printer, copies, pages,
+    sides and page set-up on the right, and the rest under More options.
+  * Dialogs: 32 px buttons and fields, the main button filled with the
+    accent, plain group headings and underline tabs.
+  * Tables: Margins opens Page settings on the Page tab.
+
+ -- Wild OS Developers <dev@wildos.io>  Wed, 11 Nov 2026 16:59:02 +0000
+
+wildos-office (0.1.1) trixie; urgency=medium
+
+  * The start screens' Today times follow the regional format and the
+    12-hour or 24-hour clock chosen in Settings > Date and time, where
+    they were always on the 24-hour clock.
+
+ -- Wild OS Developers <dev@wildos.io>  Wed, 11 Nov 2026 14:31:15 +0000
+
 wildos-office (0.1.0) trixie; urgency=medium
 
   * Write and Tables: LibreOffice Writer and Calc dressed as Wild OS apps,

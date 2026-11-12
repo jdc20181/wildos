@@ -5,6 +5,7 @@
 #include "client.h"
 #include "desktop.h"
 #include "input.h"
+#include "monitors.h"
 
 #include <QDir>
 #include <QFileInfo>
@@ -207,21 +208,31 @@ void RemoteDesktop::start(const QString &password)
     const double dpr = screen ? screen->devicePixelRatio() : 1.0;
     const double scale = scaling == QLatin1String("auto") ? dpr : scaling.toDouble() / 100.0;
     if (m_display == QLatin1String("all") && QGuiApplication::screens().size() > 1) {
-        QList<QRect> monitors;
-        // The primary screen first; each in physical pixels, at its place.
+        // The primary screen first; each in its own pixels, beside the same
+        // neighbour as here. Scaling each screen's place by its own scale
+        // put screens of different scales on top of each other.
         QList<QScreen *> screens = QGuiApplication::screens();
         screens.removeOne(screen);
         screens.prepend(screen);
-        m_monitors.clear();
+        QList<Monitor> layout;
         for (QScreen *s : std::as_const(screens)) {
-            const QRect g = s->geometry();
-            const double r = s->devicePixelRatio();
-            const QRect physical(qRound(g.x() * r), qRound(g.y() * r), qRound(g.width() * r), qRound(g.height() * r));
-            monitors.append(physical);
-            m_monitors.append(QVariantMap{{QStringLiteral("screen"), s->name()},
-                                          {QStringLiteral("rect"), physical.translated(-monitors.first().topLeft())}});
+            Monitor m;
+            m.name = s->name();
+            m.logical = s->geometry();
+            m.scale = s->devicePixelRatio();
+            layout.append(m);
         }
-        m_session->setMonitors(monitors, scale);
+        layout = monitors::arrange(layout);
+        // Each screen's part of the desktop picture, whose corner is the
+        // top left of all of them.
+        const QPoint corner = monitors::bounds(layout).topLeft();
+        QList<QRect> rects;
+        m_monitors.clear();
+        for (const Monitor &m : std::as_const(layout)) {
+            rects.append(m.rect);
+            m_monitors.append(QVariantMap{{QStringLiteral("screen"), m.name}, {QStringLiteral("rect"), m.rect.translated(-corner)}});
+        }
+        m_session->setMonitors(rects, scale);
     } else if (screen && d.value(QStringLiteral("resolution"), QStringLiteral("match")).toString() == QLatin1String("match")) {
         QSize size = screen->size() * dpr;
         if (m_display == QLatin1String("window")) {

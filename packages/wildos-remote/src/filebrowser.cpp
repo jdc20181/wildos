@@ -1,4 +1,5 @@
 #include "filebrowser.h"
+#include "clockformat.h"
 #include "paths.h"
 #include "secrets.h"
 
@@ -35,7 +36,7 @@ QString whenText(qint64 secs)
     const QDateTime t = QDateTime::fromSecsSinceEpoch(secs);
     const QDate today = QDate::currentDate();
     if (t.date() == today) {
-        return QStringLiteral("Today, ") + QLocale::system().toString(t.time(), QLocale::ShortFormat);
+        return QStringLiteral("Today, ") + ClockFormat::time(t.time());
     }
     if (t.date() == today.addDays(-1)) {
         return QStringLiteral("Yesterday");

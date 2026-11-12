@@ -1,0 +1,45 @@
+#!/bin/sh
+# Moves Alt+F4 from KWin's Close Window, which does nothing on the desktop,
+# to the Wild OS one, which also opens the shut down screen there
+# (org.wildos.closewindow). New accounts get this from their shortcut file;
+# accounts made before it are changed once, from the session's autostart.
+# The shortcut service holds its settings in memory and writes them back, so
+# the change goes through it rather than into the file.
+
+set -u
+
+state=${XDG_STATE_HOME:-$HOME/.local/state}/wildos
+marker=$state/close-window-keys
+[ -e "$marker" ] && exit 0
+
+# Alt+F4 as Qt writes it: Qt::ALT | Qt::Key_F4.
+alt_f4=150994995
+
+accel() {
+    busctl --user call org.kde.kglobalaccel /kglobalaccel org.kde.KGlobalAccel "$@"
+}
+# The keys of a KWin action, as busctl prints them.
+keys() {
+    accel shortcutKeys as 4 kwin "$1" KWin "$1"
+}
+
+# KWin registers the script's shortcut as it loads the script, so wait for it.
+i=0
+until busctl --user call org.kde.kglobalaccel /component/kwin org.kde.kglobalaccel.Component shortcutNames 2>/dev/null |
+        grep -q '"Wild OS close window"'; do
+    i=$((i + 1))
+    [ "$i" -ge 120 ] && exit 0
+    sleep 1
+done
+
+# Someone who moved KWin's Close Window to other keys keeps them; only
+# Alt+F4 changes hands.
+if keys "Window Close" | grep -q " $alt_f4 "; then
+    accel setForeignShortcutKeys 'asa(ai)' 4 kwin "Window Close" KWin "Window Close" 0 || exit 0
+fi
+if ! keys "Wild OS close window" | grep -q " $alt_f4 "; then
+    accel setForeignShortcutKeys 'asa(ai)' 4 kwin "Wild OS close window" KWin "Wild OS close window" \
+        1 4 "$alt_f4" 0 0 0 || exit 0
+fi
+
+mkdir -p "$state" && : > "$marker"

@@ -58,7 +58,7 @@ Item {
                         horizontalAlignment: Text.AlignHCenter
                         text: cell.modelData.label.toUpperCase()
                         size: 10.5
-                        font.weight: Font.Bold
+                        font.weight: UI.Style.weightBold
                         font.letterSpacing: 0.74
                         color: Metrics.inkTertiary
                     }
@@ -74,7 +74,7 @@ Item {
                             horizontalAlignment: Text.AlignHCenter
                             text: cell.modelData.value
                             size: 18
-                            font.weight: Font.Bold
+                            font.weight: UI.Style.weightBold
                             color: Metrics.inkSecondary
                         }
 

@@ -1,0 +1,42 @@
+#!/bin/sh
+# Writes Windows mode's disk to standard output for restic, run as root
+# through pkexec by `wildos-backup --run`. Only while Windows is shut down:
+# a disk read while Windows runs, or while it is saved with its memory,
+# would come back as a Windows that crashed. If Windows starts during the
+# read, the copy is refused and restic keeps no snapshot of it.
+set -eu
+
+disk=/var/lib/wildos/winmode/windows.qcow2
+domain=wildos-windows
+conf=/etc/wildos/winmode.json
+if [ -r "$conf" ]; then
+    named=$(sed -n 's/.*"domain"[[:space:]]*:[[:space:]]*"\([A-Za-z0-9_.-]*\)".*/\1/p' "$conf" | head -n 1)
+    [ -n "$named" ] && domain=$named
+fi
+
+shut_down() {
+    state=$(LC_ALL=C virsh -q -c qemu:///system domstate --reason "$domain" 2>/dev/null) || return 1
+    case "$state" in
+        "shut off (saved"*) return 1 ;;
+        "shut off"*) ;;
+        *) return 1 ;;
+    esac
+    # A managed save keeps Windows' memory on disk; it hasn't shut down.
+    ! LC_ALL=C virsh -q -c qemu:///system dominfo "$domain" 2>/dev/null | grep -qi '^managed save: *yes'
+}
+
+if [ ! -f "$disk" ]; then
+    echo "windows-disk: Windows mode isn't set up" >&2
+    exit 2
+fi
+if ! shut_down; then
+    echo "windows-disk: Windows is not shut down" >&2
+    exit 3
+fi
+before=$(stat -c '%Y %s' "$disk")
+dd if="$disk" bs=4M status=none
+after=$(stat -c '%Y %s' "$disk")
+if [ "$before" != "$after" ] || ! shut_down; then
+    echo "windows-disk: Windows started while its disk was being backed up" >&2
+    exit 4
+fi

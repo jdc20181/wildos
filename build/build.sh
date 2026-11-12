@@ -239,6 +239,21 @@ done
     fi
     dpkg-deb -b plymouth-repack "$WORK/repo/" >/dev/null
     rm -rf plymouth-repack "$deb"
+    # plymouth-label holds the boot splash's text plugins and wants exactly
+    # Debian's plymouth version, so it needs the same +wildos1. Without it
+    # the start-up screen has no way to draw text and shows boxes instead.
+    apt-get download -qq plymouth-label
+    deb=$(ls plymouth-label_*.deb)
+    rm -rf label-repack && dpkg-deb -R "$deb" label-repack
+    control=label-repack/DEBIAN/control
+    sed -i 's/^Version: \(.*\)$/Version: \1+wildos1/' "$control"
+    sed -i 's/plymouth (= \([^)]*\))/plymouth (= \1+wildos1)/' "$control"
+    if ! grep -q "plymouth (= .*+wildos1)" "$control"; then
+        echo "ERROR: plymouth-label's control file changed shape; update the repack" >&2
+        exit 1
+    fi
+    dpkg-deb -b label-repack "$WORK/repo/" >/dev/null
+    rm -rf label-repack "$deb"
 )
 # Calamares with Wild OS's patches from build/patches/calamares, versioned
 # +wildos1 so apt prefers it. Building Calamares takes several minutes, so
@@ -257,6 +272,10 @@ done
         rm -rf calamares-src && mkdir calamares-src && cd calamares-src
         apt-get source -qq "calamares=$version" >/dev/null
         cd calamares-*/
+        # Calamares falls back to Qt6 only when Qt5 is missing, and the
+        # builder has Qt5's development files for LibreOffice, so ask for Qt6.
+        sed -i 's/-DKDE_INSTALL_USE_QT_SYS_PATHS=ON/& -DWITH_QT6=ON/' debian/rules
+        grep -q -- -DWITH_QT6=ON debian/rules || { echo "Could not set WITH_QT6 in Calamares' debian/rules" >&2; exit 1; }
         mkdir -p debian/patches
         for patch in "$SRC"/build/patches/calamares/*.patch; do
             cp "$patch" debian/patches/
@@ -362,6 +381,148 @@ done
         cp ../*+wildos[0-9]*_*.deb "$fill/"
         rm -f "$fill"/*dbgsym*
         cd "$WORK" && rm -rf kio-src
+        # Another build may have made the same one meanwhile; either copy is good.
+        mv -T "$fill" "$cached" 2>/dev/null || rm -rf "$fill"
+    fi
+    cp "$cached"/*.deb "$WORK/repo/"
+)
+# LibreOffice, which Write and Tables are, with the patches from
+# build/patches/libreoffice: the Wild OS ribbon, style cards, Tables' formula
+# bar, sheet tabs and headings, Write and Tables' status bars, and no empty
+# window while a document loads. The patched code is mostly in libmergedlo.so in libreoffice-core,
+# and every LibreOffice package built for the architecture requires that
+# exact version of it, so all of them are rebuilt +wildosN; the build-arch
+# half of Debian's build is enough for those (no help, no language packs).
+# libreoffice-writer and -calc also require their uiconfig package at
+# exactly the same version: those are architecture-independent, so Debian's
+# own are republished at the new version with the few files the patches
+# change (the status bar layouts) taken from this build.
+# Cached by the patches and Debian's version like Calamares: the first
+# build compiles all of LibreOffice once (about 70 minutes at six jobs in a
+# 10 GB build, and 35 GB of scratch space), later builds reuse it until the
+# patches or Debian's LibreOffice change, and a build after a patch change
+# takes most of its objects from LibreOffice's own compiler cache.
+(
+    cd "$WORK"
+    version=$(apt-cache policy libreoffice-core | sed -n 's/^  Candidate: //p')
+    if [ -z "$version" ] || [ "$version" = "(none)" ]; then
+        apt-get update -qq
+        version=$(apt-cache policy libreoffice-core | sed -n 's/^  Candidate: //p')
+    fi
+    stamp=$(cat "$SRC"/build/patches/libreoffice/*.patch | sha256sum | cut -c1-12)
+    cached="$REBUILDS/libreoffice/$version$(wildos_suffix libreoffice)-$stamp"
+    if [ ! -d "$cached" ]; then
+        log "Building patched LibreOffice $version"
+        echo "deb-src http://deb.debian.org/debian $SUITE main" > /etc/apt/sources.list.d/wildos-src.list
+        echo "deb-src http://deb.debian.org/debian-security $SUITE-security main" >> /etc/apt/sources.list.d/wildos-src.list
+        apt-get update -qq
+        profiles="nocheck nodoc noinsttest"
+        DEBIAN_FRONTEND=noninteractive apt-get build-dep -y -qq -P "${profiles// /,}" "libreoffice=$version" >/dev/null
+        rm -rf lo-src && mkdir lo-src && cd lo-src
+        apt-get source -qq "libreoffice=$version" >/dev/null
+        cd libreoffice-*/
+        for patch in "$SRC"/build/patches/libreoffice/*.patch; do
+            cp "$patch" debian/patches/
+            basename "$patch" >> debian/patches/series
+        done
+        {
+            printf 'libreoffice (%s%s) %s; urgency=medium\n\n' "$version" "$(wildos_suffix libreoffice)" "$SUITE"
+            printf '  * Wild OS patches: %s\n\n' "$(cd "$SRC/build/patches/libreoffice" && ls *.patch | tr '\n' ' ')"
+            printf ' -- Wild OS Developers <dev@wildos.io>  %s\n\n' "$(date -R)"
+            cat debian/changelog
+        } > debian/changelog.new
+        mv debian/changelog.new debian/changelog
+        # On amd64 Debian compiles everything twice, first without a GUI for
+        # the -nogui packages; Wild OS ships none of those. LibreOffice keeps
+        # a compiler cache of its own beside the shared one (its objects
+        # alone would fill that and push out everything else's), so a patch
+        # change recompiles only the files it touches rather than all of
+        # LibreOffice.
+        CCACHE_DIR=/ccache/libreoffice CCACHE_MAXSIZE=40G \
+        DEB_BUILD_PROFILES="$profiles" DEB_BUILD_OPTIONS="nocheck nodoc noautodbgsym parallel=$BUILD_THREADS" \
+            dpkg-buildpackage -us -uc -B -R'debian/rules BUILD_NOGUI_PACKAGES=n' >/dev/null
+        # Filled under another name and renamed when complete, so a build
+        # that stops half way is not taken for a finished one next time.
+        part="$cached.part"
+        rm -rf "$part" && mkdir -p "$part"
+        cp ../*+wildos[0-9]*_*.deb "$part/"
+        rm -f "$part"/*dbgsym* "$part"/*-tests_* "$part"/*-smoketest-*
+        built="$PWD/instdir/share/config/soffice.cfg"
+        # The uiconfig packages the rebuilt ones require, republished at the
+        # new version. Only those: libreoffice-common, which is not rebuilt,
+        # requires Debian's uiconfig-common at Debian's version.
+        mkdir -p "$WORK/lo-uiconfig" && cd "$WORK/lo-uiconfig"
+        for pkg in $(for deb in "$part"/*.deb; do dpkg-deb -f "$deb" Depends; done |
+                     { grep -o 'libreoffice-uiconfig-[a-z-]*' || true; } | sort -u); do
+            apt-get download -qq "$pkg=$version"
+            deb=$(ls "${pkg}"_*.deb)
+            dpkg-deb -R "$deb" repack
+            cfg=repack/usr/lib/libreoffice/share/config/soffice.cfg
+            if [ -d "$cfg" ]; then
+                (cd "$cfg" && find . -type f) | while read -r f; do
+                    if [ -f "$built/$f" ] && ! cmp -s "$built/$f" "$cfg/$f"; then
+                        cp "$built/$f" "$cfg/$f"
+                    fi
+                done
+            fi
+            (cd repack && find usr -type f -exec md5sum {} + > DEBIAN/md5sums)
+            sed -i "s/^Version: .*/Version: $version$(wildos_suffix libreoffice)/" repack/DEBIAN/control
+            dpkg-deb -b repack "$part/" >/dev/null
+            rm -rf repack "$deb"
+        done
+        cd "$WORK" && rm -rf lo-uiconfig lo-src
+        mv "$part" "$cached"
+    fi
+    cp "$cached"/*.deb "$WORK/repo/"
+)
+# libfprint with the patch from build/patches/libfprint: the open driver for
+# the Goodix 27c6:533c reader in the Dell XPS 13 9300 and 9310 (only its
+# 533c family, which never writes a key or firmware to the sensor), with
+# every other reader Debian's libfprint drives unchanged. Its own test suite
+# runs once, when the rebuild is made. Republished +wildos1 like KIO, since
+# its packages require each other's exact version. Cached like Calamares.
+(
+    cd "$WORK"
+    version=$(apt-cache policy libfprint-2-2 | sed -n 's/^  Candidate: //p')
+    if [ -z "$version" ] || [ "$version" = "(none)" ]; then
+        apt-get update -qq
+        version=$(apt-cache policy libfprint-2-2 | sed -n 's/^  Candidate: //p')
+    fi
+    stamp=$(cat "$SRC"/build/patches/libfprint/*.patch | sha256sum | cut -c1-12)
+    cached="$REBUILDS/libfprint/$version$(wildos_suffix libfprint)-$stamp"
+    if [ ! -d "$cached" ]; then
+        log "Building patched libfprint $version"
+        echo "deb-src http://deb.debian.org/debian $SUITE main" > /etc/apt/sources.list.d/wildos-src.list
+        apt-get update -qq
+        DEBIAN_FRONTEND=noninteractive apt-get build-dep -y -qq "libfprint=$version" >/dev/null
+        rm -rf libfprint-src && mkdir libfprint-src && cd libfprint-src
+        apt-get source -qq "libfprint=$version" >/dev/null
+        cd libfprint-*/
+        mkdir -p debian/patches
+        for patch in "$SRC"/build/patches/libfprint/*.patch; do
+            cp "$patch" debian/patches/
+            basename "$patch" >> debian/patches/series
+        done
+        cat >> debian/copyright <<'COPYRIGHT'
+
+Added by Wild OS: libfprint/drivers/goodix53x5 and tests/test-goodix53x5-*,
+from https://github.com/seaweeduk/goodix53x5-libfprint pull request 334.
+Copyright © 2024-2026 goodix-fp-linux-dev contributors, under the same
+licence as the rest of libfprint (LGPL 2.1 or any later version).
+COPYRIGHT
+        {
+            printf 'libfprint (%s%s) %s; urgency=medium\n\n' "$version" "$(wildos_suffix libfprint)" "$SUITE"
+            printf '  * Wild OS patches: %s\n\n' "$(cd "$SRC/build/patches/libfprint" && ls *.patch | tr '\n' ' ')"
+            printf ' -- Wild OS Developers <dev@wildos.io>  %s\n\n' "$(date -R)"
+            cat debian/changelog
+        } > debian/changelog.new
+        mv debian/changelog.new debian/changelog
+        DEB_BUILD_OPTIONS="nodoc parallel=$BUILD_THREADS" dpkg-buildpackage -us -uc -B >/dev/null
+        fill="$cached.part.$BASHPID"
+        rm -rf "$fill" && mkdir -p "$fill"
+        cp ../*+wildos[0-9]*_*.deb "$fill/"
+        rm -f "$fill"/*dbgsym* "$fill"/*-tests_*
+        cd "$WORK" && rm -rf libfprint-src
         # Another build may have made the same one meanwhile; either copy is good.
         mv -T "$fill" "$cached" 2>/dev/null || rm -rf "$fill"
     fi

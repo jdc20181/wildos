@@ -2,11 +2,14 @@
 
 #include <QDBusObjectPath>
 #include <QDateTime>
+#include <QElapsedTimer>
 #include <QObject>
 #include <QQmlEngine>
 #include <QVariantList>
 
 #include <PackageKit/Transaction>
+
+#include <functional>
 
 // Checks for and installs system updates through PackageKit, the service the
 // Store uses, so both always agree on what is waiting.
@@ -26,7 +29,14 @@ class Updates : public QObject
     Q_PROPERTY(QVariantList history READ history NOTIFY historyChanged)
     Q_PROPERTY(int progress READ progress NOTIFY progressChanged)
     Q_PROPERTY(QString detail READ detail NOTIFY progressChanged)
+    // Another install (usually the automatic security updates) holds the
+    // package system, and the check or install waits for it.
+    Q_PROPERTY(bool waiting READ waiting NOTIFY progressChanged)
     Q_PROPERTY(QString error READ error NOTIFY stateChanged)
+    // Software sources added by other software that the last check could
+    // not use, in a sentence, while everything else was checked. Empty when
+    // none failed.
+    Q_PROPERTY(QString skippedSources READ skippedSources NOTIFY stateChanged)
     Q_PROPERTY(bool restartNeeded READ restartNeeded NOTIFY restartNeededChanged)
     Q_PROPERTY(bool available READ available CONSTANT)
     // Wild OS builds: the one installed and the one waiting, 0 when unknown
@@ -49,7 +59,9 @@ public:
     QVariantList history() const { return m_history; }
     int progress() const { return m_progress; }
     QString detail() const { return m_detail; }
+    bool waiting() const { return m_waiting; }
     QString error() const { return m_error; }
+    QString skippedSources() const { return m_skipped; }
     bool restartNeeded() const { return m_restartNeeded; }
     bool available() const;
     int installedBuild() const { return m_installedBuild; }
@@ -93,6 +105,12 @@ private:
     static QString errorText(PackageKit::Transaction::Error error, bool installing);
     void startInstall();
     void refreshThenInstall();
+    void refreshForCheck();
+    bool onlyOthersFailed(const QString &details);
+    void readUpdates(bool quiet);
+    bool lockHeld(PackageKit::Transaction::Error error);
+    void retryAfterLock(const std::function<void()> &retry);
+    void setWaiting(bool waiting);
     void readInstalledBuild();
     bool readNotes(const QByteArray &json);
 
@@ -106,6 +124,8 @@ private:
     int m_progress = 0;
     QString m_detail;
     QString m_error;
+    QString m_skipped;
+    bool m_partialRefresh = false;
     bool m_restartNeeded = false;
     // An install that failed because the update lists were out of date
     // (a package file the lists name is gone) checks again and retries
@@ -113,6 +133,11 @@ private:
     bool m_staleRetrying = false;
     bool m_staleRetried = false;
     bool m_installAfterList = false;
+    // Set by a transaction that failed only because the lock was held; it
+    // runs again once the wait below allows.
+    bool m_lockBlocked = false;
+    QElapsedTimer m_lockWait;
+    bool m_waiting = false;
     int m_installedBuild = 0;
     int m_pendingBuild = 0;
     QVariantList m_notes;

@@ -22,8 +22,8 @@ Item {
         radius: 13
         gradient: Gradient {
             orientation: Gradient.Vertical
-            GradientStop { position: 0; color: "#3a4466" }
-            GradientStop { position: 1; color: "#1a2036" }
+            GradientStop { position: 0; color: "#4a4c50" }
+            GradientStop { position: 1; color: "#232529" }
         }
 
         StoreIcon {
@@ -47,7 +47,7 @@ Item {
             width: parent.width
             text: row.title
             size: 14.5
-            font.weight: Font.DemiBold
+            font.weight: UI.Style.weightSemiBold
             wrapMode: Text.Wrap
             elide: Text.ElideNone
         }

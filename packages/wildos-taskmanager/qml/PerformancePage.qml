@@ -107,7 +107,7 @@ Item {
                 UI.Label {
                     text: page.info.title || ""
                     size: 22
-                    font.weight: Font.DemiBold
+                    font.weight: UI.Style.weightSemiBold
                 }
 
                 UI.Label {
@@ -272,8 +272,9 @@ Item {
                             TextMetrics {
                                 id: fit
                                 font.family: UI.Style.fontFamily
+                                font.letterSpacing: UI.Style.tracking(UI.Style.px(18))
                                 font.pixelSize: UI.Style.px(18)
-                                font.weight: Font.Medium
+                                font.weight: UI.Style.weightMedium
                                 text: modelData.value || ""
                             }
 
@@ -281,7 +282,7 @@ Item {
                                 width: parent.width
                                 text: modelData.value
                                 size: fit.advanceWidth > parent.width ? 15 : 18
-                                font.weight: Font.Medium
+                                font.weight: UI.Style.weightMedium
                                 font.features: { "tnum": 1 }
                             }
                         }

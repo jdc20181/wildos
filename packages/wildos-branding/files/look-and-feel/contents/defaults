@@ -3,7 +3,7 @@ ColorScheme=WildOS
 AccentColor=143,180,255
 
 [kdeglobals][Icons]
-Theme=WildOS
+Theme=WildOS-dark
 
 [kdeglobals][KDE]
 widgetStyle=kvantum

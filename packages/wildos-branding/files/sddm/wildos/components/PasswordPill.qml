@@ -85,6 +85,7 @@ FocusScope {
             text: field.placeholderText
             color: field.placeholderTextColor
             font.family: UI.Style.fontFamily
+            font.letterSpacing: UI.Style.tracking(field.font.pixelSize)
             font.pixelSize: field.font.pixelSize
             elide: Text.ElideRight
         }

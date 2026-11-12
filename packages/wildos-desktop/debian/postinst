@@ -29,6 +29,11 @@ if [ "$1" = "triggered" ]; then
 fi
 
 if [ "$1" = "configure" ]; then
+    # Fingerprint sign-in (usr/share/pam-configs/wildos-fingerprint) goes
+    # into common-auth without touching the rest of it.
+    if command -v pam-auth-update >/dev/null; then
+        pam-auth-update --package
+    fi
     /usr/libexec/wildos/wildos-app-names
     /usr/libexec/wildos/wildos-strings
     mkdir -p "$DISABLED"

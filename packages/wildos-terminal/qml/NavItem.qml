@@ -62,7 +62,7 @@ T.AbstractButton {
                 id: label
                 anchors.verticalCenter: parent.verticalCenter
                 text: item.text
-                font.weight: item.current ? Font.DemiBold : Font.Normal
+                font.weight: item.current ? UI.Style.weightSemiBold : UI.Style.weightRegular
             }
         }
     }

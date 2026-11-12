@@ -28,7 +28,7 @@ PageScroll {
                 Layout.fillWidth: true
                 text: "Lock screen picture"
                 size: 15
-                font.weight: Font.DemiBold
+                font.weight: UI.Style.weightSemiBold
             }
 
             UI.Label {

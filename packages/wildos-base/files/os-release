@@ -1,7 +1,7 @@
-PRETTY_NAME="Wild OS 0.1 (Alpha)"
+PRETTY_NAME="Wild OS 0.1 Alpha 2"
 NAME="Wild OS"
 VERSION_ID="0.1"
-VERSION="0.1 (Alpha)"
+VERSION="0.1 Alpha 2"
 VERSION_CODENAME=trixie
 DEBIAN_CODENAME=trixie
 ID=wildos

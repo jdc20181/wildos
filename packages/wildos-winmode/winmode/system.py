@@ -8,11 +8,13 @@ window list. Sleep and shutdown handling (logind's delay inhibitor, board
 system bus; polkit lets the active local user in (org.wildos.winmode.use).
 """
 
+import hashlib
 import json
 import os
 import pwd
 import re
 import secrets
+import shutil
 import socket
 import subprocess
 import sys
@@ -21,7 +23,7 @@ import time
 
 from gi.repository import Gio, GLib
 
-from . import config, dbusutil, documents, firewall, guestlink, hostinfo, lifecycle, paths, qga, setup, virsh
+from . import config, dbusutil, documents, firewall, guestlink, hostinfo, lifecycle, paths, qga, setup, usb, virsh
 
 XML = """
 <node>
@@ -94,8 +96,16 @@ XML = """
       <arg name="message" type="s" direction="in"/>
       <arg type="s" direction="out"/>
     </method>
+    <method name="Remove"><arg type="s" direction="out"/></method>
+    <method name="UsbDevices"><arg type="s" direction="out"/></method>
+    <method name="SetUsbDevice">
+      <arg name="port" type="s" direction="in"/>
+      <arg name="use" type="b" direction="in"/>
+      <arg type="s" direction="out"/>
+    </method>
     <signal name="Changed"/>
     <signal name="WindowsChanged"><arg name="windows" type="s"/></signal>
+    <signal name="UsbChanged"/>
   </interface>
 </node>
 """
@@ -125,6 +135,24 @@ SHUTDOWN_WAIT = 90
 # The share of logind's InhibitDelayMaxSec (60 s, data/logind) that saving
 # or shutting Windows down may use when the PC itself shuts down.
 PC_SHUTDOWN_BUDGET = 50
+# Windows is saved rather than shut down as the PC shuts down, so it only
+# restarts when restart_windows does it: on mains, with no app open, once
+# an update waits for a restart or a week after the last one. Asked at
+# most this often, as asking takes a few seconds of the guest agent.
+UPDATE_CHECK_EVERY = 3600
+UPDATE_RESTART_DAYS = 7
+# A restart that installs updates can take a while to shut down.
+UPDATE_RESTART_WAIT = 900
+NEEDS_RESTART_SCRIPT = (
+    r"$p = (Test-Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Auto Update\RebootRequired') -or "
+    r"(Test-Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Component Based Servicing\RebootPending'); "
+    r"$d = [int][math]::Floor(((Get-Date) - (Get-CimInstance Win32_OperatingSystem).LastBootUpTime).TotalDays); "
+    r'"$p $d"')
+# Removing Windows mode needs an administrator every time.
+REMOVE_ACTION = "org.wildos.winmode.remove"
+# What a removal keeps of the service's own state: choices about this PC
+# rather than about the Windows that was on it.
+KEPT_ON_REMOVE = ("file_sharing",)
 
 
 def log(*parts):
@@ -180,11 +208,22 @@ def drop_virtiofs(xml):
 
 # Windows' processor share while it boots ahead of time (the default is 100).
 BACKGROUND_CPU_WEIGHT = 20
-# Windows' share of memory follows what it uses (trim_memory), in KiB.
-TRIM_HEADROOM_KIB = 1536 * 1024
-TRIM_FLOOR_KIB = 3 * 1024 * 1024
-TRIM_STEP_KIB = 512 * 1024
+# Windows' share of memory follows what it uses (trim_memory), in KiB. An
+# idle Windows uses 1.2 to 1.5 GB; measured on Debian 13's libvirt, it barely
+# pages at what it uses plus 512 MB, and every MB the balloon takes comes
+# back to Wild OS. The old 1.5 GB headroom and 3 GB floor held about 1 GB
+# more than that for nothing.
+TRIM_HEADROOM_KIB = 512 * 1024
+TRIM_FLOOR_KIB = 1536 * 1024
+TRIM_STEP_KIB = 256 * 1024
 TRIM_AFTER = 60
+# How long a pause or save waits for the balloon to reach its last trim:
+# the less Windows holds, the less a save writes and a restore reads.
+TRIM_SETTLE = 15
+# Guest scripts brought up to date in an existing Windows when wild-guest
+# connects (guest_upkeep), in this order, each by the $version line inside it.
+UPKEEP_SCRIPTS = ("opengl", "tune")
+TUNE_DIR = r"C:\Program Files\Wild OS"
 
 
 class Service:
@@ -210,6 +249,8 @@ class Service:
         self.inhibitor = None
         self.pc_shutting_down = False
         self.memory_tried = -MEMORY_RETRY
+        self.update_checked = -UPDATE_CHECK_EVERY
+        self.guest_update_tried = -3600.0
         self.idle_timer = None
         self.window_list_timer = None
         self.upkeep_running = False
@@ -217,6 +258,7 @@ class Service:
         # Taken from the main loop (claim) and from wake's worker thread.
         self.bind_lock = threading.Lock()
         self.link = guestlink.GuestLink(self.guest_event, self.guest_state)
+        self.usb = usb.UsbManager(self)
         self.export = dbusutil.Exported(bus, config.OBJECT_PATH, XML, config.HOST_INTERFACE, {
             "Status": (self.m_status, "s", False),
             "Wake": (self.m_wake, "s", True),
@@ -240,6 +282,9 @@ class Service:
             "SetupControl": (self.m_setup_control, "s", True),
             "Firmware": (self.m_firmware, "s", True),
             "SetProductKey": (self.m_set_product_key, "s", True),
+            "Remove": (self.m_remove, "s", True),
+            "UsbDevices": (self.usb.m_devices, "s", True),
+            "SetUsbDevice": (self.usb.m_set, "s", True),
         }, authorize=self.authorize)
         self.power = hostinfo.Power(bus, self.host_changed)
         self.pressure = hostinfo.PressureWatch(self.host_changed)
@@ -252,6 +297,7 @@ class Service:
         self.refresh()
         self.setup_changed()
         self.setup.resume_after_restart()
+        self.usb.start()
         GLib.timeout_add_seconds(30, self.slow_check)
         bus.signal_subscribe("org.freedesktop.login1", "org.freedesktop.login1.Manager", "PrepareForShutdown",
                              "/org/freedesktop/login1", None, Gio.DBusSignalFlags.NONE, self.preparing_shutdown)
@@ -292,9 +338,13 @@ class Service:
         open the person was asked as the session ended (board 9.9, the
         agent), unless the PC was shut down some other way, so the safe
         choice is taken here: Windows saved to disk as it is, and the next
-        sign-in reopens it. With nothing open it shuts down cleanly, which
-        also spares libvirt-guests' wait. A save or shutdown the person
-        chose is let finish first. A setup in progress is left to
+        sign-in reopens it. With nothing open it is saved to disk too, so
+        the first app after the PC starts again loads it back in seconds
+        instead of waiting a minute or two for Windows to boot (measured on
+        an XPS 13: 104 s). Windows still restarts for its updates, in the
+        background (restart_windows). It shuts down cleanly only when a new
+        memory limit or a fresh sign-in needs it. A save or shutdown the
+        person chose is let finish first. A setup in progress is left to
         libvirt-guests, so setup carries on after the restart as it was."""
         if self.setup.thread and self.setup.thread.is_alive():
             return
@@ -310,6 +360,13 @@ class Service:
                 self.do_save()
                 self.state["kept"] = {"at": int(time.time())}
                 self.save_state()
+                return
+            except virsh.VirshError as e:
+                log("saving Windows as the PC shuts down:", e)
+        elif self.save_ok() and not self.restart_wanted():
+            log("the PC is shutting down: saving Windows to disk, so its first app afterwards is quick")
+            try:
+                self.do_save()
                 return
             except virsh.VirshError as e:
                 log("saving Windows as the PC shuts down:", e)
@@ -456,7 +513,9 @@ class Service:
         """virsh event streams lifecycle events, so state changes arrive as
         they happen with nothing polling."""
         try:
-            self.events = subprocess.Popen(["virsh", "-q", "-c", virsh.URI, "event", "--all", "--loop", "--event", "lifecycle"],
+            # No --all: virsh refuses it alongside --event, so the watcher used
+            # to exit at once and only launches and wakes ever saw a change.
+            self.events = subprocess.Popen(["virsh", "-q", "-c", virsh.URI, "event", "--loop", "--event", "lifecycle"],
                                            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
         except OSError:
             self.events = None
@@ -477,11 +536,13 @@ class Service:
         GLib.io_add_watch(self.events.stdout.fileno(), GLib.PRIORITY_DEFAULT, GLib.IO_IN | GLib.IO_HUP, readable)
 
     def host_changed(self):
+        since = self.state.get("since") or {}
+        paused_for = time.time() - since["at"] if since.get("state") == "paused" and since.get("at") else None
         action = self.life.reconsider_paused(self.state["when_idle"], self.power.on_battery, *hostinfo.meminfo(),
-                                             hostinfo.under_pressure())
+                                             hostinfo.under_pressure(), paused_for)
         # A wake or anything else holding Windows awake comes first.
         if action == lifecycle.SAVE and self.save_ok() and not self.busy_action and not self.life.busy_reasons:
-            log("host needs the memory or is on battery: saving the paused guest to disk")
+            log("paused long enough, or the host needs the memory or is on battery: saving the paused guest to disk")
             self.run_idle(lifecycle.SAVE)
 
     def slow_check(self):
@@ -490,6 +551,9 @@ class Service:
         drops what it cannot send while the channel reconnects)."""
         self.host_changed()
         st = virsh.state(self.domain)
+        if st != self.life.vm_state and not self.busy_action:
+            # A lifecycle event that never came.
+            self.refresh()
         if self.restart_wanted() and not self.busy_action:
             if st == "shut off":
                 # Off already: the next start takes the new limit.
@@ -521,14 +585,19 @@ class Service:
         every launch (wake) give it everything back."""
         if self.busy_action or self.life.busy() or time.monotonic() - self.last_wake < TRIM_AFTER:
             return
+        self.set_trim()
+
+    def set_trim(self):
+        """Sets the balloon to what Windows uses plus headroom and returns
+        that target in KiB, or None when Windows' figures are not in."""
         try:
             stats = virsh.memory_stats(self.domain)
         except virsh.VirshError:
-            return
+            return None
         actual, usable = stats.get("actual"), stats.get("usable")
         ceiling = virsh.defined_memory(self.domain, inactive=False) // 1024
         if not actual or usable is None or not ceiling:
-            return
+            return None
         used = actual - usable
         target = max(TRIM_FLOOR_KIB, min(ceiling, used + TRIM_HEADROOM_KIB))
         # Small moves cost more than they save; growing is never held back.
@@ -537,6 +606,23 @@ class Service:
                 virsh.set_memory(self.domain, target)
             except virsh.VirshError as e:
                 log("memory:", e)
+                return None
+        return target
+
+    def settle_trim(self):
+        """Before a pause or a save: one last trim, then a few seconds for
+        the balloon to get there. Gives up at once if an app is opened."""
+        target = self.set_trim()
+        if target is None:
+            return
+        deadline = time.monotonic() + TRIM_SETTLE
+        while time.monotonic() < deadline and not self.life.busy():
+            try:
+                if virsh.memory_stats(self.domain).get("actual", 0) <= target + TRIM_STEP_KIB:
+                    return
+            except virsh.VirshError:
+                return
+            time.sleep(1)
 
     def match_cpus(self):
         """Windows gets every processor thread, up to 8, when setup defines it
@@ -597,6 +683,7 @@ class Service:
                 self.set_windows({})
         self.schedule_idle()
         if st != prev:
+            self.usb.vm_changed(st)
             self.changed()
 
     def note_since(self, prev, st):
@@ -667,7 +754,15 @@ class Service:
         self.changed()
 
     def guest_upkeep(self):
-        """A Windows set up before guest/opengl.ps1 existed (or whose setup
+        """Guest scripts newer than the ones this Windows has had run in it
+        when wild-guest connects, in the background, one after another.
+
+        tune.ps1 keeps Windows lean. Only a Windows that setup gave it to
+        (state["tune"] set by Setup.finish) gets newer versions this way; a
+        Windows set up before it existed is left as it is, because the
+        clean-up removes apps and features its owner may already be using.
+
+        A Windows set up before guest/opengl.ps1 existed (or whose setup
         could not download Mesa) gets it the first time wild-guest connects,
         in the background. Programs only see it from Windows' next sign-in:
         GALLIUM_DRIVER reaches new sign-ins only, and apps start from the
@@ -680,22 +775,36 @@ class Service:
         time no Windows app is open, as for a new memory limit."""
         if self.state.get("setting_up") or self.upkeep_running:
             return
-        try:
-            with open(os.path.join(config.DATA, "guest", "opengl.ps1"), encoding="utf-8") as f:
-                script = f.read()
-        except OSError as e:
-            log("opengl:", e)
-            return
-        m = re.search(r"^\$version = '([^']+)'", script, re.M)
-        if not m or self.state.get("opengl") == m.group(1):
-            return
-        version = m.group(1)
+        for name in UPKEEP_SCRIPTS:
+            if name == "tune" and not self.state.get("tune"):
+                continue
+            try:
+                with open(os.path.join(config.DATA, "guest", name + ".ps1"), encoding="utf-8") as f:
+                    script = f.read()
+            except OSError as e:
+                log(f"{name}:", e)
+                continue
+            m = re.search(r"^\$version = '([^']+)'", script, re.M)
+            if m and self.state.get(name) != m.group(1):
+                self.run_upkeep(name, script, m.group(1))
+                return
+
+    def run_upkeep(self, name, script, version):
+        """One upkeep script, in the background. tune.ps1 has to stay inside
+        Windows (its start-up task runs it at every boot), so it is copied
+        in and run from there; opengl.ps1 runs once and is gone."""
         self.upkeep_running = True
         self.life.hold(time.monotonic(), "upkeep", True)
 
         def work():
-            code, out, err = qga.powershell(self.domain, script, 600)
-            return code, (out + err).strip()
+            if name == "tune":
+                qga.powershell(self.domain, f"New-Item -ItemType Directory -Force '{TUNE_DIR}' | Out-Null", 60)
+                qga.write_file(self.domain, TUNE_DIR + r"\tune.ps1", script.encode("utf-8"))
+                # Removing Windows capabilities alone took ten minutes once.
+                code, out, err = qga.powershell(self.domain, f"& '{TUNE_DIR}\\tune.ps1' -Install", 1800)
+            else:
+                code, out, err = qga.powershell(self.domain, script, 600)
+            return code, out.strip(), err.strip()
 
         def finished(result):
             self.upkeep_running = False
@@ -703,16 +812,19 @@ class Service:
             self.schedule_idle()
             if isinstance(result, Exception) or result[0] != 0:
                 # Tried again when wild-guest next connects.
-                log("opengl: not installed:", result if isinstance(result, Exception) else result[1][-300:])
+                log(f"{name}: not done:", result if isinstance(result, Exception) else (result[1] + result[2])[-300:])
                 return
+            # The script's own last line; PowerShell's warnings go to the error
+            # stream and must not be mistaken for it.
             last = result[1].splitlines()[-1] if result[1] else "done"
-            log("opengl:", last, version)
-            self.state["opengl"] = version
-            if last.strip() == "installed":
+            log(f"{name}:", last, version)
+            self.state[name] = version
+            if name == "opengl" and last.strip() == "installed":
                 self.state["restart_pending"] = True
                 if virsh.state(self.domain) in ("paused", "saved") and not self.busy_action:
                     self.restart_for_memory()
             self.save_state()
+            self.guest_upkeep()
 
         dbusutil.in_thread(work, done=finished)
 
@@ -810,6 +922,12 @@ class Service:
             log(f"no Windows app open for {self.cfg['idle_seconds']} s: shutting down for the new memory limit or a fresh sign-in")
             self.restart_for_memory()
             return False
+        if (self.life.due(time.monotonic()) and not self.busy_action and not self.upkeep_running
+                and time.monotonic() - self.guest_update_tried >= 3600
+                and virsh.state(self.domain) == "running" and self.guest_outdated()):
+            log(f"no Windows app open for {self.cfg['idle_seconds']} s: updating wild-guest inside Windows first")
+            self.update_guest()
+            return False
         if self.life.due(time.monotonic()) and not self.busy_action:
             action = lifecycle.idle_action(self.state["when_idle"], self.power.on_battery, *hostinfo.meminfo(),
                                            hostinfo.under_pressure())
@@ -833,6 +951,14 @@ class Service:
 
         def work():
             t0 = time.monotonic()
+            if (virsh.state(self.domain) == "running" and not self.power.on_battery
+                    and time.monotonic() - self.update_checked >= UPDATE_CHECK_EVERY):
+                self.update_checked = time.monotonic()
+                why = self.windows_needs_restart()
+                if why:
+                    return ("restart", why)
+            if virsh.state(self.domain) == "running":
+                self.settle_trim()
             if action == lifecycle.PAUSE:
                 virsh.suspend(self.domain)
             else:
@@ -841,6 +967,11 @@ class Service:
 
         def finished(result):
             self.busy_action = None
+            if isinstance(result, tuple):
+                self.restart_windows(result[1])
+                if done:
+                    done(result)
+                return
             if isinstance(result, Exception):
                 self.error = str(result)
                 log(f"{action} failed:", result)
@@ -852,6 +983,65 @@ class Service:
             self.changed()
             if done:
                 done(result)
+
+        dbusutil.in_thread(work, done=finished)
+
+    def windows_needs_restart(self):
+        """Why Windows should restart now, or None: an update waiting for a
+        restart, or UPDATE_RESTART_DAYS since the last one. Windows is
+        saved rather than shut down as the PC shuts down, so without this
+        it would never restart to finish its updates."""
+        try:
+            code, out, _ = qga.powershell(self.domain, NEEDS_RESTART_SCRIPT, 30)
+            pending, days = out.strip().splitlines()[-1].split()
+            days = int(days)
+        except (virsh.VirshError, ValueError, IndexError, TimeoutError) as e:
+            log("couldn't ask Windows whether it needs a restart:", e)
+            return None
+        if pending == "True":
+            return "an update is waiting for a restart"
+        if days >= UPDATE_RESTART_DAYS:
+            return f"it last restarted {days} days ago"
+        return None
+
+    def restart_windows(self, why):
+        """Restarts Windows while no app is open and the PC is on mains:
+        a clean shutdown, which finishes installing any update, then a
+        start in the background like the one at sign-in, so the next app
+        still finds it ready. An app opened meanwhile waits for it, as it
+        would for a start from off."""
+        log(f"no Windows app open: restarting Windows in the background, as {why}")
+        self.busy_action = "restart"
+        # Not idle while it boots and signs in (see m_prestart).
+        self.life.hold(time.monotonic(), PRESTART_HOLD, True)
+        self.changed()
+
+        def work():
+            virsh.run("shutdown", self.domain, check=False)
+            deadline = time.monotonic() + UPDATE_RESTART_WAIT
+            while virsh.state(self.domain) != "shut off":
+                if time.monotonic() > deadline:
+                    raise RuntimeError("Windows didn't shut down to restart")
+                time.sleep(2)
+            try:
+                return self.wake(background=True)
+            finally:
+                self.set_cpu_weight(100)
+
+        def finished(result):
+            self.busy_action = None
+            if isinstance(result, Exception):
+                log("restarting Windows:", result)
+            else:
+                log(f"Windows restarted in {result.get('seconds')} s")
+
+            def release():
+                self.life.hold(time.monotonic(), PRESTART_HOLD, False)
+                self.schedule_idle()
+                return False
+            GLib.timeout_add_seconds(PRESTART_SIGN_IN_SECONDS, release)
+            self.refresh()
+            self.changed()
 
         dbusutil.in_thread(work, done=finished)
 
@@ -1524,6 +1714,143 @@ class Service:
             return json.dumps({"type": "error", "error": "not a request"})
         return self.guest_request(msg, defer, 30)
 
+    def m_remove(self, sender, defer):
+        """Settings' Remove Windows mode, through the person's agent: after an
+        administrator's password, Windows, its disk, its saved memory and
+        firmware settings, the downloads and secrets setup kept, and the
+        record of it all are deleted, and Windows mode is back to not set
+        up. The shared folders are the person's own and are not touched.
+        "" when done, else a sentence to show."""
+        why = self.claim(sender)
+        if why:
+            return why
+
+        def allowed(ok):
+            if not ok:
+                defer.done("Windows mode wasn't removed. It needs an administrator's password.")
+                return
+            log("removing Windows mode")
+            self.life.hold(time.monotonic(), "remove", True)
+            dbusutil.in_thread(self.remove_windows, done=finished)
+
+        def finished(result):
+            self.life.hold(time.monotonic(), "remove", False)
+            self.refresh()
+            self.setup_changed()
+            if isinstance(result, Exception):
+                log("removing Windows mode:", repr(result))
+                defer.done("Windows mode couldn't be removed completely. Restart the PC, then try again.")
+                return
+            defer.done(result)
+
+        self.check_admin(sender, REMOVE_ACTION, allowed)
+        return defer
+
+    def remove_windows(self):
+        """From a worker thread. Whatever Windows was doing is ended, not
+        saved: it is about to be deleted."""
+        deadline = time.monotonic() + 120
+        while (self.busy_action or self.saving or self.upkeep_running) and time.monotonic() < deadline:
+            time.sleep(0.2)
+        try:
+            disks = [d for d in virsh.disk_files(self.domain) if d.startswith(config.STATE_DIR + os.sep)]
+        except virsh.VirshError:
+            disks = []
+        # Stops a setup under way and deletes the virtual PC with its saved
+        # memory and firmware settings, its disk and setup's secrets.
+        self.setup.cancel()
+        if virsh.state(self.domain) != "":
+            # A definition with snapshots refuses a plain undefine.
+            virsh.run("destroy", self.domain, check=False)
+            virsh.run("undefine", self.domain, "--nvram", "--managed-save", "--snapshots-metadata", check=False)
+        if virsh.state(self.domain) != "":
+            return "Windows mode couldn't delete Windows. Restart the PC, then try again."
+        for path in disks + [os.path.join(config.STATE_DIR, name) for name in ("domain.xml", "usb-device.xml")]:
+            try:
+                os.remove(path)
+            except OSError:
+                pass
+        for folder in (setup.CACHE, setup.SECRETS):
+            shutil.rmtree(folder, ignore_errors=True)
+        self.usb.remembered = {}
+        self.usb.save()
+        self.windows = {}
+        self.error = None
+        self.memory = 0
+        kept = {k: self.state[k] for k in KEPT_ON_REMOVE if k in self.state}
+        self.state.clear()
+        self.state.update(kept, when_idle=self.cfg["when_idle"])
+        self.save_state()
+        log("Windows mode was removed")
+        return ""
+
+    def check_admin(self, sender, action, reply):
+        """Asks polkit for `action`, letting it show the password prompt."""
+        uid = self.sender_uid(sender)
+        if uid == 0:
+            reply(True)
+            return
+
+        def got(conn, res):
+            try:
+                ok = bool(conn.call_finish(res).unpack()[0][0])
+            except GLib.Error as e:
+                log("polkit:", e.message)
+                ok = False
+            reply(ok)
+
+        subject = ("system-bus-name", {"name": GLib.Variant("s", sender)})
+        self.bus.call("org.freedesktop.PolicyKit1", "/org/freedesktop/PolicyKit1/Authority",
+                      "org.freedesktop.PolicyKit1.Authority", "CheckAuthorization",
+                      GLib.Variant("((sa{sv})sa{ss}us)", (subject, action, {}, 1, "")),
+                      GLib.VariantType("((bba{ss}))"), Gio.DBusCallFlags.NONE, 300000, None, got)
+
+    def guest_exe_digest(self):
+        try:
+            with open(self.cfg["guest_exe"], "rb") as f:
+                return hashlib.sha256(f.read()).hexdigest()[:16]
+        except OSError:
+            return None
+
+    def guest_outdated(self):
+        """Whether the wild-guest inside Windows is older than this
+        package's. Setup and an install record which one went in; a Windows
+        from before this was recorded gets the package's once."""
+        digest = self.guest_exe_digest()
+        return bool(digest) and self.state.get("guest_exe") != digest
+
+    def update_guest(self):
+        """Puts this package's wild-guest into Windows, only while no app is
+        open (from idle_fired): the service and the session helper restart,
+        and so does the connection, which a new app opens again. Before
+        this, a wild-guest fix reached only new setups."""
+        self.upkeep_running = True
+        self.guest_update_tried = time.monotonic()
+        self.life.hold(time.monotonic(), "upkeep", True)
+        digest = self.guest_exe_digest()
+
+        def work():
+            with open(self.cfg["guest_exe"], "rb") as f:
+                data = f.read()
+            target = r"C:\Program Files\Wild OS\wild-guest.exe"
+            qga.write_file(self.domain, target + ".new", data)
+            code, out, err = qga.powershell(self.domain, INSTALL_GUEST_PS, 90)
+            return code, (out + err).strip()[-300:]
+
+        def finished(result):
+            self.upkeep_running = False
+            self.life.hold(time.monotonic(), "upkeep", False)
+            if isinstance(result, Exception) or result[0] != 0:
+                # Tried again an hour on (guest_update_tried).
+                log("wild-guest: not updated:", result if isinstance(result, Exception) else result[1])
+            else:
+                log("wild-guest: updated to", digest)
+                self.state["guest_exe"] = digest
+                self.save_state()
+            self.schedule_idle()
+
+        dbusutil.in_thread(work, done=finished)
+
     def m_install_guest(self, sender, defer):
         """Puts this package's wild-guest into Windows and restarts it: the
         setup payload carries it for new installs, this updates one that
@@ -1540,6 +1867,9 @@ class Service:
             qga.powershell(self.domain, "New-Item -ItemType Directory -Force 'C:\\Program Files\\Wild OS' | Out-Null", 60)
             qga.write_file(self.domain, target + ".new", data)
             code, out, err = qga.powershell(self.domain, INSTALL_GUEST_PS, 90)
+            if code == 0:
+                self.state["guest_exe"] = hashlib.sha256(data).hexdigest()[:16]
+                self.save_state()
             return {"ok": code == 0, "output": (out + err).strip()[-2000:]}
 
         def finished(result):

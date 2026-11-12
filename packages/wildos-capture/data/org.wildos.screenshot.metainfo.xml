@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>org.wildos.screenshot</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0-or-later</project_license>
+  <name>Capture</name>
+  <summary>Screenshots and screen recording</summary>
+  <description>
+    <p>
+      Press Print Screen or Win+Shift+S to take a screenshot of an area, a
+      window, the full screen or a freeform shape, now or after a delay, or
+      to record the screen.
+    </p>
+    <p>
+      Every screenshot goes to the clipboard and opens in the editor, with a
+      pen, highlighter, arrow, box, text, blur and crop. It saves to
+      Pictures, in Screenshots. Nothing is sent anywhere.
+    </p>
+  </description>
+  <launchable type="desktop-id">org.wildos.screenshot.desktop</launchable>
+  <icon type="stock">wildos-capture</icon>
+  <categories>
+    <category>Utility</category>
+    <category>Graphics</category>
+  </categories>
+  <provides>
+    <binary>wildos-capture</binary>
+  </provides>
+  <pkgname>wildos-capture</pkgname>
+  <url type="homepage">https://wildos.io</url>
+  <developer id="io.wildos">
+    <name>Wild OS</name>
+  </developer>
+  <content_rating type="oars-1.1"/>
+  <releases>
+    <release version="0.1.0" date="2026-11-11"/>
+  </releases>
+</component>

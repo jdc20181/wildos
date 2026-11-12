@@ -6,11 +6,11 @@
 #   grub-theme.sh installed <theme dir> <logo svg>
 #
 # The ISO build runs the first, the wildos-branding package build the second.
-# The sources are the repo's logo and Inter.
+# The sources are the repo's logo and Albert Sans (files/fonts).
 #
 # Every word on the menu is a picture. With Secure Boot on, Debian's signed
 # GRUB only loads fonts that are inside its own signed image (GNU Unifont and
-# nothing else): an Inter .pf2 on the disk is "prohibited by secure boot
+# nothing else): an Albert Sans .pf2 on the disk is "prohibited by secure boot
 # policy". Pictures render the same with Secure Boot on, off, and on legacy
 # BIOS, so the menu looks identical everywhere.
 #
@@ -40,6 +40,14 @@ bg='#05070d'
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 
+# Albert Sans is not in Debian; the copy wildos-branding ships is the one
+# drawn with, so the build needs no font installed.
+fonts=$(cd "$(dirname "$0")/../files/fonts/albert-sans" && pwd)
+FONTCONFIG_FILE=$work/fonts.conf
+printf '<?xml version="1.0"?>\n<fontconfig><include ignore_missing="yes">/etc/fonts/fonts.conf</include><dir>%s</dir></fontconfig>\n' \
+    "$fonts" > "$FONTCONFIG_FILE"
+export FONTCONFIG_FILE
+
 rm -rf "$out"
 mkdir -p "$out/icons"
 
@@ -61,7 +69,7 @@ svg() {
 text() {
     local s=$7
     s=${s//&/&amp;}; s=${s//</&lt;}; s=${s//\"/&quot;}
-    printf '<text xml:space="preserve" x="%s" y="%s" font-family="Inter" font-size="%s" font-weight="%s" fill="#e8ecf8" fill-opacity="%s" text-anchor="%s">%s</text>' \
+    printf '<text xml:space="preserve" x="%s" y="%s" font-family="Albert Sans" font-size="%s" font-weight="%s" fill="#e8ecf8" fill-opacity="%s" text-anchor="%s">%s</text>' \
         "$1" "$2" "$3" "$4" "$5" "$6" "$s"
 }
 
@@ -72,7 +80,7 @@ svg "$out/glow.png" 1000 240 "<defs><radialGradient id='g' gradientUnits='userSp
 
 # The logo tile and the wordmark, 16px apart, as one centred row.
 rsvg-convert -w 56 -h 56 "$logo" -o "$work/logo.png"
-svg "$work/word.png" 114 56 "<text x='0' y='39' font-family='Inter' font-size='30' font-weight='600' letter-spacing='-0.3' fill='#eef1f8'>Wild OS</text>"
+svg "$work/word.png" 114 56 "<text x='0' y='39' font-family='Albert Sans' font-size='30' font-weight='550' letter-spacing='-0.3' fill='#eef1f8'>Wild OS</text>"
 magick -size 186x56 xc:none "$work/logo.png" -geometry +0+0 -composite \
     "$work/word.png" -geometry +72+0 -composite "PNG32:$out/header.png"
 
@@ -90,36 +98,36 @@ svg "$out/footer.png" 480 16 "$(text 240 12 12 400 0.55 middle "$footer")"
 # where the artboard's text starts. The selection box is drawn beneath it.
 item() {
     svg "$out/icons/$1.png" 420 66 \
-        "<text x='0' y='30' font-family='Inter' font-size='17' font-weight='$2' fill='#eef1f8'>$3</text>$(text 0 50 13 400 0.72 start "$4")"
+        "<text x='0' y='30' font-family='Albert Sans' font-size='17' font-weight='$2' fill='#eef1f8'>$3</text>$(text 0 50 13 400 0.72 start "$4")"
 }
 # The artboard shows the default entry selected, with its title in semibold.
 # GRUB cannot swap an icon when the selection moves, so the weights are the
 # artboard's: semibold for the default action, medium for the rest.
 if [ "$mode" = usb ]; then
-    item wildos-install 600 "Install Wild OS" "Set up Wild OS on this computer"
-    item wildos-try 500 "Try Wild OS" "Use it from the USB stick. Nothing on your computer changes."
-    item wildos-check 500 "Check this USB stick" "Looks for download or copying errors first"
+    item wildos-install 550 "Install Wild OS" "Set up Wild OS on this computer"
+    item wildos-try 480 "Try Wild OS" "Use it from the USB stick. Nothing on your computer changes."
+    item wildos-check 480 "Check this USB stick" "Looks for download or copying errors first"
     # The Language entry names the language in use, so there is one picture
     # per language; each language in the list is named in itself.
     while IFS=$'	' read -r code _ native english; do
         case $code in '#'* | '') continue ;; esac
-        item "wildos-language-$code" 500 "Language" "$native"
-        item "wildos-lang-$code" 500 "$native" "$english"
+        item "wildos-language-$code" 480 "Language" "$native"
+        item "wildos-lang-$code" 480 "$native" "$english"
     done < "$languages"
-    item wildos-advanced 500 "Advanced" "Safe graphics, other options"
-    item wildos-install-safe 500 "Install with safe graphics" "Use this if the screen stays black or garbled"
-    item wildos-try-safe 500 "Try with safe graphics" "The same fix, without installing anything"
-    item wildos-messages 500 "Show start-up messages" "Starts Wild OS with text instead of the logo"
-    item wildos-firmware 500 "Firmware settings" "Restart into this computer's UEFI settings"
+    item wildos-advanced 480 "Advanced" "Safe graphics, other options"
+    item wildos-install-safe 480 "Install with safe graphics" "Use this if the screen stays black or garbled"
+    item wildos-try-safe 480 "Try with safe graphics" "The same fix, without installing anything"
+    item wildos-messages 480 "Show start-up messages" "Starts Wild OS with text instead of the logo"
+    item wildos-firmware 480 "Firmware settings" "Restart into this computer's UEFI settings"
 else
     # The classes are the ones wildos-base's /etc/grub.d scripts give their
     # entries. "windows" is also the class of the installer's Windows entry
     # and of os-prober's, so every copy of Windows gets this picture.
-    item wildos 600 "Wild OS" "Start as usual"
-    item wildos-safe-graphics 500 "Wild OS (safe graphics)" "Use this if the screen stays black or garbled"
-    item wildos-previous 500 "Wild OS (previous version)" "Use this if Wild OS stopped starting after an update"
-    item windows 500 "Windows" "Start Windows on this computer"
-    item wildos-firmware 500 "UEFI firmware settings" "Restart into this computer's UEFI settings"
+    item wildos 550 "Wild OS" "Start as usual"
+    item wildos-safe-graphics 480 "Wild OS (safe graphics)" "Use this if the screen stays black or garbled"
+    item wildos-previous 480 "Wild OS (previous version)" "Use this if Wild OS stopped starting after an update"
+    item windows 480 "Windows" "Start Windows on this computer"
+    item wildos-firmware 480 "UEFI firmware settings" "Restart into this computer's UEFI settings"
 fi
 
 # The selection: a 560x66 rounded box (12px radius, 1px border) with the
@@ -254,7 +262,7 @@ fi
 countdown=8
 prefix='Use ↑ and ↓ to choose, then press Enter. Starting "Install Wild OS" in '
 
-# advance STRING: how far 13px Inter moves the pen, measured from where a
+# advance STRING: how far 13px Albert Sans moves the pen, measured from where a
 # marker drawn after the string lands.
 marker_x() {
     svg "$work/m.png" 700 28 "$(text 10 19 13 400 1 start "$1")"
@@ -263,7 +271,7 @@ marker_x() {
 advance() {
     local s=$1
     s=${s//&/&amp;}; s=${s//</&lt;}; s=${s//\"/&quot;}
-    svg "$work/m.png" 700 28 "<text xml:space='preserve' x='10' y='19' font-family='Inter' font-size='13' fill='#fff'><tspan fill-opacity='0'>$s</tspan>H</text>"
+    svg "$work/m.png" 700 28 "<text xml:space='preserve' x='10' y='19' font-family='Albert Sans' font-size='13' fill='#fff'><tspan fill-opacity='0'>$s</tspan>H</text>"
     echo $(($(magick "$work/m.png" -format '%@' info: | sed 's/.*+\([0-9]*\)+.*/\1/') - $(marker_x H)))
 }
 cell=0

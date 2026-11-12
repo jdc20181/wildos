@@ -1,3 +1,205 @@
+wildos-winmode (0.3.15) trixie; urgency=medium
+
+  * Opening a Windows app while Windows is paused no longer starts a new
+    connection each time. Remote Desktop ended the connection soon after
+    the last app closed (measured on an XPS 13: the next Word took 10.7 s,
+    4.5 s of it connecting again and Windows restarting its RemoteApp
+    shell, and Word started cold as only an open connection's launches
+    use the warm copy). wild-guest --start now stays, with no window, for
+    as long as its connection, so it stays open through pauses (tested:
+    90 s after the last app closed, and through a 3 minute pause). The
+    one a newer connection starts ends the one before.
+  * Each start carries a one-time "once", and wild-guest starts it a
+    single time: a connection that reconnects by itself no longer opens
+    its first app again.
+  * wild-guest updates itself in a Windows that is already set up: after
+    a minute with no app open, Windows mode compares it with this
+    package's copy (state "guest_exe", which setup and an install record)
+    and puts the new one in before pausing. Before, a wild-guest fix only
+    reached new setups. Tested on the WSL test Windows.
+
+ -- Wild OS Developers <dev@wildos.io>  Thu, 12 Nov 2026 11:15:00 +0000
+
+wildos-winmode (0.3.14) trixie; urgency=medium
+
+  * The first Windows app after the PC restarts opens in seconds: with no
+    Windows app open, Windows is now saved to disk as the PC shuts down,
+    restarts or updates, instead of shut down. Measured on an XPS 13 9310,
+    a start from off took 104 s for Windows to boot (82 s to Remote
+    Desktop, 108 s to Word); loading back from disk takes about 5 s. A PC
+    shut down while Windows was still starting no longer cuts it off part
+    way, which had made its next start slower still. It shuts down only
+    when a new memory limit or a fresh sign-in needs it.
+  * Windows still restarts to finish its updates, in the background: when
+    no app has been open for a minute and the PC is on mains, Windows mode
+    asks Windows (at most hourly) whether an update waits for a restart,
+    or whether it last restarted a week or more ago, and if so shuts it
+    down cleanly and starts it again ahead of time. An app opened
+    meanwhile waits for it, as from off.
+  * Starting from off says so plainly, with a minute or two expected
+    (90 s until this PC has timed it), and that it only happens now and
+    then.
+
+ -- Wild OS Developers <dev@wildos.io>  Thu, 12 Nov 2026 11:00:00 +0000
+
+wildos-winmode (0.3.13) trixie; urgency=medium
+
+  * Setting up Windows mode puts problems right by itself. Before each
+    step it checks that what the step needs is there and makes again
+    whatever has gone, such as the setup disc, which used to make Try
+    again fail at once. A step that fails is tried again; if it fails
+    twice, what it made is cleared and setup goes back a step. Only if
+    that fails twice too does setup stop and offer Try again and Start
+    over. Your documents and shared folders are never touched.
+  * A PC that restarts while Windows is still copying itself starts the
+    install again cleanly, instead of waiting two hours on a disk that
+    can't start.
+
+ -- Wild OS Developers <dev@wildos.io>  Thu, 12 Nov 2026 10:00:00 +0000
+
+wildos-winmode (0.3.12) trixie; urgency=medium
+
+  * Windows desktop opens again after its window was closed. FreeRDP could
+    stay running with no window after Windows showed an error, and the
+    button then did nothing until the PC restarted. Restarting, shutting
+    down or saving Windows mode now ends the desktop too.
+  * Remove Windows mode works: after an administrator's password, Windows,
+    its programs, their Start entries and file types, the saved sign-in
+    and everything setup downloaded are deleted, and Windows mode is ready
+    to set up again. Documents in the shared folders are not touched.
+  * Windows set up again (Start over, or after Remove) is trusted on the
+    first connection. FreeRDP refused it because its certificate differed
+    from the last Windows', so no app could open.
+  * Windows keeps its Windows mode account a local one. Signing in to a
+    Microsoft account from activation's troubleshooter turned the account
+    into a Microsoft account, after which Windows refused Windows mode's
+    password ("The username or password is incorrect"). Office and the
+    Store still sign in to Microsoft accounts for themselves.
+
+ -- Wild OS Developers <dev@wildos.io>  Thu, 12 Nov 2026 09:00:00 +0000
+
+wildos-winmode (0.3.11) trixie; urgency=medium
+
+  * A USB device that only works with Windows, such as a licence dongle,
+    label printer or scanner, can be handed to Windows from Settings >
+    Windows apps > Windows mode, and given back with the same switch.
+    The choice is remembered for that device, so it goes to Windows
+    whenever Windows is running and it is plugged in, and comes back to
+    Wild OS when Windows stops. Keyboards, mice, touchpads and the drive
+    Wild OS runs from are never offered, and a device USB protection has
+    blocked stays blocked until it is allowed. Giving a device to Windows
+    asks for an administrator's password.
+  * Windows set up from now on has room for seven USB devices at once
+    instead of three.
+
+ -- Wild OS Developers <dev@wildos.io>  Thu, 12 Nov 2026 00:44:11 +0000
+
+wildos-winmode (0.3.10) trixie; urgency=medium
+
+  * Microsoft Store apps (the new Outlook, WhatsApp, Teams, Microsoft 365
+    from the Store and the like) get Start entries with their own icons
+    and open like other Windows apps. wild-guest's session helper lists
+    the Start menu's packaged apps from the Shell's Applications folder,
+    and starts one by its app id through Windows' own activation, whether
+    a launch names its program or its shell:AppsFolder address, including
+    as the first app of a RemoteApp connection.
+  * A Store app that Windows opens in a frame (Calculator, Settings) is
+    known as that app once its window is open, so it shows as open and
+    groups with its own icon, instead of as a window of Windows itself:
+    wild-guest names the app inside the frame by its app id.
+  * wild-guest is stricter about what Wild OS's requests may name. Icons
+    are read only from local disks outside other accounts' profiles,
+    launches and warm apps only name programs on a drive letter or by
+    name, never \\server\share paths, URLs or protocol handlers, and a
+    Start menu shortcut pointing at a network share is skipped. A request
+    nested too deeply no longer ends the service, a failing request no
+    longer drops the channel, and only wild-guest itself, in the Windows
+    mode account's session, is taken as a session helper.
+
+ -- Wild OS Developers <dev@wildos.io>  Thu, 12 Nov 2026 00:13:39 +0000
+
+wildos-winmode (0.3.9) trixie; urgency=medium
+
+  * When Windows is on the PC, first run offers Windows mode on its last
+    step, with the same checks and options as the setup window, and Finish
+    sets it up in the background: a notification says so, the taskbar
+    shows "Setting up" with its progress, its panel lists the steps with
+    Pause and Open full window, and a notification says when it's ready.
+  * The setup window's options page has the Windows licence as a choice
+    (built into this PC, a product key, or activate later), Office plans
+    including a product key, and one tick box for Microsoft's licence
+    terms for Windows 11 and Office, which is kept with the setup.
+  * Checking this PC now includes the processor (4 cores or more), and
+    setup only starts when every requirement is met, internet included.
+  * Setup runs on spare capacity only: the lowest processor and disk
+    priority for its downloads and for Windows while it installs.
+  * Memory offered to Windows is at most two fifths of the PC's.
+
+ -- Wild OS Developers <dev@wildos.io>  Thu, 12 Nov 2026 00:30:00 +0000
+
+wildos-winmode (0.3.8) trixie; urgency=medium
+
+  * Windows stays lean: guest/tune.ps1 holds the machine-wide policies,
+    services, scheduled tasks, apps and features Windows mode does
+    without, and a start-up task inside Windows runs it at every boot,
+    because Office and Windows updates were found switching them back.
+    After each Windows update the same run clears the components the
+    update replaced. New: Windows' AI fabric, inventory and link tracking
+    services, Recall, widgets, Phone Link, Quick Assist and a few
+    capabilities, reserved storage and restore points; services grouped
+    as on smaller PCs. setup.ps1 hands its machine-wide part to it.
+    New setups only: a Windows set up before it is left as it is, since
+    the clean-up removes apps and features its owner may use. Guest
+    upkeep delivers newer versions only to a Windows setup gave it to
+    (state "tune"). Measured on build 26300: 22.4 GB to 15.5 GB on disk,
+    and a cumulative update installed on top without errors and left it
+    all in place. A fresh setup with Microsoft 365 came to 15.6 GB.
+  * Outlook search works in a new setup with Microsoft 365: setup cleans
+    up before Office is installed, so Windows Search was left disabled.
+    The start-up run now turns it back on (delayed start) once Outlook
+    is there.
+  * Lifecycle events reach winmoded: "virsh event --all --event
+    lifecycle" is refused (the two options are mutually exclusive), so
+    the watcher exited at once and only launches and wakes ever noticed
+    a change. A Windows that had just been set up never went idle, and
+    one that stopped by itself went unnoticed. The 30 s check now also
+    catches any change an event missed.
+  * An idle Windows is trimmed to what it uses plus 512 MB, no lower than
+    1.5 GB (was plus 1.5 GB, no lower than 3 GB), and once more just
+    before it pauses or saves. Measured on Debian 13's libvirt, Windows
+    barely pages there and every MB comes back to Wild OS: about 1 GB
+    more for the desktop while Windows waits, and a smaller save.
+  * Automatic saves a paused Windows to disk once it has been paused for 15
+    minutes, plugged in too. Measured with the trim: a save takes under
+    3 s and Windows is back to Remote Desktop answering in about 5 s
+    (from paused, under 1 s), while paused it held about 2 GB. Short
+    breaks still come back at once; long ones give all its memory back.
+  * The guest upkeep reads a script's result from its output only, so
+    PowerShell warnings are no longer taken for it, and gives tune.ps1 up
+    to 30 minutes.
+
+ -- Wild OS Developers <dev@wildos.io>  Wed, 11 Nov 2026 23:45:00 +0000
+
+wildos-winmode (0.3.6) trixie; urgency=medium
+
+  * No navy left: surfaces, glass, shadows and the logo tile use the
+    same neutral greys as the rest of Wild OS.
+
+ -- Wild OS Developers <dev@wildos.io>  Wed, 11 Nov 2026 23:30:00 +0000
+
+wildos-winmode (0.3.5) trixie; urgency=medium
+
+  * Setting up Windows mode can use a Windows 11 file you already have
+    instead of downloading one: "Use a Windows 11 file you have" on the
+    first step. The file is checked before it is accepted (Windows 11, for
+    Intel and AMD PCs, with Windows 11 Pro on it), and a file that can't
+    be used is turned down with one sentence saying why. Setup copies it
+    and goes on exactly as with a download. Only a download can be
+    checked against Microsoft's signature, so the wizard says your file
+    was checked to be Windows 11 Pro, never that it is genuine.
+
+ -- Wild OS Developers <dev@wildos.io>  Tue, 10 Nov 2026 16:00:00 +0000
+
 wildos-winmode (0.3.2) trixie; urgency=medium
 
   * Save to disk is back. It was held back because a save would not load

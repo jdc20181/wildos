@@ -11,6 +11,7 @@
 #include <KIO/PreviewJob>
 #include <KIO/UDSEntry>
 #include <QDir>
+#include <QFile>
 #include <QFileInfo>
 #include <QLocale>
 #include <QMimeDatabase>
@@ -304,7 +305,7 @@ QString FolderModel::title() const
 QString FolderModel::iconName() const
 {
     if (isComputer(m_url)) {
-        return QStringLiteral("drive-harddisk");
+        return QStringLiteral("computer");
     }
     if (isBin(m_url) && (m_url.path().isEmpty() || m_url.path() == QStringLiteral("/"))) {
         return m_rows.isEmpty() ? QStringLiteral("user-trash") : QStringLiteral("user-trash-full");
@@ -751,6 +752,17 @@ void FolderModel::openDrive(const QString &udi)
     Drives::instance()->mount(udi);
 }
 
+// Files that belong to the system, not to the person: Windows' recycle bin
+// and folder settings in the folders shared with Windows mode, the thumbnail
+// cache, and KDE's own folder files. Like Windows' protected system files,
+// they stay out of sight even with hidden items shown.
+static bool isSystemItem(const QString &name)
+{
+    static const QStringList names = {QStringLiteral("$RECYCLE.BIN"), QStringLiteral("desktop.ini"),
+                                      QStringLiteral("Thumbs.db"), QStringLiteral(".directory"), QStringLiteral(".hidden")};
+    return names.contains(name, Qt::CaseInsensitive);
+}
+
 FolderModel::Entry FolderModel::makeEntry(const KFileItem &item, const QString &relativeDir) const
 {
     Entry e;
@@ -1017,9 +1029,16 @@ void FolderModel::takePending(int row)
 
 void FolderModel::onNewItems(const KFileItemList &items)
 {
-    m_base.reserve(m_base.size() + items.size());
+    const qsizetype first = m_base.size();
+    m_base.reserve(first + items.size());
     for (const KFileItem &item : items) {
+        if (isSystemItem(item.name())) {
+            continue;
+        }
         m_base.append(makeEntry(item));
+    }
+    if (m_base.size() == first) {
+        return;
     }
     // The first listing arrives in batches; one reset per batch is cheaper
     // than inserting a thousand rows one by one.
@@ -1027,7 +1046,7 @@ void FolderModel::onNewItems(const KFileItemList &items)
         rebuild();
         return;
     }
-    for (qsizetype i = m_base.size() - items.size(); i < m_base.size(); ++i) {
+    for (qsizetype i = first; i < m_base.size(); ++i) {
         insertEntry(m_base.at(i));
     }
 }
@@ -1199,6 +1218,9 @@ void FolderModel::onSearchEntries(KIO::Job *, const QList<KIO::UDSEntry> &entrie
             continue;
         }
         const QString leaf = relative.mid(slash + 1);
+        if (isSystemItem(leaf) || relative.startsWith(QStringLiteral("$RECYCLE.BIN/"), Qt::CaseInsensitive) || relative.contains(QStringLiteral("/$RECYCLE.BIN/"), Qt::CaseInsensitive)) {
+            continue;
+        }
         if (!leaf.contains(m_searchText, Qt::CaseInsensitive)) {
             continue;
         }
@@ -1510,6 +1532,7 @@ QVariantList FolderModel::subfolders(const QUrl &url) const
     }
     QDir dir(url.toLocalFile());
     QStringList names = dir.entryList(filters);
+    names.removeIf(isSystemItem);
     std::sort(names.begin(), names.end(), [this](const QString &a, const QString &b) {
         return m_collator.compare(a, b) < 0;
     });

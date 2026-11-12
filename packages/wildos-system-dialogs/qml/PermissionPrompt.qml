@@ -5,7 +5,7 @@ import WildOS.SystemDialogs
 import WildOS.SystemDialogs.Backend
 
 // The permission prompt on the desktop: every screen dims and blurs
-// (DialogPermission.dc rgba(6,10,26,0.55) with an 8px blur) under a layer
+// (DialogPermission.dc rgba(12,14,18,0.55) with an 8px blur) under a layer
 // surface above every window, which holds the keyboard until Yes or No.
 // Apps cannot draw over it or put up a look-alike, because only the
 // shell may make surfaces like this one.

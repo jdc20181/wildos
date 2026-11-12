@@ -17,15 +17,23 @@ manage activities=none,Meta+Q,Show Activity Switcher
 # keys up.
 #
 # Win+D minimises every window into the taskbar and brings them back, as on
-# Windows (the org.wildos.showdesktop KWin script). KWin's Show Desktop,
-# which slides the windows off the screen, gives up the keys; the taskbar's
-# peek still uses it. Accounts made before this get the change once from
+# Windows (the wildos_gestures KWin effect, which also does it on the
+# touchpad's swipe down and up). KWin's Show Desktop, which slides the
+# windows off the screen, gives up the keys; the taskbar's peek still uses
+# it. Accounts made before this get the change once from
 # /usr/libexec/wildos/show-desktop-keys.
 [kwin]
 Overview=Meta+W\tMeta+Tab,Meta+W,Toggle Overview
 Window Operations Menu=Alt+Space,Alt+F3,Window Operations Menu
 Show Desktop=none,Meta+D,Peek at Desktop
 Wild OS show desktop=Meta+D,Meta+D,Show the desktop (minimise every window)
+#
+# Alt+F4 closes the window in use and, on the desktop, opens the shut down
+# screen (the org.wildos.closewindow KWin script). KWin's Close Window,
+# which does nothing on the desktop, gives up the keys. Accounts made before
+# this get the change once from /usr/libexec/wildos/close-window-keys.
+Window Close=none,Alt+F4,Close Window
+Wild OS close window=Alt+F4,Alt+F4,Close the window, or shut down from the desktop
 
 [services][org.kde.krunner.desktop]
 _launch=none
@@ -36,6 +44,11 @@ _launch=none
 [services][org.wildos.screenshot.desktop]
 _launch=Meta+Shift+S\tPrint
 Record=Meta+Shift+R
+
+# Win+N opens a quick note, saved into Notes as you type, even when Notes
+# is closed.
+[services][org.wildos.notes.desktop]
+QuickNote=Meta+N
 
 [services][org.kde.spectacle.desktop]
 _launch=none

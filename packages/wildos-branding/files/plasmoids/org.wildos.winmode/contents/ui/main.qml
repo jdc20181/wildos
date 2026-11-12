@@ -1,15 +1,19 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
+import QtQuick.Layouts
 import org.kde.plasma.plasmoid
 import org.kde.plasma.core as PlasmaCore
 import org.kde.plasma.plasma5support as P5Support
+import org.kde.plasma.workspace.dbus as DBus
 
 // Windows mode's status at the left end of the taskbar, where Windows 11
 // puts its weather (boards 4.13 and 4.14): what Windows mode is doing in a
 // word, the memory it holds on hover, and a panel with processor use, memory
 // and the Windows apps open. Everything comes from "wildos-winmode status",
-// so it only appears once this account has Windows mode set up.
+// so it only appears once this account has Windows mode set up, or while
+// it sets up: then a ring fills on the mark, "Setting up · 46%", and the
+// panel shows setup's steps (boards 9.11 and 9.12).
 PlasmoidItem {
     id: winmode
 
@@ -29,9 +33,17 @@ PlasmoidItem {
     property int hostCores: 0
 
     readonly property var setupRecord: system ? system.setup : null
+    readonly property bool settingUp: answering && setupRecord !== null && setupRecord.running === true
     readonly property bool setUp: !answering || (system !== null && (system.vm || "") !== ""
         && !(setupRecord && setupRecord.running) && (!setupRecord || setupRecord.stage === "done"))
-    readonly property bool shown: setUp && Plasmoid.configuration.shown
+    readonly property bool shown: (setUp || settingUp) && Plasmoid.configuration.shown
+    readonly property int setupPercent: settingUp ? Number(setupRecord.percent) || 0 : 0
+    // Board 9.14: straight after setup the status says Ready, until the
+    // first Windows app opens or an hour has gone by; then the states of
+    // board 4.13 as usual.
+    readonly property bool justReady: setUp && answering && setupRecord !== null && setupRecord.stage === "done"
+        && Number(setupRecord.finished) > 0 && now / 1000 - Number(setupRecord.finished) < 3600
+        && openApps.length === 0 && !(agent && agent.lastLaunch)
 
     readonly property var openApps: agent && Array.isArray(agent.openApps) ? agent.openApps : systemWindows(system)
     readonly property int appCount: {
@@ -42,10 +54,16 @@ PlasmoidItem {
         return Object.keys(ids).length;
     }
 
-    // One of: running, paused, saved, off, starting, updating, attention.
-    // Not "state": Item has one.
-    readonly property string level: levelFor(system, agent, answering, openApps.length)
+    // One of: settingup, ready, running, paused, saved, off, starting,
+    // updating, attention. Not "state": Item has one.
+    readonly property string level: settingUp ? (setupRecord.failed ? "attention" : "settingup")
+        : justReady && baseLevel !== "attention" ? "ready" : baseLevel
+    // What Windows itself is doing; the panel shows this even while the
+    // chip still says Ready.
+    readonly property string baseLevel: levelFor(system, agent, answering, openApps.length)
     readonly property string stateText: ({
+        settingup: (setupRecord && setupRecord.paused ? "Setup paused · " : "Setting up · ") + setupPercent + "%",
+        ready: "Ready",
         running: appCount === 0 ? "Running" : appCount === 1 ? "Running, 1 app" : "Running, " + appCount + " apps",
         paused: "Paused",
         saved: "Saved to disk",
@@ -54,10 +72,15 @@ PlasmoidItem {
         updating: "Updating",
         attention: "Needs attention"
     })[level]
-    readonly property string pillText: ({
+
+    function pillFor(state: string): string {
+        return pillWords[state] || "";
+    }
+    readonly property var pillWords: ({
+        settingup: "Setting up", ready: "Ready",
         running: "Running", paused: "Paused", saved: "Saved", off: "Off",
         starting: "Starting", updating: "Updating", attention: "Needs attention"
-    })[level]
+    })
 
     readonly property var qemu: system && system.qemu ? system.qemu : null
     readonly property real memoryHeld: qemu ? Number(qemu.rss_bytes) || 0 : 0
@@ -191,7 +214,7 @@ PlasmoidItem {
         if (actionText !== "") {
             return actionText;
         }
-        switch (level) {
+        switch (baseLevel) {
         case "running":
             return editionText();
         case "paused":
@@ -231,10 +254,10 @@ PlasmoidItem {
     // Saved or off: what it costs now and to come back.
     function restingText(): string {
         const timings = system && system.timings ? system.timings : {};
-        const about = aboutText(Number(level === "saved" ? timings.restore : timings.start));
-        const lead = level === "saved" ? "Ready in " : "Starts in ";
+        const about = aboutText(Number(baseLevel === "saved" ? timings.restore : timings.start));
+        const lead = baseLevel === "saved" ? "Ready in " : "Starts in ";
         return "Uses no memory or processor. " + (about ? lead + about + ", or by itself when a Windows app opens."
-            : (level === "saved" ? "Ready again" : "Starts") + " by itself when a Windows app opens.");
+            : (baseLevel === "saved" ? "Ready again" : "Starts") + " by itself when a Windows app opens.");
     }
 
     // What the panel says the idle policy will do (winmode/lifecycle.py).
@@ -257,6 +280,9 @@ PlasmoidItem {
     }
 
     function attentionText(): string {
+        if (settingUp) {
+            return (setupRecord.problem && setupRecord.problem.text) || "Windows mode couldn't finish setting up. Open the full window to try again.";
+        }
         if (!answering || !system) {
             return "Windows mode isn't answering. Restart the PC, then try again.";
         }
@@ -323,13 +349,62 @@ PlasmoidItem {
 
     // Every second while the panel is open, for the processor graph and the
     // memory figure; every ten seconds behind the chip; once a minute on a PC that hasn't
-    // set Windows mode up, which costs a check for a file and nothing more.
+    // set Windows mode up, which costs a check for a file and nothing more,
+    // unless the agent is up (it is whenever anything uses Windows mode).
     Timer {
         running: true
         repeat: true
         triggeredOnStart: true
-        interval: winmode.expanded ? 1000 : winmode.setUp ? 10000 : 60000
+        interval: winmode.expanded ? 1000 : winmode.setUp || winmode.settingUp || agentWatcher.registered ? 10000 : 60000
         onTriggered: winmode.refresh()
+    }
+
+    // The agent starts when setup does (from first run, or the setup
+    // window), so the item shows at once instead of at the next minute.
+    DBus.DBusServiceWatcher {
+        id: agentWatcher
+        busType: DBus.BusType.Session
+        watchedService: "org.wildos.WindowsMode1"
+        onRegisteredChanged: winmode.refresh()
+    }
+
+    // "Show progress" in the setup notification and Start's "Setting up"
+    // button ask the agent, which counts the requests; each new one opens
+    // the panel. Asked over D-Bus, not by starting a program, and only
+    // while setup runs.
+    property int progressRequests: -1
+
+    function checkProgressRequests(): void {
+        const reply = DBus.SessionBus.asyncCall({
+            service: "org.wildos.WindowsMode1",
+            path: "/org/wildos/WindowsMode1",
+            iface: "org.wildos.WindowsMode1",
+            member: "Status"
+        });
+        reply.finished.connect(() => {
+            if (reply.isError) {
+                return;
+            }
+            let count = -1;
+            try {
+                count = Number(JSON.parse(String(reply.value)).progressRequests);
+            } catch (e) {
+                return;
+            }
+            if (progressRequests >= 0 && count > progressRequests) {
+                refresh();
+                expanded = true;
+            }
+            progressRequests = count;
+        });
+    }
+
+    Timer {
+        running: winmode.settingUp && agentWatcher.registered
+        repeat: true
+        triggeredOnStart: true
+        interval: 1000
+        onTriggered: winmode.checkProgressRequests()
     }
 
     P5Support.DataSource {
@@ -374,6 +449,21 @@ PlasmoidItem {
         }
     }
 
+    // Pause and Resume of setup (board 9.12), and its full window.
+    function setupControl(action: string): void {
+        if (action === "window") {
+            run("setsid -f wildos-winmode >/dev/null 2>&1");
+            expanded = false;
+            return;
+        }
+        DBus.SessionBus.asyncCall({
+            service: "org.wildos.WindowsMode1",
+            path: "/org/wildos/WindowsMode1",
+            iface: "org.wildos.WindowsMode1",
+            member: action === "pause" ? "PauseSetup" : "ResumeSetup"
+        }).finished.connect(() => refresh());
+    }
+
     // Settings ships with Wild OS, but if it has gone the click still says
     // something rather than doing nothing.
     function openSettings(): void {
@@ -403,8 +493,29 @@ PlasmoidItem {
     compactRepresentation: Chip {
         winmode: winmode
     }
-    fullRepresentation: StatusPanel {
-        winmode: winmode
+    fullRepresentation: Loader {
+        Layout.minimumWidth: item ? item.Layout.minimumWidth : 0
+        Layout.preferredWidth: item ? item.Layout.preferredWidth : 0
+        Layout.maximumWidth: item ? item.Layout.maximumWidth : 0
+        Layout.minimumHeight: item ? item.Layout.minimumHeight : 0
+        Layout.preferredHeight: item ? item.Layout.preferredHeight : 0
+        Layout.maximumHeight: item ? item.Layout.maximumHeight : 0
+        focus: true
+        sourceComponent: winmode.settingUp ? setupPanel : statusPanel
+
+        Component {
+            id: statusPanel
+            StatusPanel {
+                winmode: winmode
+            }
+        }
+
+        Component {
+            id: setupPanel
+            SetupPanel {
+                winmode: winmode
+            }
+        }
     }
 
     Component.onCompleted: {

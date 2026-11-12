@@ -27,6 +27,12 @@ SAVE = "save"
 # guest to be worth keeping in memory (brief 5.6, Automatic).
 MEMORY_FREE_SHARE = 0.25
 
+# How long Automatic keeps a paused guest in memory before saving it to
+# disk. Measured: a trimmed Windows saves in under 3 s and is back to Remote
+# Desktop answering in about 5 s, against under 1 s from paused, while
+# paused it holds about 2 GB of Wild OS's memory.
+SAVE_AFTER_PAUSED = 15 * 60
+
 
 def state_from_vm(vm_state, setting_up=False, error=None):
     if error:
@@ -106,11 +112,15 @@ class Lifecycle:
         d = self.deadline()
         return d is not None and now >= d
 
-    def reconsider_paused(self, policy, on_battery, mem_available, mem_total, mem_pressure=False):
+    def reconsider_paused(self, policy, on_battery, mem_available, mem_total, mem_pressure=False, paused_seconds=None):
         """A paused guest under Automatic is saved to disk when the host goes
-        on battery or runs short of memory; nothing else changes it."""
+        on battery or runs short of memory, or once it has been paused for
+        SAVE_AFTER_PAUSED: a short break comes back instantly from memory,
+        a long one gives all of Windows' memory back to Wild OS."""
         if self.vm_state != "paused" or policy != "automatic":
             return None
         if idle_action(policy, on_battery, mem_available, mem_total, mem_pressure) == SAVE:
+            return SAVE
+        if paused_seconds is not None and paused_seconds >= SAVE_AFTER_PAUSED:
             return SAVE
         return None

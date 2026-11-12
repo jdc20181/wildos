@@ -2,7 +2,7 @@
 // stand and fade back in place afterwards, as on Windows. KWin's own Window
 // Aperture slides them off to the screen edges instead, which looks like
 // they are going somewhere. Clicking the taskbar corner and Windows key + D
-// minimise windows instead (org.wildos.showdesktop).
+// minimise windows instead (the wildos_gestures effect).
 
 "use strict";
 

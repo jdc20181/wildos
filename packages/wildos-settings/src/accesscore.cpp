@@ -198,6 +198,7 @@ const PointerColour pointerList[] = {
 const QString outlineEffect = QStringLiteral("wildos_outline");
 const QString blurEffect = QStringLiteral("wildos_blurinactive");
 const QString blurGroup = QStringLiteral("Effect-wildos_blurinactive");
+const QString outlineGroup = QStringLiteral("Effect-wildos_outline");
 
 void callEffects(const QString &method, const QString &effect)
 {
@@ -222,12 +223,18 @@ void setEffectEnabled(const QString &effect, bool on)
 }
 
 template<typename T>
-void writeBlurSetting(const char *key, const T &value)
+void writeEffectSetting(const QString &effect, const QString &group, const char *key, const T &value)
 {
     KSharedConfigPtr kwin = fresh(QStringLiteral("kwinrc"));
-    kwin->group(blurGroup).writeEntry(key, value, KConfig::Notify);
+    kwin->group(group).writeEntry(key, value, KConfig::Notify);
     kwin->sync();
-    callEffects(QStringLiteral("reconfigureEffect"), blurEffect);
+    callEffects(QStringLiteral("reconfigureEffect"), effect);
+}
+
+template<typename T>
+void writeBlurSetting(const char *key, const T &value)
+{
+    writeEffectSetting(blurEffect, blurGroup, key, value);
 }
 
 QString cursorTheme()
@@ -687,6 +694,16 @@ bool outlineWindows()
 void setOutlineWindows(bool on)
 {
     setEffectEnabled(outlineEffect, on);
+}
+
+bool outlineFillingScreen()
+{
+    return fresh(QStringLiteral("kwinrc"))->group(outlineGroup).readEntry("Maximised", true);
+}
+
+void setOutlineFillingScreen(bool on)
+{
+    writeEffectSetting(outlineEffect, outlineGroup, "Maximised", on);
 }
 
 bool blurBackground()

@@ -6,6 +6,7 @@ import org.kde.plasma.core as PlasmaCore
 import org.kde.plasma.plasma5support as P5Support
 import org.kde.notificationmanager as NotificationManager
 import org.wildos.shell as WildOS
+import WildOS.UI as UI
 import "Formats.js" as Formats
 
 // The clock at the end of the taskbar: 24-hour time over the date, opening
@@ -149,6 +150,18 @@ PlasmoidItem {
             const index = history.index(row, 0);
             if (history.data(index, NotificationManager.Notifications.TypeRole) !== NotificationManager.Notifications.JobType) {
                 history.close(index);
+            }
+        }
+    }
+
+    // KWin's hot corners and touchpad gestures open the notifications
+    // through plasmashell; only the clock on the screen they name answers.
+    Connections {
+        target: WildOS.ShellRequests
+        function onNotificationsRequested(x: int, y: int): void {
+            const screen = Plasmoid.containment ? Plasmoid.containment.screenGeometry : null;
+            if (screen && x >= screen.x && y >= screen.y && x < screen.x + screen.width && y < screen.y + screen.height) {
+                clock.expanded = !clock.expanded;
             }
         }
     }

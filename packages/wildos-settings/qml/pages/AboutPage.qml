@@ -77,7 +77,7 @@ PageScroll {
                     Layout.fillWidth: true
                     text: System.hostName
                     size: 18
-                    font.weight: Font.DemiBold
+                    font.weight: UI.Style.weightSemiBold
                 }
 
                 UI.Label {
@@ -200,6 +200,40 @@ PageScroll {
                 description: "Encryption, Secure Boot and app protection"
                 chevron: true
                 onClicked: Navigator.open("privacy")
+            }
+        }
+    }
+
+    SectionTitle {
+        Layout.fillWidth: true
+        text: "Credits"
+    }
+
+    UI.Card {
+        Layout.fillWidth: true
+
+        Column {
+            width: parent.width
+
+            // GPL-3.0 asks for the licence to travel with the icons, so the
+            // row opens the copy the theme package installs.
+            UI.SettingRow {
+                iconName: "folder"
+                title: "Fluent icon theme"
+                description: "Folders, This computer and the Recycle Bin. By vinceliuice, under the GPL-3.0 licence."
+                external: true
+                onClicked: Qt.openUrlExternally("file:///usr/share/icons/Fluent-yellow/COPYING")
+            }
+
+            UI.SettingRow {
+                leading: PathIcon {
+                    name: "fingerprint"
+                    size: 20
+                }
+                title: "Fluent UI System Icons"
+                description: "The fingerprint in fingerprint setup. By Microsoft, under the MIT licence."
+                external: true
+                onClicked: Qt.openUrlExternally("file:///usr/share/wildos-settings/licences/fluent-ui-system-icons.txt")
             }
         }
     }

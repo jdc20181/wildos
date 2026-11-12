@@ -113,7 +113,9 @@
     <tpm model='tpm-crb'>
       <backend type='emulator' version='2.0'/>
     </tpm>
-    <controller type='usb' model='qemu-xhci'/>
+    <!-- Eight ports: the tablet takes one, and the rest are for devices
+         handed to Windows from Settings (winmode/usb.py). -->
+    <controller type='usb' model='qemu-xhci' ports='8'/>
     <input type='tablet' bus='usb'/>
     <!-- Setup and troubleshooting only, on a socket only root can open. -->
     <graphics type='vnc'>

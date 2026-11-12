@@ -191,11 +191,26 @@ namespace WildOS.Guest
             host.Send(body);
         }
 
+        // A request that fails answers with its error. Thrown out of here it
+        // would end the read loop and drop the channel to Wild OS.
         void HandleHost(Dictionary<string, object> m)
         {
-            string type = Json.Str(m, "type") ?? "";
             object id;
             m.TryGetValue("id", out id);
+            try
+            {
+                Dispatch(m, id);
+            }
+            catch (Exception e)
+            {
+                Log.Write("request " + (Json.Str(m, "type") ?? "") + ": " + e.Message);
+                Reply(id, Message("error", "error", e.Message));
+            }
+        }
+
+        void Dispatch(Dictionary<string, object> m, object id)
+        {
+            string type = Json.Str(m, "type") ?? "";
             switch (type)
             {
                 case "hello":
@@ -208,7 +223,13 @@ namespace WildOS.Guest
                 case "apps":
                     ThreadPool.QueueUserWorkItem(delegate
                     {
-                        try { Reply(id, Message("apps", "apps", Apps.List(account, Json.Bool(m, "icons", true)))); }
+                        try
+                        {
+                            bool icons = Json.Bool(m, "icons", true);
+                            var list = Apps.List(account, icons);
+                            Apps.AddPackaged(list, PackagedApps(icons));
+                            Reply(id, Message("apps", "apps", list));
+                        }
                         catch (Exception e) { Reply(id, Message("error", "error", e.Message)); }
                     });
                     break;
@@ -216,7 +237,14 @@ namespace WildOS.Guest
                     ThreadPool.QueueUserWorkItem(delegate
                     {
                         byte[] ico = null;
-                        try { ico = Icons.FromExecutable(Json.Str(m, "path") ?? ""); } catch (Exception) { }
+                        // The service reads as LocalSystem: only a program on
+                        // a local disk, outside every other account's
+                        // profile, never \\server\share.
+                        string path = Paths.ForService(Json.Str(m, "path"), account);
+                        if (path != null && (path.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) || path.EndsWith(".dll", StringComparison.OrdinalIgnoreCase)))
+                        {
+                            try { ico = Icons.FromExecutable(path); } catch (Exception) { }
+                        }
                         Reply(id, Message("icon", "path", Json.Str(m, "path"), "icon", ico == null ? null : Convert.ToBase64String(ico)));
                     });
                     break;
@@ -262,10 +290,79 @@ namespace WildOS.Guest
             }
         }
 
+        const string PackagedCache = @"C:\ProgramData\WildOS\packaged-apps.json";
+
+        // The account's Store apps, from its session helper, since only the
+        // account itself can see them. With no session open (Windows has
+        // just started, or the person signed out) the last list stands in,
+        // so their Start entries don't come and go with the session.
+        List<object> PackagedApps(bool icons)
+        {
+            List<object> apps = null;
+            var client = Target(new Dictionary<string, object>());
+            if (client != null)
+            {
+                var reply = Ask(client, Message("packaged-apps", "icons", true), 60000);
+                if (reply != null && Json.Str(reply, "type") == "packaged-apps") apps = Json.List(reply, "apps");
+                else Log.Write("packaged apps: " + (reply == null ? "no answer from the session" : Json.Str(reply, "error")));
+                if (apps != null)
+                {
+                    try { File.WriteAllText(PackagedCache, Json.Write(apps)); }
+                    catch (Exception e) { Log.Write("packaged apps: " + e.Message); }
+                }
+            }
+            if (apps == null)
+            {
+                try { apps = Json.Parse(File.ReadAllText(PackagedCache)) as List<object>; }
+                catch (Exception) { }
+            }
+            apps = apps ?? new List<object>();
+            if (!icons)
+            {
+                foreach (object a in apps)
+                {
+                    var d = a as Dictionary<string, object>;
+                    if (d != null) d.Remove("icon");
+                }
+            }
+            return apps;
+        }
+
+        sealed class Asked
+        {
+            public readonly ManualResetEvent Done = new ManualResetEvent(false);
+            public Dictionary<string, object> Reply;
+        }
+
+        readonly Dictionary<string, Asked> asked = new Dictionary<string, Asked>();
+        int asking;
+
+        // A request of the service's own to a session helper. Its id is a
+        // string, which Wild OS's never are, so FromSession can tell the
+        // reply from one meant for Wild OS.
+        Dictionary<string, object> Ask(SessionClient client, Dictionary<string, object> m, int timeoutMs)
+        {
+            string id = "service-" + Interlocked.Increment(ref asking);
+            var box = new Asked();
+            lock (asked) asked[id] = box;
+            try
+            {
+                m["id"] = id;
+                client.Send(m);
+                box.Done.WaitOne(timeoutMs);
+                return box.Reply;
+            }
+            finally
+            {
+                lock (asked) asked.Remove(id);
+                box.Done.Close();
+            }
+        }
+
         Dictionary<string, object> SetClock(Dictionary<string, object> m)
         {
             long ms = Json.Num(m, "unix_ms", 0);
-            if (ms <= 0) return Message("time", "ok", false, "error", "no time given");
+            if (ms <= 0 || ms > SessionHelper.MaxUnixMs) return Message("time", "ok", false, "error", "no time given");
             DateTime target = new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc).AddMilliseconds(ms);
             double skew = (DateTime.UtcNow - target).TotalMilliseconds;
             bool was;
@@ -418,7 +515,7 @@ namespace WildOS.Guest
                         PipeTransmissionMode.Byte, PipeOptions.Asynchronous, 65536, 65536, security);
                     pipe.WaitForConnection();
                     uint session;
-                    if (!Native.GetNamedPipeClientSessionId(pipe.SafePipeHandle.DangerousGetHandle(), out session))
+                    if (!Native.GetNamedPipeClientSessionId(pipe.SafePipeHandle.DangerousGetHandle(), out session) || !IsHelper(pipe, session))
                     {
                         pipe.Dispose();
                         continue;
@@ -433,6 +530,21 @@ namespace WildOS.Guest
                     Thread.Sleep(1000);
                 }
             }
+        }
+
+        // Any signed-in account can open the pipe. Only this program, in a
+        // session of the Windows mode account, is a session helper: anything
+        // else would be handed the programs Wild OS starts and could answer
+        // for the session.
+        bool IsHelper(NamedPipeServerStream pipe, uint session)
+        {
+            if (session == 0 || !string.Equals(UserOf(session), account, StringComparison.OrdinalIgnoreCase)) return false;
+            uint pid;
+            if (!Native.GetNamedPipeClientProcessId(pipe.SafePipeHandle.DangerousGetHandle(), out pid)) return false;
+            string image = Windows.ImagePath(pid);
+            bool ok = image != null && string.Equals(image, System.Reflection.Assembly.GetExecutingAssembly().Location, StringComparison.OrdinalIgnoreCase);
+            if (!ok) Log.Write("pipe: refused " + (image ?? "process " + pid) + " in session " + session);
+            return ok;
         }
 
         internal void Register(SessionClient client)
@@ -475,6 +587,21 @@ namespace WildOS.Guest
 
         internal void FromSession(SessionClient client, Dictionary<string, object> message)
         {
+            object id;
+            var key = message.TryGetValue("id", out id) ? id as string : null;
+            if (key != null)
+            {
+                lock (asked)
+                {
+                    Asked box;
+                    if (asked.TryGetValue(key, out box))
+                    {
+                        box.Reply = message;
+                        box.Done.Set();
+                        return;
+                    }
+                }
+            }
             message["session"] = (long)client.Session;
             host.Send(message);
         }

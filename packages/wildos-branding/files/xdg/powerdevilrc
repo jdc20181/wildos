@@ -1,0 +1,18 @@
+# Battery saver, as on Windows: below 20% the low battery profile takes
+# over, and it switches the power mode to power-saver. powerdevil's own
+# default leaves the power mode alone at any charge and calls the battery
+# low at 10%. Settings > Home reads these two values for its Battery saver
+# row.
+[BatteryManagement]
+BatteryLowLevel=20
+
+[LowBattery][Performance]
+PowerProfile=power-saver
+
+# Plugged in, the screen still turns off when idle but the computer stays
+# awake, as a MacBook does on its power adapter. Sleep drops Wi-Fi, so
+# downloads, updates, Windows mode and remote sessions stopped 15 minutes
+# after walking away. On battery it still sleeps. Settings > Power and
+# battery changes either.
+[AC][SuspendAndShutdown]
+AutoSuspendAction=0

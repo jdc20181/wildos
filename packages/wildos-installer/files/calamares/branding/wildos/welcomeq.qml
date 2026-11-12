@@ -124,8 +124,9 @@ WPage {
                 text: qsTr("Wild OS cannot be installed on this computer")
                 color: UI.Style.ink
                 font.family: UI.Style.fontFamily
+                font.letterSpacing: UI.Style.tracking(14)
                 font.pixelSize: 14
-                font.weight: Font.DemiBold
+                font.weight: UI.Style.weightSemiBold
             }
             Repeater {
                 model: page.requirements
@@ -138,6 +139,7 @@ WPage {
                     text: negatedText
                     color: UI.Style.inkStatus
                     font.family: UI.Style.fontFamily
+                    font.letterSpacing: UI.Style.tracking(13)
                     font.pixelSize: 13
                     wrapMode: Text.WordWrap
                 }
@@ -187,8 +189,9 @@ WPage {
                         text: modelData.title
                         color: UI.Style.ink
                         font.family: UI.Style.fontFamily
+                        font.letterSpacing: UI.Style.tracking(14)
                         font.pixelSize: 14
-                        font.weight: Font.DemiBold
+                        font.weight: UI.Style.weightSemiBold
                         wrapMode: Text.WordWrap
                     }
                     Text {
@@ -196,6 +199,7 @@ WPage {
                         text: modelData.detail
                         color: Qt.rgba(232 / 255, 236 / 255, 248 / 255, 0.82)
                         font.family: UI.Style.fontFamily
+                        font.letterSpacing: UI.Style.tracking(13)
                         font.pixelSize: 13
                         lineHeightMode: Text.FixedHeight
                         lineHeight: 19.5
@@ -215,6 +219,7 @@ WPage {
                                 text: (index + 1) + ".  " + modelData
                                 color: UI.Style.inkStatus
                                 font.family: UI.Style.fontFamily
+                                font.letterSpacing: UI.Style.tracking(12)
                                 font.pixelSize: 12
                                 lineHeightMode: Text.FixedHeight
                                 lineHeight: 18
@@ -295,6 +300,7 @@ WPage {
                                 text: modelData.title
                                 color: UI.Style.ink
                                 font.family: UI.Style.fontFamily
+                                font.letterSpacing: UI.Style.tracking(14)
                                 font.pixelSize: 14
                             }
                             Text {
@@ -302,6 +308,7 @@ WPage {
                                 text: modelData.detail
                                 color: UI.Style.inkMuted
                                 font.family: UI.Style.fontFamily
+                                font.letterSpacing: UI.Style.tracking(12)
                                 font.pixelSize: 12
                                 wrapMode: Text.WordWrap
                             }

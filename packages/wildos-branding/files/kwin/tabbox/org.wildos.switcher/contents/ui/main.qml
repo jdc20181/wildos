@@ -11,7 +11,7 @@ import WildOS.UI as UI
 //
 // The panel is a Plasma dialog rather than a plain window because only the
 // dialog asks KWin to blur behind it, and the Wild OS desktop theme already
-// draws dialogs as the design's glass (16,20,38 at 0.74 to 0.76, 22px corners,
+// draws dialogs as the design's glass (35,37,41 at 0.96, 22px corners,
 // 1px edge at 0.12). The theme frame contributes 14px of the design's 20px
 // padding; the remaining 6px is added here.
 KWin.TabBoxSwitcher {
@@ -185,7 +185,7 @@ KWin.TabBoxSwitcher {
                     visible: panel.count === 0
                     text: "No open windows"
                     size: 14
-                    font.weight: Font.Medium
+                    font.weight: UI.Style.weightMedium
                 }
 
                 UI.Label {

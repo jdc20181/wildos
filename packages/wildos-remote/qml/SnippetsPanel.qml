@@ -31,7 +31,7 @@ Item {
                 Layout.fillWidth: true
                 text: qsTr("Snippets")
                 size: 16
-                font.weight: Font.Bold
+                font.weight: UI.Style.weightBold
             }
             UI.IconButton {
                 width: 28
@@ -73,9 +73,9 @@ Item {
                 width: ListView.view.width
                 height: 61
                 radius: 10
-                color: current ? Qt.rgba(143 / 255, 180 / 255, 255 / 255, 0.12) : cardMouse.containsMouse ? UI.Style.tone(0.06) : UI.Style.tone(0.04)
+                color: current ? UI.Style.surfaceSelected : cardMouse.containsMouse ? UI.Style.surfaceHover : UI.Style.surfaceRaised
                 border.width: 1
-                border.color: current ? Qt.rgba(143 / 255, 180 / 255, 255 / 255, 0.5) : UI.Style.tone(0.06)
+                border.color: current ? UI.Style.borderControl : UI.Style.borderSubtle
                 Column {
                     x: 12
                     anchors.verticalCenter: parent.verticalCenter
@@ -85,7 +85,7 @@ Item {
                         width: parent.width
                         text: card.modelData.title
                         size: 14
-                        font.weight: Font.DemiBold
+                        font.weight: UI.Style.weightSemiBold
                     }
                     UI.Label {
                         width: parent.width
@@ -143,16 +143,16 @@ Item {
             Layout.fillWidth: true
             Layout.preferredHeight: 68
             radius: 10
-            color: UI.Style.tone(0.04)
+            color: UI.Style.surfaceRest
             border.width: 1
-            border.color: UI.Style.tone(0.06)
+            border.color: UI.Style.borderSubtle
             UI.Glyph {
                 x: 13
                 anchors.verticalCenter: parent.verticalCenter
                 width: 16
                 height: 16
                 path: RemoteIcons.broadcast
-                color: panel.runAll ? UI.Style.accent : UI.Style.iconMuted
+                color: panel.runAll ? UI.Style.iconInk : UI.Style.iconMuted
             }
             Column {
                 x: 38
@@ -162,7 +162,7 @@ Item {
                 UI.Label {
                     text: qsTr("Run in all open tabs")
                     size: 13
-                    font.weight: Font.DemiBold
+                    font.weight: UI.Style.weightSemiBold
                 }
                 UI.Label {
                     width: parent.width

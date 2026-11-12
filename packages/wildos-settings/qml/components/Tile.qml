@@ -63,7 +63,7 @@ T.AbstractButton {
             UI.Label {
                 Layout.fillWidth: true
                 text: tile.title
-                font.weight: Font.Medium
+                font.weight: UI.Style.weightMedium
             }
 
             UI.Label {

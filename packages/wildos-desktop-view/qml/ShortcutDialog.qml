@@ -50,7 +50,7 @@ DeskDialog {
     UI.Label {
         Layout.fillWidth: true
         text: "Location"
-        font.weight: Font.Medium
+        font.weight: UI.Style.weightMedium
     }
 
     Field {
@@ -74,7 +74,7 @@ DeskDialog {
         Layout.fillWidth: true
         Layout.topMargin: 6
         text: "Name"
-        font.weight: Font.Medium
+        font.weight: UI.Style.weightMedium
     }
 
     Field {

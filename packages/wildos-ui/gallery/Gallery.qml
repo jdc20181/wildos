@@ -44,7 +44,7 @@ Window {
         UI.Label {
             text: section.heading
             size: 15
-            font.weight: Font.DemiBold
+            font.weight: UI.Style.weightSemiBold
         }
 
         ColumnLayout {
@@ -151,6 +151,20 @@ Window {
                 heading: "Buttons " + (UI.Style.dark ? "(dark)" : "(light)") + ", text scale " + UI.Style.textScale.toFixed(2)
                 Layout.columnSpan: 2
 
+                // The five Style weights should read as five distinct steps;
+                // 480 and 550 need the variable Albert Sans.
+                States {
+                    label: "Weights"
+                    Repeater {
+                        model: [UI.Style.weightLight, UI.Style.weightRegular, UI.Style.weightMedium, UI.Style.weightSemiBold, UI.Style.weightBold]
+                        UI.Label {
+                            required property int modelData
+                            text: "Wild OS " + modelData
+                            size: 18
+                            font.weight: modelData
+                        }
+                    }
+                }
                 States {
                     label: "Primary"
                     UI.Button { kind: "primary"; text: "Install" }
@@ -465,7 +479,7 @@ Window {
             UI.Label {
                 text: "Overlays " + (UI.Style.dark ? "(dark)" : "(light)")
                 size: 15
-                font.weight: Font.DemiBold
+                font.weight: UI.Style.weightSemiBold
             }
 
             UI.Button {

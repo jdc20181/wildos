@@ -1,6 +1,7 @@
 #include "autoconfig.h"
 
 #include <QDnsLookup>
+#include <QHostAddress>
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
 #include <QUrl>
@@ -37,6 +38,16 @@ QString securityOf(const QString &socketType)
         return QStringLiteral("starttls");
     }
     return QStringLiteral("none");
+}
+
+bool isLoopback(const QString &host)
+{
+    const QString h = host.trimmed().toLower();
+    if (h == QLatin1String("localhost") || h.endsWith(QLatin1String(".localhost"))) {
+        return true;
+    }
+    QHostAddress address;
+    return address.setAddress(h.startsWith(QLatin1Char('[')) ? h.mid(1, h.size() - 2) : h) && address.isLoopback();
 }
 
 // Thunderbird's autoconfig XML: the first IMAP server and the first SMTP
@@ -84,6 +95,12 @@ QVariantMap parseConfig(const QByteArray &xml, const QString &email)
     if (!out.contains(QStringLiteral("imapHost")) || !out.contains(QStringLiteral("smtpHost"))) {
         return {};
     }
+    // A server on this PC means a local helper app (Proton Mail Bridge is
+    // one) that is likely not installed; offered as found, the sign-in only
+    // fails with "connection refused", so the person picks the servers.
+    if (isLoopback(out.value(QStringLiteral("imapHost")).toString()) || isLoopback(out.value(QStringLiteral("smtpHost")).toString())) {
+        return {};
+    }
     out.insert(QStringLiteral("provider"), QStringLiteral("other"));
     return out;
 }
@@ -117,6 +134,10 @@ QString AutoConfig::providerOf(const QString &email)
     }
     if (domain == QLatin1String("fastmail.com") || domain == QLatin1String("fastmail.fm")) {
         return QStringLiteral("fastmail");
+    }
+    if (domain == QLatin1String("proton.me") || domain == QLatin1String("protonmail.com") || domain == QLatin1String("protonmail.ch")
+        || domain == QLatin1String("pm.me")) {
+        return QStringLiteral("proton");
     }
     return QStringLiteral("other");
 }
@@ -154,6 +175,12 @@ void AutoConfig::lookup(const QString &email)
     m_busy = true;
     Q_EMIT busyChanged();
     const QString provider = providerOf(email);
+    // Proton has no server Mail can sign in to, only Proton Mail Bridge on
+    // the PC, so there are no settings to find; the dialog explains instead.
+    if (provider == QLatin1String("proton")) {
+        finish({{QStringLiteral("provider"), provider}, {QStringLiteral("email"), email}}, false);
+        return;
+    }
     if (provider != QLatin1String("other")) {
         finish(preset(provider, email), false);
         return;
@@ -213,6 +240,12 @@ void AutoConfig::tryMx(const QString &email)
         }
         if (mx.endsWith(QLatin1String("outlook.com"))) {
             finish(preset(QStringLiteral("outlook"), email), false);
+            return;
+        }
+        // Custom domains on Proton, whose mail is no more reachable than an
+        // @proton.me address.
+        if (mx.endsWith(QLatin1String("protonmail.ch")) || mx.endsWith(QLatin1String("proton.me"))) {
+            finish({{QStringLiteral("provider"), QStringLiteral("proton")}, {QStringLiteral("email"), email}}, false);
             return;
         }
         const QString domain = domainOf(email);

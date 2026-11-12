@@ -5,6 +5,7 @@
 #include <KConfigWatcher>
 
 #include <QColor>
+#include <QDateTime>
 #include <QObject>
 #include <QQmlEngine>
 
@@ -44,6 +45,9 @@ public:
     QString running() const { return m_running; }
 
     Q_INVOKABLE QList<qreal> glowRows(int reach) const { return UnderglowSettings::glowRows(reach); }
+    Q_INVOKABLE QList<qreal> spectrumCopyRows(int reach) const { return UnderglowSettings::spectrumCopyRows(reach); }
+    // 0 to 1 through the spectrum's six second slide, from the wall clock.
+    Q_INVOKABLE qreal flowPhase() const { return UnderglowSettings::flowPhase(QDateTime::currentMSecsSinceEpoch()); }
 
 Q_SIGNALS:
     void settingsChanged();

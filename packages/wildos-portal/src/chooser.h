@@ -70,6 +70,12 @@ public:
     Q_INVOKABLE void setChoice(const QString &id, const QString &value);
     // The "All files" type, or -1 when the app offers none.
     Q_INVOKABLE int allFilesIndex() const;
+    // The name with the extension of type `from` changed to that of `to`,
+    // so the name box never shows one type while saving as another.
+    Q_INVOKABLE QString swapSuffix(const QString &name, int from, int to) const;
+    // Where the name's extension starts, or -1, so opening Save selects
+    // only the name, as Windows does.
+    Q_INVOKABLE int suffixStart(const QString &name) const;
 
     // The main button, Enter in the name field, or a double click on a
     // file. Returns "" when done (or when it moved into a folder instead),
@@ -92,12 +98,16 @@ private:
     QString displayName(const QString &fileName) const;
     QString finalName(const QString &typed) const;
     void finish(const QList<QUrl> &urls);
+    QString recentKey() const;
+    QUrl startFolder() const;
+    void rememberFolder(const QList<QUrl> &urls);
 
     Request m_request;
     DirModel *m_folder;
     int m_currentFilter = -1;
     QHash<QString, QString> m_chosen;
     QString m_initialName;
+    QString m_purpose;
     QList<QUrl> m_pending;
     bool m_done = false;
 };

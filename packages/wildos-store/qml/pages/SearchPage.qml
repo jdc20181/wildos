@@ -83,7 +83,7 @@ AppGrid {
                     width: parent.width
                     text: "Looking for " + page.windowsName + "?"
                     size: 16
-                    font.weight: Font.Bold
+                    font.weight: UI.Style.weightBold
                 }
 
                 UI.Label {

@@ -19,6 +19,10 @@ void move(Client *client, QPoint at);
 // steps for smooth scrolling. What doesn't fit in one message waits in
 // `pendingX` and `pendingY` for the next.
 void wheel(Client *client, QPoint angleDelta, QPoint at, int &pendingX, int &pendingY);
+// A two-finger pinch on a touchpad, as Windows' own touchpad driver gives
+// it to apps: the wheel turned with Ctrl held, a notch for every tenth of
+// the pinch. `begin` and `end` press and let go of Ctrl around it.
+void pinch(Client *client, Qt::NativeGestureType type, qreal value, QPoint at, int &pending);
 
 // A key, by the scancode of the physical key behind it, or as the character
 // it typed when there is no key (an input method, the on-screen keyboard).

@@ -1,0 +1,11 @@
+// A restore point before apt changes anything, so Settings > System >
+// Recovery can go back to it. Runs for apt, PackageKit (Settings > Updates
+// and the Store) and the automatic security updates alike. It never stops
+// an update: the tool logs any failure and exits 0.
+DPkg::Pre-Invoke { "if [ -x /usr/libexec/wildos/restore-points ]; then /usr/libexec/wildos/restore-points apt-pre; fi"; };
+// Names the restore point after what is about to change (a Wild OS build,
+// a driver). Version 3 gives the old and new version of every package.
+DPkg::Pre-Install-Pkgs { "if [ -x /usr/libexec/wildos/restore-points ]; then /usr/libexec/wildos/restore-points apt-pkgs; else cat >/dev/null; fi"; };
+DPkg::Tools::Options::"if [ -x /usr/libexec/wildos/restore-points ]; then /usr/libexec/wildos/restore-points apt-pkgs; else cat >/dev/null; fi"::Version "3";
+// What changed goes into the restore point's summary afterwards.
+DPkg::Post-Invoke { "if [ -x /usr/libexec/wildos/restore-points ]; then /usr/libexec/wildos/restore-points apt-post; fi"; };

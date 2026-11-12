@@ -8,7 +8,8 @@ QtObject {
     property var window: null
     // Something a page should do once it is open, asked for from outside
     // (wildos-settings --page signin-wallet asks Sign-in options to open
-    // its saved passwords dialog). The page clears it when done.
+    // its saved passwords dialog, --page update-install asks Updates to
+    // install what is waiting). The page clears it when done.
     property string request: ""
 
     function open(id) {

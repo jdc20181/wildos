@@ -62,7 +62,7 @@ Item {
                 anchors.verticalCenter: parent.verticalCenter
                 text: "Windows mode"
                 size: 17
-                font.weight: Font.DemiBold
+                font.weight: UI.Style.weightSemiBold
                 Accessible.role: Accessible.Heading
             }
         }
@@ -121,7 +121,7 @@ Item {
                                 visible: !row.done
                                 text: row.number
                                 size: 11
-                                font.weight: row.active ? Font.Bold : Font.Normal
+                                font.weight: row.active ? UI.Style.weightBold : UI.Style.weightRegular
                                 color: row.active ? UI.Style.textOnAccent : UI.Style.ink
                             }
                         }
@@ -130,7 +130,7 @@ Item {
                             anchors.verticalCenter: parent.verticalCenter
                             text: row.modelData
                             size: 13
-                            font.weight: row.active ? Font.DemiBold : Font.Normal
+                            font.weight: row.active ? UI.Style.weightSemiBold : UI.Style.weightRegular
                             color: row.active ? UI.Style.ink : UI.Style.inkAlpha(row.done ? 0.80 : 0.75, 0.70)
                         }
                     }

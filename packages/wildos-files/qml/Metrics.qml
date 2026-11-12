@@ -42,5 +42,5 @@ QtObject {
     readonly property color chipText: UI.Style.dark
         ? Qt.rgba(UI.Style.accent.r + (1 - UI.Style.accent.r) * 0.7, UI.Style.accent.g + (1 - UI.Style.accent.g) * 0.7, UI.Style.accent.b + (1 - UI.Style.accent.b) * 0.7, 1)
         : UI.Style.accentText
-    readonly property color chipHover: UI.Style.accentAlpha(0.18, 0.14)
+    readonly property color chipHover: UI.Style.fillSelected(0.18, 0.14)
 }

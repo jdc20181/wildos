@@ -1,19 +1,18 @@
 // Dates and times in the regional format chosen in Settings > Language and
 // region (LC_TIME, which Qt.locale() follows), with day and month names in
-// English because the rest of Wild OS is in English.
+// English because the rest of Wild OS is in English. Times also follow the
+// 12 or 24-hour clock chosen in Settings > Date and time, through UI, the
+// WildOS.UI import of the file that imports this one (a .import here would
+// hide QtQuick's Locale from it).
 
 function names() {
     return Qt.locale("en_GB");
 }
 
+// The formats are TimeFormat's properties, so a binding that calls this
+// follows a change of clock in Settings straight away.
 function time(when, seconds) {
-    let format = Qt.locale().timeFormat(Locale.ShortFormat);
-    // The short format has no seconds; the long one adds a time zone, which
-    // the taskbar has no room for, so seconds go in after the minutes.
-    if (seconds && format.indexOf("s") < 0) {
-        format = format.replace(/mm/, "mm:ss");
-    }
-    return Qt.locale().toString(when, format);
+    return Qt.locale().toString(when, seconds ? UI.TimeFormat.secondsFormat : UI.TimeFormat.shortFormat);
 }
 
 function shortDate(when) {

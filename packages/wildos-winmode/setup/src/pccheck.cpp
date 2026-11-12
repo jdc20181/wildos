@@ -4,6 +4,8 @@
 #include <QFile>
 #include <QFileInfo>
 #include <QLocale>
+#include <QPair>
+#include <QSet>
 
 #include <cerrno>
 #include <cstring>
@@ -58,6 +60,23 @@ Virtualisation virtualisation()
     }
     ::close(kvm);
     return result;
+}
+
+int processorCores()
+{
+    // A core is a package and core id pair. The second thread of a core
+    // that Wild OS keeps offline has no topology folder, so is skipped.
+    QSet<QPair<QByteArray, QByteArray>> cores;
+    QDirIterator it(QStringLiteral("/sys/devices/system/cpu"), {QStringLiteral("cpu[0-9]*")}, QDir::Dirs);
+    while (it.hasNext()) {
+        const QString topology = it.next() + QStringLiteral("/topology/");
+        QFile package(topology + QStringLiteral("physical_package_id"));
+        QFile core(topology + QStringLiteral("core_id"));
+        if (package.open(QIODevice::ReadOnly) && core.open(QIODevice::ReadOnly)) {
+            cores.insert({package.readAll().trimmed(), core.readAll().trimmed()});
+        }
+    }
+    return int(cores.size());
 }
 
 qint64 memoryBytes()

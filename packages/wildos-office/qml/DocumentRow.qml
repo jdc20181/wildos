@@ -64,7 +64,7 @@ T.AbstractButton {
             width: parent.width
             text: row.modelData.name
             size: 13.5
-            font.weight: Font.Medium
+            font.weight: UI.Style.weightMedium
         }
         UI.Label {
             width: parent.width

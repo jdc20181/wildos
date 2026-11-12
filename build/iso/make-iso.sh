@@ -62,6 +62,25 @@ grub-mkimage -O i386-pc-eltorito -p /boot/grub -o "$tree/boot/grub/i386-pc/eltor
     biosdisk iso9660 normal search search_label configfile gfxterm gfxmenu \
     all_video png font echo test halt
 
+# The reset copy's list of sums (wildos-recovery's reset-copy): what a new
+# install keeps on the PC for Reset Wild OS and start-up recovery, and what
+# a PC downloading this release checks before using it. Signed with the
+# update channel's key when the build has it (release builds pass
+# WILDOS_UPDATES_KEY); an unsigned copy is kept but never used.
+(
+    cd "$tree"
+    find LiveOS/squashfs.img live/vmlinuz live/initrd.img .disk/info pool -type f -print0 2>/dev/null         | sort -z | xargs -0 sha256sum > LiveOS/reset.sha256
+)
+rm -f "$tree/LiveOS/reset.sha256.sig"
+if [ -n "${WILDOS_UPDATES_KEY:-}" ]; then
+    command -v gpg >/dev/null || apt-get install -y -q gnupg >/dev/null
+    gnupghome=$(mktemp -d)
+    printf '%s
+' "$WILDOS_UPDATES_KEY" | gpg --homedir "$gnupghome" --batch --import 2>/dev/null
+    gpg --homedir "$gnupghome" --batch --yes --armor --detach-sign         --output "$tree/LiveOS/reset.sha256.sig" "$tree/LiveOS/reset.sha256"
+    rm -rf "$gnupghome"
+fi
+
 # -partition_offset 16 gives the stick's GPT a first partition holding a
 # mountable copy of the file system, as Ubuntu's images do. Without it a
 # stick booted by UEFI starts GRUB from the appended EFI partition, GRUB

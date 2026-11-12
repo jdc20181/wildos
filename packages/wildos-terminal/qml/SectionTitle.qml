@@ -3,6 +3,6 @@ import WildOS.UI as UI
 
 UI.Label {
     size: 15
-    font.weight: Font.DemiBold
+    font.weight: UI.Style.weightSemiBold
     Accessible.role: Accessible.Heading
 }

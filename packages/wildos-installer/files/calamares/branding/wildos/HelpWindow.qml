@@ -116,7 +116,7 @@ Window {
     Rectangle {
         anchors.fill: parent
         radius: UI.Style.radiusDialog
-        color: "#1a1e33"
+        color: "#222428"
         border.width: 1
         border.color: UI.Style.borderDialog
 
@@ -139,8 +139,9 @@ Window {
                     text: help.page.title
                     color: UI.Style.ink
                     font.family: UI.Style.fontFamily
+                    font.letterSpacing: UI.Style.tracking(18)
                     font.pixelSize: 18
-                    font.weight: Font.DemiBold
+                    font.weight: UI.Style.weightSemiBold
                     wrapMode: Text.WordWrap
                 }
                 Text {
@@ -149,6 +150,7 @@ Window {
                     text: help.page.intro
                     color: UI.Style.inkStatus
                     font.family: UI.Style.fontFamily
+                    font.letterSpacing: UI.Style.tracking(13)
                     font.pixelSize: 13
                     lineHeight: 1.4
                     wrapMode: Text.WordWrap
@@ -171,8 +173,9 @@ Window {
                                 text: index + 1
                                 color: UI.Style.accentText
                                 font.family: UI.Style.fontFamily
+                                font.letterSpacing: UI.Style.tracking(11)
                                 font.pixelSize: 11
-                                font.weight: Font.Bold
+                                font.weight: UI.Style.weightBold
                             }
                         }
                         Text {
@@ -180,6 +183,7 @@ Window {
                             text: modelData
                             color: UI.Style.ink
                             font.family: UI.Style.fontFamily
+                            font.letterSpacing: UI.Style.tracking(13)
                             font.pixelSize: 13
                             lineHeight: 1.4
                             wrapMode: Text.WordWrap
@@ -196,14 +200,16 @@ Window {
                             text: modelData.t
                             color: UI.Style.ink
                             font.family: UI.Style.fontFamily
+                            font.letterSpacing: UI.Style.tracking(14)
                             font.pixelSize: 14
-                            font.weight: Font.DemiBold
+                            font.weight: UI.Style.weightSemiBold
                         }
                         Text {
                             Layout.fillWidth: true
                             text: modelData.b
                             color: UI.Style.inkStatus
                             font.family: UI.Style.fontFamily
+                            font.letterSpacing: UI.Style.tracking(13)
                             font.pixelSize: 13
                             lineHeight: 1.4
                             wrapMode: Text.WordWrap

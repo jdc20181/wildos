@@ -1,0 +1,20 @@
+{
+    "KPackageStructure": "KWin/Script",
+    "KPlugin": {
+        "Authors": [
+            {
+                "Email": "dev@wildos.io",
+                "Name": "Wild OS"
+            }
+        ],
+        "Description": "Alt+F4 closes the window in use, and on the desktop opens the shut down screen",
+        "EnabledByDefault": true,
+        "Id": "org.wildos.closewindow",
+        "License": "GPL-3.0-or-later",
+        "Name": "Close window",
+        "Version": "0.1.0",
+        "Website": "https://wildos.io"
+    },
+    "X-Plasma-API": "javascript",
+    "X-Plasma-MainScript": "code/main.js"
+}

@@ -10,13 +10,13 @@
     <node oor:name="Office">
       <node oor:name="Factories">
         <node oor:name="com.sun.star.text.TextDocument">
-          <prop oor:name="ooSetupFactoryWindowAttributes"><value>,,,;8;</value></prop>
+          <prop oor:name="ooSetupFactoryWindowAttributes"><value>,,,;4;</value></prop>
           <prop oor:name="ooSetupFactoryTemplateFile"><value>file:///usr/share/wildos-office/templates/default/Default.ott</value></prop>
           <prop oor:name="ooSetupFactoryDefaultFilter"><value>MS Word 2007 XML</value></prop>
           <prop oor:name="ooSetupFactoryUIName"><value xml:lang="en-US">Write</value></prop>
         </node>
         <node oor:name="com.sun.star.sheet.SpreadsheetDocument">
-          <prop oor:name="ooSetupFactoryWindowAttributes"><value>,,,;8;</value></prop>
+          <prop oor:name="ooSetupFactoryWindowAttributes"><value>,,,;4;</value></prop>
           <prop oor:name="ooSetupFactoryTemplateFile"><value>file:///usr/share/wildos-office/templates/default/Default.ots</value></prop>
           <prop oor:name="ooSetupFactoryDefaultFilter"><value>Calc MS Excel 2007 XML</value></prop>
           <prop oor:name="ooSetupFactoryUIName"><value xml:lang="en-US">Tables</value></prop>
@@ -32,25 +32,111 @@
   </oor:component-data>
 
   <oor:component-data oor:package="org.openoffice.Office" oor:name="Common">
-    <!-- Pages stay white under the dark theme, as printed paper is. -->
+    <!-- The application colours follow light and dark mode. -->
     <node oor:name="Appearance">
-      <prop oor:name="ApplicationAppearance"><value>1</value></prop>
+      <prop oor:name="ApplicationAppearance"><value>0</value></prop>
     </node>
+    <!-- Open, Save as, Export and Insert picture use the system file dialog,
+         the one every other app uses, never LibreOffice's own. -->
     <node oor:name="Misc">
       <prop oor:name="ShowTipOfTheDay"><value>false</value></prop>
+      <prop oor:name="UseSystemFileDialog"><value>true</value></prop>
+    </node>
+    <!-- The File menu shows its icons, as on the boards. -->
+    <node oor:name="View">
+      <node oor:name="Menu">
+        <prop oor:name="IsSystemIconsInMenus"><value>false</value></prop>
+        <prop oor:name="ShowIconsInMenues"><value>true</value></prop>
+      </node>
     </node>
     <node oor:name="Save">
       <node oor:name="Document">
         <prop oor:name="WarnAlienFormat"><value>false</value></prop>
       </node>
     </node>
+    <!-- File > Recent lists Write and Tables files together, each with its
+         app's icon, as on the board. -->
+    <node oor:name="History">
+      <prop oor:name="ShowCurrentModuleOnly"><value>false</value></prop>
+    </node>
+    <!-- Print opens with More options folded, and the page order section
+         inside it open, so unfolding More options shows everything. Both
+         keys are named for the old layout's sections. -->
+    <node oor:name="Print">
+      <node oor:name="Dialog">
+        <prop oor:name="LayoutSectionExpanded"><value>false</value></prop>
+        <prop oor:name="RangeSectionExpanded"><value>true</value></prop>
+      </node>
+    </node>
   </oor:component-data>
 
-  <!-- The status bar's sum field shows Sum and Count, as Excel's does. -->
+  <!-- Pages stay white in dark mode, as printed paper is, with dark ink for
+       text in the automatic colour; around them the window is the boards'
+       near-black #0e0f15 in dark mode and #efefef in light mode. -->
+  <oor:component-data oor:package="org.openoffice.Office" oor:name="UI">
+    <node oor:name="ColorScheme">
+      <node oor:name="ColorSchemes">
+        <node oor:name="COLOR_SCHEME_LIBREOFFICE_AUTOMATIC">
+          <node oor:name="DocColor">
+            <prop oor:name="Dark"><value>16777215</value></prop>
+          </node>
+          <node oor:name="FontColor">
+            <prop oor:name="Dark"><value>2041395</value></prop>
+          </node>
+          <node oor:name="AppBackground">
+            <prop oor:name="Light"><value>15724527</value></prop>
+            <prop oor:name="Dark"><value>921365</value></prop>
+          </node>
+          <!-- Tables' cell lines: a hairline grey on the white sheet. -->
+          <node oor:name="CalcGrid">
+            <prop oor:name="Light"><value>14935788</value></prop>
+            <prop oor:name="Dark"><value>14935788</value></prop>
+          </node>
+        </node>
+      </node>
+    </node>
+  </oor:component-data>
+
+  <!-- The sidebar's tab strip holds Properties, Styles, Gallery and
+       Navigator, as on the boards. The other decks only show in
+       LibreOffice's experimental mode. -->
+  <oor:component-data oor:package="org.openoffice.Office.UI" oor:name="Sidebar">
+    <node oor:name="Content">
+      <node oor:name="DeckList">
+        <node oor:name="InspectorDeck"><prop oor:name="IsExperimental"><value>true</value></prop></node>
+        <node oor:name="WriterPageDeck"><prop oor:name="IsExperimental"><value>true</value></prop></node>
+        <node oor:name="CommentsDeck"><prop oor:name="IsExperimental"><value>true</value></prop></node>
+        <node oor:name="A11yCheckDeck"><prop oor:name="IsExperimental"><value>true</value></prop></node>
+        <node oor:name="ShapesDeck"><prop oor:name="IsExperimental"><value>true</value></prop></node>
+        <node oor:name="SwManageChangesDeck"><prop oor:name="IsExperimental"><value>true</value></prop></node>
+        <node oor:name="SwDesignDeck"><prop oor:name="IsExperimental"><value>true</value></prop></node>
+        <node oor:name="FindDeck"><prop oor:name="IsExperimental"><value>true</value></prop></node>
+        <node oor:name="ScFunctionsDeck"><prop oor:name="IsExperimental"><value>true</value></prop></node>
+      </node>
+    </node>
+  </oor:component-data>
+
+  <!-- No rulers and no corner marks for the text area, as on the boards;
+       View > Ruler and View > Text Boundaries bring them back. -->
+  <oor:component-data oor:package="org.openoffice.Office" oor:name="Writer">
+    <node oor:name="Layout">
+      <node oor:name="Window">
+        <prop oor:name="ShowRulers"><value>false</value></prop>
+      </node>
+    </node>
+    <node oor:name="Content">
+      <node oor:name="Display">
+        <prop oor:name="TextBoundaries"><value>false</value></prop>
+      </node>
+    </node>
+  </oor:component-data>
+
+  <!-- The status bar shows the selection's Sum and Count (of numbers), as on
+       the boards: bits 9 (sum) and 2 (count). -->
   <oor:component-data oor:package="org.openoffice.Office" oor:name="Calc">
     <node oor:name="Layout">
       <node oor:name="Other">
-        <prop oor:name="StatusbarMultiFunction"><value>520</value></prop>
+        <prop oor:name="StatusbarMultiFunction"><value>516</value></prop>
       </node>
     </node>
   </oor:component-data>
@@ -160,6 +246,24 @@
           <node oor:name="GroupedbarCompact"><prop oor:name="IsExperimental"><value>true</value></prop></node>
           <node oor:name="GroupedbarFull"><prop oor:name="IsExperimental"><value>true</value></prop></node>
           <node oor:name="ContextualGroups"><prop oor:name="IsExperimental"><value>true</value></prop></node>
+        </node>
+      </node>
+    </node>
+  </oor:component-data>
+
+  <!-- Alt+Q opens Find a command, as in Word; the search field shows it. -->
+  <oor:component-data oor:package="org.openoffice.Office" oor:name="Accelerators">
+    <node oor:name="PrimaryKeys">
+      <node oor:name="Modules">
+        <node oor:name="com.sun.star.text.TextDocument">
+          <node oor:name="Q_MOD2" oor:op="replace">
+            <prop oor:name="Command"><value xml:lang="en-US">.uno:CommandPopup</value></prop>
+          </node>
+        </node>
+        <node oor:name="com.sun.star.sheet.SpreadsheetDocument">
+          <node oor:name="Q_MOD2" oor:op="replace">
+            <prop oor:name="Command"><value xml:lang="en-US">.uno:CommandPopup</value></prop>
+          </node>
         </node>
       </node>
     </node>

@@ -180,7 +180,7 @@ UI.AppWindow {
                 anchors.verticalCenter: parent.verticalCenter
                 text: qsTr("Remote")
                 size: 15
-                font.weight: Font.DemiBold
+                font.weight: UI.Style.weightSemiBold
             }
 
             UI.TextField {

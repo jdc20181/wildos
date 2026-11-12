@@ -32,7 +32,7 @@ FocusScope {
     readonly property real edgeTop: frame.margins.top
     readonly property real edgeBottom: frame.margins.bottom
 
-    readonly property string level: winmode.level
+    readonly property string level: winmode.baseLevel
     readonly property bool running: level === "running"
     readonly property bool vmRunning: winmode.system !== null && winmode.system.vm === "running"
 
@@ -80,7 +80,7 @@ FocusScope {
 
     component Figure: UI.Label {
         size: 13
-        font.weight: Font.DemiBold
+        font.weight: UI.Style.weightSemiBold
         font.features: ({ "tnum": 1 })
     }
 
@@ -175,7 +175,7 @@ FocusScope {
                     Layout.fillWidth: true
                     text: "Windows mode"
                     size: 15
-                    font.weight: Font.DemiBold
+                    font.weight: UI.Style.weightSemiBold
                     Accessible.role: Accessible.Heading
                 }
 
@@ -201,9 +201,9 @@ FocusScope {
                     }
 
                     UI.Label {
-                        text: panel.winmode.pillText
+                        text: panel.winmode.pillFor(panel.level)
                         size: 11
-                        font.weight: Font.DemiBold
+                        font.weight: UI.Style.weightSemiBold
                         color: Tones.pillText(panel.level)
                     }
                 }

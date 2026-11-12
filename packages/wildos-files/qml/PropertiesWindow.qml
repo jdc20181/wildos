@@ -141,7 +141,7 @@ UI.AppWindow {
             id: tabLabel
             horizontalAlignment: Text.AlignHCenter
             text: tab.text
-            font.weight: tab.checked ? Font.DemiBold : Font.Normal
+            font.weight: tab.checked ? UI.Style.weightSemiBold : UI.Style.weightRegular
             color: tab.checked ? UI.Style.ink : UI.Style.iconMuted
         }
     }
@@ -166,7 +166,7 @@ UI.AppWindow {
             Layout.alignment: Qt.AlignHCenter
             text: parent.heading
             size: 15
-            font.weight: Font.DemiBold
+            font.weight: UI.Style.weightSemiBold
         }
         UI.Label {
             Layout.fillWidth: true
@@ -213,7 +213,7 @@ UI.AppWindow {
                 UI.Label {
                     anchors.verticalCenter: parent.verticalCenter
                     text: props.title
-                    font.weight: Font.Medium
+                    font.weight: UI.Style.weightMedium
                     color: props.active ? UI.Style.ink : UI.Style.inkMuted
                 }
             }
@@ -285,7 +285,7 @@ UI.AppWindow {
                             Layout.fillWidth: true
                             text: info.name
                             size: 15
-                            font.weight: Font.DemiBold
+                            font.weight: UI.Style.weightSemiBold
                         }
                     }
 
@@ -374,7 +374,7 @@ UI.AppWindow {
 
                     UI.Label {
                         text: "On this computer"
-                        font.weight: Font.DemiBold
+                        font.weight: UI.Style.weightSemiBold
                     }
                     UI.CheckBox {
                         text: "Other people who use this computer can open it"
@@ -395,7 +395,7 @@ UI.AppWindow {
 
                     UI.Label {
                         text: "On your network"
-                        font.weight: Font.DemiBold
+                        font.weight: UI.Style.weightSemiBold
                     }
                     UI.CheckBox {
                         visible: info.isDir && props.share.available === true
@@ -428,7 +428,7 @@ UI.AppWindow {
                     UI.Label {
                         visible: !info.isDir
                         text: "Send a copy"
-                        font.weight: Font.DemiBold
+                        font.weight: UI.Style.weightSemiBold
                     }
                     UI.Button {
                         id: shareButton

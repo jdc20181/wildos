@@ -21,6 +21,8 @@ FocusScope {
     // Set after a wrong password; shown with the message while it lasts.
     property string passwordHint: ""
     property bool capsLockOn: false
+    // A finger is enrolled and the reader is waiting for it.
+    property bool fingerprintReady: false
     property bool canSwitchUser: false
     property Item layoutSwitcher: null
     property bool showMediaControls: false
@@ -75,7 +77,7 @@ FocusScope {
             horizontalAlignment: Text.AlignHCenter
             text: block.userName
             size: 18
-            font.weight: Font.DemiBold
+            font.weight: UI.Style.weightSemiBold
             color: UI.Style.inkOnWallpaper
             bottomPadding: 6
             layer.enabled: GraphicsInfo.api !== GraphicsInfo.Software
@@ -116,7 +118,7 @@ FocusScope {
             anchors.horizontalCenter: parent.horizontalCenter
             width: parent.width
             spacing: 6
-            visible: messageNotice.shown || hintNotice.shown || capsNotice.shown
+            visible: messageNotice.shown || hintNotice.shown || capsNotice.shown || fingerprintNotice.shown
 
             Notice {
                 id: messageNotice
@@ -127,6 +129,12 @@ FocusScope {
                 id: hintNotice
                 shown: block.notificationMessage.length > 0 && block.passwordHint.length > 0
                 text: "Hint: " + block.passwordHint
+                muted: true
+            }
+            Notice {
+                id: fingerprintNotice
+                shown: block.fingerprintReady && !messageNotice.shown && pill.text.length === 0
+                text: "Or touch the fingerprint reader"
                 muted: true
             }
             Notice {

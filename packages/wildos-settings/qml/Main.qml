@@ -16,8 +16,13 @@ UI.AppWindow {
 
     required property string startPage
     property string currentId: ""
+    // Pages visited before this one, newest last. Back takes one step down
+    // it, as Back does in Windows 11 Settings.
     property var history: []
     property string pendingId: ""
+    property bool pendingBack: false
+    readonly property var searchFound: Pages.find(search.text)
+    property int resultIndex: 0
     readonly property var current: Pages.page(currentId)
     property string currentKcm: ""
     property string pageError: ""
@@ -42,6 +47,9 @@ UI.AppWindow {
         if (id === "signin-wallet") {
             Navigator.request = "wallet";
         }
+        if (id === "update-install") {
+            Navigator.request = "install";
+        }
         id = Pages.resolve(id);
         let p = Pages.page(id);
         if (!p || !Pages.exists(id)) {
@@ -62,11 +70,16 @@ UI.AppWindow {
         }
         if (pageLoader.item && pageLoader.item.dirty) {
             pendingId = id;
+            pendingBack = fromHistory === true;
             unsavedDialog.open();
             return;
         }
-        if (!fromHistory && currentId.length > 0) {
-            history = history.concat([currentId]);
+        // The step back is only used up once the page really changes, so
+        // "Stay on this page" in the unsaved changes dialog keeps it.
+        if (fromHistory === true) {
+            history = history.slice(0, -1);
+        } else if (currentId.length > 0) {
+            history = history.concat([currentId]).slice(-50);
         }
         currentId = id;
         pageLoader.sourceComponent = null;
@@ -101,28 +114,63 @@ UI.AppWindow {
         if (pageLoader.item && pageLoader.item.back && pageLoader.item.back()) {
             return;
         }
+        // A step can lead nowhere by now: a page whose KDE module has been
+        // removed since, which would otherwise leave Back stuck on Home.
+        while (history.length > 0) {
+            const previous = Pages.resolve(history[history.length - 1]);
+            if (previous !== currentId && Pages.exists(previous)) {
+                break;
+            }
+            history = history.slice(0, -1);
+        }
         if (history.length > 0) {
-            const previous = history[history.length - 1];
-            history = history.slice(0, history.length - 1);
-            openPage(previous, true);
+            openPage(history[history.length - 1], true);
+        }
+    }
+
+    function openResult(index) {
+        const ids = searchFound.ids;
+        if (ids.length > 0) {
+            openPage(ids[Math.max(0, Math.min(index, ids.length - 1))]);
+        }
+        // Picking the page already showing changes nothing else, and the
+        // list would otherwise stay open over it.
+        search.text = "";
+    }
+
+    function moveResult(step) {
+        const count = searchFound.ids.length;
+        if (count > 0) {
+            resultIndex = Math.max(0, Math.min(resultIndex + step, count - 1));
+            resultList.positionViewAtIndex(resultIndex, ListView.Contain);
         }
     }
 
     Component.onCompleted: {
         Navigator.window = window;
         openPage(startPage);
+        // Opened straight onto an inner page (from Start, a notification or
+        // --page), Back climbs the way the page title reads, one level at a
+        // time, and ends on Home.
+        if (currentId !== "home") {
+            history = ["home"].concat(Pages.trail(currentId).slice(0, -1));
+        }
     }
 
     onClosing: close => {
         if (pageLoader.item && pageLoader.item.dirty) {
             close.accepted = false;
             pendingId = "";
+            pendingBack = false;
             unsavedDialog.open();
         }
     }
 
+    // StandardKey.Back is Alt+Left on Linux, so listing both registered
+    // Alt+Left twice, and Qt treats a doubled shortcut as ambiguous and
+    // never fires it. "Back" is the browser back key on some keyboards.
     Shortcut {
-        sequences: [StandardKey.Back, "Alt+Left"]
+        sequences: ["Alt+Left", "Back"]
         onActivated: window.goBack()
     }
 
@@ -214,7 +262,7 @@ UI.AppWindow {
                             width: navColumn.width - 60 - 14 - 16
                             text: System.userFullName
                             size: 15
-                            font.weight: Font.DemiBold
+                            font.weight: UI.Style.weightSemiBold
                         }
                     }
                 }
@@ -224,13 +272,13 @@ UI.AppWindow {
                 id: search
                 width: parent.width
                 placeholderText: "Find a setting"
-                onAccepted: {
-                    const found = Pages.search(text);
-                    if (found.length > 0) {
-                        window.openPage(found[0]);
-                    }
-                }
-                onDownPressed: resultList.forceActiveFocus()
+                Accessible.name: "Find a setting"
+                // Typing stays in the box while Up and Down pick a result,
+                // as in Windows Settings; Enter opens the one picked.
+                onTextChanged: window.resultIndex = 0
+                onAccepted: window.openResult(window.resultIndex)
+                onDownPressed: window.moveResult(1)
+                Keys.onUpPressed: window.moveResult(-1)
             }
 
             Item {
@@ -260,7 +308,7 @@ UI.AppWindow {
         width: Metrics.navWidth - 28
         implicitHeight: contentItem.implicitHeight + topPadding + bottomPadding
         padding: 6
-        visible: search.text.trim().length > 0 && search.activeFocus || resultList.activeFocus
+        visible: search.text.trim().length > 0 && search.activeFocus
         closePolicy: T.Popup.NoAutoClose
 
         background: Rectangle {
@@ -281,40 +329,56 @@ UI.AppWindow {
         contentItem: Column {
             spacing: 2
 
+            UI.Label {
+                id: partialNote
+                visible: window.searchFound.partial
+                width: parent.width
+                topPadding: 4
+                bottomPadding: 4
+                leftPadding: 10
+                rightPadding: 10
+                wrapMode: Text.Wrap
+                text: "Nothing matches every word, so here are the closest"
+                size: 12
+                color: UI.Style.inkMuted
+            }
+
             ListView {
                 id: resultList
                 width: parent.width
-                height: contentHeight
-                interactive: false
+                // Long lists scroll inside the drop-down rather than run
+                // past the bottom of the window.
+                height: Math.min(contentHeight, Math.max(UI.Style.menuItemHeight * 3,
+                    window.height - results.y - results.topPadding - results.bottomPadding - 24 - (partialNote.visible ? partialNote.height + 2 : 0)))
+                clip: true
+                interactive: contentHeight > height
+                boundsBehavior: Flickable.StopAtBounds
                 spacing: 2
-                model: Pages.search(search.text)
-                currentIndex: 0
-                keyNavigationEnabled: true
-                Keys.onReturnPressed: window.openPage(model[currentIndex])
-                Keys.onEnterPressed: window.openPage(model[currentIndex])
-                Keys.onEscapePressed: search.forceActiveFocus()
-                Keys.onUpPressed: event => {
-                    if (currentIndex === 0) {
-                        search.forceActiveFocus();
-                    } else {
-                        event.accepted = false;
-                    }
-                }
+                model: window.searchFound.ids
+                T.ScrollBar.vertical: UI.ScrollBar {}
 
                 delegate: T.AbstractButton {
                     id: result
                     required property string modelData
                     required property int index
                     readonly property var info: Pages.page(modelData)
-                    readonly property bool lit: hovered || (resultList.activeFocus && ListView.isCurrentItem)
+                    readonly property string place: Pages.location(modelData)
+                    readonly property bool lit: index === window.resultIndex
                     width: ListView.view.width
                     implicitHeight: Math.max(UI.Style.menuItemHeight, column.implicitHeight + 12)
                     padding: 0
                     hoverEnabled: true
                     focusPolicy: Qt.NoFocus
                     Accessible.role: Accessible.ListItem
-                    Accessible.name: info.title
-                    onClicked: window.openPage(modelData)
+                    Accessible.name: place.length > 0 ? info.title + ", in " + place : info.title
+                    Accessible.description: info.description || ""
+                    Accessible.selected: lit
+                    onHoveredChanged: {
+                        if (hovered) {
+                            window.resultIndex = index;
+                        }
+                    }
+                    onClicked: window.openResult(index)
 
                     background: Rectangle {
                         radius: UI.Style.radiusSm
@@ -324,7 +388,7 @@ UI.AppWindow {
                     contentItem: Item {
                         UI.Icon {
                             x: 10
-                            anchors.verticalCenter: parent.verticalCenter
+                            y: column.y + (titleLabel.height - height) / 2
                             name: result.info.icon || "info"
                             size: 16
                             strokeWidth: 1.8
@@ -337,29 +401,54 @@ UI.AppWindow {
                             anchors.verticalCenter: parent.verticalCenter
 
                             UI.Label {
+                                id: titleLabel
                                 width: parent.width
                                 text: result.info.title
                             }
 
                             UI.Label {
                                 width: parent.width
-                                visible: result.info.parent !== undefined
-                                text: result.info.parent ? Pages.page(Pages.category(result.modelData)).title : ""
+                                visible: text.length > 0
+                                text: result.place
                                 size: 12
                                 color: UI.Style.inkMuted
+                            }
+
+                            UI.Label {
+                                width: parent.width
+                                visible: text.length > 0
+                                text: result.info.description || ""
+                                size: 12
+                                color: UI.Style.inkSubtle
                             }
                         }
                     }
                 }
             }
 
-            UI.Label {
+            Column {
                 visible: resultList.count === 0
                 width: parent.width
-                height: UI.Style.menuItemHeight
-                leftPadding: 10
-                text: "No settings match “" + search.text.trim() + "”"
-                color: UI.Style.inkMuted
+                topPadding: 6
+                bottomPadding: 6
+                spacing: 2
+
+                UI.Label {
+                    width: parent.width
+                    leftPadding: 10
+                    rightPadding: 10
+                    text: "No settings match “" + search.text.trim() + "”"
+                }
+
+                UI.Label {
+                    width: parent.width
+                    leftPadding: 10
+                    rightPadding: 10
+                    wrapMode: Text.Wrap
+                    text: "Check the spelling, or try fewer or more general words, such as display, sound or wifi."
+                    size: 12
+                    color: UI.Style.inkMuted
+                }
             }
         }
     }
@@ -437,7 +526,7 @@ UI.AppWindow {
                             id: crumbText
                             text: crumb.modelData.title
                             size: 28
-                            font.weight: Font.DemiBold
+                            font.weight: UI.Style.weightSemiBold
                             font.letterSpacing: -0.28
                             color: crumb.last || crumbButton.hovered ? UI.Style.ink : UI.Style.inkMuted
                         }
@@ -489,6 +578,16 @@ UI.AppWindow {
         }
     }
 
+    // The back button on a mouse goes back too, wherever the pointer is.
+    Item {
+        anchors.fill: parent
+
+        TapHandler {
+            acceptedButtons: Qt.BackButton
+            onTapped: window.goBack()
+        }
+    }
+
     UI.Dialog {
         id: unsavedDialog
         title: "Apply your changes?"
@@ -518,7 +617,7 @@ UI.AppWindow {
         function leave() {
             close();
             if (window.pendingId.length > 0) {
-                window.openPage(window.pendingId);
+                window.openPage(window.pendingId, window.pendingBack);
             } else {
                 window.close();
             }

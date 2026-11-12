@@ -31,7 +31,7 @@ int main(int argc, char *argv[])
     parser.addPositionalArgument(QStringLiteral("qml"), QStringLiteral("Gallery.qml to load"));
     parser.process(app);
 
-    QFont font(QStringLiteral("Inter"));
+    QFont font(QStringLiteral("Albert Sans"));
     font.setPointSizeF(parser.isSet(sizeOption) ? parser.value(sizeOption).toDouble() : 10.0);
     QGuiApplication::setFont(font);
 

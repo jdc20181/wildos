@@ -17,11 +17,14 @@ Build-Depends:
  libkscreen-dev,
  libkf6networkmanagerqt-dev,
  libkf6globalaccel-dev,
+ libkf6windowsystem-dev,
  libpackagekitqt6-dev,
  libcups2-dev,
  libsdl2-dev,
  libglib2.0-dev,
  libpwquality-dev,
+ libudev-dev,
+ libpolkit-qt6-1-dev,
  pkgconf,
 Standards-Version: 4.7.0
 Rules-Requires-Root: no
@@ -55,7 +58,7 @@ Depends:
  plasma-desktop,
  libkscreen-bin,
  wildos-branding,
- wildos-ui,
+ wildos-ui (>= 0.1.3),
  kio6,
  packagekit,
  pkexec,

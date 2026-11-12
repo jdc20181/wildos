@@ -66,7 +66,7 @@ T.AbstractButton {
             anchors.verticalCenter: parent.verticalCenter
             text: row.app ? row.app.name : ""
             size: 14
-            font.weight: Font.DemiBold
+            font.weight: UI.Style.weightSemiBold
         }
 
         UI.Label {

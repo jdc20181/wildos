@@ -206,7 +206,7 @@ Item {
                         anchors.verticalCenter: parent.verticalCenter
                         text: bar.folder ? bar.folder.scope : ""
                         size: 12
-                        font.weight: Font.Medium
+                        font.weight: UI.Style.weightMedium
                         color: Metrics.chipText
                     }
                 }

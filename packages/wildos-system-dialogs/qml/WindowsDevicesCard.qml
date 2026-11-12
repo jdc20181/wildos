@@ -77,7 +77,7 @@ Item {
                         Layout.fillWidth: true
                         text: card.title
                         size: 17
-                        font.weight: Font.DemiBold
+                        font.weight: UI.Style.weightSemiBold
                         wrapMode: Text.Wrap
                         elide: Text.ElideNone
                         Accessible.role: Accessible.Heading

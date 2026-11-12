@@ -38,6 +38,11 @@ def start_argument(path, args, cwd=None):
     msg = {"path": path, "args": list(args)}
     if cwd:
         msg["cwd"] = cwd
+    if path:
+        # A connection that reconnects by itself sends its first program
+        # again; wild-guest starts each "once" a single time, so an app
+        # closed long ago doesn't open again after a pause.
+        msg["once"] = os.urandom(8).hex()
     return base64.b64encode(json.dumps(msg, separators=(",", ":")).encode()).decode()
 
 
@@ -151,6 +156,24 @@ def desktop_arguments(host, port, account, domain, drive=None):
         *scale_arguments(display_scale()),
         "/log-level:WARN",
     ]
+
+
+def certificate_path(host, port, config_home=None):
+    """Where FreeRDP keeps the certificate /cert:tofu trusted for a host."""
+    base = config_home or os.environ.get("XDG_CONFIG_HOME") or os.path.expanduser("~/.config")
+    return os.path.join(base, "freerdp", "server", f"{str(host).lower()}_{int(port)}.pem")
+
+
+def forget_certificate(host, port, config_home=None):
+    """A new Windows (set up again, or removed) has a certificate of its
+    own, and FreeRDP refuses a host whose certificate changed, so every
+    connection to it would fail. Forgetting the old one lets the next
+    connection trust the new one, as on the first."""
+    try:
+        os.remove(certificate_path(host, port, config_home))
+        return True
+    except OSError:
+        return False
 
 
 def client_program(choice=None, native=NATIVE_CLIENT):

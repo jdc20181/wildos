@@ -12,6 +12,12 @@
 #include <QUrl>
 #include <QWidget>
 #include <QWindow>
+#include <QScreen>
+#include <qpa/qplatformnativeinterface.h>
+
+#include <wayland-client.h>
+
+#include "xdg-shell-client-protocol.h"
 
 App *App::instance()
 {
@@ -39,6 +45,32 @@ QString App::version() const
 QString App::homePath() const
 {
     return QDir::homePath();
+}
+
+bool App::fullScreenOn(QQuickWindow *window, const QString &screenName)
+{
+    QPlatformNativeInterface *native = QGuiApplication::platformNativeInterface();
+    auto *app = qGuiApp->nativeInterface<QNativeInterface::QWaylandApplication>();
+    if (!native || !app || !window || !window->handle()) {
+        return false;
+    }
+    QScreen *screen = nullptr;
+    for (QScreen *s : QGuiApplication::screens()) {
+        if (s->name() == screenName) {
+            screen = s;
+        }
+    }
+    auto *top = static_cast<xdg_toplevel *>(native->nativeResourceForWindow(QByteArrayLiteral("xdg_toplevel"), window));
+    auto *output = screen ? static_cast<wl_output *>(native->nativeResourceForScreen(QByteArrayLiteral("output"), screen)) : nullptr;
+    if (!top || !output) {
+        return false;
+    }
+    // KWin keeps a window that is already full screen on its screen, so it
+    // leaves full screen first.
+    xdg_toplevel_unset_fullscreen(top);
+    xdg_toplevel_set_fullscreen(top, output);
+    wl_display_flush(app->display());
+    return true;
 }
 
 QUrl App::testScript() const

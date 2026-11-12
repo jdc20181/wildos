@@ -68,6 +68,34 @@ namespace WildOS.Guest
             }
         }
 
+        // A PNG (a packaged app's logo) as a one-image .ico, the form every
+        // icon travels to Wild OS in; .ico has carried PNG images since
+        // Windows Vista. A width or height of 0 in the entry means 256.
+        public static byte[] FromPng(byte[] png)
+        {
+            if (png == null || png.Length < 24) return null;
+            int width = (png[16] << 24) | (png[17] << 16) | (png[18] << 8) | png[19];
+            int height = (png[20] << 24) | (png[21] << 16) | (png[22] << 8) | png[23];
+            using (var ms = new MemoryStream())
+            using (var w = new BinaryWriter(ms))
+            {
+                w.Write((ushort)0);
+                w.Write((ushort)1);
+                w.Write((ushort)1);
+                w.Write((byte)(width >= 256 || width <= 0 ? 0 : width));
+                w.Write((byte)(height >= 256 || height <= 0 ? 0 : height));
+                w.Write((byte)0);
+                w.Write((byte)0);
+                w.Write((ushort)1);
+                w.Write((ushort)32);
+                w.Write((uint)png.Length);
+                w.Write((uint)22);
+                w.Write(png);
+                w.Flush();
+                return ms.ToArray();
+            }
+        }
+
         static byte[] Resource(IntPtr module, IntPtr name, IntPtr type)
         {
             IntPtr info = Native.FindResource(module, name, type);

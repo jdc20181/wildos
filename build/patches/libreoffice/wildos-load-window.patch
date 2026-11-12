@@ -1,0 +1,29 @@
+Description: No empty window while a document loads
+ LibreOffice showed a document's window as soon as it was created, before
+ the document was loaded into it, so for a second or more an empty frame
+ stood on screen, titled only by the process (soffice.bin). Write and
+ Tables show the Wild OS loading screen until the document is ready, so the
+ window is now shown once the document is in it. The window is still the
+ parent of any message the import raises.
+Author: Wild OS Developers <dev@wildos.io>
+Forwarded: not-needed
+
+--- a/framework/source/loadenv/loadenv.cxx
++++ b/framework/source/loadenv/loadenv.cxx
+@@ -1138,12 +1138,10 @@
+                 {"Parent", uno::Any(xWindow)}
+             }));
+             xHandler->initialize(aArguments);
+-            //show the frame as early as possible to make it the parent of any message dialogs
+-            if (!impl_filterHasInteractiveDialog())
+-            {
+-                impl_makeFrameWindowVisible(xWindow, shouldFocusAndToFront());
+-                m_bFocusedAndToFront = true; // no need to ask shouldFocusAndToFront second time
+-            }
++            // Wild OS: the window is not shown before the document is in it.
++            // Shown here it would stand empty, without a title, while the
++            // document loads; Write and Tables show their own loading screen
++            // until it is ready. Message dialogs still have it as parent.
+         }
+     }
+ 

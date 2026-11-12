@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>org.wildos.voice</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0-or-later</project_license>
+  <name>Voice</name>
+  <summary>Record voice notes and meetings, with transcripts made on this PC</summary>
+  <description>
+    <p>
+      Voice records from your microphone to Opus files in the Recordings
+      folder in your home folder. Pause and carry on, and press Mark to flag
+      a moment you want to find again; the markers show on the waveform and
+      you can jump straight to them when you play the recording back.
+    </p>
+    <p>
+      Turn on transcripts and Voice writes down what's said as you record,
+      with the time of each line. They're made on this PC with whisper.cpp:
+      the speech model is downloaded once and checked, and nothing you say
+      ever leaves your PC. Recordings, markers and transcripts are plain
+      files beside each other, so any app can open them. No accounts and no
+      tracking.
+    </p>
+  </description>
+  <launchable type="desktop-id">org.wildos.voice.desktop</launchable>
+  <icon type="stock">wildos-voice</icon>
+  <categories>
+    <category>AudioVideo</category>
+    <category>Audio</category>
+    <category>Recorder</category>
+  </categories>
+  <provides>
+    <binary>wildos-voice</binary>
+  </provides>
+  <pkgname>wildos-voice</pkgname>
+  <url type="homepage">https://wildos.io</url>
+  <developer id="io.wildos">
+    <name>Wild OS</name>
+  </developer>
+  <content_rating type="oars-1.1"/>
+  <releases>
+    <release version="0.1.0" date="2026-11-11"/>
+  </releases>
+</component>

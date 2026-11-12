@@ -92,7 +92,7 @@ QString quoteHtml(const QString &header, const QString &quote)
     body.replace(QLatin1Char('\n'), QStringLiteral("<br>"));
     QString head = header.toHtmlEscaped();
     head.replace(QLatin1Char('\n'), QStringLiteral("<br>"));
-    return QStringLiteral("<br><div>%1</div><blockquote style=\"margin:0 0 0 4px;padding-left:12px;border-left:2px solid #c3c8d4;color:#555b6b\">%2</blockquote>")
+    return QStringLiteral("<br><div>%1</div><blockquote style=\"margin:0 0 0 4px;padding-left:12px;border-left:2px solid #c3c8d4;color:#5c5e62\">%2</blockquote>")
         .arg(head, body);
 }
 

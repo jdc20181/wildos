@@ -132,8 +132,9 @@ T.AbstractButton {
     TextMetrics {
         id: widest
         font.family: UI.Style.fontFamily
+        font.letterSpacing: UI.Style.tracking(UI.Style.px(control.fontSize))
         font.pixelSize: UI.Style.px(control.fontSize)
-        font.weight: Font.Bold
+        font.weight: UI.Style.weightBold
         text: "Installed"
     }
 
@@ -202,7 +203,7 @@ T.AbstractButton {
                     anchors.verticalCenter: parent.verticalCenter
                     text: control.label
                     size: control.fontSize
-                    font.weight: Font.Bold
+                    font.weight: UI.Style.weightBold
                     color: pill.filled ? UI.Style.textOnAccent
                         : control.shown === "retry" ? Metrics.danger
                         : control.shown === "nospace" ? Metrics.inkDim

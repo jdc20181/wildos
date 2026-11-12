@@ -7,6 +7,7 @@
 #include <PolkitQt1/Details>
 #include <PolkitQt1/Identity>
 
+#include <QElapsedTimer>
 #include <QPointer>
 #include <QQueue>
 #include <QTimer>
@@ -24,6 +25,19 @@
 // the app that asked is not left waiting for ever. Messages from the
 // password system itself (an account locked after too many tries, an
 // expired password) are shown as they come.
+//
+// Fingerprints: Wild OS's PAM profile (wildos-desktop's
+// wildos-fingerprint) takes an empty password as "use my finger" for an
+// account with one enrolled. When the chosen person is you and fprintd has
+// your finger, the prompt answers polkit's first password question with an
+// empty one as soon as it opens, so a touch approves without a key press.
+// The first key typed into the field drops that attempt (its helper is
+// stopped, nothing is counted as a wrong try) and starts a fresh one for
+// the password, so a reader that never answers can't stand in the way.
+// pam_fprintd retries a wrong finger itself; once it gives up, or the
+// reader fails, the prompt stops listening, and an empty password with Yes
+// tries again. A reader that only saw no touch in time is listened to
+// again. The reader's own messages come through as plain words.
 class Agent : public PolkitQt1::Agent::Listener
 {
     Q_OBJECT
@@ -40,6 +54,13 @@ class Agent : public PolkitQt1::Agent::Listener
     Q_PROPERTY(int person READ person NOTIFY personChanged)
     Q_PROPERTY(bool forSelf READ forSelf NOTIFY personChanged)
     Q_PROPERTY(QString error READ error NOTIFY stateChanged)
+    // What the fingerprint reader wants now ("Touch the fingerprint
+    // reader"), not an error.
+    Q_PROPERTY(QString info READ info NOTIFY stateChanged)
+    // The chosen person is you and has a finger enrolled.
+    Q_PROPERTY(bool fingerprint READ fingerprint NOTIFY personChanged)
+    // A touch on the reader would approve the request now.
+    Q_PROPERTY(bool listening READ listening NOTIFY stateChanged)
     Q_PROPERTY(bool busy READ busy NOTIFY stateChanged)
     Q_PROPERTY(int waitSeconds READ waitSeconds NOTIFY stateChanged)
     Q_PROPERTY(int serial READ serial NOTIFY serialChanged)
@@ -65,6 +86,9 @@ public:
     int person() const { return m_person; }
     bool forSelf() const;
     QString error() const { return m_error; }
+    QString info() const { return m_info; }
+    bool fingerprint() const { return m_fingerprint && forSelf(); }
+    bool listening() const { return m_listening; }
     bool busy() const { return m_busy; }
     int waitSeconds() const { return m_waitSeconds; }
     int serial() const { return m_serial; }
@@ -72,6 +96,9 @@ public:
     Q_INVOKABLE void choose(int index);
     Q_INVOKABLE void submit(const QString &password);
     Q_INVOKABLE void cancel();
+    // Something was typed into the password field: no more listening for a
+    // finger on this request.
+    Q_INVOKABLE void typing();
 
 public Q_SLOTS:
     void initiateAuthentication(const QString &actionId, const QString &message, const QString &iconName, const PolkitQt1::Details &details,
@@ -108,6 +135,10 @@ private:
     void onCompleted(bool gained);
     void finish();
     void setError(const QString &text);
+    void onMessage(const QString &text, bool error);
+    void checkFingerprint();
+    void listen();
+    void stopListening();
 
     QQueue<Request> m_queue;
     Request m_request;
@@ -125,6 +156,16 @@ private:
     int m_waitSeconds = 0;
     int m_serial = 0;
     QString m_error;
+    QString m_info;
+    bool m_fingerprint = false;
+    enum class FingerEnd { None, TimedOut, NoMatch, Broken };
+    // Listen for a finger whenever polkit asks, until something is typed
+    // or the reader gives up.
+    bool m_autoFinger = false;
+    bool m_listening = false;
+    bool m_promptEcho = false;
+    FingerEnd m_fingerEnd = FingerEnd::None;
+    QElapsedTimer m_listenClock;
     QString m_trust = QStringLiteral("checking");
     Verdict m_verdict;
     QTimer m_wait;

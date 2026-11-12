@@ -4,9 +4,11 @@
  "http://www.freedesktop.org/standards/PolicyKit/1/policyconfig.dtd">
 <!-- The password prompts behind Settings. Each action runs one helper in
      /usr/libexec/wildos, which takes only its own fixed requests:
-     settings-update-policy (Updates), settings-users (Accounts),
+     settings-update-policy (Updates), settings-users and
+     settings-fingerprint (Accounts),
      settings-locale (Time and language), settings-protection (Privacy
-     and security) and settings-network (the VPN kill switch). -->
+     and security), settings-network (the VPN kill switch) and
+     settings-brave-spelling (Typing). -->
 <policyconfig>
   <vendor>Wild OS</vendor>
   <vendor_url>https://wildos.io</vendor_url>
@@ -59,6 +61,18 @@
     <annotate key="org.freedesktop.policykit.exec.path">/usr/libexec/wildos/settings-graphics-driver</annotate>
   </action>
 
+  <action id="org.wildos.settings.fingerprint">
+    <description>Choose where fingerprints can be used</description>
+    <message>Change where a fingerprint can be used instead of the password?</message>
+    <icon_name>security-high</icon_name>
+    <defaults>
+      <allow_any>no</allow_any>
+      <allow_inactive>no</allow_inactive>
+      <allow_active>auth_admin_keep</allow_active>
+    </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/libexec/wildos/settings-fingerprint</annotate>
+  </action>
+
   <action id="org.wildos.settings.network">
     <description>Turn the VPN kill switch on or off</description>
     <message>Change whether Wild OS blocks the internet when a VPN drops?</message>
@@ -69,6 +83,20 @@
       <allow_active>auth_admin_keep</allow_active>
     </defaults>
     <annotate key="org.freedesktop.policykit.exec.path">/usr/libexec/wildos/settings-network</annotate>
+  </action>
+
+  <!-- No password: it only sets which languages Brave checks spelling in,
+       from a fixed list, in one file of its own. -->
+  <action id="org.wildos.settings.brave-spelling">
+    <description>Set the languages Brave checks spelling in</description>
+    <message>Change the languages Brave checks spelling in?</message>
+    <icon_name>tools-check-spelling</icon_name>
+    <defaults>
+      <allow_any>no</allow_any>
+      <allow_inactive>no</allow_inactive>
+      <allow_active>yes</allow_active>
+    </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/libexec/wildos/settings-brave-spelling</annotate>
   </action>
 
   <action id="org.wildos.settings.users">

@@ -1,0 +1,406 @@
+Description: Wild OS sheet tabs, headings, status bar and zoom slider
+ Tables' sheet tabs sit on the ribbon's tab row colour: the current sheet
+ is a soft 26 px pill with an accent line along its foot and its name
+ semibold, other sheets are quiet labels without rules between them, and
+ sheet colours chosen by the user fill their pill. The scroll buttons only
+ show while some sheets are out of sight. Tab bars elsewhere (layers in
+ Draw) are drawn as before.
+ Row and column headings and the corner are the paper's light grey with
+ grey numbers, in light and dark mode alike, since the cells are white.
+ The status bar is one band in the title bar's colour with its text in the
+ quiet ink and no rules between fields or along its top, and the zoom
+ slider is a 3 px track with an 11 px accent knob, as on the boards. The
+ selection's figures in Tables' status bar start at their field's left
+ edge rather than its middle.
+Author: Wild OS Developers <dev@wildos.io>
+Forwarded: not-needed
+
+--- a/svtools/source/control/tabbar.cxx
++++ b/svtools/source/control/tabbar.cxx
+@@ -146,6 +146,38 @@
+                                  Point(aRight, maRect.Bottom() - cMargin));
+     }
+ 
++    // Wild OS sheet tabs, 26 px high, corners of 5 px.
++    void drawWildOSTab(const Color& rBar, const Color& rInk, const Color& rAccent)
++    {
++        tools::Rectangle aPill(maRect);
++        const tools::Long nInset = std::max<tools::Long>(0, (aPill.GetHeight() - 26) / 2);
++        aPill.AdjustTop(nInset);
++        aPill.AdjustBottom(-nInset);
++        mrRenderContext.SetLineColor();
++        if (mbSelected || mbCustomColored)
++        {
++            Color aFill(mbCustomColored ? maCustomColor : rBar);
++            if (!mbCustomColored)
++                aFill.Merge(rInk, 235);
++            mrRenderContext.SetFillColor(aFill);
++            mrRenderContext.DrawRect(aPill, 5, 5);
++        }
++        if (mbSelected)
++        {
++            mrRenderContext.SetFillColor(rAccent);
++            mrRenderContext.DrawRect(tools::Rectangle(Point(aPill.Left() + 3, aPill.Bottom() - 1),
++                                                      Point(aPill.Right() - 3, aPill.Bottom())));
++        }
++        if (mbProtect)
++        {
++            BitmapEx aBitmap(BMP_TAB_LOCK);
++            Point aPosition = maRect.TopLeft();
++            aPosition.AdjustX(2);
++            aPosition.AdjustY((maRect.getOpenHeight() - aBitmap.GetSizePixel().Height()) / 2);
++            mrRenderContext.DrawBitmapEx(aPosition, aBitmap);
++        }
++    }
++
+     void drawTab()
+     {
+         drawOuterFrame();
+@@ -612,7 +644,7 @@
+     if (bFont)
+     {
+         vcl::Font aToolFont = rStyleSettings.GetToolFont();
+-        aToolFont.SetWeight( WEIGHT_BOLD );
++        aToolFont.SetWeight( mbSheets ? WEIGHT_SEMIBOLD : WEIGHT_BOLD );
+         ApplyControlFont(*GetOutDev(), aToolFont);
+ 
+         // Adapt font size if window too small?
+@@ -853,6 +885,25 @@
+     mpImpl->mxButtonBox->m_xNextButton->set_sensitive(bEnableBtn);
+     if (!bEnableBtn && mpImpl->mxButtonBox->m_xNextRepeater)
+         mpImpl->mxButtonBox->m_xNextRepeater->Stop();
++
++    // Wild OS: sheet tabs show their scroll buttons only while some sheets
++    // are out of sight, as on the boards; the room goes back to the tabs.
++    if (mbSheets && (mnWinStyle & (WB_MINSCROLL | WB_SCROLL)))
++    {
++        const bool bScroll = mnFirstPos > 0 || mnFirstPos < ImplGetLastFirstPos();
++        TabButtons& rButtons = *mpImpl->mxButtonBox;
++        if (rButtons.m_xPrevButton->get_visible() != bScroll)
++        {
++            rButtons.m_xPrevButton->set_visible(bScroll);
++            rButtons.m_xNextButton->set_visible(bScroll);
++            if (mnWinStyle & WB_SCROLL)
++            {
++                rButtons.m_xFirstButton->set_visible(bScroll);
++                rButtons.m_xLastButton->set_visible(bScroll);
++            }
++            Resize();
++        }
++    }
+ }
+ 
+ void TabBar::SetScrollAlwaysEnabled(bool bScrollAlwaysEnabled)
+@@ -1145,7 +1196,23 @@
+ 
+ void TabBar::Paint(vcl::RenderContext& rRenderContext, const tools::Rectangle& rect)
+ {
+-    if (rRenderContext.IsNativeControlSupported(ControlType::WindowBackground,ControlPart::Entire))
++    const StyleSettings& rWildOSStyle = rRenderContext.GetSettings().GetStyleSettings();
++    const Color aWildOSInk = rWildOSStyle.GetWindowTextColor();
++    // The sheet tab row shares the ribbon's tab row colour.
++    Color aWildOSBar = rWildOSStyle.GetDialogColor();
++    if (aWildOSBar.IsDark())
++        aWildOSBar.Merge(COL_BLACK, 204);
++    else
++        aWildOSBar.Merge(aWildOSInk, 246);
++    if (mbSheets)
++    {
++        rRenderContext.Push(vcl::PushFlags::LINECOLOR | vcl::PushFlags::FILLCOLOR);
++        rRenderContext.SetLineColor();
++        rRenderContext.SetFillColor(aWildOSBar);
++        rRenderContext.DrawRect(rect);
++        rRenderContext.Pop();
++    }
++    else if (rRenderContext.IsNativeControlSupported(ControlType::WindowBackground,ControlPart::Entire))
+     {
+         rRenderContext.DrawNativeControl(ControlType::WindowBackground,ControlPart::Entire,rect,
+                                          ControlState::ENABLED,ImplControlValue(0),OUString());
+@@ -1207,7 +1274,10 @@
+             aDrawer.setEnabled(true);
+             aDrawer.setCustomColor(pItem->maTabBgColor);
+             aDrawer.mbProtect = pItem->mbProtect;
+-            aDrawer.drawTab();
++            if (mbSheets)
++                aDrawer.drawWildOSTab(aWildOSBar, aWildOSInk, rStyleSettings.GetAccentColor());
++            else
++                aDrawer.drawTab();
+ 
+             // currently visible sheet is drawn using a bold font
+             if (bCurrent)
+@@ -1223,6 +1293,12 @@
+                 rRenderContext.SetTextColor(pItem->maTabTextColor);
+             else
+                 rRenderContext.SetTextColor(aFaceTextColor);
++            if (mbSheets && !bSelected && !bCustomBgColor)
++            {
++                Color aQuiet(aWildOSBar);
++                aQuiet.Merge(aWildOSInk, 97);
++                rRenderContext.SetTextColor(aQuiet);
++            }
+ 
+             // Special display of tab name depending on page bits
+ 
+@@ -1247,9 +1323,12 @@
+ 
+             if (bCurrent)
+             {
+-                rRenderContext.SetLineColor();
+-                rRenderContext.SetFillColor(aSelectColor);
+-                aDrawer.drawOverTopBorder();
++                if (!mbSheets)
++                {
++                    rRenderContext.SetLineColor();
++                    rRenderContext.SetFillColor(aSelectColor);
++                    aDrawer.drawOverTopBorder();
++                }
+                 break;
+             }
+ 
+--- a/vcl/source/window/status.cxx
++++ b/vcl/source/window/status.cxx
+@@ -180,31 +180,31 @@
+     ApplyControlFont(rRenderContext, rStyleSettings.GetToolFont());
+ 
+     Color aColor;
++    // Wild OS: the band is the window colour taken a third of the way to
++    // black in dark mode and a touch into the ink in light mode.
++    const Color& rInk = rStyleSettings.GetDialogTextColor();
++    Color aBand(rStyleSettings.GetDialogColor());
++    if (aBand.IsDark())
++        aBand.Merge(COL_BLACK, 170);
++    else
++        aBand.Merge(rInk, 242);
++
+     if (IsControlForeground())
+         aColor = GetControlForeground();
+-    else if (GetStyle() & WB_3DLOOK)
+-        aColor = rStyleSettings.GetButtonTextColor();
+     else
+-        aColor = rStyleSettings.GetWindowTextColor();
++    {
++        aColor = aBand;
++        aColor.Merge(rInk, 97);
++    }
+     rRenderContext.SetTextColor(aColor);
+ 
+     rRenderContext.SetTextFillColor();
+ 
+     if (IsControlBackground())
+         aColor = GetControlBackground();
+-    else if (GetStyle() & WB_3DLOOK)
+-        aColor = rStyleSettings.GetFaceColor();
+     else
+-        aColor = rStyleSettings.GetWindowColor();
++        aColor = aBand;
+     rRenderContext.SetBackground(aColor);
+-
+-    // NWF background
+-    if (!IsControlBackground() &&
+-          rRenderContext.IsNativeControlSupported(ControlType::WindowBackground, ControlPart::BackgroundWindow))
+-    {
+-        ImplGetWindowImpl()->mnNativeBackground = ControlPart::BackgroundWindow;
+-        EnableChildTransparentMode();
+-    }
+ }
+ 
+ void StatusBar::ImplInitSettings()
+@@ -453,20 +453,7 @@
+     else
+         rRenderContext.SetClipRegion();
+ 
+-    if (nPos != ImplGetFirstVisiblePos())
+-    {
+-        // draw separator
+-        Point aFrom(aRect.TopLeft());
+-        aFrom.AdjustX( -4 );
+-        aFrom.AdjustY( 1 );
+-        Point aTo(aRect.BottomLeft());
+-        aTo.AdjustX( -4 );
+-        aTo.AdjustY( -1 );
+-
+-        DecorationView aDecoView(&rRenderContext);
+-        aDecoView.DrawSeparator(aFrom, aTo);
+-    }
+-
++    // Wild OS: fields are set apart by space alone, without rules.
+     if (!rRenderContext.ImplIsRecordLayout())
+         CallEventListeners(VclEventId::StatusbarDrawItem, reinterpret_cast<void*>(pItem->mnId));
+ }
+@@ -744,11 +731,6 @@
+             ImplDrawItem(rRenderContext, bOffscreen, i);
+     }
+ 
+-    // draw line at the top of the status bar (to visually distinguish it from
+-    // shell / docking area)
+-    const StyleSettings& rStyleSettings = rRenderContext.GetSettings().GetStyleSettings();
+-    rRenderContext.SetLineColor(rStyleSettings.GetShadowColor());
+-    rRenderContext.DrawLine(Point(0, 0), Point(mnDX-1, 0));
+ }
+ 
+ void StatusBar::Resize()
+--- a/svx/source/stbctrls/zoomsliderctrl.cxx
++++ b/svx/source/stbctrls/zoomsliderctrl.cxx
+@@ -227,8 +227,9 @@
+     tools::Rectangle           aRect = rUsrEvt.GetRect();
+     tools::Rectangle           aSlider = aRect;
+ 
+-    tools::Long nSliderHeight  = 1 * pDev->GetDPIScaleFactor();
+-    tools::Long nSnappingHeight = 2 * pDev->GetDPIScaleFactor();
++    const double fScale = pDev->GetDPIScaleFactor();
++    const tools::Long nSliderHeight = 3 * fScale;
++    const tools::Long nKnob = 11 * fScale;
+ 
+     aSlider.AdjustTop((aControlRect.GetHeight() - nSliderHeight)/2 );
+     aSlider.SetBottom( aSlider.Top() + nSliderHeight - 1 );
+@@ -236,33 +237,22 @@
+     aSlider.AdjustRight( -nSliderXOffset );
+ 
+     pDev->Push(vcl::PushFlags::LINECOLOR | vcl::PushFlags::FILLCOLOR);
++    pDev->SetAntialiasing(pDev->GetAntialiasing() | AntialiasingFlags::Enable);
+ 
+-    const StyleSettings& rStyleSettings = Application::GetSettings().GetStyleSettings();
+-    pDev->SetLineColor( rStyleSettings.GetDarkShadowColor() );
+-    pDev->SetFillColor( rStyleSettings.GetDarkShadowColor() );
+-
+-    // draw slider
+-    pDev->DrawRect( aSlider );
+-    // shadow
+-    pDev->SetLineColor( rStyleSettings.GetShadowColor() );
+-    pDev->DrawLine(Point(aSlider.Left()+1,aSlider.Bottom()+1), Point(aSlider.Right()+1,aSlider.Bottom()+1));
+-    pDev->SetLineColor( rStyleSettings.GetDarkShadowColor() );
+-
+-    // draw snapping points:
+-    for ( const auto& rSnappingPoint : mxImpl->maSnappingPointOffsets )
+-    {
+-        tools::Long nSnapPosX = aRect.Left() + rSnappingPoint;
+-
+-        pDev->DrawRect( tools::Rectangle( nSnapPosX - 1, aSlider.Top() - nSnappingHeight,
+-                    nSnapPosX, aSlider.Bottom() + nSnappingHeight ) );
+-    }
+-
+-    // draw slider button
+-    Point aImagePoint = aRect.TopLeft();
+-    aImagePoint.AdjustX(Zoom2Offset( mxImpl->mnCurrentZoom ) );
+-    aImagePoint.AdjustX( -(mxImpl->maSliderButton.GetSizePixel().Width()/2) );
+-    aImagePoint.AdjustY((aControlRect.GetHeight() - mxImpl->maSliderButton.GetSizePixel().Height())/2 );
+-    pDev->DrawImage( aImagePoint, mxImpl->maSliderButton );
++    const StyleSettings& rStyleSettings = pDev->GetSettings().GetStyleSettings();
++    Color aTrack(pDev->GetBackground().GetColor());
++    aTrack.Merge(rStyleSettings.GetDialogTextColor(), 217);
++    pDev->SetLineColor();
++    pDev->SetFillColor(aTrack);
++    pDev->DrawRect(aSlider, nSliderHeight / 2 + 1, nSliderHeight / 2 + 1);
++
++    const tools::Long nKnobX = aRect.Left() + Zoom2Offset(mxImpl->mnCurrentZoom);
++    const tools::Long nKnobY = aRect.Top() + aControlRect.GetHeight() / 2;
++    pDev->SetFillColor(rStyleSettings.GetAccentColor());
++    pDev->DrawEllipse(tools::Rectangle(Point(nKnobX - nKnob / 2, nKnobY - nKnob / 2),
++                                       Size(nKnob, nKnob)));
++
++    Point aImagePoint;
+ 
+     // draw decrease button
+     aImagePoint = aRect.TopLeft();
+--- a/sc/source/ui/inc/hdrcont.hxx
++++ b/sc/source/ui/inc/hdrcont.hxx
+@@ -31,6 +31,11 @@
+ class ScTabView;
+ class SelectionEngine;
+ 
++class StyleSettings;
++
++// Wild OS: the colours the headings and the corner are drawn in.
++void ScWildOSPaperHeadings(StyleSettings& rStyle);
++
+ class ScHeaderControl : public vcl::Window
+ {
+ private:
+--- a/sc/source/ui/view/hdrcont.cxx
++++ b/sc/source/ui/view/hdrcont.cxx
+@@ -48,6 +48,16 @@
+ #define SC_HDRPAINT_TEXT        6
+ #define SC_HDRPAINT_COUNT       7
+ 
++void ScWildOSPaperHeadings(StyleSettings& rStyle)
++{
++    if (rStyle.GetHighContrastMode())
++        return;
++    rStyle.SetFaceColor(Color(0xee, 0xf0, 0xf4));
++    rStyle.SetButtonTextColor(Color(0x4a, 0x52, 0x66));
++    rStyle.SetHighlightTextColor(Color(0x1f, 0x26, 0x33));
++    rStyle.SetShadowColor(Color(0xe3, 0xe6, 0xec));
++}
++
+ ScHeaderControl::ScHeaderControl( vcl::Window* pParent, SelectionEngine* pSelectionEngine,
+                                   SCCOLROW nNewSize, bool bNewVertical, ScTabView* pTab ) :
+             Window      ( pParent ),
+@@ -222,7 +232,9 @@
+     // It is important for VCL to have few calls, that is why the outer lines are
+     // grouped together
+ 
+-    const StyleSettings& rStyleSettings = GetSettings().GetStyleSettings();
++    StyleSettings aPaperStyle(GetSettings().GetStyleSettings());
++    ScWildOSPaperHeadings(aPaperStyle);
++    const StyleSettings& rStyleSettings = aPaperStyle;
+     bool bHighContrast = rStyleSettings.GetHighContrastMode();
+     bool bDark = rStyleSettings.GetFaceColor().IsDark();
+     // Use the same distinction for bDark as in Window::DrawSelectionBackground
+--- a/sc/source/ui/view/tabview.cxx
++++ b/sc/source/ui/view/tabview.cxx
+@@ -31,6 +31,7 @@
+ 
+ #include <pagedata.hxx>
+ #include <tabview.hxx>
++#include <hdrcont.hxx>
+ #include <tabvwsh.hxx>
+ #include <document.hxx>
+ #include <gridwin.hxx>
+@@ -90,7 +91,9 @@
+ 
+ void ScCornerButton::Paint(vcl::RenderContext& rRenderContext, const tools::Rectangle& rRect)
+ {
+-    const StyleSettings& rStyleSettings = rRenderContext.GetSettings().GetStyleSettings();
++    StyleSettings aPaperStyle(rRenderContext.GetSettings().GetStyleSettings());
++    ScWildOSPaperHeadings(aPaperStyle);
++    const StyleSettings& rStyleSettings = aPaperStyle;
+     SetBackground(rStyleSettings.GetFaceColor());
+ 
+     Size aSize(GetOutputSizePixel());
+@@ -112,8 +115,9 @@
+ {
+     Window::StateChanged( nType );
+ 
+-    const StyleSettings& rStyleSettings = GetSettings().GetStyleSettings();
+-    SetBackground( rStyleSettings.GetFaceColor() );
++    StyleSettings aStyleSettings(GetSettings().GetStyleSettings());
++    ScWildOSPaperHeadings(aStyleSettings);
++    SetBackground( aStyleSettings.GetFaceColor() );
+     Invalidate();
+ }
+ 
+@@ -121,8 +125,9 @@
+ {
+     Window::DataChanged( rDCEvt );
+ 
+-    const StyleSettings& rStyleSettings = GetSettings().GetStyleSettings();
+-    SetBackground( rStyleSettings.GetFaceColor() );
++    StyleSettings aStyleSettings(GetSettings().GetStyleSettings());
++    ScWildOSPaperHeadings(aStyleSettings);
++    SetBackground( aStyleSettings.GetFaceColor() );
+     Invalidate();
+ }
+ 
+--- a/svx/source/stbctrls/pszctrl.cxx
++++ b/svx/source/stbctrls/pszctrl.cxx
+@@ -491,9 +491,7 @@
+     else if ( pImpl->bTable )
+     {
+         pDev->DrawRect( rRect );
+-        pDev->DrawText( Point(
+-            rRect.Left() + rRect.GetWidth() / 2 - pDev->GetTextWidth( pImpl->aStr ) / 2,
+-            aItemPos.Y() ), pImpl->aStr );
++        pDev->DrawText( Point( rRect.Left(), aItemPos.Y() ), pImpl->aStr );
+     }
+     else
+     {

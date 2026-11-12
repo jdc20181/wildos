@@ -172,7 +172,7 @@ Panel {
                 UI.Label {
                     text: dialog.editing ? qsTr("Edit %1").arg(dialog.host.name) : dialog.kind === "desktop" ? qsTr("New connection") : qsTr("New host")
                     size: 22
-                    font.weight: Font.Bold
+                    font.weight: UI.Style.weightBold
                 }
                 UI.Label {
                     text: dialog.kind === "desktop" ? qsTr("Connect to a Windows PC or server with Remote Desktop switched on")
@@ -543,7 +543,7 @@ Panel {
                                 width: 16
                                 height: 16
                                 path: RemoteIcons.forward
-                                color: UI.Style.accent
+                                color: UI.Style.iconInk
                             }
                             UI.Label {
                                 x: 38
@@ -650,14 +650,14 @@ Panel {
 
     component Heading: UI.Label {
         size: 12
-        font.weight: Font.Bold
+        font.weight: UI.Style.weightBold
         font.letterSpacing: 0.6
         font.capitalization: Font.AllUppercase
         color: UI.Style.inkMuted
     }
     component FieldLabel: UI.Label {
         size: 13
-        font.weight: Font.DemiBold
+        font.weight: UI.Style.weightSemiBold
     }
     component ShareRow: Item {
         id: shareRow
@@ -701,7 +701,7 @@ Panel {
                 width: parent.width
                 text: shareRow.title
                 size: 14
-                font.weight: Font.DemiBold
+                font.weight: UI.Style.weightSemiBold
             }
             UI.Label {
                 width: parent.width

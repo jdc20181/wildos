@@ -4,11 +4,12 @@
 Plymouth cannot blur, draw soft gradients or render text reliably inside the
 initramfs, so every frame of the boot screen is drawn here, from the logo
 masters in branding/logo, the gradients in design/BootIntro.dc.html and the
-Inter typeface, and shipped as PNGs. The sign-in screen and the session splash
+Albert Sans typeface, and shipped as PNGs. The sign-in screen and the session splash
 load the same files to open on Plymouth's last frame, so all three draw from
 one set of pixels.
 
-Needs python3, librsvg2-bin and fonts-inter. The package build runs it:
+Needs python3 and librsvg2-bin; the font is the copy in files/fonts. The
+package build runs it:
 
     python3 tools/render-boot-assets.py DEST HANDOFF
 
@@ -25,6 +26,7 @@ it lands after gliding out of the unlock screen's tile (AfterUnlockD.dc.html).
 Assets for the first end in -i, for the second in -u.
 """
 
+import atexit
 import concurrent.futures
 import math
 import os
@@ -41,6 +43,16 @@ LOGOS = next(p for p in (os.path.join(PKG, "branding", "logo"), os.path.join(REP
              if os.path.isdir(p))
 MARK = os.path.join(LOGOS, "wild-os-mark.svg")
 TILE = os.path.join(LOGOS, "wild-os-icon.svg")
+
+# Albert Sans is not in Debian, so rsvg finds the copy wildos-branding ships
+# through a font configuration of its own.
+FONTS = os.path.join(PKG, "files", "fonts", "albert-sans")
+_fontconf = tempfile.NamedTemporaryFile("w", suffix=".conf", delete=False)
+_fontconf.write('<?xml version="1.0"?>\n<fontconfig><include ignore_missing="yes">/etc/fonts/fonts.conf</include>'
+                f"<dir>{FONTS}</dir></fontconfig>\n")
+_fontconf.close()
+atexit.register(os.unlink, _fontconf.name)
+os.environ["FONTCONFIG_FILE"] = _fontconf.name
 
 SCALES = (0.8, 1.0, 1.2, 1.6, 2.0, 2.4)
 
@@ -98,14 +110,16 @@ def stops(spec, steps=12):
                    f'stop-opacity="{a:.4f}"/>' for o, (r, g, b), a in out)
 
 
-# Inter's ascender and line gap give CSS "normal" line height of 1.2109em,
-# with the baseline 0.96875em below the top of the line box.
-LINE = 1.2109375
-ASC = 0.96875
+# Albert Sans's ascender and descender give CSS "normal" line height of
+# 1.2em, with the baseline 0.95em below the top of the line box.
+LINE = 1.2
+ASC = 0.95
+# Albert Sans is set a touch tighter than drawn, as Style.tracking.
+TRACKING = -0.006
 
 INK = "#ffffff"
-LABEL = "rgba(232,236,248,0.85)"
-MUTED = "rgba(232,236,248,0.72)"
+LABEL = "rgba(255,255,255,0.85)"
+MUTED = "rgba(255,255,255,0.786)"
 ACCENT = "#8fb4ff"
 ON_ACCENT = "#0f1530"
 
@@ -190,8 +204,8 @@ COMPLETE_FRAMES = 46
 
 # "Starting securely" where it comes to rest: in the start-up animation it
 # rises 62px from under the wordmark (BootIntro's column: the 240px box, 30px
-# gaps, Inter 30px and 14px lines); after unlocking it sits at artboard 548.
-STATUS_TOP = {"i": 50 + 30 * 1.2109375 + 30 - 62, "u": 548 - 450}
+# gaps, 30px and 14px lines); after unlocking it sits at artboard 548.
+STATUS_TOP = {"i": 50 + 30 * LINE + 30 - 62, "u": 548 - 450}
 STATUS_CANVAS = {"i": (-100, 50, 200, 25), "u": (-100, 95, 200, 25)}
 
 # The glide from the tile to the glass W: 1 s at 50 frames a second. The
@@ -236,12 +250,12 @@ def text_el(text, size, weight, fill, top, tracking=0.0, anchor="middle", x=0.0)
     rsvg centres glyphs plus the spacing between them, CSS also counts the
     spacing after the last glyph, so the run sits half a gap to the left.
     """
-    spacing = tracking * size
+    spacing = (tracking + TRACKING) * size
     base = top + size * ASC + (round(size * LINE) - size * LINE) / 2
     if anchor == "middle":
         x -= spacing / 2
     attr = f' letter-spacing="{spacing:.3f}"' if spacing else ""
-    return (f'<text x="{x:.3f}" y="{base:.3f}" font-family="Inter" font-size="{size}" '
+    return (f'<text x="{x:.3f}" y="{base:.3f}" font-family="Albert Sans" font-size="{size}" '
             f'font-weight="{weight}" fill="{fill}" text-anchor="{anchor}"{attr}>{text}</text>')
 
 
@@ -302,7 +316,7 @@ def jobs_for_scale(scale, dest):
         e = segment(design_time(t0 + (t1 - t0) * k / (WORD_FRAMES - 1)), 3.6, 4.4)
         tracking = 0.3 + (0.02 - 0.3) * e
         add(f"word-{k:02d}", WORD_CANVAS,
-            f'<g opacity="{e:.4f}">{text_el("Wild OS", 30, 500, INK, 50, tracking)}</g>')
+            f'<g opacity="{e:.4f}">{text_el("Wild OS", 30, 480, INK, 50, tracking)}</g>')
 
     # The glass W and its running light, for each place the W appears.
     for g, pose in (("i", POSE_I), ("u", POSE_U)):
@@ -325,7 +339,7 @@ def jobs_for_scale(scale, dest):
     # The glide out of the unlock screen's tile (AfterUnlockD, 1.6 s to
     # 2.6 s): the tile's ground fades, the W dims to glass as its outline
     # comes up, and the whole mark, spark included, moves to its place.
-    tile_bg = ('<rect x="-4.3" y="-32.8" width="194.6" height="194.6" rx="46.6" fill="#121a33" '
+    tile_bg = ('<rect x="-4.3" y="-32.8" width="194.6" height="194.6" rx="46.6" fill="#1b1d22" '
                'opacity="{op:.4f}"/>')
     for k in range(GLIDE_FRAMES):
         d = 1.6 + k / (GLIDE_FRAMES - 1)
@@ -346,7 +360,7 @@ def jobs_for_scale(scale, dest):
     tile = re.sub(r'<svg xmlns="http://www.w3.org/2000/svg" width="\d+" height="\d+"',
                   '<svg x="-44" y="-200" width="88" height="88"', tile, count=1)
     add("tile", TILE_CANVAS, tile)
-    add("name", NAME_CANVAS, text_el("Wild OS", 22, 600, "#eef1f8", -94, -0.02))
+    add("name", NAME_CANVAS, text_el("Wild OS", 22, 550, INK, -94, -0.02))
     add("prompt", PROMPT_CANVAS, text_el("Enter your disk password to start", 14, 400, LABEL, -31))
     add("prompt-retry", PROMPT_CANVAS,
         text_el("That password did not work. Try again.", 14, 400, LABEL, -31))

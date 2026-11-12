@@ -1,0 +1,78 @@
+#!/bin/sh
+# Remembers which installed package versions came from a trusted archive,
+# for the permission prompt (verifier.cpp in wildos-dialogs).
+#
+# apt only knows where a version comes from while the archive still lists
+# it. deb.wildos.io lists only the newest build, and Debian drops old point
+# release versions, so the moment a newer version is published, the one
+# installed shows in apt-cache policy as coming from nowhere but dpkg's own
+# status. The prompt then called Settings, the Store and every other Wild
+# OS app "from outside Wild OS". This runs after every dpkg run (apt's
+# DPkg::Post-Invoke, 80wildos-package-sources) while the lists are still
+# the ones the install used, and keeps the answer.
+#
+# /var/lib/wildos/package-sources: "name<TAB>version<TAB>host" per
+# installed version, host being the archive whose apt list names that exact
+# version, or "-" when no trusted list does. Only versions still installed
+# are kept. A version is looked up once: later runs only look up versions
+# not seen before, so an ordinary run reads no lists at all.
+#
+# The hosts are the ones verifier.cpp trusts; keep both lists the same.
+
+set -eu
+
+RECORD=/var/lib/wildos/package-sources
+LISTS=/var/lib/apt/lists
+CAT=/usr/lib/apt/apt-helper
+
+umask 022
+mkdir -p "${RECORD%/*}"
+work=$(mktemp -d)
+trap 'rm -rf "$work"' EXIT
+
+dpkg-query -W -f='${Package}\t${Version}\n' | sort -u > "$work/installed"
+if [ -r "$RECORD" ]; then
+    sort -u "$RECORD" > "$work/known"
+else
+    : > "$work/known"
+fi
+
+# Installed versions with no answer yet.
+awk -F'\t' 'FILENAME == ARGV[1] { known[$1 "\t" $2] = 1; next } !(($1 "\t" $2) in known)' "$work/known" "$work/installed" > "$work/new"
+
+: > "$work/found"
+if [ -s "$work/new" ]; then
+    for list in "$LISTS"/*_Packages*; do
+        [ -f "$list" ] || continue
+        host=${list##*/}
+        host=${host%%_*}
+        case $host in
+            deb.debian.org | security.debian.org | deb.kicksecure.com | wildos.io | *.wildos.io) ;;
+            *) continue ;;
+        esac
+        "$CAT" cat-file "$list" 2>/dev/null \
+            | awk -v host="$host" -F'\t' '
+                FILENAME == ARGV[1] { wanted[$1 "\t" $2] = 1; next }
+                /^Package: / { name = substr($0, 10) }
+                /^Version: / { key = name "\t" substr($0, 10); if (key in wanted) print key "\t" host }
+            ' "$work/new" - >> "$work/found" || true
+    done
+fi
+
+# Known answers for what is still installed, then the new ones, with "-"
+# for a new version no trusted list names.
+awk -F'\t' '
+    FILENAME == ARGV[1] { installed[$1 "\t" $2] = 1; next }
+    FILENAME == ARGV[2] { if (($1 "\t" $2) in installed) host[$1 "\t" $2] = $3; next }
+    FILENAME == ARGV[3] { if (!(($1 "\t" $2) in found)) found[$1 "\t" $2] = $3; next }
+    { key = $1 "\t" $2; host[key] = (key in found) ? found[key] : "-" }
+    END { for (key in host) print key "\t" host[key] }
+' "$work/installed" "$work/known" "$work/found" "$work/new" | sort > "$work/record"
+
+# Through a file beside the record, so the rename is atomic and a prompt
+# never reads half of it.
+if ! cmp -s "$work/record" "$RECORD" 2>/dev/null; then
+    cp "$work/record" "$RECORD.new"
+    chmod 644 "$RECORD.new"
+    mv -f "$RECORD.new" "$RECORD"
+fi

@@ -1,0 +1,84 @@
+import QtQuick
+import QtQuick.Layouts
+import WildOS.UI as UI
+
+// A row in the sidebar (AppMusic.dc): 34px, 8px in from each side, an icon,
+// the name and a count. The open one has the neutral selected fill, a
+// semibold name and the small accent bar at its left edge.
+Item {
+    id: row
+
+    property string iconName
+    property string text
+    property int count: -1
+    property bool current: false
+
+    signal clicked()
+    signal menuRequested(real x, real y)
+
+    implicitHeight: 34
+    Accessible.role: Accessible.ListItem
+    Accessible.name: count >= 0 ? qsTr("%1, %2").arg(text).arg(count) : text
+    Accessible.selected: current
+
+    Rectangle {
+        anchors.fill: parent
+        anchors.leftMargin: 8
+        anchors.rightMargin: 8
+        radius: UI.Style.radiusXs
+        color: row.current ? UI.Style.surfaceSelected : mouse.containsMouse ? UI.Style.surfaceHover : "transparent"
+        Behavior on color {
+            ColorAnimation { duration: UI.Style.hoverDuration }
+        }
+
+        Rectangle {
+            visible: row.current
+            x: 0
+            y: 9
+            width: 3
+            height: parent.height - 18
+            radius: 2
+            color: UI.Style.accent
+        }
+    }
+
+    RowLayout {
+        anchors.fill: parent
+        anchors.leftMargin: 18
+        anchors.rightMargin: 18
+        spacing: 11
+
+        MusicIcon {
+            name: row.iconName
+            size: 16
+            color: row.current ? UI.Style.iconInk : UI.Style.inkMuted
+        }
+        UI.Label {
+            Layout.fillWidth: true
+            text: row.text
+            size: 13
+            font.weight: row.current ? UI.Style.weightSemiBold : UI.Style.weightRegular
+        }
+        UI.Label {
+            visible: row.count >= 0
+            text: MusicStyle.count(row.count)
+            size: 12
+            color: UI.Style.inkSubtle
+        }
+    }
+
+    MouseArea {
+        id: mouse
+        anchors.fill: parent
+        hoverEnabled: true
+        cursorShape: Qt.PointingHandCursor
+        acceptedButtons: Qt.LeftButton | Qt.RightButton
+        onClicked: function (event) {
+            if (event.button === Qt.RightButton) {
+                row.menuRequested(event.x, event.y);
+            } else {
+                row.clicked();
+            }
+        }
+    }
+}

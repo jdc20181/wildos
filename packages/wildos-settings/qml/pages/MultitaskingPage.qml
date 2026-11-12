@@ -3,21 +3,16 @@ import QtQuick.Layouts
 import WildOS.Settings
 import WildOS.UI as UI
 
-// Multitasking: snapping, screen corners, Alt+Tab and the taskbar across
-// desktops. The snapping, corner and Alt+Tab settings write kwinrc and ask
-// KWin to reload, so the change applies without signing out; the taskbar
-// choice is the taskbar's own setting, changed through plasmashell.
+// Multitasking: snapping, hot corners, Alt+Tab and the taskbar across
+// desktops. The snapping and Alt+Tab settings write kwinrc and ask KWin to
+// reload, so the change applies without signing out; hot corners are
+// wildosrc settings KWin's wildos_hotcorners plugin follows as they change;
+// the taskbar choice is the taskbar's own setting, changed through
+// plasmashell.
 PageScroll {
     id: page
 
     Component.onCompleted: System.readTaskbarDesktops()
-
-    readonly property var cornerActions: [
-        { value: "taskview", text: "Task view" },
-        { value: "desktop", text: "Show the desktop" },
-        { value: "lock", text: "Lock the screen" },
-        { value: "none", text: "Nothing" }
-    ]
 
     UI.Card {
         Layout.fillWidth: true
@@ -94,8 +89,18 @@ PageScroll {
         Layout.fillWidth: true
         spacing: 10
 
-        SectionTitle {
-            text: "Screen corners"
+        RowLayout {
+            Layout.fillWidth: true
+
+            SectionTitle {
+                Layout.fillWidth: true
+                text: "Hot corners"
+            }
+
+            UI.LinkButton {
+                text: "Learn more"
+                onClicked: Qt.openUrlExternally("https://help.wildos.io/using/hot-corners/")
+            }
         }
 
         UI.Card {
@@ -104,27 +109,71 @@ PageScroll {
             Column {
                 width: parent.width
 
-                Repeater {
-                    model: [
-                        { corner: 7, title: "Top left corner" },
-                        { corner: 1, title: "Top right corner" },
-                        { corner: 5, title: "Bottom left corner" },
-                        { corner: 3, title: "Bottom right corner" }
-                    ]
+                // The Card has no padding of its own, as its rows reach its
+                // edges, so the preview keeps its own distance.
+                Item {
+                    width: 1
+                    height: 16
+                }
 
-                    UI.SettingRow {
-                        id: cornerRow
-                        required property var modelData
-                        title: modelData.title
+                HotCornersPreview {
+                    x: 16
+                    width: parent.width - 32
+                    settings: System.hotCorners
+                }
 
-                        UI.ComboBox {
-                            anchors.verticalCenter: parent.verticalCenter
-                            Accessible.name: cornerRow.modelData.title
-                            model: page.cornerActions
-                            readonly property string choice: System.screenCorners[String(cornerRow.modelData.corner)] ?? "none"
-                            currentIndex: model.findIndex(o => o.value === choice)
-                            onActivated: index => System.setScreenCorner(cornerRow.modelData.corner, model[index].value)
+                Item {
+                    width: 1
+                    height: 16
+                }
+
+                UI.SettingRow {
+                    title: "Don't trigger in full-screen apps and games"
+                    description: "Corners do nothing while the app in front fills the screen"
+                    status: (System.hotCorners.SkipFullScreen) ? "On" : "Off"
+
+                    UI.Toggle {
+                        anchors.verticalCenter: parent.verticalCenter
+                        checked: System.hotCorners.SkipFullScreen
+                        Accessible.name: "Don't trigger in full-screen apps and games"
+                        onToggled: System.setHotCorner("SkipFullScreen", checked)
+                    }
+                }
+
+                UI.SettingRow {
+                    title: "Delay"
+                    description: "How long the pointer rests in a corner before it acts"
+
+                    Row {
+                        anchors.verticalCenter: parent.verticalCenter
+                        spacing: 4
+
+                        Repeater {
+                            model: [
+                                { value: 0, text: "Instant" },
+                                { value: 150, text: "Short" },
+                                { value: 400, text: "Long" }
+                            ]
+
+                            UI.SegmentButton {
+                                required property var modelData
+                                text: modelData.text
+                                checked: System.hotCorners.Delay === modelData.value
+                                onClicked: System.setHotCorner("Delay", modelData.value)
+                            }
                         }
+                    }
+                }
+
+                UI.SettingRow {
+                    title: "Reset to defaults"
+                    description: "Task view top left, notifications top right, nothing at the bottom"
+
+                    UI.Button {
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: "Reset"
+                        Accessible.name: "Reset hot corners to defaults"
+                        onClicked: System.resetHotCorners()
                     }
                 }
             }
@@ -181,6 +230,34 @@ PageScroll {
                     description: "Extra desktops for separate sets of windows"
                     chevron: true
                     onClicked: Navigator.open("desktops")
+                }
+            }
+        }
+    }
+
+    // Task view, the desktop and switching desktops are also touchpad
+    // swipes, set on their own page, which only exists with a touchpad.
+    ColumnLayout {
+        Layout.fillWidth: true
+        visible: InputDevices.touchpads.length > 0
+        spacing: 10
+
+        SectionTitle {
+            text: "Related settings"
+        }
+
+        UI.Card {
+            Layout.fillWidth: true
+
+            Column {
+                width: parent.width
+
+                UI.SettingRow {
+                    iconName: "touchpad"
+                    title: "Looking for gestures?"
+                    description: "Swipe on the touchpad for Task view, the desktop and other desktops"
+                    chevron: true
+                    onClicked: Navigator.open("touchpadgestures")
                 }
             }
         }

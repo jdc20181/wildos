@@ -9,8 +9,8 @@
     },
     "text-styles": {
         "Normal": {
-            "text-color": "#151b2c",
-            "selected-text-color": "#151b2c"
+            "text-color": "#1d1f23",
+            "selected-text-color": "#1d1f23"
         },
         "Keyword": {
             "text-color": "#2a55c4",
@@ -27,7 +27,7 @@
             "bold": true
         },
         "Operator": {
-            "text-color": "#151b2c"
+            "text-color": "#1d1f23"
         },
         "BuiltIn": {
             "text-color": "#3563d8"
@@ -117,7 +117,7 @@
         "IconBorder": "#fafbfe",
         "IndentationLine": "#e2e6ef",
         "LineNumbers": "#9aa0b2",
-        "CurrentLineNumber": "#151b2c",
+        "CurrentLineNumber": "#1d1f23",
         "MarkBookmark": "#3563d8",
         "MarkBreakpointActive": "#c5372c",
         "MarkBreakpointReached": "#9a6400",

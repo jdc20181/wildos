@@ -1,0 +1,9 @@
+Name: Fingerprint for the sign-in screen, sudo and administrator prompts (Wild OS)
+Default: yes
+Priority: 400
+Conflicts: fprintd
+Auth-Type: Primary
+Auth:
+	[success=ok default=2]	pam_exec.so quiet seteuid expose_authtok /usr/libexec/wildos/fingerprint-turn
+	[success=ok default=die]	pam_fprintd.so max-tries=3 timeout=30
+	[success=end default=ignore]	pam_faillock.so authsucc

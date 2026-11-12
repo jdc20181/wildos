@@ -45,7 +45,7 @@ Rectangle {
             width: parent.width
             text: card.title
             size: 12
-            font.weight: Font.DemiBold
+            font.weight: UI.Style.weightSemiBold
             color: UI.Style.inkStatus
         }
 

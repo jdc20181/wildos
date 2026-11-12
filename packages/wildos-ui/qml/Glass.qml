@@ -12,7 +12,7 @@ Rectangle {
 
     property string level: "panel"
     property bool shadow: true
-    property bool topHighlight: level === "bar" || level === "panel"
+    property bool topHighlight: !Style.dark && (level === "bar" || level === "panel")
 
     radius: level === "bar" || level === "panel" ? Style.radiusXl : level === "dialog" ? Style.radiusDialog : Style.radiusLg
     color: level === "bar" ? Style.glassBar

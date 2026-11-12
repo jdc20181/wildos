@@ -75,7 +75,7 @@ T.AbstractButton {
                 Layout.preferredWidth: 16
                 Layout.preferredHeight: 16
                 radius: 8
-                color: control.checked ? Style.textOnAccent : "transparent"
+                color: control.checked ? Style.accentDot : "transparent"
                 border.width: control.checked ? 5 : 1.5
                 border.color: control.checked ? Style.accent : Style.radioRing
             }
@@ -104,7 +104,7 @@ T.AbstractButton {
                 Layout.minimumWidth: Math.min(implicitWidth, 120)
                 text: control.title
                 size: 14
-                font.weight: Font.DemiBold
+                font.weight: Style.weightSemiBold
             }
 
             Chip {

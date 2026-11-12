@@ -25,12 +25,24 @@ namespace WildOS.Guest
         public static extern bool ProcessIdToSessionId(uint pid, out uint session);
 
         public const uint PROCESS_QUERY_LIMITED_INFORMATION = 0x1000;
+        public const uint PROCESS_TERMINATE = 0x0001;
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        public static extern bool TerminateProcess(IntPtr process, uint exitCode);
+
+        // FILETIMEs as 64-bit counts of 100 ns.
+        [DllImport("kernel32.dll", SetLastError = true)]
+        public static extern bool GetProcessTimes(IntPtr process, out long creation, out long exit, out long kernel, out long user);
 
         [DllImport("kernel32.dll", SetLastError = true)]
         public static extern IntPtr OpenProcess(uint access, bool inherit, uint pid);
 
         [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
         public static extern bool QueryFullProcessImageName(IntPtr process, uint flags, StringBuilder name, ref uint size);
+
+        // 0 when the process belongs to a packaged app, whose AUMID it fills in.
+        [DllImport("kernel32.dll", CharSet = CharSet.Unicode)]
+        public static extern int GetApplicationUserModelId(IntPtr process, ref uint length, StringBuilder id);
 
         [StructLayout(LayoutKind.Sequential)]
         public struct SYSTEMTIME
@@ -49,6 +61,9 @@ namespace WildOS.Guest
 
         [DllImport("user32.dll")]
         public static extern bool EnumWindows(EnumWindowsProc callback, IntPtr param);
+
+        [DllImport("user32.dll")]
+        public static extern bool EnumChildWindows(IntPtr parent, EnumWindowsProc callback, IntPtr param);
 
         [DllImport("user32.dll")]
         public static extern uint GetWindowThreadProcessId(IntPtr hwnd, out uint pid);
@@ -226,6 +241,9 @@ namespace WildOS.Guest
         [DllImport("kernel32.dll", SetLastError = true)]
         public static extern bool GetNamedPipeClientSessionId(IntPtr pipe, out uint session);
 
+        [DllImport("kernel32.dll", SetLastError = true)]
+        public static extern bool GetNamedPipeClientProcessId(IntPtr pipe, out uint pid);
+
         public const uint LOAD_LIBRARY_AS_DATAFILE = 0x2;
         public const uint LOAD_LIBRARY_AS_IMAGE_RESOURCE = 0x20;
 
@@ -254,5 +272,14 @@ namespace WildOS.Guest
 
         public static readonly IntPtr RT_ICON = new IntPtr(3);
         public static readonly IntPtr RT_GROUP_ICON = new IntPtr(14);
+
+        public const int ERROR_INSUFFICIENT_BUFFER = 122;
+
+        // The installed packages of a family, for the account this runs as.
+        [DllImport("kernel32.dll", CharSet = CharSet.Unicode)]
+        public static extern int GetPackagesByPackageFamily(string family, ref uint count, IntPtr fullNames, ref uint bufferLength, IntPtr buffer);
+
+        [DllImport("kernel32.dll", CharSet = CharSet.Unicode)]
+        public static extern int GetPackagePathByFullName(string fullName, ref uint length, StringBuilder path);
     }
 }

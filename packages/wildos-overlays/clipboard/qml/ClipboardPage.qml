@@ -186,7 +186,7 @@ Item {
             UI.Label {
                 Layout.fillWidth: true
                 text: "Clipboard history"
-                font.weight: Font.DemiBold
+                font.weight: UI.Style.weightSemiBold
             }
 
             UI.LinkButton {
@@ -251,7 +251,7 @@ Item {
                 Layout.topMargin: 6
                 horizontalAlignment: Text.AlignHCenter
                 text: "Nothing copied yet"
-                font.weight: Font.DemiBold
+                font.weight: UI.Style.weightSemiBold
             }
             UI.Label {
                 Layout.fillWidth: true

@@ -1,16 +1,24 @@
 pragma Singleton
 
 import QtQuick
+import WildOS.UI as UI
 
-// Times and counts in the house style: 24-hour clock, day-first dates,
-// plain words for recent times.
+// Times and counts in the house style: day-first dates, plain words for
+// recent times, and times in the regional format on the clock chosen on
+// the Date and time page.
 QtObject {
     function pad(n) {
         return n < 10 ? "0" + n : "" + n;
     }
 
     function time(date) {
-        return pad(date.getHours()) + ":" + pad(date.getMinutes());
+        return Qt.locale().toString(date, UI.TimeFormat.shortFormat);
+    }
+
+    // Whether times carry AM or PM, from the clock chosen or the regional
+    // format's own.
+    function twelveHour() {
+        return /a/i.test(UI.TimeFormat.shortFormat.replace(/'[^']*'/g, ""));
     }
 
     readonly property var days: ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]

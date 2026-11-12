@@ -81,7 +81,9 @@ namespace WildOS.Guest
                 foreach (object a in apps)
                 {
                     var d = a as Dictionary<string, object>;
-                    if (d != null && !string.IsNullOrEmpty(Json.Str(d, "path"))) list.Add(d);
+                    // Only programs on a drive letter: checking for one on
+                    // \\server\share would sign in to that server.
+                    if (d != null && Paths.Local(Json.Str(d, "path")) != null) list.Add(d);
                 }
             }
             lock (work)

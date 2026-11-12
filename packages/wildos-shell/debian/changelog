@@ -1,3 +1,90 @@
+wildos-shell (0.1.10) trixie; urgency=medium
+
+  * Three and four-finger swipes each have their own actions. The thumb
+    and three finger pinches are gone: libinput drops a thumb that stays
+    still and reports the rest as a three-finger swipe, so they only
+    worked when the thumb moved too. Pinches of three or more fingers are
+    still taken and do nothing.
+
+ -- Wild OS Developers <dev@wildos.io>  Thu, 12 Nov 2026 09:33:32 +0000
+
+wildos-shell (0.1.9) trixie; urgency=medium
+
+  * Touchpad gestures with three or four fingers that follow the fingers:
+    swipe up for Task view, down to show the desktop, sideways to switch
+    desktops, and a thumb and three fingers to pinch for all apps or spread
+    for the desktop. Settings chooses the action for each and turns on
+    three-finger drag. Win+D moves from the org.wildos.showdesktop script
+    into the same KWin effect.
+
+ -- Wild OS Developers <dev@wildos.io>  Thu, 12 Nov 2026 00:33:25 +0000
+
+wildos-shell (0.1.8) trixie; urgency=medium
+
+  * Hot corners: each outer corner of the screen can open Task view, the
+    windows of the app in use, the desktop, the app list, the notifications or
+    a quick note, lock, turn the screen off, keep the computer awake or switch
+    do not disturb, and can wait for a key to be held. Corners rest for a
+    moment first, fire once per visit and stay quiet in full screen apps and
+    games. A short note in the corner says when a switch went on or off.
+  * The taskbar corner shows a cup while a hot corner keeps the computer
+    awake; clicking it turns that off.
+  * Start's app list and the notifications can be opened from outside the
+    taskbar (org.wildos.Shell on plasmashell), for hot corners and touchpad
+    gestures.
+
+ -- Wild OS Developers <dev@wildos.io>  Wed, 11 Nov 2026 23:47:01 +0000
+
+wildos-shell (0.1.7) trixie; urgency=medium
+
+  * Alt+F4 on the desktop, or with every window closed, opens the shut
+    down screen, as on Windows. On a window it still closes the window.
+
+ -- Wild OS Developers <dev@wildos.io>  Wed, 11 Nov 2026 23:40:00 +0000
+
+wildos-shell (0.1.6) trixie; urgency=medium
+
+  * No navy left: surfaces, glass, shadows and the logo tile use the
+    same neutral greys as the rest of Wild OS.
+
+ -- Wild OS Developers <dev@wildos.io>  Wed, 11 Nov 2026 22:40:26 +0000
+
+wildos-shell (0.1.5) trixie; urgency=medium
+
+  * The Warp wallpaper breathes: the picture eases in and out over 28
+    seconds while the W stays still. It holds still behind a maximised or
+    full screen window, while locked or with the screen off, in battery
+    saver, and when animations are off.
+
+ -- Wild OS Developers <dev@wildos.io>  Wed, 11 Nov 2026 17:50:00 +0000
+
+wildos-shell (0.1.4) trixie; urgency=medium
+
+  * The taskbar underglow waits for the desktop to fade in after signing in,
+    then fades in itself, instead of showing over the start-up screen.
+
+ -- Wild OS Developers <dev@wildos.io>  Wed, 11 Nov 2026 15:59:57 +0000
+
+wildos-shell (0.1.3) trixie; urgency=medium
+
+  * The close button's hover fills the square corner of a maximised
+    window, as on Windows 11, for title bar themes with a
+    close-maximized.svg (Wild OS's, from wildos-branding 0.1.7).
+
+ -- Wild OS Developers <dev@wildos.io>  Wed, 11 Nov 2026 15:54:41 +0000
+
+wildos-shell (0.1.2) trixie; urgency=medium
+
+  * Blur windows in the background never blurs the window in use, its
+    dialogs or the window they belong to, and screenshot overlays no longer
+    count as the window in use, so screenshots come out clear.
+  * The lightest blur is lighter, a single pass.
+  * Outline windows leaves a window without its edge while it is blurred in
+    the background, and can leave out maximised windows and windows that
+    fill the screen.
+
+ -- Wild OS Developers <dev@wildos.io>  Tue, 10 Nov 2026 22:47:59 +0000
+
 wildos-shell (0.1.1) trixie; urgency=medium
 
   * Settings > Accessibility can outline every window, with a thick accent ring

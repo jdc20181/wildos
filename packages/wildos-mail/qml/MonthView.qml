@@ -110,7 +110,7 @@ Item {
                     // The first of a month carries its name.
                     text: cell.day.getDate() === 1 ? Formats.shortDayAndMonth(cell.day) : cell.day.getDate()
                     size: 13
-                    font.weight: cell.today ? Font.DemiBold : Font.Normal
+                    font.weight: cell.today ? UI.Style.weightSemiBold : UI.Style.weightRegular
                     color: cell.today ? UI.Style.textOnAccent : cell.inMonth ? UI.Style.ink : UI.Style.inkSubtle
                     MouseArea {
                         anchors.fill: parent
@@ -161,7 +161,7 @@ Item {
                                     width: parent.width - (line.bar ? 0 : 60)
                                     text: line.modelData.title
                                     size: 12
-                                    font.weight: line.bar ? Font.DemiBold : Font.Medium
+                                    font.weight: line.bar ? UI.Style.weightSemiBold : UI.Style.weightMedium
                                     elide: Text.ElideRight
                                 }
                             }

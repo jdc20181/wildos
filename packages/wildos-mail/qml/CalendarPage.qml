@@ -134,6 +134,13 @@ Item {
         editing = false;
         showSettings = !showSettings;
     }
+    // Where People and Tasks send you to add an account: the same
+    // accounts bring contacts and task lists with them.
+    function showAccounts() {
+        editing = false;
+        settingsPage.section = "accounts";
+        showSettings = true;
+    }
     function tryPending() {
         if (!pendingKey) {
             return;
@@ -249,9 +256,9 @@ Item {
                 Layout.topMargin: 8
                 implicitHeight: 44
                 radius: 8
-                color: UI.Style.accentSoft
+                color: UI.Style.surfaceRaised
                 border.width: 1
-                border.color: UI.Style.accentBorder
+                border.color: UI.Style.borderSubtle
                 RowLayout {
                     anchors.fill: parent
                     anchors.leftMargin: 14
@@ -260,7 +267,7 @@ Item {
                     MailIcon {
                         name: "calendar"
                         size: 16
-                        color: UI.Style.accent
+                        color: UI.Style.iconInk
                     }
                     UI.Label {
                         Layout.fillWidth: true
@@ -317,7 +324,7 @@ Item {
                                     anchors.centerIn: parent
                                     text: tab.modelData.name
                                     size: 13
-                                    font.weight: tab.active ? Font.DemiBold : Font.Normal
+                                    font.weight: tab.active ? UI.Style.weightSemiBold : UI.Style.weightRegular
                                     color: tab.active ? UI.Style.ink : UI.Style.inkMuted
                                 }
                                 Rectangle {
@@ -379,7 +386,7 @@ Item {
                                     checkable: false
                                     background: Rectangle {
                                         radius: 6
-                                        color: window.view === modelData.id && !window.editing ? UI.Style.accentSelected : parent.hovered ? UI.Style.surfaceHover : "transparent"
+                                        color: window.view === modelData.id && !window.editing ? UI.Style.surfaceSelected : parent.hovered ? UI.Style.surfaceHover : "transparent"
                                     }
                                     onClicked: window.setView(modelData.id)
                                 }
@@ -406,6 +413,7 @@ Item {
                                 iconOnly: true
                                 iconName: "refresh"
                                 tip: qsTr("Check for changes")
+                                spinning: CalendarEngine.syncing
                                 onClicked: CalendarEngine.refresh()
                             }
                         }
@@ -451,6 +459,11 @@ Item {
                                 text: qsTr("Keyboard shortcuts")
                                 iconName: "external"
                                 onClicked: Qt.openUrlExternally("https://help.wildos.io/using/calendar/#keyboard-shortcuts")
+                            }
+                            CommandButton {
+                                text: qsTr("Report a problem")
+                                iconName: "warning"
+                                onClicked: Qt.openUrlExternally("wildos-report:calendar")
                             }
                             Item {
                                 Layout.fillWidth: true
@@ -538,7 +551,7 @@ Item {
                                     Layout.leftMargin: 8
                                     text: window.rangeTitle
                                     size: 17
-                                    font.weight: Font.DemiBold
+                                    font.weight: UI.Style.weightSemiBold
                                 }
                                 Item {
                                     Layout.fillWidth: true
@@ -676,7 +689,7 @@ Item {
                         width: parent.width
                         text: modelData.title
                         size: 13
-                        font.weight: Font.DemiBold
+                        font.weight: UI.Style.weightSemiBold
                         elide: Text.ElideRight
                     }
                     UI.Label {

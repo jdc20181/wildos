@@ -27,6 +27,12 @@ class WindowsMode : public QObject
     // A product key is going in; it can take minutes (Windows starting,
     // then Microsoft's activation servers).
     Q_PROPERTY(bool activating READ activating NOTIFY activatingChanged)
+    // The power action under way from Home's Windows mode card ("save",
+    // "shutdown"), or empty. Saving or shutting down can take minutes.
+    Q_PROPERTY(QString powerAction READ powerAction NOTIFY powerActionChanged)
+    // Remove Windows mode is under way: the administrator's password, then
+    // deleting Windows.
+    Q_PROPERTY(bool removing READ removing NOTIFY removingChanged)
 
 public:
     explicit WindowsMode(QObject *parent = nullptr);
@@ -36,6 +42,8 @@ public:
     QString state() const { return m_status.value(QStringLiteral("state")).toString(); }
     QVariantList memoryChoices() const;
     bool activating() const { return m_activating; }
+    QString powerAction() const { return m_powerAction; }
+    bool removing() const { return m_removing; }
 
     Q_INVOKABLE QString setOption(const QString &key, const QString &value);
     // Answers with productKeyDone: "" once activated, or why not.
@@ -44,9 +52,21 @@ public:
     Q_INVOKABLE QString checkUpdates();
     Q_INVOKABLE QString openDesktop();
     Q_INVOKABLE QString repair();
-    Q_INVOKABLE QString remove();
+    // The Windows account's password, for when Windows itself asks for it
+    // (activation, an installer that wants an administrator). "" when it
+    // isn't in the keyring.
+    Q_INVOKABLE QString windowsPassword(const QString &account) const;
+    // Onto the clipboard marked as a secret, so clipboard history skips it.
+    Q_INVOKABLE void copySecret(const QString &text) const;
+    // Deletes Windows and its programs; the documents in the shared folders
+    // stay. Answers with removeDone: "" when done, or why not.
+    Q_INVOKABLE void remove();
     // The setup app (9.1 to 9.7).
     Q_INVOKABLE void openSetup();
+    // pause, save, resume, start, restart or shutdown, as the taskbar's
+    // Windows mode panel does. Answers with powerDone: "" when done, or a
+    // sentence to show. The service asks first when work could be lost.
+    Q_INVOKABLE void power(const QString &action);
     // "27.4 GB" from bytes; "" for nothing.
     Q_INVOKABLE QString size(double bytes) const;
 
@@ -54,6 +74,10 @@ Q_SIGNALS:
     void statusChanged();
     void activatingChanged();
     void productKeyDone(const QString &result);
+    void powerActionChanged();
+    void powerDone(const QString &result);
+    void removingChanged();
+    void removeDone(const QString &result);
 
 private Q_SLOTS:
     void refresh();
@@ -64,4 +88,6 @@ private:
     QDBusInterface *m_service = nullptr;
     QVariantMap m_status;
     bool m_activating = false;
+    QString m_powerAction;
+    bool m_removing = false;
 };

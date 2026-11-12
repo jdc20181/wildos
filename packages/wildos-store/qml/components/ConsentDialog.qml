@@ -51,7 +51,7 @@ T.Popup {
 
     T.Overlay.modal: Rectangle {
         radius: Window.window && Window.window.visibility !== Window.Maximized && Window.window.visibility !== Window.FullScreen ? UI.Style.windowRadius : 0
-        color: UI.Style.dark ? Qt.rgba(4 / 255, 6 / 255, 16 / 255, 0.55) : UI.Style.scrim
+        color: UI.Style.dark ? Qt.rgba(7 / 255, 9 / 255, 13 / 255, 0.55) : UI.Style.scrim
         Behavior on opacity {
             NumberAnimation { duration: UI.Style.motionFast }
         }
@@ -100,7 +100,7 @@ T.Popup {
                     horizontalAlignment: Text.AlignHCenter
                     text: dialog.app ? "Before " + dialog.app.name + " installs" : ""
                     size: 20
-                    font.weight: Font.Bold
+                    font.weight: UI.Style.weightBold
                     wrapMode: Text.Wrap
                     elide: Text.ElideNone
                     Accessible.role: Accessible.Heading
@@ -168,7 +168,7 @@ T.Popup {
                                 width: parent.width
                                 text: choice.modelData.label
                                 size: 14
-                                font.weight: Font.DemiBold
+                                font.weight: UI.Style.weightSemiBold
                             }
 
                             UI.Label {
@@ -251,7 +251,7 @@ T.Popup {
                         horizontalAlignment: Text.AlignHCenter
                         text: button.text
                         size: 14
-                        font.weight: button.primary ? Font.Bold : Font.DemiBold
+                        font.weight: button.primary ? UI.Style.weightBold : UI.Style.weightSemiBold
                         color: button.primary ? UI.Style.textOnAccent : UI.Style.ink
                     }
                 }

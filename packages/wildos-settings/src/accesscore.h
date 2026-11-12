@@ -83,6 +83,9 @@ bool windowEffectsInstalled();
 bool windowEffectsSupported();
 bool outlineWindows();
 void setOutlineWindows(bool on);
+// Whether maximised windows, and others that fill the screen, are outlined.
+bool outlineFillingScreen();
+void setOutlineFillingScreen(bool on);
 bool blurBackground();
 void setBlurBackground(bool on);
 // 1 (lightest) to 5.

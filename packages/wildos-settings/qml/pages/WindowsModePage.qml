@@ -105,7 +105,7 @@ PageScroll {
                     UI.Label {
                         text: modelData.value
                         size: 18
-                        font.weight: Font.DemiBold
+                        font.weight: UI.Style.weightSemiBold
                     }
 
                     UI.Label {
@@ -156,9 +156,9 @@ PageScroll {
                 description: {
                     switch (page.options.whenIdle) {
                     case "memory": return "Kept ready in memory, using no processor time";
-                    case "disk": return "Saved to disk after five minutes, so its memory is free";
+                    case "disk": return "Saved to disk after a minute, so its memory is free";
                     case "shutdown": return "Windows shuts down after five minutes";
-                    default: return "Automatic: kept in memory while plugged in, saved to disk on battery";
+                    default: return "Automatic: kept in memory for 15 minutes, then saved to disk, at once on battery";
                     }
                 }
 
@@ -257,9 +257,144 @@ PageScroll {
             UI.ListRow {
                 minHeight: 54
                 title: "Windows and Office updates"
-                description: "Monthly updates wait a week, so Wild OS can hold back one that breaks Windows apps."
+                description: "Monthly updates install a week after Microsoft releases them."
                     + (page.status.officeVersion ? " Microsoft 365 " + page.status.officeVersion + "." : "")
 
+            }
+        }
+    }
+
+    // Devices that only work with Windows. The service (winmode/usb.py)
+    // remembers each choice and hands the device over whenever Windows
+    // runs; this lists what is plugged in and says plainly why a device
+    // stays with Wild OS.
+    ColumnLayout {
+        id: usbSection
+        Layout.fillWidth: true
+        visible: page.ready
+        spacing: 10
+
+        onVisibleChanged: if (visible) WindowsUsb.reload()
+        Component.onCompleted: if (visible) WindowsUsb.reload()
+
+        function kindName(kind) {
+            switch (kind) {
+            case "printer": return "Printer";
+            case "audio": return "Sound device";
+            case "camera": return "Camera";
+            case "scanner": return "Scanner or camera";
+            case "storage": return "Drive";
+            case "smartcard": return "Card reader";
+            case "wireless": return "Wireless adapter";
+            case "network": return "Network adapter";
+            default: return "USB device";
+            }
+        }
+
+        function icon(device) {
+            if (device.problem === "keyboard") return "keyboard";
+            if (device.problem === "pointer") return "mouse";
+            switch (device.kind) {
+            case "printer": case "scanner": return "printer";
+            case "audio": return "sound";
+            case "camera": return "camera";
+            case "storage": return "drive";
+            case "wireless": return "bluetooth";
+            case "network": return "ethernet";
+            default: return "usb";
+            }
+        }
+
+        function describe(device) {
+            switch (device.state) {
+            case "windows": return "In use by Windows";
+            case "blocked": return WindowsUsb.canAllow ? "Blocked by USB protection until you allow it"
+                                                       : "Blocked by USB protection. Allow it from the shield on the taskbar.";
+            case "refused":
+                if (device.problem === "keyboard") return "You type into Wild OS with it, so it stays here";
+                if (device.problem === "pointer") return "You move the pointer in Wild OS with it, so it stays here";
+                return "Wild OS runs from this drive, so it stays here";
+            case "waiting":
+                if (device.problem === "in-use") return "Goes to Windows once you eject it in Files";
+                if (device.problem === "full") return "Windows can't take any more devices. Switch one off first.";
+                if (device.problem === "failed") return "Windows couldn't take it. Unplug it and plug it back in.";
+                return WindowsUsb.running ? "Going to Windows" : "Goes to Windows when a Windows app opens";
+            default:
+                return device.problem === "in-use" ? "In use by Wild OS. Eject it in Files before Windows can have it." : "Used by Wild OS";
+            }
+        }
+
+        Connections {
+            target: WindowsUsb
+            function onFailed(message) {
+                page.show(message);
+            }
+        }
+
+        SectionTitle {
+            text: "USB devices"
+        }
+
+        UI.Label {
+            Layout.fillWidth: true
+            text: "For a device that only works with Windows, such as a licence dongle, label printer or scanner. Wild OS gets it back when you switch it off or Windows stops."
+            size: 12
+            color: UI.Style.inkMuted
+            wrapMode: Text.Wrap
+            elide: Text.ElideNone
+        }
+
+        UI.Card {
+            Layout.fillWidth: true
+
+            Column {
+                width: parent.width
+
+                Repeater {
+                    id: usbList
+                    model: WindowsUsb.devices
+
+                    UI.ListRow {
+                        id: usbRow
+                        required property var modelData
+                        readonly property bool problem: modelData.state === "blocked"
+                            || modelData.problem === "full" || modelData.problem === "failed"
+                        minHeight: 54
+                        iconName: usbSection.icon(modelData)
+                        title: modelData.name || usbSection.kindName(modelData.kind)
+                        description: usbSection.describe(modelData)
+                        descriptionColor: problem ? UI.Style.warning : UI.Style.inkMuted
+
+                        UI.Button {
+                            anchors.verticalCenter: parent.verticalCenter
+                            visible: usbRow.modelData.state === "blocked" && WindowsUsb.canAllow
+                            text: "Allow once"
+                            busy: WindowsUsb.busy === usbRow.modelData.port
+                            enabled: WindowsUsb.busy.length === 0
+                            Accessible.name: "Allow " + usbRow.title + " once"
+                            onClicked: WindowsUsb.allow(usbRow.modelData.port)
+                        }
+
+                        UI.Toggle {
+                            anchors.verticalCenter: parent.verticalCenter
+                            visible: usbRow.modelData.state !== "blocked" || usbRow.modelData.use
+                            text: "Use in Windows"
+                            checked: usbRow.modelData.use
+                            locked: usbRow.modelData.state === "refused"
+                            lockedReason: usbRow.description
+                            enabled: WindowsUsb.busy.length === 0
+                            Accessible.name: "Use " + usbRow.title + " in Windows"
+                            onToggled: WindowsUsb.setUse(usbRow.modelData.port, checked)
+                        }
+                    }
+                }
+
+                UI.ListRow {
+                    visible: WindowsUsb.loaded && usbList.count === 0
+                    iconName: "usb"
+                    title: "No USB devices plugged in"
+                    description: "Plug in a device and it appears here."
+                }
             }
         }
     }
@@ -285,6 +420,33 @@ PageScroll {
                         onClicked: page.show(WindowsMode.openDesktop())
                     }
 
+                }
+            }
+
+            UI.ListRow {
+                minHeight: 54
+                title: "Windows password"
+                description: "Windows mode signs in for you with a password of its own. Windows asks for it now and then, for activation or an installer that needs an administrator."
+
+                UI.Button {
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: "Show"
+                    onClicked: passwordDialog.open()
+                }
+            }
+
+            UI.ListRow {
+                minHeight: 54
+                title: "Remove Windows mode"
+                description: WindowsMode.removing ? "Removing Windows. This can take a minute."
+                    : "Deletes Windows and the programs in it, to free the space or to set Windows mode up again from the start. Your documents stay in your folders."
+
+                UI.Button {
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: "Remove"
+                    busy: WindowsMode.removing
+                    enabled: !WindowsMode.removing
+                    onClicked: removeDialog.open()
                 }
             }
         }
@@ -332,8 +494,55 @@ PageScroll {
             Layout.fillWidth: true
             enabled: !WindowsMode.activating
             placeholderText: "XXXXX-XXXXX-XXXXX-XXXXX-XXXXX"
+            // Room for a pasted key with spaces round its dashes; shaping
+            // cuts it to 25 characters.
+            maximumLength: 64
             error: text.length >= 25 && !WindowsMode.keyShapeValid(text)
             Accessible.name: "Windows product key"
+
+            // The text after the last edit, to tell when an edit removed
+            // nothing but a dash.
+            property string shaped: ""
+            property bool forwardDelete: false
+
+            Keys.onDeletePressed: event => {
+                forwardDelete = true;
+                event.accepted = false;
+                // The edit happens during this key press, so a Delete that removed
+                // nothing must not count for a later Backspace.
+                Qt.callLater(() => forwardDelete = false);
+            }
+
+            // Capitals and a dash after every five, as Windows' own key box
+            // does, however the key is typed or pasted.
+            onTextEdited: {
+                let typed = text;
+                let cursor = cursorPosition;
+                if (typed.length === shaped.length - 1) {
+                    let i = 0;
+                    while (i < typed.length && typed[i] === shaped[i]) {
+                        i++;
+                    }
+                    // The dash would only come straight back, so the
+                    // character beside it goes instead.
+                    if (shaped[i] === "-" && shaped.slice(i + 1) === typed.slice(i)) {
+                        if (forwardDelete) {
+                            typed = typed.slice(0, i) + typed.slice(i + 1);
+                        } else if (i > 0) {
+                            typed = typed.slice(0, i - 1) + typed.slice(i);
+                            cursor = i - 1;
+                        }
+                    }
+                }
+                forwardDelete = false;
+                const before = Math.min(25, typed.slice(0, cursor).replace(/[^0-9a-z]/gi, "").length);
+                const next = typed.toUpperCase().replace(/[^0-9A-Z]/g, "").slice(0, 25).replace(/(.{5})(?=.)/g, "$1-");
+                shaped = next;
+                if (next !== text) {
+                    text = next;
+                }
+                cursorPosition = before + Math.floor(Math.max(before - 1, 0) / 5);
+            }
         }
 
         UI.Label {
@@ -417,6 +626,49 @@ PageScroll {
         ]
     }
 
+    // Read when it opens and dropped when it closes, so the password
+    // isn't held in the page.
+    UI.Dialog {
+        id: passwordDialog
+        title: "Windows password"
+        text: secret.length > 0
+            ? "The account is " + account + ". Windows mode needs this password to sign in, so don't change it in Windows."
+            : "The password isn't in your saved passwords, so there's nothing to show. Windows mode sets a new one the next time it starts."
+
+        readonly property string account: page.status.account || "wild"
+        property string secret
+
+        onOpened: secret = WindowsMode.windowsPassword(account)
+        onClosed: secret = ""
+
+        UI.TextField {
+            visible: passwordDialog.secret.length > 0
+            Layout.fillWidth: true
+            text: passwordDialog.secret
+            readOnly: true
+            selectByMouse: true
+            font.family: "monospace"
+            Accessible.name: "Windows password"
+        }
+
+        buttons: [
+            UI.Button {
+                text: "Close"
+                kind: passwordDialog.secret.length > 0 ? "secondary" : "primary"
+                onClicked: passwordDialog.close()
+            },
+            UI.Button {
+                visible: passwordDialog.secret.length > 0
+                kind: "primary"
+                text: "Copy"
+                onClicked: {
+                    WindowsMode.copySecret(passwordDialog.secret);
+                    passwordDialog.close();
+                }
+            }
+        ]
+    }
+
     UI.Dialog {
         id: repairDialog
         title: "Repair Windows mode?"
@@ -452,9 +704,17 @@ PageScroll {
                 text: "Remove"
                 onClicked: {
                     removeDialog.close();
-                    page.show(WindowsMode.remove());
+                    page.show("");
+                    WindowsMode.remove();
                 }
             }
         ]
+    }
+
+    Connections {
+        target: WindowsMode
+        function onRemoveDone(answer) {
+            page.show(answer);
+        }
     }
 }

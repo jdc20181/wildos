@@ -974,7 +974,7 @@ Forwarded: no
      }
  }
  
-@@ -1729,93 +2046,60 @@ ChoicePage::shouldShowEncryptWidget( Config::InstallChoice choice ) const
+@@ -1729,93 +2058,60 @@ ChoicePage::shouldShowEncryptWidget( Config::InstallChoice choice ) const
  void
  ChoicePage::updateActionDescriptionsTr()
  {
@@ -1001,27 +1001,6 @@ Forwarded: no
 -    if ( m_osproberEntriesCount == 1 )
 -    {
 -        if ( !m_osproberOneEntryName.isEmpty() )
--        {
--            cDebug() << "Setting texts for 1 non-empty osprober entry";
--            m_messageLabel->setText( tr( "This storage device has %1 on it. "
--                                         "What would you like to do?<br/>"
--                                         "You will be able to review and confirm your choices "
--                                         "before any change is made to the storage device." )
--                                         .arg( m_osproberOneEntryName ) );
--
--            m_alongsideButton->setText( tr( "<strong>Install alongside</strong><br/>"
--                                            "The installer will shrink a partition to make room for %1." )
--                                            .arg( Calamares::Branding::instance()->shortVersionedName() ) );
--
--            m_eraseButton->setText( tr( "<strong>Erase disk</strong><br/>"
--                                        "This will <font color=\"red\">delete</font> all data "
--                                        "currently present on the selected storage device." ) );
--
--            m_replaceButton->setText( tr( "<strong>Replace a partition</strong><br/>"
--                                          "Replaces a partition with %1." )
--                                          .arg( Calamares::Branding::instance()->shortVersionedName() ) );
--        }
--        else
 +    if ( m_osproberEntriesCount < 0 || !m_eraseButton )
 +    {
 +        return;  // Nothing scanned yet
@@ -1058,6 +1037,27 @@ Forwarded: no
 +                          : alongsideBlockedReason() ) );
 +        if ( keepPossible && !m_alongsideButton->isEnabled() )
          {
+-            cDebug() << "Setting texts for 1 non-empty osprober entry";
+-            m_messageLabel->setText( tr( "This storage device has %1 on it. "
+-                                         "What would you like to do?<br/>"
+-                                         "You will be able to review and confirm your choices "
+-                                         "before any change is made to the storage device." )
+-                                         .arg( m_osproberOneEntryName ) );
+-
+-            m_alongsideButton->setText( tr( "<strong>Install alongside</strong><br/>"
+-                                            "The installer will shrink a partition to make room for %1." )
+-                                            .arg( Calamares::Branding::instance()->shortVersionedName() ) );
+-
+-            m_eraseButton->setText( tr( "<strong>Erase disk</strong><br/>"
+-                                        "This will <font color=\"red\">delete</font> all data "
+-                                        "currently present on the selected storage device." ) );
+-
+-            m_replaceButton->setText( tr( "<strong>Replace a partition</strong><br/>"
+-                                          "Replaces a partition with %1." )
+-                                          .arg( Calamares::Branding::instance()->shortVersionedName() ) );
+-        }
+-        else
+-        {
 -            cDebug() << "Setting texts for 1 empty osprober entry";
 -            m_messageLabel->setText( tr( "This storage device already has an operating system on it. "
 -                                         "What would you like to do?<br/>"
@@ -2781,7 +2781,7 @@ Forwarded: no
 +    outline.addRoundedRect( bar, 10, 10 );
 +    painter->setClipPath( outline );
 +    painter->fillRect( QRectF( 0, 0, split, FOCUSED_HEIGHT ), QColor( 255, 255, 255, 36 ) );
-+    painter->fillRect( QRectF( split, 0, FOCUSED_GAP, FOCUSED_HEIGHT ), QColor( 0x0f, 0x15, 0x30 ) );
++    painter->fillRect( QRectF( split, 0, FOCUSED_GAP, FOCUSED_HEIGHT ), QColor( 0x1a, 0x1c, 0x20 ) );
 +    painter->fillRect( QRectF( split + FOCUSED_GAP, 0, width() - split - FOCUSED_GAP, FOCUSED_HEIGHT ),
 +                       QColor( 0x8f, 0xb4, 0xff ) );
 +

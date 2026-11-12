@@ -1,0 +1,56 @@
+#!/usr/bin/python3 -I
+"""The "Restore points" submenu of the start-up menu (Btrfs only).
+
+Called by /etc/grub.d/15_wildos_recovery with the path of /boot as GRUB sees
+it, the root filesystem's UUID and the kernel arguments. Each restore point
+starts with its own kernel: the one still installed, or the copy kept in
+/boot/wildos-restore when apt removed it. A point whose kernel is gone gets
+no entry; going back from Settings or start-up recovery still works.
+"""
+
+import json
+import os
+import sys
+import time
+
+boot, uuid, args = sys.argv[1], sys.argv[2], sys.argv[3]
+try:
+    with open("/.snapshots/index.json") as f:
+        index = json.load(f)
+except (OSError, ValueError):
+    sys.exit(0)
+
+
+def kernel_for(point):
+    for k in reversed(point.get("kernels") or []):
+        for kern, init in (
+            (f"/boot/vmlinuz-{k}", f"/boot/initrd.img-{k}"),
+            (f"/boot/wildos-restore/{k}/vmlinuz-{k}", f"/boot/wildos-restore/{k}/initrd.img-{k}"),
+        ):
+            if os.path.exists(kern) and os.path.exists(init):
+                return kern[len("/boot"):], init[len("/boot"):]
+    return None
+
+
+entries = []
+for p in index.get("points", []):
+    if p.get("kind") == "undo" and p.get("readonly_pending"):
+        continue
+    k = kernel_for(p)
+    if k:
+        entries.append((p, k))
+
+if not entries:
+    sys.exit(0)
+
+print("submenu 'Restore points' --class wildos-restore-points $menuentry_id_option 'wildos-restore-points' {")
+for p, (kern, init) in entries:
+    when = time.strftime("%-d %b %H:%M", time.localtime(p["time"]))
+    title = f"{p['label']} ({when})".replace("'", "")
+    print(f"\tmenuentry '{title}' --class wildos-previous $menuentry_id_option 'wildos-point-{p['id']}' {{")
+    print("\t\tload_video")
+    print("\t\tinsmod gzio")
+    print(f"\t\tlinux\t{boot}{kern} root=UUID={uuid} rootflags=subvol=@snapshots/{p['id']}/snapshot ro wildos.snapshot={p['id']} {args}")
+    print(f"\t\tinitrd\t{boot}{init}")
+    print("\t}")
+print("}")

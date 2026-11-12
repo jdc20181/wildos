@@ -117,7 +117,7 @@ FocusScope {
                         anchors.verticalCenter: parent.verticalCenter
                         text: column.modelData
                         font.pixelSize: UI.Style.px(12)
-                        font.weight: column.sorted ? Font.Medium : Font.Normal
+                        font.weight: column.sorted ? UI.Style.weightMedium : UI.Style.weightRegular
                         color: column.sorted ? UI.Style.ink : UI.Style.inkMuted
                     }
 

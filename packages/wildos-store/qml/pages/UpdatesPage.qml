@@ -40,7 +40,7 @@ PageFlick {
                 anchors.verticalCenter: parent.verticalCenter
                 text: "Updating"
                 size: 13
-                font.weight: Font.DemiBold
+                font.weight: UI.Style.weightSemiBold
             }
 
             Ring {
@@ -137,7 +137,7 @@ PageFlick {
                                     id: name
                                     text: entry.app ? entry.app.name : ""
                                     size: 15
-                                    font.weight: Font.DemiBold
+                                    font.weight: UI.Style.weightSemiBold
                                     width: Math.min(implicitWidth, parent.width)
                                 }
 
@@ -169,6 +169,7 @@ PageFlick {
                                 textFormat: Text.StyledText
                                 wrapMode: Text.Wrap
                                 font.family: UI.Style.fontFamily
+                                font.letterSpacing: UI.Style.tracking(UI.Style.px(13.5))
                                 font.pixelSize: UI.Style.px(13.5)
                                 lineHeight: 1.5
                                 color: Metrics.inkSecondary
@@ -253,7 +254,7 @@ PageFlick {
                             width: parent.width - autoToggle.width - 12
                             text: "Update automatically"
                             size: 15
-                            font.weight: Font.Bold
+                            font.weight: UI.Style.weightBold
                         }
 
                         UI.Toggle {
@@ -307,7 +308,7 @@ PageFlick {
                             width: parent.width - 30
                             text: "Wild OS updates"
                             size: 15
-                            font.weight: Font.Bold
+                            font.weight: UI.Style.weightBold
                         }
                     }
 

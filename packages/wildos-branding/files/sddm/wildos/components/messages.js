@@ -7,6 +7,7 @@
 
 const wrongPassword = "That password did not work";
 const unavailable = "You can't sign in right now. Try again in a moment.";
+const fingerprintFailed = "That fingerprint wasn't recognised. Try again, or type your password";
 
 const blockingPatterns = [
     /lock(ed)?\b.*\b(account|user)|account.*\block/i,
@@ -25,4 +26,17 @@ function translate(message) {
             return unavailable;
     }
     return "";
+}
+
+// pam_fprintd's words for the reader ("Place your right index finger on the
+// fingerprint reader", "Failed to match fingerprint"): what to do now, or
+// null when the message isn't the reader's. A mismatch says nothing here;
+// the failure that follows does.
+function fingerprint(message) {
+    const text = String(message || "");
+    if (!/finger/i.test(text))
+        return null;
+    if (/match/i.test(text))
+        return "";
+    return /swipe/i.test(text) ? "Swipe your finger across the reader" : "Touch the fingerprint reader";
 }

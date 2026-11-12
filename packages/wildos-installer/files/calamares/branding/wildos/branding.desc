@@ -1,6 +1,6 @@
 ---
 # Wild OS installer branding. The look follows the Wild OS Design System:
-# a dark glass window, Inter, one accent (Glacier). Colours live in the QML
+# a dark glass window, Albert Sans, one accent (Glacier). Colours live in the QML
 # files and stylesheet.qss, because the QML sidebar and navigation draw
 # everything themselves.
 componentName: wildos
@@ -44,7 +44,7 @@ slideshowAPI: 2
 # Calamares refuses to start without this block. The QML panels do not read
 # it; the values match them so any fallback widget stays on palette.
 style:
-  SidebarBackground: "#0f1222"
+  SidebarBackground: "#14161a"
   SidebarText: "#eef1f8"
   SidebarTextCurrent: "#eef1f8"
-  SidebarBackgroundCurrent: "#262a3d"
+  SidebarBackgroundCurrent: "#2d2f33"

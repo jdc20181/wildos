@@ -101,6 +101,14 @@ RailWindow::RailWindow(Rail *rail, Client *client, const QString &appId)
         }
         appReady();
     });
+    m_followSettle.setSingleShot(true);
+    connect(&m_followSettle, &QTimer::timeout, this, &RailWindow::followSettled);
+    // A window dragged across screens can change screen more than once on
+    // the way; Windows hears where it ended up.
+    m_screenSettle.setSingleShot(true);
+    m_screenSettle.setInterval(300);
+    connect(&m_screenSettle, &QTimer::timeout, this, &RailWindow::followScreen);
+    connect(this, &QWindow::screenChanged, this, [this] { m_screenSettle.start(); });
 }
 
 RailWindow::~RailWindow()
@@ -110,7 +118,117 @@ RailWindow::~RailWindow()
 
 double RailWindow::scale() const
 {
-    return m_rail->scale();
+    if (m_id && m_frame.isValid()) {
+        return m_rail->scaleFor(m_frame);
+    }
+    return m_rail->scaleForScreen(screen());
+}
+
+void RailWindow::followScreen()
+{
+    const QList<Monitor> &layout = m_rail->layout();
+    if (!m_id || m_loading || m_popup || !isVisible() || (windowStates() & Qt::WindowMinimized) || !m_frame.isValid() || layout.size() < 2) {
+        return;
+    }
+    // Rail::relayout calls this again once Windows has the new layout.
+    if (!m_rail->layoutCurrent()) {
+        return;
+    }
+    const int to = m_rail->monitorFor(screen());
+    const int from = monitors::at(layout, m_frame);
+    if (to < 0 || to == from || m_follow.monitor == to) {
+        return;
+    }
+    moveToMonitor(to, size());
+}
+
+QRect RailWindow::placeOn(int from, int to, const QSize &size) const
+{
+    const QList<Monitor> &layout = m_rail->layout();
+    const QRect b = layout[to].rect;
+    QPoint at = b.topLeft() + QPoint((b.width() - size.width()) / 2, (b.height() - size.height()) / 2);
+    if (from >= 0) {
+        // The same place in proportion to the monitor.
+        const QRect a = layout[from].rect;
+        const QPoint rel = m_frame.topLeft() - a.topLeft();
+        at = QPoint(b.left() + int(std::lround(double(rel.x()) * b.width() / a.width())), b.top() + int(std::lround(double(rel.y()) * b.height() / a.height())));
+    }
+    at.setX(qBound(b.left(), at.x(), std::max(b.left(), b.left() + b.width() - size.width())));
+    at.setY(qBound(b.top(), at.y(), std::max(b.top(), b.top() + b.height() - size.height())));
+    return QRect(at, size);
+}
+
+void RailWindow::moveToMonitor(int to, const QSize &logical)
+{
+    const QList<Monitor> &layout = m_rail->layout();
+    const Monitor &target = layout[to];
+    const int from = monitors::at(layout, m_frame);
+    const double ratio = from >= 0 ? target.scale / layout[from].scale : 1.0;
+    const bool maximized = (windowStates() & Qt::WindowMaximized) || m_showState == stateMaximized;
+    const QSize wanted(int(std::lround(logical.width() * target.scale)), int(std::lround(logical.height() * target.scale)));
+    QRect rect;
+    if (maximized) {
+        // Maximised on the screen here: it fills the same space there.
+        rect = QRect(target.rect.topLeft(), wanted).intersected(target.rect);
+    } else if (m_loading && (m_style & WS_THICKFRAME)) {
+        // The app is still being handed its loading window: it is asked for
+        // the loading window's size as well.
+        rect = placeOn(from, to, wanted);
+    } else {
+        // Moved at its own size, which Windows rescales for the monitor's
+        // scale as it arrives, as it does when a window is dragged across.
+        const QSize expected(int(std::lround(m_frame.width() * ratio)), int(std::lround(m_frame.height() * ratio)));
+        rect = QRect(placeOn(from, to, expected).topLeft(), m_frame.size());
+    }
+    m_follow = Follow();
+    m_follow.monitor = to;
+    m_follow.logical = logical;
+    m_follow.since.start();
+    qInfo("wildos-rdp: window %08x goes to Windows' monitor %s (scale %.2f) at %d,%d %dx%d", m_id, qPrintable(target.name), target.scale,
+          rect.x(), rect.y(), rect.width(), rect.height());
+    m_client->moveWindow(m_id, rect);
+    // Windows may be slow to move a busy app; the first frame from it
+    // shortens this.
+    m_followSettle.start(1500);
+}
+
+bool RailWindow::followFrame()
+{
+    if (m_follow.monitor < 0) {
+        return false;
+    }
+    m_followSettle.start(400);
+    return true;
+}
+
+void RailWindow::followSettled()
+{
+    if (m_follow.monitor < 0) {
+        return;
+    }
+    const QList<Monitor> &layout = m_rail->layout();
+    const bool there = monitors::at(layout, m_frame) == m_follow.monitor;
+    const QSize got = logicalSize(m_frame.size());
+    const bool off = std::abs(got.width() - m_follow.logical.width()) > 2 || std::abs(got.height() - m_follow.logical.height()) > 2;
+    const bool maximized = windowStates() & Qt::WindowMaximized;
+    if (there && off && ((m_style & WS_THICKFRAME) || maximized) && !m_follow.corrected && m_follow.since.elapsed() < 4000) {
+        // It arrived at another size than it has here: rescaled twice, or
+        // not at all. Asked once more for its size; an app that insists on
+        // its own keeps it.
+        m_follow.corrected = true;
+        const QSize wanted(int(std::lround(m_follow.logical.width() * scale())), int(std::lround(m_follow.logical.height() * scale())));
+        qInfo("wildos-rdp: window %08x arrived at %dx%d; asked for %dx%d", m_id, m_frame.width(), m_frame.height(), wanted.width(), wanted.height());
+        m_client->moveWindow(m_id, QRect(m_frame.topLeft(), wanted));
+        m_followSettle.start(600);
+        return;
+    }
+    m_follow.monitor = -1;
+    if (!there) {
+        qInfo("wildos-rdp: window %08x stayed on its monitor in Windows", m_id);
+    }
+    if (off && !m_loading && !maximized) {
+        resize(got);
+    }
 }
 
 QSize RailWindow::logicalSize(const QSize &remote) const
@@ -206,7 +324,24 @@ void RailWindow::beginHandoff()
     const QSize wanted(int(std::lround(width() * scale())), int(std::lround(height() * scale())));
     m_handoffSize = m_frame.size();
     m_handoffResizing = false;
-    if ((m_style & WS_THICKFRAME) && m_frame.isValid() && m_frame.size() != wanted && !(m_style & WS_MAXIMIZE)) {
+    const QList<Monitor> &layout = m_rail->layout();
+    const int to = layout.size() > 1 ? m_rail->monitorFor(screen()) : -1;
+    const int from = monitors::at(layout, m_frame);
+    if (to >= 0 && from >= 0 && to != from && m_frame.isValid() && !(m_style & WS_MAXIMIZE)) {
+        // The app opened on another of Windows' monitors than the screen its
+        // loading window is on: it moves to this screen's, and is drawn at
+        // its scale.
+        const double target = layout[to].scale;
+        const QSize logical = (m_style & WS_THICKFRAME) ? size() : logicalSize(m_frame.size());
+        m_handoffSize = QSize(int(std::lround(logical.width() * target)), int(std::lround(logical.height() * target)));
+        m_handoffResizing = true;
+        if (logical != intendedSize()) {
+            resizeAroundCentre(logical);
+            m_fullRepaint = true;
+            requestUpdate();
+        }
+        moveToMonitor(to, logical);
+    } else if ((m_style & WS_THICKFRAME) && m_frame.isValid() && m_frame.size() != wanted && !(m_style & WS_MAXIMIZE)) {
         m_handoffSize = wanted;
         m_handoffResizing = true;
         m_client->moveWindow(m_id, QRect(m_frame.topLeft(), wanted));
@@ -215,7 +350,8 @@ void RailWindow::beginHandoff()
         m_fullRepaint = true;
         requestUpdate();
     }
-    m_handoffTimer.start(m_handoffResizing ? handoffResizeMs * 3 : handoffBlankMs);
+    // A move to another monitor takes Windows longer: the app rescales too.
+    m_handoffTimer.start(m_handoffResizing ? handoffResizeMs * (m_follow.monitor >= 0 ? 6 : 3) : handoffBlankMs);
     if (m_hasSurface || m_primary) {
         handoffContent(m_hasSurface ? m_surfaceSize : m_frame.size());
     }
@@ -226,12 +362,13 @@ void RailWindow::handoffContent(const QSize &drawn)
     if (!m_loading || !m_id || m_view.finishing() || !m_handoffSize.isValid()) {
         return;
     }
-    if (!m_handoffResizing || drawn == m_handoffSize) {
+    // A pixel or two either way is rounding in Windows' rescaling.
+    if (!m_handoffResizing || (std::abs(drawn.width() - m_handoffSize.width()) <= 2 && std::abs(drawn.height() - m_handoffSize.height()) <= 2)) {
         appReady();
         return;
     }
     // Drawn, but not at the size asked for yet: it is given a moment.
-    if (!m_handoffTimer.isActive() || m_handoffTimer.remainingTime() > handoffResizeMs) {
+    if (m_follow.monitor < 0 && (!m_handoffTimer.isActive() || m_handoffTimer.remainingTime() > handoffResizeMs)) {
         m_handoffTimer.start(handoffResizeMs);
     }
 }
@@ -313,6 +450,11 @@ void RailWindow::setFrame(const QRect &frame)
 {
     const bool resized = frame.size() != m_frame.size();
     m_frame = frame;
+    if (followFrame()) {
+        // On its way to another monitor: the size here holds until the app
+        // has rescaled for it.
+        return;
+    }
     if (resized && !m_loading && !(windowStates() & Qt::WindowMaximized)) {
         resize(logicalSize(frame.size()));
     }
@@ -418,7 +560,8 @@ void RailWindow::primaryDamaged(const QRegion &desktopDamage)
     if (m_hasSurface) {
         return;
     }
-    const QRegion mine = desktopDamage.intersected(m_frame).translated(-m_frame.topLeft());
+    const QRect frame = m_frame.translated(-m_client->desktopOrigin());
+    const QRegion mine = desktopDamage.intersected(frame).translated(-frame.topLeft());
     if (mine.isEmpty()) {
         return;
     }
@@ -434,6 +577,12 @@ void RailWindow::primaryDamaged(const QRegion &desktopDamage)
 bool RailWindow::event(QEvent *event)
 {
     switch (event->type()) {
+    case QEvent::NativeGesture:
+        if (m_id && !m_loading) {
+            const auto gesture = static_cast<QNativeGestureEvent *>(event);
+            rdpinput::pinch(m_client, gesture->gestureType(), gesture->value(), toRemote(gesture->position()), m_pinch);
+        }
+        return true;
     case QEvent::Hide:
         // A window shown again is a new toplevel to the compositor.
         m_iconSent = false;
@@ -460,6 +609,9 @@ bool RailWindow::event(QEvent *event)
         }
         return true;
     case QEvent::Enter:
+        if (m_id && !m_loading) {
+            m_rail->pointerOver(scale());
+        }
         if (m_moveSize) {
             finishMoveSize(static_cast<QEnterEvent *>(event)->position());
         }
@@ -468,6 +620,9 @@ bool RailWindow::event(QEvent *event)
         if (m_id && !m_loading && !m_popup) {
             const bool maximized = windowStates() & Qt::WindowMaximized;
             if (maximized && m_showState != stateMaximized) {
+                // Maximised to the monitor it is on in Windows, which has to
+                // be this screen's.
+                followScreen();
                 m_client->sysCommand(m_id, SC_MAXIMIZE);
             } else if (!maximized && m_showState == stateMaximized) {
                 m_client->sysCommand(m_id, SC_RESTORE);
@@ -494,6 +649,9 @@ void RailWindow::exposeEvent(QExposeEvent *)
     }
     m_damage = QRect(QPoint(0, 0), m_hasSurface ? m_surfaceSize : m_frame.size());
     render();
+    // Shown: now it is on a screen, and Windows may have it on another
+    // monitor (an app that opens where it was last time).
+    m_screenSettle.start();
 }
 
 void RailWindow::resizeEvent(QResizeEvent *event)
@@ -511,12 +669,18 @@ void RailWindow::resizeEvent(QResizeEvent *event)
     }
     if (!m_loading && m_id && !m_popup && !m_moveSize) {
         // The compositor sized the window itself (snapped to half the
-        // screen, maximised): Windows follows.
+        // screen, maximised): Windows follows, unless the window is on its
+        // way to another monitor, which sets its size there.
         const QSize remote(int(std::lround(event->size().width() * scale())), int(std::lround(event->size().height() * scale())));
         const bool maximized = windowStates() & Qt::WindowMaximized;
         if (maximized) {
-            m_client->setWorkArea(QRect(QPoint(0, 0), remote));
-        } else if (logicalSize(m_frame.size()) != event->size() && m_frame.isValid()) {
+            // The work area of the monitor this screen is in Windows, which
+            // Windows maximises the app to.
+            const int monitor = m_rail->monitorFor(screen());
+            const double s = m_rail->scaleForScreen(screen());
+            const QPoint corner = monitor >= 0 ? m_rail->layout()[monitor].rect.topLeft() : QPoint(0, 0);
+            m_client->setWorkArea(QRect(corner, QSize(int(std::lround(event->size().width() * s)), int(std::lround(event->size().height() * s)))));
+        } else if (logicalSize(m_frame.size()) != event->size() && m_frame.isValid() && m_follow.monitor < 0) {
             m_client->moveWindow(m_id, QRect(m_frame.topLeft(), remote));
         }
     }
@@ -662,7 +826,7 @@ void RailWindow::renderRemote()
         ok = m_client->withSurface(m_surfaceId, [&](const uchar *data, int stride, QSize size) { copy(data, stride, size); });
     } else if (m_primary) {
         ok = m_client->withPrimary([&](const uchar *data, int stride, QSize desktop) {
-            const QRect area = m_frame.intersected(QRect(QPoint(0, 0), desktop));
+            const QRect area = m_frame.translated(-m_client->desktopOrigin()).intersected(QRect(QPoint(0, 0), desktop));
             if (area.isEmpty()) {
                 return;
             }
@@ -737,6 +901,7 @@ void RailWindow::mouseMoveEvent(QMouseEvent *event)
         }
         finishMoveSize(event->position());
     }
+    m_rail->pointerOver(scale());
     rdpinput::move(m_client, toRemote(event->position()));
 }
 
@@ -873,7 +1038,7 @@ QImage RailWindow::snapshot() const
         m_client->withSurface(m_surfaceId, copy);
     } else if (m_primary) {
         m_client->withPrimary([&](const uchar *data, int stride, QSize desktop) {
-            const QRect area = m_frame.intersected(QRect(QPoint(0, 0), desktop));
+            const QRect area = m_frame.translated(-m_client->desktopOrigin()).intersected(QRect(QPoint(0, 0), desktop));
             if (!area.isEmpty()) {
                 copy(data + qsizetype(area.top()) * stride + qsizetype(area.left()) * 4, stride, area.size());
             }

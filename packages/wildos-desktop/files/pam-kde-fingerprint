@@ -1,0 +1,19 @@
+# Lock screen fingerprint unlock for Wild OS. kscreenlocker runs this beside
+# the password (/etc/pam.d/kde) and unlocks with whichever succeeds first.
+# Takes precedence over /usr/lib/pam.d/kde-fingerprint.
+#
+# The stock file also asks pam_kwallet5, which has no password to work with
+# after a fingerprint and so asks for one itself. Nobody answers a prompt
+# from the fingerprint side of the lock screen, so the unlock hung after a
+# good touch. The wallet is already open in a locked session; it has
+# nothing to do here.
+#
+# fingerprint-turn stops here when Sign-in options has "Sign in and unlock"
+# off, before the reader is ever asked, so the lock screen shows only the
+# password.
+auth    requisite       pam_nologin.so
+auth    required        pam_succeed_if.so user != root quiet_success
+auth    requisite       pam_exec.so quiet /usr/libexec/wildos/fingerprint-turn
+auth    required        pam_fprintd.so
+
+@include common-account

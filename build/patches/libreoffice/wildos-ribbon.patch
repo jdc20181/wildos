@@ -1,0 +1,834 @@
+Description: Wild OS ribbon for Write and Tables
+ A notebookbar .ui can set wildos-file-label, wildos-file-menu and
+ wildos-search-label on an sfxlo-NotebookbarTabControl. The tab control then
+ draws the Wild OS ribbon from the design boards instead of native tabs:
+ plain tab labels with an accent underline under the current one (no
+ 100 px minimum), the page as one flat band under the tab row (no tab pane
+ frame), a File button in the accent colour before the tabs that opens the
+ named popup menu, and a Find a command field at the end of the row where
+ the menu button was, which opens the command popup over itself. Each
+ group (a prioritised box) is followed by a hairline and group labels are
+ drawn in the quiet ink, so the .ui needs no separators.
+ Notebookbars without those properties are drawn as before.
+ A priority box keeps no room for its >> button while every group fits,
+ so a ribbon only folds when it has to.
+ A toolbox with wildos-no-arrows set in the .ui keeps drop-down arrows
+ and menus off its buttons (Paste and Table on the boards), so a click
+ runs the command itself: Paste pastes, Table opens Insert Table.
+Author: Wild OS Developers <dev@wildos.io>
+Forwarded: not-needed
+
+--- a/include/vcl/tabctrl.hxx
++++ b/include/vcl/tabctrl.hxx
+@@ -174,6 +174,7 @@
+ };
+ 
+ class NotebookBar;
++namespace vcl { class Window; }
+ 
+ class UNLESS_MERGELIBS(VCL_DLLPUBLIC) NotebookbarTabControlBase : public TabControl,
+                                             public NotebookbarContextControl
+@@ -191,11 +192,37 @@
+ 
+     virtual Size        calculateRequisition() const override;
+ 
++    // Wild OS: a flat ribbon, turned on from the .ui by the properties
++    // wildos-file-label, wildos-file-menu and wildos-search-label. The tabs
++    // become plain labels with an accent underline under the current one,
++    // the page one flat band, and the tab row holds a File button before
++    // the tabs and a search field at its end.
++    bool IsWildOS() const { return m_bWildOS; }
++    const OUString& GetWildOSFileMenu() const { return m_aWildOSFileMenu; }
++    void SetWildOSFileHdl( const Link<vcl::Window&, void>& rLink ) { m_aWildOSFileHdl = rLink; }
++    void SetWildOSSearchHdl( const Link<vcl::Window&, void>& rLink ) { m_aWildOSSearchHdl = rLink; }
++    static constexpr tools::Long WILDOS_ROW_HEIGHT = 38;
++
++    virtual void Paint( vcl::RenderContext& rRenderContext, const tools::Rectangle& rRect ) override;
++    virtual bool set_property( const OUString& rKey, const OUString& rValue ) override;
++    virtual void StateChanged( StateChangedType nType ) override;
++    virtual void DataChanged( const DataChangedEvent& rDCEvt ) override;
++
+ protected:
+     virtual bool ImplPlaceTabs( tools::Long nWidth ) override;
+     virtual void ImplActivateTabPage( bool bNext ) override;
+ 
+ private:
++    bool m_bWildOS = false;
++    OUString m_aWildOSFileMenu;
++    VclPtr<PushButton> m_pWildOSFile;
++    VclPtr<PushButton> m_pWildOSSearch;
++    Link<vcl::Window&, void> m_aWildOSFileHdl;
++    Link<vcl::Window&, void> m_aWildOSSearchHdl;
++    SAL_DLLPRIVATE void ImplWildOSEnable();
++    SAL_DLLPRIVATE void ImplWildOSStyleLabels();
++    DECL_DLLPRIVATE_LINK(WildOSFileClick, Button*, void);
++    DECL_DLLPRIVATE_LINK(WildOSSearchClick, Button*, void);
+     bool bLastContextWasSupported;
+     vcl::EnumContext::Context eLastContext;
+     Link<NotebookBar*,void> m_aIconClickHdl;
+--- a/vcl/source/control/tabctrl.cxx
++++ b/vcl/source/control/tabctrl.cxx
+@@ -38,8 +38,14 @@
+ #include <tools/json_writer.hxx>
+ 
+ #include <svdata.hxx>
++#include <IPrioritable.hxx>
+ #include <window.h>
+ 
++#include <basegfx/polygon/b2dpolygon.hxx>
++#include <basegfx/polygon/b2dpolygontools.hxx>
++#include <vcl/decoview.hxx>
++
++#include <algorithm>
+ #include <deque>
+ #include <unordered_map>
+ #include <vector>
+@@ -576,6 +582,17 @@
+         if (aRect.IsEmpty())
+             return aRect;
+ 
++        // Wild OS: the flat ribbon's page is the whole band under the tab
++        // row, less the hairline along its bottom edge.
++        if (auto pNotebookbar = dynamic_cast<const NotebookbarTabControlBase*>(this);
++            pNotebookbar && pNotebookbar->IsWildOS())
++        {
++            const tools::Long nTop = NotebookbarTabControlBase::WILDOS_ROW_HEIGHT;
++            return (nWidth > 0 && nHeight - nTop - 1 > 0)
++                ? tools::Rectangle(Point(0, nTop), Size(nWidth, nHeight - nTop - 1))
++                : tools::Rectangle();
++        }
++
+         // with show-tabs of true (the usual) the page rect is from under the
+         // visible tab to the bottom of the TabControl, otherwise it extends
+         // from the top of the TabControl
+@@ -2260,6 +2277,8 @@
+ 
+ void NotebookbarTabControlBase::dispose()
+ {
++    m_pWildOSFile.disposeAndClear();
++    m_pWildOSSearch.disposeAndClear();
+     m_pShortcuts.disposeAndClear();
+     m_pOpenMenu.disposeAndClear();
+     TabControl::dispose();
+@@ -2306,12 +2325,375 @@
+     SelectTabPage( TabControl::GetPageId( nCurPos ) );
+ }
+ 
++namespace
++{
++// Wild OS ribbon metrics, from the design boards: 12 px at either end of
++// the row, 8 px after the File button, tabs 36 px high with 10 px either
++// side of the label, a 2 px underline 3 px above the foot of the tab, and
++// File and the search field 28 px high.
++constexpr tools::Long WILDOS_ROW_PADDING = 12;
++constexpr tools::Long WILDOS_START_GAP = 8;
++constexpr tools::Long WILDOS_TAB_HEIGHT = 36;
++constexpr tools::Long WILDOS_TAB_PADDING = 10;
++constexpr tools::Long WILDOS_UNDERLINE = 2;
++constexpr tools::Long WILDOS_UNDERLINE_GAP = 3;
++constexpr tools::Long WILDOS_FIELD_HEIGHT = 28;
++constexpr tools::Long WILDOS_SEARCH_WIDTH = 220;
++
++// a with the fraction f of b mixed in.
++Color lcl_mix(const Color& a, const Color& b, double f)
++{
++    Color aColor(a);
++    aColor.Merge(b, sal_uInt8(std::clamp(255.0 * (1.0 - f), 0.0, 255.0)));
++    return aColor;
++}
++
++// The tab row sits a shade below the band in dark mode and a shade into
++// the ink in light mode.
++Color lcl_wildosRowColor(const StyleSettings& rStyle)
++{
++    const Color& rWindow = rStyle.GetDialogColor();
++    return rWindow.IsDark() ? lcl_mix(rWindow, COL_BLACK, 0.2)
++                            : lcl_mix(rWindow, rStyle.GetDialogTextColor(), 0.035);
++}
++
++// File and the search field draw themselves to the boards rather than as
++// native buttons; both stay push buttons for the keyboard and for screen
++// readers.
++class WildOSRowButton : public PushButton
++{
++public:
++    explicit WildOSRowButton(vcl::Window* pParent)
++        : PushButton(pParent, WB_TABSTOP)
++    {
++        SetPaintTransparent(true);
++    }
++
++    virtual void MouseMove(const MouseEvent& rMEvt) override
++    {
++        PushButton::MouseMove(rMEvt);
++        if (rMEvt.IsEnterWindow() || rMEvt.IsLeaveWindow())
++            Invalidate();
++    }
++
++    virtual void GetFocus() override
++    {
++        PushButton::GetFocus();
++        Invalidate();
++    }
++
++    virtual void LoseFocus() override
++    {
++        PushButton::LoseFocus();
++        Invalidate();
++    }
++
++protected:
++    bool IsDown() const { return IsPressed() || (GetButtonState() & DrawButtonFlags::Pressed); }
++
++    vcl::Font LabelFont(double fScale, FontWeight eWeight) const
++    {
++        // The tab labels' font, so File reads at the size of the tabs.
++        vcl::Font aFont(GetSettings().GetStyleSettings().GetTabFont());
++        aFont.SetFontHeight(aFont.GetFontHeight() * fScale);
++        aFont.SetWeight(eWeight);
++        aFont.SetTransparent(true);
++        return aFont;
++    }
++
++    void DrawFocusRing(vcl::RenderContext& rRenderContext, const Color& rColor)
++    {
++        if (!HasFocus())
++            return;
++        tools::Rectangle aRing(Point(0, 0), GetOutputSizePixel());
++        aRing.shrink(2);
++        rRenderContext.SetFillColor();
++        rRenderContext.SetLineColor(rColor);
++        rRenderContext.DrawRect(aRing, 4, 4);
++        rRenderContext.SetLineColor();
++    }
++
++    void Begin(vcl::RenderContext& rRenderContext)
++    {
++        rRenderContext.Push(vcl::PushFlags::LINECOLOR | vcl::PushFlags::FILLCOLOR
++                            | vcl::PushFlags::FONT | vcl::PushFlags::TEXTCOLOR);
++        rRenderContext.SetAntialiasing(rRenderContext.GetAntialiasing() | AntialiasingFlags::Enable);
++        rRenderContext.SetLineColor();
++    }
++};
++
++// File: an accent pill, its label semibold.
++class WildOSFileButton final : public WildOSRowButton
++{
++public:
++    explicit WildOSFileButton(vcl::Window* pParent)
++        : WildOSRowButton(pParent)
++    {
++    }
++
++    virtual Size GetOptimalSize() const override
++    {
++        OutputDevice* pDev = const_cast<WildOSFileButton*>(this)->GetOutDev();
++        pDev->Push(vcl::PushFlags::FONT);
++        pDev->SetFont(LabelFont(1.0, WEIGHT_SEMIBOLD));
++        const tools::Long nWidth = pDev->GetCtrlTextWidth(GetText()) + 24;
++        pDev->Pop();
++        return Size(nWidth, WILDOS_FIELD_HEIGHT);
++    }
++
++    virtual void Paint(vcl::RenderContext& rRenderContext, const tools::Rectangle&) override
++    {
++        const StyleSettings& rStyle = rRenderContext.GetSettings().GetStyleSettings();
++        const Color& rAccent = rStyle.GetAccentColor();
++        const Color& rWindow = rStyle.GetDialogColor();
++        const Color aOnAccent = rAccent.IsDark() ? COL_WHITE
++                                : rWindow.IsDark() ? lcl_mix(rWindow, COL_BLACK, 0.2)
++                                : COL_BLACK;
++        // Hover and press move the accent away from the window colour.
++        const double fShift = IsDown() ? 0.16 : (IsMouseOver() ? 0.08 : 0.0);
++
++        Begin(rRenderContext);
++        const tools::Rectangle aRect(Point(0, 0), GetOutputSizePixel());
++        rRenderContext.SetFillColor(lcl_mix(rAccent, rWindow.IsDark() ? COL_WHITE : COL_BLACK, fShift));
++        rRenderContext.DrawRect(aRect, 6, 6);
++        rRenderContext.SetFont(LabelFont(1.0, WEIGHT_SEMIBOLD));
++        rRenderContext.SetTextColor(aOnAccent);
++        rRenderContext.DrawText(aRect, GetText(),
++                                DrawTextFlags::Center | DrawTextFlags::VCenter
++                                    | DrawTextFlags::Mnemonic);
++        DrawFocusRing(rRenderContext, aOnAccent);
++        rRenderContext.Pop();
++    }
++};
++
++// Find a command: a rounded field with a magnifier and the label as its
++// placeholder.
++class WildOSSearchField final : public WildOSRowButton
++{
++public:
++    explicit WildOSSearchField(vcl::Window* pParent)
++        : WildOSRowButton(pParent)
++    {
++    }
++
++    virtual Size GetOptimalSize() const override
++    {
++        return Size(WILDOS_SEARCH_WIDTH, WILDOS_FIELD_HEIGHT);
++    }
++
++    virtual void Paint(vcl::RenderContext& rRenderContext, const tools::Rectangle&) override
++    {
++        const StyleSettings& rStyle = rRenderContext.GetSettings().GetStyleSettings();
++        const Color aRow = lcl_wildosRowColor(rStyle);
++        const Color& rInk = rStyle.GetDialogTextColor();
++        const Color aQuiet = lcl_mix(aRow, rInk, 0.62);
++        const double fFill = IsDown() ? 0.12 : (IsMouseOver() ? 0.09 : 0.06);
++
++        Begin(rRenderContext);
++        const Size aSize(GetOutputSizePixel());
++        rRenderContext.SetFillColor(lcl_mix(aRow, rInk, fFill));
++        rRenderContext.DrawRect(tools::Rectangle(Point(0, 0), aSize), 6, 6);
++
++        // A 13 px magnifier, 10 px in.
++        const double fX = 15.5, fY = aSize.Height() / 2.0 - 1.0;
++        rRenderContext.SetLineColor(aQuiet);
++        rRenderContext.SetFillColor();
++        rRenderContext.DrawPolyLine(
++            basegfx::utils::createPolygonFromCircle(basegfx::B2DPoint(fX, fY), 4.5), 1.4);
++        basegfx::B2DPolygon aHandle;
++        aHandle.append(basegfx::B2DPoint(fX + 3.4, fY + 3.4));
++        aHandle.append(basegfx::B2DPoint(fX + 6.5, fY + 6.5));
++        rRenderContext.DrawPolyLine(aHandle, 1.4);
++
++        rRenderContext.SetFont(LabelFont(0.94, WEIGHT_NORMAL));
++        rRenderContext.SetTextColor(aQuiet);
++        rRenderContext.DrawText(
++            tools::Rectangle(Point(31, 0), Size(aSize.Width() - 41, aSize.Height())), GetText(),
++            DrawTextFlags::Left | DrawTextFlags::VCenter | DrawTextFlags::EndEllipsis);
++        DrawFocusRing(rRenderContext, rStyle.GetAccentColor());
++        rRenderContext.Pop();
++    }
++};
++}
++
++void NotebookbarTabControlBase::ImplWildOSEnable()
++{
++    if (m_bWildOS)
++        return;
++    m_bWildOS = true;
++    // The search field takes the menu button's place.
++    m_pOpenMenu->Hide();
++}
++
++bool NotebookbarTabControlBase::set_property(const OUString& rKey, const OUString& rValue)
++{
++    if (rKey == "wildos-file-label")
++    {
++        ImplWildOSEnable();
++        if (!m_pWildOSFile)
++        {
++            m_pWildOSFile = VclPtr<WildOSFileButton>::Create(this);
++            m_pWildOSFile->SetClickHdl(LINK(this, NotebookbarTabControlBase, WildOSFileClick));
++            m_pWildOSFile->Show();
++        }
++        m_pWildOSFile->SetText(rValue);
++    }
++    else if (rKey == "wildos-file-menu")
++    {
++        ImplWildOSEnable();
++        m_aWildOSFileMenu = rValue;
++    }
++    else if (rKey == "wildos-search-label")
++    {
++        ImplWildOSEnable();
++        if (!m_pWildOSSearch)
++        {
++            m_pWildOSSearch = VclPtr<WildOSSearchField>::Create(this);
++            m_pWildOSSearch->SetClickHdl(LINK(this, NotebookbarTabControlBase, WildOSSearchClick));
++            m_pWildOSSearch->Show();
++        }
++        m_pWildOSSearch->SetText(rValue);
++        m_pWildOSSearch->SetAccessibleName(rValue);
++    }
++    else
++        return TabControl::set_property(rKey, rValue);
++
++    mbFormat = true;
++    return true;
++}
++
++namespace
++{
++void lcl_wildosStyleLabels(vcl::Window* pParent, const Color& rColor)
++{
++    for (vcl::Window* pChild = pParent->GetWindow(GetWindowType::FirstChild); pChild;
++         pChild = pChild->GetWindow(GetWindowType::Next))
++    {
++        if (pChild->GetType() == WindowType::FIXEDTEXT)
++        {
++            pChild->SetControlForeground(rColor);
++            pChild->Invalidate();
++        }
++        else
++            lcl_wildosStyleLabels(pChild, rColor);
++    }
++}
++
++// The groups of the flat ribbon are its prioritised boxes; a hairline
++// follows each one.
++void lcl_wildosDividers(const vcl::Window& rTabControl, vcl::Window* pParent,
++                        vcl::RenderContext& rRenderContext, tools::Long nTop, tools::Long nBottom)
++{
++    for (vcl::Window* pChild = pParent->GetWindow(GetWindowType::FirstChild); pChild;
++         pChild = pChild->GetWindow(GetWindowType::Next))
++    {
++        if (!pChild->IsVisible())
++            continue;
++        if (dynamic_cast<vcl::IPrioritable*>(pChild))
++        {
++            const tools::Rectangle aGroup(pChild->GetWindowExtentsRelative(rTabControl));
++            rRenderContext.DrawRect(tools::Rectangle(Point(aGroup.Right(), nTop),
++                                                     Point(aGroup.Right(), nBottom)));
++        }
++        else
++            lcl_wildosDividers(rTabControl, pChild, rRenderContext, nTop, nBottom);
++    }
++}
++}
++
++// Group labels are quiet, at 40% of the ink, as on the boards.
++void NotebookbarTabControlBase::ImplWildOSStyleLabels()
++{
++    const StyleSettings& rStyle = GetSettings().GetStyleSettings();
++    lcl_wildosStyleLabels(this, lcl_mix(rStyle.GetDialogColor(), rStyle.GetDialogTextColor(), 0.40));
++}
++
++void NotebookbarTabControlBase::StateChanged(StateChangedType nType)
++{
++    TabControl::StateChanged(nType);
++    if (m_bWildOS && nType == StateChangedType::InitShow)
++        ImplWildOSStyleLabels();
++}
++
++void NotebookbarTabControlBase::DataChanged(const DataChangedEvent& rDCEvt)
++{
++    TabControl::DataChanged(rDCEvt);
++    if (m_bWildOS && rDCEvt.GetType() == DataChangedEventType::SETTINGS
++        && (rDCEvt.GetFlags() & AllSettingsFlags::STYLE))
++        ImplWildOSStyleLabels();
++}
++
++IMPL_LINK_NOARG(NotebookbarTabControlBase, WildOSFileClick, Button*, void)
++{
++    // Pressed while its menu is open.
++    VclPtr<PushButton> xFile(m_pWildOSFile);
++    xFile->SetPressed(true);
++    m_aWildOSFileHdl.Call(*xFile);
++    if (!xFile->isDisposed())
++        xFile->SetPressed(false);
++}
++
++IMPL_LINK_NOARG(NotebookbarTabControlBase, WildOSSearchClick, Button*, void)
++{
++    m_aWildOSSearchHdl.Call(*m_pWildOSSearch);
++}
++
+ bool NotebookbarTabControlBase::ImplPlaceTabs( tools::Long nWidth )
+ {
+     if ( nWidth <= 0 )
+         return false;
+     if ( mpTabCtrlData->maItemList.empty() )
+         return false;
++
++    if (m_bWildOS)
++    {
++        if (m_pShortcuts)
++            m_pShortcuts->Hide();
++        tools::Long nX = WILDOS_ROW_PADDING;
++        if (m_pWildOSFile)
++        {
++            const Size aSize(m_pWildOSFile->GetOptimalSize());
++            m_pWildOSFile->SetPosSizePixel(Point(nX, (WILDOS_ROW_HEIGHT - aSize.Height()) / 2),
++                                           aSize);
++            nX += aSize.Width() + WILDOS_START_GAP;
++        }
++
++        // Measured in the current tab's weight for every tab, so the row
++        // does not shift when another tab is picked.
++        vcl::Font aFont(GetFont());
++        aFont.SetWeight(WEIGHT_SEMIBOLD);
++        GetOutDev()->Push(vcl::PushFlags::FONT);
++        GetOutDev()->SetFont(aFont);
++        for (auto& item : mpTabCtrlData->maItemList)
++        {
++            item.maFormatText = item.maText;
++            item.mnLine = 0;
++            item.mbFullVisible = item.m_bVisible;
++            if (!item.m_bVisible)
++                continue;
++            const tools::Long nTabWidth
++                = GetOutDev()->GetCtrlTextWidth(item.maFormatText) + 2 * WILDOS_TAB_PADDING;
++            tools::Rectangle aNewRect(Point(nX, (WILDOS_ROW_HEIGHT - WILDOS_TAB_HEIGHT) / 2),
++                                      Size(nTabWidth, WILDOS_TAB_HEIGHT));
++            if (mbSmallInvalidate && item.maRect != aNewRect)
++                mbSmallInvalidate = false;
++            item.maRect = aNewRect;
++            nX += nTabWidth;
++        }
++        GetOutDev()->Pop();
++
++        if (m_pWildOSSearch)
++        {
++            const Size aSize(m_pWildOSSearch->GetOptimalSize());
++            m_pWildOSSearch->SetPosSizePixel(Point(nWidth - WILDOS_ROW_PADDING - aSize.Width(),
++                                                   (WILDOS_ROW_HEIGHT - aSize.Height()) / 2),
++                                             aSize);
++            // In a narrow window the field gives way to the tabs.
++            m_pWildOSSearch->Show(nWidth - WILDOS_ROW_PADDING - aSize.Width() >= nX + WILDOS_START_GAP);
++        }
++        return true;
++    }
++
+     if (!m_pOpenMenu || m_pOpenMenu->isDisposed())
+         return false;
+ 
+@@ -2390,7 +2772,88 @@
+ 
+ Size NotebookbarTabControlBase::calculateRequisition() const
+ {
+-    return TabControl::ImplCalculateRequisition(m_nHeaderHeight);
++    Size aSize = TabControl::ImplCalculateRequisition(m_nHeaderHeight);
++    // The flat page sits straight under the row with a hairline below it,
++    // not inset in a tab pane's frame.
++    if (m_bWildOS)
++        aSize.AdjustHeight(WILDOS_ROW_HEIGHT + 1 - (m_nHeaderHeight + TAB_OFFSET * 2));
++    return aSize;
++}
++
++void NotebookbarTabControlBase::Paint(vcl::RenderContext& rRenderContext, const tools::Rectangle& rRect)
++{
++    if (!m_bWildOS)
++        return TabControl::Paint(rRenderContext, rRect);
++
++    HideFocus();
++    // Lays the tabs out first if they need it.
++    ImplGetTabRect(TAB_PAGERECT);
++
++    const StyleSettings& rStyle = rRenderContext.GetSettings().GetStyleSettings();
++    const Color& rWindow = rStyle.GetDialogColor();
++    const Color& rInk = rStyle.GetDialogTextColor();
++    const Color& rAccent = rStyle.GetAccentColor();
++    const Size aSize(GetOutputSizePixel());
++
++    rRenderContext.Push(vcl::PushFlags::LINECOLOR | vcl::PushFlags::FILLCOLOR
++                        | vcl::PushFlags::FONT | vcl::PushFlags::TEXTCOLOR);
++    rRenderContext.SetAntialiasing(rRenderContext.GetAntialiasing() | AntialiasingFlags::Enable);
++    rRenderContext.SetLineColor();
++    rRenderContext.SetFillColor(lcl_wildosRowColor(rStyle));
++    rRenderContext.DrawRect(tools::Rectangle(Point(0, 0), Size(aSize.Width(), WILDOS_ROW_HEIGHT)));
++    rRenderContext.SetFillColor(rWindow);
++    rRenderContext.DrawRect(tools::Rectangle(
++        Point(0, WILDOS_ROW_HEIGHT), Size(aSize.Width(), aSize.Height() - WILDOS_ROW_HEIGHT)));
++    rRenderContext.SetFillColor(lcl_mix(rWindow, rInk, 0.08));
++    rRenderContext.DrawRect(tools::Rectangle(Point(0, aSize.Height() - 1), Size(aSize.Width(), 1)));
++    if (TabPage* pPage = GetTabPage(mnCurPageId))
++        lcl_wildosDividers(*this, pPage, rRenderContext, WILDOS_ROW_HEIGHT, aSize.Height() - 6);
++
++    const Point aPointer(GetPointerPosPixel());
++    for (const auto& item : mpTabCtrlData->maItemList)
++    {
++        if (!item.m_bVisible || item.maRect.IsEmpty())
++            continue;
++        const bool bCurrent = item.id() == mnCurPageId;
++        const bool bHover = IsMouseOver() && item.maRect.Contains(aPointer);
++
++        vcl::Font aFont(GetFont());
++        aFont.SetWeight(bCurrent ? WEIGHT_SEMIBOLD : WEIGHT_NORMAL);
++        aFont.SetTransparent(true);
++        rRenderContext.SetFont(aFont);
++        Color aText = (bCurrent || bHover) ? rInk : lcl_mix(rWindow, rInk, 0.62);
++        if (!item.m_bEnabled || !IsEnabled())
++            aText = lcl_mix(rWindow, rInk, 0.35);
++        rRenderContext.SetTextColor(aText);
++        rRenderContext.DrawText(item.maRect, item.maFormatText,
++                                DrawTextFlags::Center | DrawTextFlags::VCenter
++                                    | DrawTextFlags::Mnemonic);
++
++        if (!bCurrent)
++            continue;
++
++        const tools::Long nTextWidth = rRenderContext.GetCtrlTextWidth(item.maFormatText);
++        rRenderContext.SetFillColor(rAccent);
++        rRenderContext.DrawRect(
++            tools::Rectangle(Point(item.maRect.Left() + (item.maRect.GetWidth() - nTextWidth) / 2,
++                                   item.maRect.Bottom() + 1 - WILDOS_UNDERLINE_GAP - WILDOS_UNDERLINE),
++                             Size(nTextWidth, WILDOS_UNDERLINE)),
++            1, 1);
++
++        if (HasFocus())
++        {
++            rRenderContext.SetFillColor();
++            rRenderContext.SetLineColor(rAccent);
++            tools::Rectangle aRing(item.maRect);
++            aRing.shrink(2);
++            rRenderContext.DrawRect(aRing, 5, 5);
++            aRing.shrink(1);
++            rRenderContext.DrawRect(aRing, 4, 4);
++            rRenderContext.SetLineColor();
++        }
++    }
++    rRenderContext.Pop();
++    mbSmallInvalidate = true;
+ }
+ 
+ Control* NotebookbarTabControlBase::GetOpenMenu()
+--- a/vcl/source/control/PriorityMergedHBox.cxx
++++ b/vcl/source/control/PriorityMergedHBox.cxx
+@@ -57,6 +57,34 @@
+     }
+ 
+     tools::Long nWidth = GetSizePixel().Width();
++
++    // When every child fits, the >> button is not needed, and neither is
++    // the room otherwise kept for it.
++    tools::Long nAllWidth = 0;
++    int nChildren = 0;
++    for (int i = 0; i < GetChildCount(); i++)
++    {
++        vcl::Window* pWindow = GetChild(i);
++        if (pWindow == m_pButton.get() || pWindow->GetParent() != this)
++            continue;
++        nAllWidth += getLayoutRequisition(*pWindow).Width() + pWindow->get_padding() * 2;
++        ++nChildren;
++    }
++    if (nChildren)
++        nAllWidth += (nChildren - 1) * get_spacing();
++    if (nAllWidth <= nWidth)
++    {
++        for (int i = 0; i < GetChildCount(); i++)
++        {
++            vcl::Window* pWindow = GetChild(i);
++            if (pWindow != m_pButton.get() && pWindow->GetParent() == this)
++                pWindow->Show();
++        }
++        m_pButton->Hide();
++        VclHBox::Resize();
++        return;
++    }
++
+     tools::Long nCurrentWidth = VclHBox::calculateRequisition().getWidth() + BUTTON_WIDTH;
+ 
+     // Hide lower priority controls
+--- a/vcl/inc/toolbox.h
++++ b/vcl/inc/toolbox.h
+@@ -125,6 +125,9 @@
+ 
+     // called when dropdown items are clicked
+     Link<ToolBox *, void> maDropdownClickHdl;
++    // Wild OS: the .ui's wildos-no-arrows. Items lose their drop-down
++    // arrows and menus, and a click runs the command itself.
++    bool mbWildOSNoArrows = false;
+     Timer   maDropdownTimer { "vcl::ToolBox mpData->maDropdownTimer" }; // for opening dropdown items on "long click"
+ 
+     // large or small buttons ?
+--- a/vcl/source/window/toolbox2.cxx
++++ b/vcl/source/window/toolbox2.cxx
+@@ -877,6 +877,8 @@
+ void ToolBox::SetItemBits( ToolBoxItemId nItemId, ToolBoxItemBits nBits )
+ {
+     ImplToolItems::size_type nPos = GetItemPos( nItemId );
++    if (mpData->mbWildOSNoArrows)
++        nBits &= ~ToolBoxItemBits::DROPDOWNONLY;
+ 
+     if ( nPos < GetItemCount() )
+     {
+--- a/vcl/source/window/window2.cxx
++++ b/vcl/source/window/window2.cxx
+@@ -42,6 +42,8 @@
+ #include <salgdi.hxx>
+ #include <salframe.hxx>
+ #include <scrwnd.hxx>
++#include <toolbox.h>
++#include <vcl/toolbox.hxx>
+ 
+ #include <com/sun/star/accessibility/AccessibleRelation.hpp>
+ #include <com/sun/star/accessibility/AccessibleRole.hpp>
+@@ -1601,6 +1603,11 @@
+     }
+     else if (rKey == "height-request")
+         set_height_request(rValue.toInt32());
++    else if (rKey == "wildos-no-arrows")
++    {
++        if (ToolBox* pToolBox = dynamic_cast<ToolBox*>(this))
++            pToolBox->ImplGetToolBoxPrivateData()->mbWildOSNoArrows = toBool(rValue);
++    }
+     else if (rKey == "width-request")
+         set_width_request(rValue.toInt32());
+     else if (rKey == "hexpand")
+--- a/sfx2/inc/notebookbar/NotebookbarTabControl.hxx
++++ b/sfx2/inc/notebookbar/NotebookbarTabControl.hxx
+@@ -16,6 +16,7 @@
+ namespace com::sun::star::ui { class XUIConfigurationListener; }
+ namespace com::sun::star::uno { class XComponentContext; }
+ class ChangedUIEventListener;
++class CommandPopupHandler;
+ 
+ class NotebookbarTabControl final : public NotebookbarTabControlBase
+ {
+@@ -39,6 +40,11 @@
+     void ArrowStops( sal_uInt16 nCode );
+ 
+     DECL_LINK(OpenNotebookbarPopupMenu, NotebookBar*, void);
++    DECL_LINK(OpenWildOSFileMenu, vcl::Window&, void);
++    DECL_LINK(OpenWildOSSearch, vcl::Window&, void);
++
++    std::unique_ptr<CommandPopupHandler> m_pCommandPopup;
++    css::uno::Reference<css::frame::XFrame> GetWildOSFrame() const;
+ 
+     rtl::Reference<ChangedUIEventListener> m_pListener;
+     css::uno::Reference<css::frame::XFrame> m_xFrame;
+--- a/sfx2/source/notebookbar/NotebookbarTabControl.cxx
++++ b/sfx2/source/notebookbar/NotebookbarTabControl.cxx
+@@ -37,6 +37,8 @@
+ #include <sidebar/SidebarToolBox.hxx>
+ #include <toolkit/awt/vclxmenu.hxx>
+ #include <cppuhelper/implbase.hxx>
++#include <commandpopup/CommandPopup.hxx>
++#include <vcl/weldutils.hxx>
+ 
+ #define ICON_SIZE 25
+ constexpr OUString TOOLBAR_STR = u"private:resource/toolbar/notebookbarshortcuts"_ustr;
+@@ -153,12 +155,65 @@
+ , m_bInitialized( false )
+ , m_bInvalidate( true )
+ {
++    SetWildOSFileHdl(LINK(this, NotebookbarTabControl, OpenWildOSFileMenu));
++    SetWildOSSearchHdl(LINK(this, NotebookbarTabControl, OpenWildOSSearch));
+ }
+ 
+ NotebookbarTabControl::~NotebookbarTabControl()
+ {
+ }
+ 
++// The ribbon is built before its window's view frame is current, so the
++// frame is looked up when File or the search field is used: the window
++// they are in is the active one then.
++css::uno::Reference<css::frame::XFrame> NotebookbarTabControl::GetWildOSFrame() const
++{
++    if (SfxViewFrame* pViewFrm = SfxViewFrame::Current())
++        return pViewFrm->GetFrame().GetFrameInterface();
++    return m_xFrame;
++}
++
++IMPL_LINK(NotebookbarTabControl, OpenWildOSFileMenu, vcl::Window&, rButton, void)
++{
++    const Reference<XFrame> xFrame(GetWildOSFrame());
++    if (!xFrame.is())
++        return;
++
++    Sequence<Any> aArgs {
++        Any(comphelper::makePropertyValue(u"Value"_ustr, GetWildOSFileMenu())),
++        Any(comphelper::makePropertyValue(u"Frame"_ustr, xFrame)) };
++
++    const Reference<XComponentContext>& xContext = comphelper::getProcessComponentContext();
++    Reference<XPopupMenuController> xPopupController(
++        xContext->getServiceManager()->createInstanceWithArgumentsAndContext(
++        u"com.sun.star.comp.framework.ResourceMenuController"_ustr, aArgs, xContext), UNO_QUERY);
++    if (!xPopupController.is())
++        return;
++
++    rtl::Reference<VCLXPopupMenu> xPopupMenu = new VCLXPopupMenu();
++    xPopupController->setPopupMenu(xPopupMenu);
++    // Under the button, 4 px down, lined up with its left edge.
++    xPopupMenu->execute(rButton.GetComponentInterface(),
++                        css::awt::Rectangle(0, rButton.GetSizePixel().Height() + 4, 1, 1),
++                        css::awt::PopupMenuDirection::EXECUTE_DOWN);
++
++    Reference<css::lang::XComponent> xComponent(xPopupController, UNO_QUERY);
++    if (xComponent.is())
++        xComponent->dispose();
++}
++
++IMPL_LINK(NotebookbarTabControl, OpenWildOSSearch, vcl::Window&, rField, void)
++{
++    const Reference<XFrame> xFrame(GetWildOSFrame());
++    if (!xFrame.is())
++        return;
++    tools::Rectangle aRect(Point(0, 0), rField.GetSizePixel());
++    weld::Window* pParent = weld::GetPopupParent(rField, aRect);
++    if (!m_pCommandPopup)
++        m_pCommandPopup.reset(new CommandPopupHandler);
++    m_pCommandPopup->showPopup(pParent, xFrame, aRect);
++}
++
+ void NotebookbarTabControl::ArrowStops( sal_uInt16 nCode )
+ {
+     ToolBox* pToolBox( GetToolBox() );
+@@ -240,6 +295,13 @@
+ void NotebookbarTabControl::StateChanged(StateChangedType nStateChange)
+ {
+     SfxViewFrame* pViewFrm = SfxViewFrame::Current();
++    // Wild OS: File and the search field stand where the shortcuts and the
++    // menu button would.
++    if (IsWildOS())
++    {
++        NotebookbarTabControlBase::StateChanged(nStateChange);
++        return;
++    }
+     if (!m_bInitialized && pViewFrm)
+     {
+         VclPtr<ShortcutsToolBox> pShortcuts = VclPtr<ShortcutsToolBox>::Create( this );
+--- a/sfx2/inc/commandpopup/CommandPopup.hxx
++++ b/sfx2/inc/commandpopup/CommandPopup.hxx
+@@ -95,7 +95,8 @@
+     void dispatchCommandAndClose(OUString const& rCommand);
+ 
+ public:
+-    CommandListBox(weld::Window* pParent, css::uno::Reference<css::frame::XFrame> const& xFrame);
++    CommandListBox(weld::Window* pParent, css::uno::Reference<css::frame::XFrame> const& xFrame,
++                   const tools::Rectangle& rAnchor = tools::Rectangle());
+     void connect_closed(const Link<weld::Popover&, void>& rLink)
+     {
+         mxPopover->connect_closed(rLink);
+@@ -108,7 +109,8 @@
+     std::unique_ptr<CommandListBox> mpListBox;
+ 
+ public:
+-    void showPopup(weld::Window* pParent, css::uno::Reference<css::frame::XFrame> const& xFrame);
++    void showPopup(weld::Window* pParent, css::uno::Reference<css::frame::XFrame> const& xFrame,
++                   const tools::Rectangle& rAnchor = tools::Rectangle());
+     DECL_LINK(PopupModeEnd, weld::Popover&, void);
+ };
+ 
+--- a/sfx2/source/commandpopup/CommandPopup.cxx
++++ b/sfx2/source/commandpopup/CommandPopup.cxx
+@@ -187,7 +187,8 @@
+     return m_xCharacterClassification->toLower(rString, 0, rString.getLength(), rLocale);
+ }
+ 
+-CommandListBox::CommandListBox(weld::Window* pParent, uno::Reference<frame::XFrame> const& xFrame)
++CommandListBox::CommandListBox(weld::Window* pParent, uno::Reference<frame::XFrame> const& xFrame,
++                               const tools::Rectangle& rAnchor)
+     : mxBuilder(Application::CreateBuilder(pParent, u"sfx/ui/commandpopup.ui"_ustr))
+     , mxPopover(mxBuilder->weld_popover(u"CommandPopup"_ustr))
+     , mpEntry(mxBuilder->weld_entry(u"command_entry"_ustr))
+@@ -205,8 +206,11 @@
+     tools::Long nWidth = std::max(tools::Long(400), aFrameSize.Width() / 3);
+     mpCommandTreeView->set_size_request(nWidth, 400);
+ 
+-    // Set the location of the pop-over window
++    // Set the location of the pop-over window. From a search field it opens
++    // over the field, its entry in the field's place.
+     tools::Rectangle aRect(Point(aFrameSize.Width() / 2, 0), Size(0, 0));
++    if (!rAnchor.IsEmpty())
++        aRect = tools::Rectangle(rAnchor.TopLeft(), Size(rAnchor.GetWidth(), 0));
+     mxPopover->popup_at_rect(pParent, aRect);
+     mpEntry->grab_focus();
+ }
+@@ -286,9 +290,10 @@
+ }
+ 
+ void CommandPopupHandler::showPopup(weld::Window* pParent,
+-                                    css::uno::Reference<css::frame::XFrame> const& xFrame)
++                                    css::uno::Reference<css::frame::XFrame> const& xFrame,
++                                    const tools::Rectangle& rAnchor)
+ {
+-    auto pCommandListBox = std::make_unique<CommandListBox>(pParent, xFrame);
++    auto pCommandListBox = std::make_unique<CommandListBox>(pParent, xFrame, rAnchor);
+     pCommandListBox->connect_closed(LINK(this, CommandPopupHandler, PopupModeEnd));
+     mpListBox = std::move(pCommandListBox);
+ }

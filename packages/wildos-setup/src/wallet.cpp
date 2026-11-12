@@ -41,10 +41,21 @@
  * - An account that signs in automatically with no key kept: it turned
  *   automatic sign-in on before Wild OS kept keys, and nobody would guess
  *   that turning it off and on again fixes it.
- * - A wallet still closed after the desktop started: its password is not
- *   the account's (made in KWallet's own dialog, or left behind by a
- *   password change before Settings moved wallets along), so pam_kwallet's
- *   key, or the kept one, does not open it.
+ * - A wallet still closed after the desktop started. Closed alone proves
+ *   little, so the notice says why only when it knows:
+ *   - kwalletd was started by pam_kwallet, so it was handed the key made
+ *     from the password typed at sign-in, and that key failed: the
+ *     wallet's password is not the account's (made in KWallet's own
+ *     dialog, or left behind by a password change before Settings moved
+ *     wallets along).
+ *   - kwalletd was started some other way (an app asked for it before
+ *     pam_kwallet's could), so it never had a key. The password may well
+ *     be right; it just never reached the wallet.
+ *
+ * A wallet made in KWallet's own dialog with the password left empty is
+ * not one with a different password either. Any app opens it without a
+ * prompt, so the notice opens it too and offers to protect it with the
+ * account password instead.
  */
 namespace
 {
@@ -80,6 +91,40 @@ bool walletOpen(QDBusConnection &session, const QString &wallet)
     isOpen << wallet;
     const QDBusReply<bool> open = session.call(isOpen, QDBus::Block, 30000);
     return open.isValid() && open.value();
+}
+
+bool startedByPam(QDBusConnection &session)
+{
+    const QDBusReply<uint> pid = session.interface()->servicePid(QStringLiteral("org.kde.kwalletd6"));
+    if (!pid.isValid()) {
+        return false;
+    }
+    QFile cmdline(QStringLiteral("/proc/%1/cmdline").arg(pid.value()));
+    if (!cmdline.open(QIODevice::ReadOnly)) {
+        return false;
+    }
+    return cmdline.readAll().split('\0').contains("--pam-login");
+}
+
+// KWallet's create dialog accepts an empty password, and people press
+// Enter on it without ever thinking they chose one. Such a wallet opens
+// with the key made from no password at all.
+bool openWithoutPassword(QDBusConnection &session, const QString &wallet)
+{
+    QFile saltFile(QDir::homePath() + QStringLiteral("/.local/share/kwalletd/kdewallet.salt"));
+    const QByteArray salt = saltFile.open(QIODevice::ReadOnly) ? saltFile.read(WalletKey::saltSize + 1) : QByteArray();
+    if (salt.size() != WalletKey::saltSize) {
+        return false;
+    }
+    QByteArray key = WalletKey::derive(QByteArray(""), salt);
+    if (key.isEmpty()) {
+        return false;
+    }
+    // pamOpen never replies; isOpen, sent after it, answers once it has run.
+    QDBusMessage open = kwallet(QStringLiteral("pamOpen"));
+    open << wallet << key << 0;
+    key.fill('\0');
+    return session.send(open) && walletOpen(session, wallet);
 }
 
 // Left by the sign-in half for the notice half, in the session's runtime
@@ -201,7 +246,20 @@ int notice()
     shown.close();
 
     QDBusConnection session = QDBusConnection::sessionBus();
-    if (!needsKey) {
+    // Signed in with a fingerprint: no password reached pam_kwallet, so it
+    // started no kwalletd and the wallet stays shut until the password is
+    // typed. An app may already have asked for it and been given it.
+    const struct passwd *pw = ::getpwuid(::getuid());
+    const bool automatic = pw && WalletKey::autoLoginUser() == QString::fromUtf8(pw->pw_name);
+    const bool noPasswordTyped = !needsKey && !automatic && !qEnvironmentVariableIsSet("PAM_KWALLET5_LOGIN");
+    if (noPasswordTyped) {
+        QEventLoop wait;
+        QTimer::singleShot(5000, &wait, &QEventLoop::quit);
+        wait.exec();
+        if (walletOpen(session, walletName(session))) {
+            return 0;
+        }
+    } else if (!needsKey) {
         // pam_kwallet's opener starts kwalletd alongside the desktop and
         // hands it the key; give it time before deciding the wallet did not
         // open. kwalletd is only asked once it is running: started here by
@@ -223,11 +281,54 @@ int notice()
         }
     }
 
-    const QString summary = needsKey ? QStringLiteral("Saved passwords need your password") : QStringLiteral("Saved passwords didn't open");
-    const QString body = needsKey
-        ? QStringLiteral("You sign in automatically, so your saved passwords can't open by themselves yet. Enter your password once and they will. Until then, "
-                         "apps may ask for it.")
-        : QStringLiteral("They use a different password from your account, so apps may ask for it. Move them to your account password to fix it.");
+    enum class Reason { NeedsKey, NoPassword, OtherPassword, NoKey, Fingerprint };
+    Reason reason = Reason::NeedsKey;
+    if (noPasswordTyped) {
+        reason = Reason::Fingerprint;
+    } else if (!needsKey) {
+        const QString wallet = walletName(session);
+        reason = openWithoutPassword(session, wallet) ? Reason::NoPassword : startedByPam(session) ? Reason::OtherPassword : Reason::NoKey;
+    }
+
+    QString summary;
+    QString body;
+    QString button;
+    const char *why = "";
+    switch (reason) {
+    case Reason::NeedsKey:
+        summary = QStringLiteral("Saved passwords need your password");
+        body = QStringLiteral("You sign in automatically, so your saved passwords can't open by themselves yet. Enter your password once and they will. "
+                              "Until then, apps may ask for it.");
+        button = QStringLiteral("Enter password");
+        why = "no key kept";
+        break;
+    case Reason::NoPassword:
+        summary = QStringLiteral("Saved passwords aren't protected");
+        body = QStringLiteral("They were set up without a password, so they don't open with your account. Protect them with your account password and "
+                              "they open when you sign in.");
+        button = QStringLiteral("Protect them");
+        why = "wallet has no password";
+        break;
+    case Reason::OtherPassword:
+        summary = QStringLiteral("Saved passwords didn't open");
+        body = QStringLiteral("They use a different password from your account, so apps may ask for it. Move them to your account password to fix it.");
+        button = QStringLiteral("Fix it");
+        why = "wallet password differs";
+        break;
+    case Reason::Fingerprint:
+        summary = QStringLiteral("Saved passwords are locked");
+        body = QStringLiteral("Signing in with your fingerprint doesn't open them. Enter your password once and they stay open until you sign out. "
+                              "Until then, apps may ask for it.");
+        button = QStringLiteral("Enter password");
+        why = "signed in without a password";
+        break;
+    case Reason::NoKey:
+        summary = QStringLiteral("Saved passwords didn't open");
+        body = QStringLiteral("They didn't open by themselves this time, so apps may ask for your password. Enter it once to open them.");
+        button = QStringLiteral("Enter password");
+        why = "kwalletd had no key";
+        break;
+    }
     QDBusMessage notify = QDBusMessage::createMethodCall(QStringLiteral("org.freedesktop.Notifications"), QStringLiteral("/org/freedesktop/Notifications"),
                                                          QStringLiteral("org.freedesktop.Notifications"), QStringLiteral("Notify"));
     // Critical, so it stays until answered or closed: shortly after the
@@ -236,7 +337,7 @@ int notice()
     const QVariantMap hints = {{QStringLiteral("desktop-entry"), QStringLiteral("org.wildos.settings")},
                                {QStringLiteral("urgency"), QVariant::fromValue<uchar>(2)}};
     notify << QStringLiteral("Settings") << uint(0) << QStringLiteral("dialog-password") << summary << body
-           << QStringList{QStringLiteral("password"), needsKey ? QStringLiteral("Enter password") : QStringLiteral("Fix it")} << hints << int(0);
+           << QStringList{QStringLiteral("password"), button} << hints << int(0);
 
     const auto pause = [](int seconds) {
         QEventLoop wait;
@@ -267,7 +368,7 @@ int notice()
             return 1;
         }
         answer.id = id.value();
-        qInfo("saved passwords notice shown (%s)", needsKey ? "no key kept" : "wallet closed");
+        qInfo("saved passwords notice shown (%s)", why);
         QElapsedTimer shownFor;
         shownFor.start();
         // The notification stays in the history; this waits for it a while.
@@ -299,10 +400,28 @@ int notice()
 }
 }
 
+// Running from the USB stick, as wildos-setup-boot tells it. The live
+// session signs in by itself and keeps no saved passwords, so there is
+// nothing to open and nothing to warn about.
+bool liveSession()
+{
+    QFile cmdline(QStringLiteral("/proc/cmdline"));
+    if (cmdline.open(QIODevice::ReadOnly)) {
+        const QList<QByteArray> words = cmdline.readAll().simplified().split(' ');
+        if (words.contains("boot=live") || words.contains("rd.live.image")) {
+            return true;
+        }
+    }
+    return QFileInfo::exists(QStringLiteral("/run/live/medium"));
+}
+
 int main(int argc, char *argv[])
 {
     QCoreApplication app(argc, argv);
     app.setApplicationName(QStringLiteral("wildos-setup-wallet"));
+    if (liveSession()) {
+        return 0;
+    }
     if (app.arguments().contains(QStringLiteral("--notice"))) {
         return notice();
     }

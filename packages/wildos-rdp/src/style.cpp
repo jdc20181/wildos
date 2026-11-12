@@ -13,8 +13,8 @@
 namespace
 {
 const QColor glacier(0x8f, 0xb4, 0xff);
-const QColor darkReference = QColor::fromRgbF(18 / 255.0, 22 / 255.0, 40 / 255.0, 0.86);
-const QColor lightReference = QColor::fromRgbF(250 / 255.0, 251 / 255.0, 254 / 255.0, 0.82);
+const QColor darkReference = QColor::fromRgbF(24 / 255.0, 26 / 255.0, 34 / 255.0, 0.95);
+const QColor lightReference = QColor::fromRgbF(243 / 255.0, 243 / 255.0, 243 / 255.0, 0.96);
 
 QColor parseColour(const QString &value)
 {
@@ -87,13 +87,13 @@ Style Style::read()
         s.border = Qt::white;
         s.ink = Qt::white;
     } else if (s.dark) {
-        s.glass = tinted(tint, ref, 20, 24, 42, 0.80);
-        s.border = QColor::fromRgbF(1, 1, 1, 0.12);
-        s.ink = QColor(0xee, 0xf1, 0xf8);
+        s.glass = tinted(tint, ref, 24, 26, 34, 0.95);
+        s.border = QColor::fromRgbF(1, 1, 1, 0.093);
+        s.ink = Qt::white;
     } else {
-        s.glass = tinted(tint, ref, 250, 251, 254, 0.92);
-        s.border = QColor::fromRgbF(30 / 255.0, 40 / 255.0, 70 / 255.0, 0.12 * 0.75);
-        s.ink = QColor(0x15, 0x1b, 0x2c);
+        s.glass = tinted(tint, ref, 243, 243, 243, 0.96);
+        s.border = QColor::fromRgbF(0, 0, 0, 0.073);
+        s.ink = QColor::fromRgbF(0, 0, 0, 0.896);
     }
     return s;
 }

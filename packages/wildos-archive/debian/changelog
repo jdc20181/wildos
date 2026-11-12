@@ -1,0 +1,14 @@
+wildos-archive (0.1.1) trixie; urgency=medium
+
+  * Extract here asks before extracting into a folder that is already
+    there: replace its files or keep both.
+  * The Extract here progress window opens at its full size instead of
+    as a thin strip.
+
+ -- Wild OS Developers <dev@wildos.io>  Thu, 12 Nov 2026 08:16:49 +0000
+
+wildos-archive (0.1.0) trixie; urgency=medium
+
+  * Initial release.
+
+ -- Wild OS Developers <dev@wildos.io>  Thu, 12 Nov 2026 01:00:00 +0000

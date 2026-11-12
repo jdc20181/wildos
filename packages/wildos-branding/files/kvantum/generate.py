@@ -56,64 +56,67 @@ def qt_darker(h, factor):
 
 # The two schemes, from the Wild OS Design System (dark) and the README's
 # light mode rules. "tone" is the colour translucent surfaces and edges are
-# drawn in: white in dark mode, rgba(30,40,70) at three quarters of the
+# drawn in: white in dark mode, rgba(46,48,52) at three quarters of the
 # alpha in light mode.
 DARK = {
     "name": "WildOS",
     "tone": "#ffffff",
     "tone_scale": 1.0,
-    "ink": "#eef1f8",
+    "ink": "#ffffff",
     "strong": "#ffffff",
     "on_accent": "#0f1530",
+    # The checked radio's centre is a fill, so it takes the neutral dark
+    # (design v3); the ink stays for text and marks on the accent.
+    "radio_dot": "#1a1c20",
     "accent": "#8fb4ff",
     "accent_hover": qt_lighter("#8fb4ff", 108),
     "accent_pressed": qt_darker("#8fb4ff", 108),
-    "sunken": ("#060814", 0.35),
-    "menu": ("#161a2e", 0.94),
-    "window": "#151a2f",
-    "toggle_off": ("#eef1f8", 0.55),
-    "radio_ring": ("#eef1f8", 0.60),
-    "shadow": "#040818",
+    "sunken": ("#0a0b0e", 0.35),
+    "menu": ("#232529", 0.96),
+    "window": "#181a22",
+    "toggle_off": ("#ffffff", 0.55),
+    "radio_ring": ("#ffffff", 0.60),
+    "shadow": "#08090c",
     "shadow_alpha": 0.60,
 }
 LIGHT = {
     "name": "WildOSLight",
-    "tone": "#1e2846",
+    "tone": "#202020",
     "tone_scale": 0.75,
-    "ink": "#151b2c",
-    "strong": "#0b1020",
+    "ink": "#1a1a1a",
+    "strong": "#111111",
     "on_accent": "#ffffff",
+    "radio_dot": "#ffffff",
     "accent": "#3563d8",
     "accent_hover": qt_darker("#3563d8", 108),
     "accent_pressed": qt_darker("#3563d8", 118),
-    "sunken": ("#fafbfe", 0.55),
-    "menu": ("#fafbfe", 0.96),
-    "window": "#f4f6fb",
-    "toggle_off": ("#1e2846", 0.413),
-    "radio_ring": ("#1e2846", 0.45),
-    "shadow": "#141e3c",
+    "sunken": ("#fbfbfb", 0.55),
+    "menu": ("#f0f0f0", 0.96),
+    "window": "#f3f3f3",
+    "toggle_off": ("#202020", 0.413),
+    "radio_ring": ("#202020", 0.45),
+    "shadow": "#1a1a1a",
     "shadow_alpha": 0.24,
 }
 
 # The light kvconfig is the dark one with these colours swapped.
 LIGHT_KVCONFIG = {
-    "#151a2f": "#f4f6fb",
-    "#11152a": "#fafbfe",
-    "#161b2e": "#f0f2f8",
-    "#22283e": "#eceff6",
-    "#2c3350": "#ffffff",
-    "#232a44": "#f4f6fb",
-    "#0a0d1a": "#c3c9d6",
-    "#1a1f36": "#dde1ea",
+    "#181a22": "#f3f3f3",
+    "#14151b": "#fbfbfb",
+    "#1a1c23": "#eeeeee",
+    "#26282f": "#ebebeb",
+    "#30323a": "#ffffff",
+    "#272930": "#f3f3f3",
+    "#0e0f13": "#c6c6c6",
+    "#1c1e26": "#dfdfdf",
     "#8fb4ff": "#3563d8",
-    "#161a2e": "#fafbfe",
-    "#e8ecf894": "#151b2c61",
-    "#e8ecf8b8": "#151b2ca8",
-    "#eef1f8": "#151b2c",
-    "#0f1530": "#ffffff",
+    "#232529": "#f0f0f0",
+    "#ffffff8b": "#1a1a1a71",
+    "#ffffffc8": "#1a1a1a9b",
+    "#0f1530": "#ffffff",  # the ink on the accent
     "#b9cfff": "#2a55c4",
     "#c4b2ff": "#6a4bc4",
-    "#ffffff": "#0b1020",
+    "#ffffff": "#1a1a1a",
 }
 
 # Menus: 14 px corners, 6 px between the edge and the rows, and a shadow
@@ -237,20 +240,25 @@ def round_rect_path(x, y, w, h, r):
     )
 
 
-def build(P):
+def build(P, office=False):
+    """The SVG for one palette. office=True draws the Write and Tables
+    variant: the DialogKit board's 6 px corners on buttons, drop-downs and
+    fields, and fields that mark focus with a 2 px accent line along their
+    foot instead of an accent edge."""
     S = Sheet()
+    RADIUS = 6 if office else 8
     INK, STRONG, ON_ACCENT = P["ink"], P["strong"], P["on_accent"]
     ACCENT, ACCENT_HOVER, ACCENT_PRESSED = P["accent"], P["accent_hover"], P["accent_pressed"]
 
     def W(a):
         return (P["tone"], a * P["tone_scale"])
 
-    def frame_element(name, f, fill=None, rings=(), r=None, w=16, interior=True):
+    def frame_element(name, f, fill=None, rings=(), r=None, w=16, interior=True, foot=()):
         """A nine-slice element with corner radius r (defaults to f).
 
         rings is a list of (inset_out, inset_in, paint) drawn over the fill, so
         a 1px border at the edge is (0, 1, paint) exactly like a CSS border
-        over a background.
+        over a background. foot is the same, drawn along the bottom edge only.
         """
         r = f if r is None else r
         if f == 0:
@@ -289,6 +297,9 @@ def build(P):
                     body += rect(ex + o1, ey, t, eh, p)
                 else:
                     body += rect(ex + ew - o2, ey, t, eh, p)
+            if side == "bottom":
+                for o1, o2, p in foot:
+                    body += rect(ex, ey + eh - o2, ew, o2 - o1, p)
             S.group("%s-%s" % (name, side), body)
 
         edge("top", C, T, w, f)
@@ -313,9 +324,9 @@ def build(P):
         "disabled": (W(0.03), border(W(0.08))),
     }
     for state, (fill, rings) in BUTTON.items():
-        frame_element("button-" + state, 8, fill, rings)
+        frame_element("button-" + state, RADIUS, fill, rings)
         # Drop-downs have the slightly quieter 0.14 edge.
-        frame_element("combo-" + state, 8, fill, [(0, 1, W(0.14) if state != "disabled" else W(0.08))]
+        frame_element("combo-" + state, RADIUS, fill, [(0, 1, W(0.14) if state != "disabled" else W(0.08))]
                       if state != "toggled" else rings)
 
     # The default (primary) button is solid accent with its label in the
@@ -327,11 +338,11 @@ def build(P):
         "pressed": ACCENT_PRESSED,
         "toggled": ACCENT_PRESSED,
     }.items():
-        frame_element("button-default-" + state, 8, (fill, 1))
+        frame_element("button-default-" + state, RADIUS, (fill, 1))
     # Stock Kvantum (and the Qt 5 build) only knows one default overlay laid
     # over the button and keeps the label in ink, so for it the default
     # button is the active chip, which reads with ink text.
-    frame_element("button-default", 8, (ACCENT, 0.24), border((ACCENT, 0.60)))
+    frame_element("button-default", RADIUS, (ACCENT, 0.24), border((ACCENT, 0.60)))
     # An empty indicator stops Kvantum drawing its corner glyph on that button.
     gx, gy = S.place(8, 8)
     S.group("button-default-indicator", bbox(gx, gy, 8, 8))
@@ -355,27 +366,52 @@ def build(P):
     }.items():
         frame_element("tbutton-" + state, 8, fill)
 
-    # Text fields: sunken fill, quiet edge; editing turns the edge accent.
-    for state, (fill, rings) in {
-        "normal": (P["sunken"], border(W(0.10))),
-        "focused": (P["sunken"], border((ACCENT, 0.55))),
-        "disabled": ((P["sunken"][0], P["sunken"][1] * 0.6), border(W(0.06))),
-    }.items():
-        frame_element("lineedit-" + state, 8, fill, rings)
+    # Text fields: sunken fill, quiet edge; editing turns the edge accent. In
+    # the office variant (DialogKit) a field is a shade lighter than the
+    # dialog and editing draws a 2 px accent line along its foot.
+    if office:
+        # Solid, not see-through: LibreOffice paints a field's fill twice, for
+        # the border window and again for the text area inside it, and two
+        # see-through layers showed as a box within a box.
+        def solid(a):
+            w, t = P["window"].lstrip("#"), P["tone"].lstrip("#")
+            k = a * P["tone_scale"]
+            mix = [round(int(w[i:i + 2], 16) * (1 - k) + int(t[i:i + 2], 16) * k) for i in (0, 2, 4)]
+            return ("#%02x%02x%02x" % tuple(mix), 1)
 
-    # Tabs: the current tab lifted with surface-selected.
+        fields = {
+            "normal": (solid(0.05), border(W(0.10)), ()),
+            "focused": (solid(0.05), border(W(0.10)), [(0, 2, (ACCENT, 1))]),
+            "disabled": (solid(0.03), border(W(0.06)), ()),
+        }
+    else:
+        fields = {
+            "normal": (P["sunken"], border(W(0.10)), ()),
+            "focused": (P["sunken"], border((ACCENT, 0.55)), ()),
+            "disabled": ((P["sunken"][0], P["sunken"][1] * 0.6), border(W(0.06)), ()),
+        }
+    for state, (fill, rings, foot) in fields.items():
+        frame_element("lineedit-" + state, RADIUS, fill, rings, foot=foot)
+
+    # Tabs: the current tab lifted with surface-selected. In the office
+    # variant (DialogKit) tabs are underline tabs: no fill, the current one
+    # marked by a 2 px accent line at its foot, over a page with no frame.
+    tab_foot = [(0, 2, (ACCENT, 1))] if office else ()
     for state, fill in {
         "normal": None,
         "focused": W(0.05),
         "pressed": W(0.08),
-        "toggled": W(0.10),
+        "toggled": None if office else W(0.10),
         "disabled": None,
     }.items():
-        frame_element("tab-" + state, 8, fill)
-        frame_element("floating-tab-" + state, 8, fill)
+        frame_element("tab-" + state, 8, fill, foot=tab_foot if state == "toggled" else ())
+        frame_element("floating-tab-" + state, 8, fill, foot=tab_foot if state == "toggled" else ())
 
     # Cards: tab pages and group boxes use surface-raised with border-subtle.
-    frame_element("tabframe-normal", 12, W(0.05), border(W(0.07)))
+    if office:
+        frame_element("tabframe-normal", 12, None)
+    else:
+        frame_element("tabframe-normal", 12, W(0.05), border(W(0.07)))
     frame_element("group-normal", 12, W(0.05), border(W(0.07)))
 
     # Generic frames around views and scroll areas: a quiet edge, no fill so
@@ -611,7 +647,7 @@ def build(P):
         return s + "/>"
 
     # Radio buttons: the design's 16px ring in the 20px box; checked is a
-    # 5px accent ring around a text-on-accent centre.
+    # 5px accent ring around a dark centre.
     ring_c, ring_a = P["radio_ring"]
     for state, (fill, edge) in CB_OFF.items():
         ea = {"normal": ring_a, "disabled": ring_a * 0.4}.get(state, min(1, ring_a + 0.2))
@@ -619,7 +655,7 @@ def build(P):
             x + 10, y + 10, 8, fill) + circle(x + 10, y + 10, 7.25, None, (ring_c, ea, 1.5)))
     for state, (c, a) in CB_ON.items():
         glyph("radio-checked-%s" % state, 20, lambda x, y, c=c, a=a: circle(
-            x + 10, y + 10, 8, (c, a)) + circle(x + 10, y + 10, 3, (ON_ACCENT, 1.0 if a >= 1 else 0.6)))
+            x + 10, y + 10, 8, (c, a)) + circle(x + 10, y + 10, 3, (P["radio_dot"], 1.0 if a >= 1 else 0.6)))
 
     # In menus only the mark shows, Windows style: no empty box for unchecked items.
     for state, (c, a) in {"normal": (INK, 1.0), "focused": (STRONG, 1.0), "disabled": (INK, 0.4)}.items():
@@ -705,6 +741,48 @@ def accent_line(P):
     return "accent_colors=%s,%s,%s" % (P["accent"], P["accent_hover"], P["accent_pressed"])
 
 
+# The office variant: the Write and Tables ribbon on the boards uses 28 px
+# tool buttons and drop-downs, denser than the rest of Wild OS. LibreOffice
+# sizes every toolbar row to the taller of the two, so both shrink, and only
+# for LibreOffice ([Applications] in kvantum.kvconfig).
+OFFICE = {
+    # LibreOffice draws its own scroll bars, which stay on screen: thinner
+    # ones keep the page and the sheet as quiet as the boards. DialogKit's
+    # checkboxes and radio buttons are 18 px.
+    "%General": {"scroll_width": "8", "check_size": "18"},
+    # DialogKit: dialog buttons are 32 px tall. Fields get their 32 px in
+    # LibreOffice itself: it reads a taller line edit as a thicker frame and
+    # adds it again around the text. LineEdit inherits PanelButtonCommand,
+    # so it takes its minimum back off.
+    "PanelButtonCommand": {"min_height": "32"},
+    "LineEdit": {"min_height": "0", "frame.top": "3", "frame.bottom": "3", "frame.left": "6",
+                 "frame.right": "6", "text.margin.top": "0", "text.margin.bottom": "0"},
+    "ToolbarButton": {"frame.top": "6", "frame.bottom": "6", "frame.left": "6", "frame.right": "6",
+                      "text.margin.top": "0", "text.margin.bottom": "0",
+                      "min_width": "28", "min_height": "28"},
+    # LibreOffice's ribbon buttons reach Kvantum as tool buttons outside a
+    # toolbar, which it draws as panel buttons: a checked one (the current
+    # alignment) took the accent chip. The boards keep them flat.
+    "PanelButtonTool": {"frame.element": "tbutton", "interior.element": "tbutton"},
+    "ComboBox": {"frame.top": "5", "frame.bottom": "5",
+                 "text.margin.top": "0", "text.margin.bottom": "0", "min_height": "28"},
+}
+
+
+def office_kvconfig(text):
+    for section, keys in OFFICE.items():
+        m = re.search(r"(?ms)^\[" + re.escape(section) + r"\]\n(.*?)(?=^\[|\Z)", text)
+        body = m.group(1)
+        for key, value in keys.items():
+            line = re.compile(r"(?m)^" + re.escape(key) + r"=.*$")
+            if line.search(body):
+                body = line.sub(key + "=" + value, body)
+            else:
+                body = body.rstrip("\n") + "\n" + key + "=" + value + "\n\n"
+        text = text[:m.start(1)] + body + text[m.end(1):]
+    return text.replace("comment=Wild OS controls:", "comment=Wild OS office controls:")
+
+
 def write(path, text):
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, "w", encoding="utf-8", newline="\n") as fh:
@@ -724,6 +802,10 @@ def main():
     light = re.sub(r"(?m)^accent_colors=.*$", accent_line(LIGHT), light)
     write(os.path.join(HERE, "WildOSLight", "WildOSLight.kvconfig"), light)
     write(os.path.join(HERE, "WildOSLight", "WildOSLight.svg"), build(LIGHT))
+    write(os.path.join(HERE, "WildOSOffice", "WildOSOffice.kvconfig"), office_kvconfig(cfg))
+    write(os.path.join(HERE, "WildOSOffice", "WildOSOffice.svg"), build(DARK, office=True))
+    write(os.path.join(HERE, "WildOSOfficeLight", "WildOSOfficeLight.kvconfig"), office_kvconfig(light))
+    write(os.path.join(HERE, "WildOSOfficeLight", "WildOSOfficeLight.svg"), build(LIGHT, office=True))
 
 
 if __name__ == "__main__":

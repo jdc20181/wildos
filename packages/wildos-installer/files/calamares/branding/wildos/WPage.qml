@@ -31,9 +31,9 @@ Item {
                 Layout.fillWidth: true
                 text: page.title
                 color: "#eef1f8"
-                font.family: "Inter"
+                font.family: "Albert Sans"
                 font.pixelSize: 28
-                font.weight: Font.DemiBold
+                font.weight: 550
                 font.letterSpacing: -0.28
                 wrapMode: Text.WordWrap
             }
@@ -42,7 +42,7 @@ Item {
                 visible: text !== ""
                 text: page.subtitle
                 color: Qt.rgba(232 / 255, 236 / 255, 248 / 255, 0.8)
-                font.family: "Inter"
+                font.family: "Albert Sans"
                 font.pixelSize: 14
                 lineHeightMode: Text.FixedHeight
                 lineHeight: 21

@@ -103,7 +103,7 @@ T.MenuItem {
                 - (control.tickRight ? 24 : 0)
             anchors.verticalCenter: parent.verticalCenter
             text: control.text
-            font.weight: control.bold ? Font.DemiBold : Font.Normal
+            font.weight: control.bold ? Style.weightSemiBold : Style.weightRegular
             color: control.danger ? Style.dangerMenu : Style.ink
         }
 

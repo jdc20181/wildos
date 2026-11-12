@@ -78,7 +78,7 @@ Item {
                     Layout.fillWidth: true
                     text: qsTr("Keychain")
                     size: 26
-                    font.weight: Font.Bold
+                    font.weight: UI.Style.weightBold
                 }
                 UI.Button {
                     size: "small"
@@ -118,9 +118,9 @@ Item {
                     width: ListView.view.width
                     height: 76
                     radius: 12
-                    color: current ? UI.Style.accentTint : keyMouse.containsMouse ? UI.Style.tone(0.07) : UI.Style.tone(0.045)
+                    color: current ? UI.Style.surfaceSelected : keyMouse.containsMouse ? UI.Style.surfaceHover : UI.Style.surfaceRaised
                     border.width: 1
-                    border.color: current ? UI.Style.accentBorderStrong : UI.Style.tone(0.07)
+                    border.color: current ? UI.Style.borderControl : UI.Style.borderSubtle
                     Accessible.role: Accessible.ListItem
                     Accessible.name: modelData.label
 
@@ -130,14 +130,14 @@ Item {
                         width: 42
                         height: 42
                         radius: 10
-                        color: keyCard.modelData.legacy ? Qt.rgba(1, 196 / 255, 106 / 255, 0.16) : UI.Style.accentChip
+                        color: keyCard.modelData.legacy ? UI.Style.warningSoft : UI.Style.surfaceTile
                         UI.Glyph {
                             anchors.centerIn: parent
                             width: 19
                             height: 19
                             path: keyCard.modelData.securityKey ? RemoteIcons.securityKey : RemoteIcons.key
                             strokeWidth: 1.8
-                            color: keyCard.modelData.legacy ? "#ffc46a" : UI.Style.accent
+                            color: keyCard.modelData.legacy ? UI.Style.warning : UI.Style.iconInk
                         }
                     }
                     Column {
@@ -150,7 +150,7 @@ Item {
                             UI.Label {
                                 text: keyCard.modelData.label
                                 size: 15
-                                font.weight: Font.DemiBold
+                                font.weight: UI.Style.weightSemiBold
                             }
                             Rectangle {
                                 anchors.verticalCenter: parent.verticalCenter
@@ -163,7 +163,7 @@ Item {
                                     anchors.centerIn: parent
                                     text: keyCard.modelData.type + (keyCard.modelData.bits ? " " + keyCard.modelData.bits : "")
                                     size: 11
-                                    font.weight: Font.DemiBold
+                                    font.weight: UI.Style.weightSemiBold
                                     color: UI.Style.inkMuted
                                 }
                             }
@@ -212,15 +212,15 @@ Item {
                         width: parent.width
                         height: warnText.implicitHeight + 32
                         radius: 12
-                        color: Qt.rgba(1, 196 / 255, 106 / 255, 0.08)
+                        color: Qt.alpha(UI.Style.warning, 0.08)
                         border.width: 1
-                        border.color: Qt.rgba(1, 196 / 255, 106 / 255, 0.28)
+                        border.color: Qt.alpha(UI.Style.warning, 0.28)
                         UI.Icon {
                             x: 16
                             y: 17
                             name: "warning"
                             size: 17
-                            color: "#ffc46a"
+                            color: UI.Style.warning
                         }
                         UI.Label {
                             id: warnText
@@ -243,7 +243,7 @@ Item {
                             anchors.horizontalCenter: parent.horizontalCenter
                             text: qsTr("No keys yet")
                             size: 18
-                            font.weight: Font.DemiBold
+                            font.weight: UI.Style.weightSemiBold
                         }
                         UI.Label {
                             anchors.horizontalCenter: parent.horizontalCenter
@@ -265,9 +265,9 @@ Item {
             Layout.preferredWidth: 486
             Layout.fillHeight: true
             radius: 14
-            color: UI.Style.tone(0.03)
+            color: UI.Style.surfaceRaised
             border.width: 1
-            border.color: UI.Style.tone(0.07)
+            border.color: UI.Style.borderSubtle
 
             ColumnLayout {
                 anchors.fill: parent
@@ -280,14 +280,14 @@ Item {
                         Layout.preferredWidth: 46
                         Layout.preferredHeight: 46
                         radius: 11
-                        color: UI.Style.accentChip
+                        color: UI.Style.surfaceTile
                         UI.Glyph {
                             anchors.centerIn: parent
                             width: 20
                             height: 20
                             path: page.selected && page.selected.securityKey ? RemoteIcons.securityKey : RemoteIcons.key
                             strokeWidth: 1.8
-                            color: UI.Style.accent
+                            color: UI.Style.iconInk
                         }
                     }
                     ColumnLayout {
@@ -295,7 +295,7 @@ Item {
                         UI.Label {
                             text: page.selected ? page.selected.label : ""
                             size: 19
-                            font.weight: Font.Bold
+                            font.weight: UI.Style.weightBold
                         }
                         UI.Label {
                             text: page.selected ? qsTr("%1, made %2").arg(page.selected.type).arg(page.selected.made) : ""
@@ -310,7 +310,9 @@ Item {
                     Layout.fillWidth: true
                     Layout.preferredHeight: publicText.implicitHeight + 24
                     radius: 10
-                    color: Qt.rgba(11 / 255, 15 / 255, 28 / 255, UI.Style.dark ? 0.9 : 0.06)
+                    color: UI.Style.surfaceSunken
+                    border.width: 1
+                    border.color: UI.Style.borderSubtle
                     TextEdit {
                         id: publicText
                         x: 12
@@ -321,7 +323,7 @@ Item {
                         selectByMouse: true
                         wrapMode: TextEdit.WrapAnywhere
                         color: UI.Style.ink
-                        selectionColor: UI.Style.accentSelected
+                        selectionColor: UI.Style.textSelection
                         font.family: "JetBrains Mono"
                         font.pixelSize: UI.Style.px(12)
                     }
@@ -469,7 +471,7 @@ Item {
 
     component Caption: UI.Label {
         size: 12
-        font.weight: Font.Bold
+        font.weight: UI.Style.weightBold
         font.letterSpacing: 0.6
         font.capitalization: Font.AllUppercase
         color: UI.Style.inkMuted

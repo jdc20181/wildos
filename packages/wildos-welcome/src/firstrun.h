@@ -32,6 +32,9 @@ int runPrograms(const QString &jobFile);
 void startPrograms(const QVariantList &programs);
 // Windows mode itself is not built yet; what setup found is kept for it.
 void saveWindowsMode(const QVariantMap &plan);
+// Sends step 7's saved setup request (boards 3.9 and 3.10) to Windows
+// mode's agent, as this account.
+void startWindowsMode(const QString &request);
 }
 
 class DownloadJob : public KJob

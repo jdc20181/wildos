@@ -82,7 +82,7 @@ PageFlick {
                 Layout.fillWidth: true
                 text: page.app ? page.app.name : ""
                 size: 32
-                font.weight: Font.Bold
+                font.weight: UI.Style.weightBold
                 font.letterSpacing: -0.64
                 Accessible.role: Accessible.Heading
             }
@@ -143,7 +143,7 @@ PageFlick {
                                 return page.app && page.app.action === "update" ? "Downloading the update" : "Downloading";
                             }
                             size: 13
-                            font.weight: Font.DemiBold
+                            font.weight: UI.Style.weightSemiBold
                         }
 
                         UI.Label {
@@ -473,6 +473,7 @@ PageFlick {
                 color: Metrics.inkSecondary
                 linkColor: UI.Style.accent
                 font.family: UI.Style.fontFamily
+                font.letterSpacing: UI.Style.tracking(UI.Style.px(14))
                 font.pixelSize: UI.Style.px(14)
                 lineHeight: 1.6
                 onLinkActivated: link => Qt.openUrlExternally(link)
@@ -549,7 +550,7 @@ PageFlick {
                     width: parent.width
                     text: page.app ? page.app.swapTitle : ""
                     size: 16
-                    font.weight: Font.Bold
+                    font.weight: UI.Style.weightBold
                 }
 
                 UI.Label {
@@ -603,7 +604,7 @@ PageFlick {
             width: parent.width
             text: page.sandboxed ? "Installing the sandboxed version, from Flathub" : "Installing the Wild OS version, from Debian"
             size: 13.5
-            font.weight: Font.DemiBold
+            font.weight: UI.Style.weightSemiBold
         }
 
         UI.Label {

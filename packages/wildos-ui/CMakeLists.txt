@@ -38,6 +38,8 @@ qt_add_qml_module(wildosui
         src/themeicon.cpp src/themeicon.h
         src/system.cpp src/system.h
         src/accessshortcuts.cpp src/accessshortcuts.h
+        src/historyswipe.cpp src/historyswipe.h
+        src/timeformat.cpp src/timeformat.h src/clockformat.h
 )
 
 target_include_directories(wildosui PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)

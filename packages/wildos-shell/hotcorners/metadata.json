@@ -1,0 +1,8 @@
+{
+    "KPlugin": {
+        "Description": "Hot corners from Settings > Multitasking: an action for each outer corner of the screen, optionally only while a key is held",
+        "EnabledByDefault": true,
+        "License": "GPL",
+        "Name": "Wild OS hot corners"
+    }
+}

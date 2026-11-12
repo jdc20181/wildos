@@ -69,7 +69,7 @@ Item {
                     anchors.topMargin: row.kind === "header" ? 4 : 0
                     radius: 6
                     visible: row.kind === "folder"
-                    color: drop.containsDrag ? UI.Style.accentSelected : row.current ? UI.Style.accentSelected : mouse.containsMouse ? UI.Style.surfaceHover : "transparent"
+                    color: drop.containsDrag || row.current ? UI.Style.surfaceSelected : mouse.containsMouse ? UI.Style.surfaceHover : "transparent"
                     border.width: drop.containsDrag ? 1 : 0
                     border.color: UI.Style.accent
                 }
@@ -141,7 +141,7 @@ Item {
                         Layout.fillWidth: true
                         text: row.name
                         size: 13
-                        font.weight: Font.DemiBold
+                        font.weight: UI.Style.weightSemiBold
                         elide: Text.ElideRight
                     }
                 }
@@ -156,21 +156,21 @@ Item {
                     MailIcon {
                         name: pane.iconFor(row.folderRole)
                         size: 16
-                        color: row.current ? UI.Style.accent : UI.Style.iconInk
+                        color: row.current ? UI.Style.iconInk : UI.Style.iconMuted
                     }
                     UI.Label {
                         Layout.fillWidth: true
                         text: row.name
                         size: 13
-                        font.weight: row.current ? Font.DemiBold : Font.Normal
+                        font.weight: row.current ? UI.Style.weightSemiBold : UI.Style.weightRegular
                         elide: Text.ElideRight
                     }
                     UI.Label {
                         visible: row.count > 0
                         text: row.count
                         size: 12
-                        font.weight: Font.DemiBold
-                        color: UI.Style.accent
+                        font.weight: UI.Style.weightSemiBold
+                        color: UI.Style.inkMuted
                     }
                 }
 
@@ -259,7 +259,7 @@ Item {
                         Layout.fillWidth: true
                         text: MailEngine.trackersThisWeek === 1 ? qsTr("1 tracker blocked") : qsTr("%1 trackers blocked").arg(MailEngine.trackersThisWeek)
                         size: 12
-                        font.weight: Font.DemiBold
+                        font.weight: UI.Style.weightSemiBold
                         elide: Text.ElideRight
                     }
                     UI.Label {

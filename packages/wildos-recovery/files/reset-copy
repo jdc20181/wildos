@@ -1,0 +1,317 @@
+#!/usr/bin/python3 -I
+"""The reset copy: the release's system image kept on the PC.
+
+/var/lib/wildos/reset holds the image (LiveOS/squashfs.img), its kernel and
+live initramfs (live/), the installer's GRUB packages (pool/) and the
+release's list of their SHA-256 sums (LiveOS/reset.sha256), signed with the
+Wild OS updates key (LiveOS/reset.sha256.sig). It is what Reset Wild OS
+copies back, and what start-up recovery runs from.
+
+    reset-copy status [--json]     present, verified, release, size
+    reset-copy verify              the signature and every file; exit 1 if not
+    reset-copy from-media SRC ROOT copy it from install media into ROOT
+    reset-copy boot-files          verified kernel and initramfs to /boot
+    reset-copy update              fetch the newest release when it is newer
+
+Nothing is used unless the signature and every sum check out.
+"""
+
+import base64
+import hashlib
+import json
+import os
+import shutil
+import subprocess
+import sys
+import tempfile
+import time
+import urllib.request
+
+RESET = "/var/lib/wildos/reset"
+BOOT = "/boot/wildos-recovery"
+KEYRING = "/usr/share/keyrings/wildos-updates-keyring.asc"
+MANIFEST = "LiveOS/reset.sha256"
+SIGNATURE = "LiveOS/reset.sha256.sig"
+RELEASE = "https://dl.wildos.io/latest/"
+STATE = "state.json"
+LOG = "/var/log/wildos-restore-points.log"
+FILES = ["LiveOS/squashfs.img", "live/vmlinuz", "live/initrd.img"]
+
+
+def log(msg):
+    try:
+        with open(LOG, "a") as f:
+            f.write(time.strftime("%Y-%m-%d %H:%M:%S ") + "reset copy: " + msg + "\n")
+    except OSError:
+        pass
+    if sys.stderr.isatty():
+        print(msg, file=sys.stderr)
+
+
+def dearmor(path):
+    """An armored OpenPGP key as binary, for gpgv."""
+    lines = open(path).read().splitlines()
+    body, inside = [], False
+    for line in lines:
+        if line.startswith("-----BEGIN"):
+            inside = True
+            continue
+        if line.startswith("-----END"):
+            break
+        if not inside:
+            continue
+        if not line.strip() or ":" in line and not body:
+            continue
+        if line.startswith("="):
+            continue
+        body.append(line.strip())
+    return base64.b64decode("".join(body))
+
+
+def signature_ok(data, sig, keyring=KEYRING):
+    if not (os.path.exists(data) and os.path.exists(sig) and os.path.exists(keyring)):
+        return False
+    if shutil.which("sqv"):
+        r = subprocess.run(["sqv", "--keyring", keyring, sig, data], capture_output=True)
+        return r.returncode == 0
+    if shutil.which("gpgv"):
+        with tempfile.NamedTemporaryFile(suffix=".gpg") as kr:
+            kr.write(dearmor(keyring))
+            kr.flush()
+            r = subprocess.run(["gpgv", "--keyring", kr.name, sig, data], capture_output=True)
+            return r.returncode == 0
+    return False
+
+
+def sha256(path):
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(1 << 20), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def read_manifest(base):
+    sums = {}
+    try:
+        with open(os.path.join(base, MANIFEST)) as f:
+            for line in f:
+                parts = line.strip().split(None, 1)
+                if len(parts) == 2 and len(parts[0]) == 64:
+                    path = parts[1].lstrip("*")
+                    if path.startswith("./"):
+                        path = path[2:]
+                    sums[path] = parts[0]
+    except OSError:
+        pass
+    return sums
+
+
+def verify(base=RESET, quick=False):
+    """(ok, why) for the copy in `base`."""
+    if not os.path.exists(os.path.join(base, FILES[0])):
+        return False, "missing"
+    if not signature_ok(os.path.join(base, MANIFEST), os.path.join(base, SIGNATURE)):
+        return False, "unsigned"
+    sums = read_manifest(base)
+    for f in FILES:
+        if f not in sums:
+            return False, "incomplete"
+    for rel, want in sums.items():
+        path = os.path.join(base, rel)
+        if not os.path.exists(path):
+            return False, "incomplete"
+        if quick and rel == FILES[0]:
+            continue
+        if sha256(path) != want:
+            return False, "damaged"
+    return True, ""
+
+
+def release_name(base=RESET):
+    try:
+        with open(os.path.join(base, ".disk/info")) as f:
+            return f.read().strip()
+    except OSError:
+        return ""
+
+
+def state(base=RESET):
+    try:
+        with open(os.path.join(base, STATE)) as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return {}
+
+
+def write_state(base, **kw):
+    s = state(base)
+    s.update(kw)
+    tmp = os.path.join(base, STATE + ".new")
+    with open(tmp, "w") as f:
+        json.dump(s, f)
+    os.chmod(tmp, 0o644)
+    os.replace(tmp, os.path.join(base, STATE))
+
+
+def size(base=RESET):
+    total = 0
+    for dirpath, _, names in os.walk(base):
+        for n in names:
+            try:
+                total += os.lstat(os.path.join(dirpath, n)).st_size
+            except OSError:
+                pass
+    return total
+
+
+def copy_tree(src, dst):
+    """Copy the reset files from an ISO-like tree at src into dst."""
+    os.makedirs(dst, exist_ok=True)
+    for rel in FILES + [MANIFEST, SIGNATURE, ".disk/info"]:
+        s = os.path.join(src, rel)
+        if os.path.exists(s):
+            os.makedirs(os.path.dirname(os.path.join(dst, rel)), exist_ok=True)
+            shutil.copyfile(s, os.path.join(dst, rel))
+    if os.path.isdir(os.path.join(src, "pool")):
+        shutil.copytree(os.path.join(src, "pool"), os.path.join(dst, "pool"), dirs_exist_ok=True)
+
+
+def from_media(src, root):
+    """Installer: copy the reset copy from the install media into root."""
+    dst = root.rstrip("/") + RESET
+    copy_tree(src, dst)
+    os.chmod(dst, 0o711)
+    ok, why = verify(dst, quick=True)
+    write_state(dst, verified=ok, why=why, release=release_name(dst), copied=int(time.time()))
+    log(f"copied from the install media ({release_name(dst) or 'unknown release'}); signed: {ok} {why}")
+    if ok:
+        boot = root.rstrip("/") + BOOT
+        os.makedirs(boot, exist_ok=True)
+        for name in ("vmlinuz", "initrd.img"):
+            shutil.copyfile(os.path.join(dst, "live", name), os.path.join(boot, name))
+
+
+def boot_files():
+    """Put the verified recovery kernel and initramfs where GRUB reads them."""
+    ok, why = verify()
+    if not ok:
+        log(f"not writing start-up recovery's files: {why}")
+        if os.path.isdir(BOOT):
+            shutil.rmtree(BOOT, ignore_errors=True)
+        return False
+    os.makedirs(BOOT, exist_ok=True)
+    for name in ("vmlinuz", "initrd.img"):
+        shutil.copyfile(os.path.join(RESET, "live", name), os.path.join(BOOT, name + ".new"))
+        os.replace(os.path.join(BOOT, name + ".new"), os.path.join(BOOT, name))
+    write_state(RESET, verified=True, why="", checked=int(time.time()))
+    return True
+
+
+def metered():
+    try:
+        r = subprocess.run(["nmcli", "-t", "-f", "GENERAL.METERED", "dev", "show"],
+                           capture_output=True, text=True, timeout=10)
+        return "yes" in r.stdout.lower()
+    except (OSError, subprocess.SubprocessError):
+        return False
+
+
+def fetch(url, path):
+    req = urllib.request.Request(url, headers={"User-Agent": "WildOS-reset-copy"})
+    with urllib.request.urlopen(req, timeout=60) as r, open(path, "wb") as f:
+        shutil.copyfileobj(r, f, 1 << 20)
+
+
+def update():
+    """Replace the copy with the newest release, once fully verified."""
+    if metered():
+        log("on a metered connection; not downloading")
+        return 0
+    work = tempfile.mkdtemp(prefix="reset-", dir=os.path.dirname(RESET))
+    try:
+        fetch(RELEASE + "SHA256SUMS", os.path.join(work, "SHA256SUMS"))
+        fetch(RELEASE + "SHA256SUMS.sig", os.path.join(work, "SHA256SUMS.sig"))
+        if not signature_ok(os.path.join(work, "SHA256SUMS"), os.path.join(work, "SHA256SUMS.sig")):
+            log("the release's SHA256SUMS is not signed by Wild OS; not used")
+            return 1
+        want = None
+        for line in open(os.path.join(work, "SHA256SUMS")):
+            parts = line.split()
+            if len(parts) == 2 and parts[1].lstrip("*") == "wildos-amd64.iso":
+                want = parts[0]
+        if not want:
+            return 1
+        if state().get("iso_sha256") == want and verify(quick=True)[0]:
+            return 0
+        iso = os.path.join(work, "wildos-amd64.iso")
+        log("downloading the newest release for the reset copy")
+        fetch(RELEASE + "wildos-amd64.iso", iso)
+        if sha256(iso) != want:
+            log("downloaded release does not match its signed sum; not used")
+            return 1
+        mnt = os.path.join(work, "iso")
+        os.makedirs(mnt)
+        subprocess.run(["mount", "-o", "loop,ro", iso, mnt], check=True)
+        try:
+            new = os.path.join(work, "new")
+            copy_tree(mnt, new)
+        finally:
+            subprocess.run(["umount", mnt], check=False)
+        os.unlink(iso)
+        ok, why = verify(new)
+        if not ok:
+            log(f"the release's reset files did not verify ({why}); keeping the old copy")
+            return 1
+        write_state(new, verified=True, why="", release=release_name(new), iso_sha256=want,
+                    copied=int(time.time()))
+        old = RESET + ".old"
+        if os.path.exists(RESET):
+            os.rename(RESET, old)
+        os.rename(new, RESET)
+        shutil.rmtree(old, ignore_errors=True)
+        os.chmod(RESET, 0o711)
+        log(f"reset copy is now {release_name()}")
+        if boot_files():
+            subprocess.run(["update-grub"], check=False, capture_output=True)
+        return 0
+    except (OSError, subprocess.CalledProcessError, ValueError) as e:
+        log(f"update failed: {e!r}")
+        return 1
+    finally:
+        shutil.rmtree(work, ignore_errors=True)
+
+
+def main(argv):
+    cmd = argv[0] if argv else ""
+    if cmd == "status":
+        st = state()
+        present = os.path.exists(os.path.join(RESET, FILES[0]))
+        info = {"present": present, "verified": bool(st.get("verified")) and present,
+                "why": st.get("why", "missing" if not present else ""),
+                "release": st.get("release", ""), "bytes": size() if present else 0}
+        print(json.dumps(info) if "--json" in argv else info)
+        return 0
+    if os.geteuid() != 0:
+        print("reset-copy: needs root", file=sys.stderr)
+        return 1
+    if cmd == "verify":
+        base = argv[1] if len(argv) > 1 else RESET
+        ok, why = verify(base)
+        if base == RESET and os.path.isdir(RESET):
+            write_state(RESET, verified=ok, why=why, checked=int(time.time()))
+        print("ok" if ok else why)
+        return 0 if ok else 1
+    if cmd == "from-media":
+        from_media(argv[1], argv[2])
+        return 0
+    if cmd == "boot-files":
+        return 0 if boot_files() else 1
+    if cmd == "update":
+        return update()
+    print(__doc__)
+    return 2
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

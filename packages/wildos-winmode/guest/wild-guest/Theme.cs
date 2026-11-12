@@ -16,8 +16,14 @@ namespace WildOS.Guest
 
         public static void Save(Dictionary<string, object> theme)
         {
+            // Only what Apply reads: the request itself can be megabytes.
+            var keep = new Dictionary<string, object>();
+            keep["dark"] = Json.Bool(theme, "dark", false);
+            string accent = Json.Str(theme, "accent");
+            int r, g, b;
+            keep["accent"] = ParseColour(accent, out r, out g, out b) ? accent : null;
             Directory.CreateDirectory(Path.GetDirectoryName(StateFile));
-            File.WriteAllText(StateFile, Json.Write(theme));
+            File.WriteAllText(StateFile, Json.Write(keep));
         }
 
         public static Dictionary<string, object> Load()

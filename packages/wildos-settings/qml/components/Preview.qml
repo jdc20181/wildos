@@ -20,7 +20,7 @@ DesktopPreview {
             anchors.horizontalCenter: parent.horizontalCenter
             text: Format.time(new Date())
             size: 40
-            font.weight: Font.Light
+            font.weight: UI.Style.weightLight
             color: UI.Style.inkOnWallpaper
         }
 

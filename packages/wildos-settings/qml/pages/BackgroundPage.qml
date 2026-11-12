@@ -28,7 +28,7 @@ PageScroll {
                 Layout.fillWidth: true
                 text: "Your background"
                 size: 15
-                font.weight: Font.DemiBold
+                font.weight: UI.Style.weightSemiBold
             }
 
             UI.Label {

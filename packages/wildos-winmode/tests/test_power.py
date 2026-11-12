@@ -130,8 +130,9 @@ class Power(unittest.TestCase):
         from winmode import agent
         a = agent.Agent.__new__(agent.Agent)
         a.calls, a.asked, a.closed, a.answers = [], [], [], []
-        a.windows, a.host, a.registry, a.waking = [], {}, {}, False
+        a.windows, a.host, a.registry, a.waking, a.preparing = [], {}, {}, False, None
         a.conn = type("Conn", (), {"open": True, "running": True, "close": lambda c: a.closed.append(True)})()
+        a.desktop = type("Desktop", (), {"close": lambda c: None})()
         a.documents_now = lambda done, timeout=20, unanswered=None: unanswered() if docs is None and unanswered else done(docs or [])
         a.ask = lambda action, d, answered: (a.asked.append(action), answered(a.answers.pop(0)))
         a.call_json = lambda method, args=None, signature=None, done=None, timeout=600: (

@@ -121,9 +121,10 @@ Rectangle {
         visible: bar.editing
         verticalAlignment: TextInput.AlignVCenter
         color: UI.Style.inkField
-        selectionColor: UI.Style.accentSelected
+        selectionColor: UI.Style.textSelection
         selectedTextColor: UI.Style.ink
         font.family: UI.Style.fontFamily
+        font.letterSpacing: UI.Style.tracking(UI.Style.px(13))
         font.pixelSize: UI.Style.px(13)
         clip: true
         Accessible.role: Accessible.EditableText

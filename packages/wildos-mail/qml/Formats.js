@@ -1,14 +1,29 @@
 // Dates and times in the regional format chosen in Settings > Language and
 // region (LC_TIME, which Qt.locale() follows), with day and month names in
-// English because the rest of Wild OS is in English. The taskbar clock's
-// Formats.js works the same way.
+// English because the rest of Wild OS is in English. Times also follow the
+// 12 or 24-hour clock chosen in Settings > Date and time, through UI, the
+// WildOS.UI import of the file that imports this one. The taskbar
+// clock's Formats.js works the same way.
 
 function names() {
     return Qt.locale("en_GB");
 }
 
 function time(when) {
-    return Qt.locale().toString(when, Qt.locale().timeFormat(Locale.ShortFormat));
+    return Qt.locale().toString(when, UI.TimeFormat.shortFormat);
+}
+
+// Whether times carry AM or PM, from the clock chosen in Settings or the
+// regional format's own.
+function twelveHour() {
+    return /a/i.test(UI.TimeFormat.shortFormat.replace(/'[^']*'/g, ""));
+}
+
+// The hours down the side of the calendar: "13:00" on the 24-hour clock,
+// "1 PM" on the 12-hour, as Outlook writes them.
+function hour(h) {
+    const format = UI.TimeFormat.shortFormat;
+    return Qt.locale().toString(new Date(2000, 0, 1, h), twelveHour() ? format.replace(/[^\sh']?mm/, "") : format);
 }
 
 // "Mon 09/11/2026", "Mon 11/9/26".

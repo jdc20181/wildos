@@ -308,7 +308,7 @@ PageScroll {
             UI.Label {
                 Layout.fillWidth: true
                 text: page.target ? page.target.realName : ""
-                font.weight: Font.DemiBold
+                font.weight: UI.Style.weightSemiBold
             }
 
             UI.ComboBox {

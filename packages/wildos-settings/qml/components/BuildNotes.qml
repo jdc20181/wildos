@@ -70,7 +70,7 @@ ColumnLayout {
             UI.Label {
                 text: section.modelData.title
                 size: 13
-                font.weight: Font.DemiBold
+                font.weight: UI.Style.weightSemiBold
                 Accessible.role: Accessible.Heading
             }
 

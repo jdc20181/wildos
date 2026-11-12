@@ -1,3 +1,30 @@
+wildos-store (0.1.5) trixie; urgency=medium
+
+  * New Store and Settings icons: a white shopping bag with the Wild OS
+    mark, and a grey cog.
+
+ -- Wild OS Developers <dev@wildos.io>  Thu, 12 Nov 2026 09:07:51 +0000
+
+wildos-store (0.1.4) trixie; urgency=medium
+
+  * No navy left: surfaces, glass, shadows and the logo tile use the
+    same neutral greys as the rest of Wild OS.
+
+ -- Wild OS Developers <dev@wildos.io>  Wed, 11 Nov 2026 22:40:26 +0000
+
+wildos-store (0.1.3) trixie; urgency=medium
+
+  * The Store has its new icon.
+
+ -- Wild OS Developers <dev@wildos.io>  Wed, 11 Nov 2026 16:10:00 +0000
+
+wildos-store (0.1.2) trixie; urgency=medium
+
+  * The time of the last check follows the 12-hour or 24-hour clock
+    chosen in Settings > Date and time.
+
+ -- Wild OS Developers <dev@wildos.io>  Wed, 11 Nov 2026 14:31:15 +0000
+
 wildos-store (0.1.1) trixie; urgency=medium
 
   * Opening a .deb, .flatpakref or .flatpak file shows its own install

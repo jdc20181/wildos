@@ -8,7 +8,10 @@
 #include <QRect>
 #include <QRegion>
 
+#include "monitors.h"
+
 #include <freerdp/client.h>
+#include <freerdp/client/disp.h>
 #include <freerdp/client/rail.h>
 #include <freerdp/client/rdpgfx.h>
 #include <freerdp/freerdp.h>
@@ -67,6 +70,19 @@ public:
     // The output the session is laid out for, in physical pixels, and the
     // scale Windows should draw at.
     void setDisplay(const QSize &physical, double scale);
+    // Every screen, for a RemoteApp session on more than one: Windows then
+    // has a monitor for each, at its own scale, and maximises an app to
+    // the monitor it is on. Set before start().
+    void setLayout(const QList<Monitor> &layout);
+    // A new layout for a session already open (a screen plugged in or
+    // taken away), through the display control channel. False when
+    // Windows cannot take one now.
+    bool sendLayout(const QList<Monitor> &layout);
+    // The layout every connection and reconnection starts with: the one
+    // given to setLayout(), whatever was sent since.
+    QList<Monitor> connectLayout() const { return m_layout; }
+    // After a reconnection Windows has the first layout again.
+    void layoutReset() { m_origin = m_layout.size() > 1 ? monitors::bounds(m_layout).topLeft() : QPoint(); }
     void start();
     void stop();
     void setPrepareOnly(bool on) { m_prepareOnly = on; }
@@ -74,6 +90,9 @@ public:
 
     rdpContext *context() const;
     QSize desktopSize() const;
+    // Where the desktop picture's top left corner is on Windows' desktop:
+    // left of or above 0,0 when a monitor is left of or above the primary.
+    QPoint desktopOrigin() const { return m_origin; }
 
     // Input, in Windows' desktop coordinates.
     void sendMouse(quint16 flags, int x, int y);
@@ -129,6 +148,8 @@ Q_SIGNALS:
     // The connection dropped and is being made again, and is back.
     void connectionLost();
     void connectionBack();
+    // Windows can take a new monitor layout (sendLayout) from now on.
+    void displayControlReady();
     // The process behind a window: its image (full path), App User Model
     // ID and process id.
     void windowProcess(quint32 id, const QString &image, const QString &appUserModel, quint32 pid);
@@ -147,6 +168,8 @@ private:
     std::atomic<bool> m_stopping = false;
     QSize m_physical;
     double m_scale = 1.0;
+    QList<Monitor> m_layout;
+    QPoint m_origin;
 
     std::mutex m_channels;
     // The connection's app has been asked for; a reconnection must not ask
@@ -156,6 +179,8 @@ private:
     bool m_prepareOnly = false;
     RailClientContext *m_rail = nullptr;
     RdpgfxClientContext *m_gfx = nullptr;
+    DispClientContext *m_disp = nullptr;
+    std::atomic_bool m_dispReady = false;
     Clipboard *m_clipboard = nullptr;
 
     // Damage collects here between deliveries, so a slow GUI thread gets

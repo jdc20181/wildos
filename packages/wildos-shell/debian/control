@@ -3,7 +3,8 @@ Section: x11
 Priority: optional
 Maintainer: Wild OS Developers <dev@wildos.io>
 Build-Depends: debhelper-compat (= 13), cmake, qt6-base-dev, qt6-declarative-dev,
- extra-cmake-modules, kwin-dev (>= 4:6.3), kwin-dev (<< 4:6.4), libkf6config-dev
+ extra-cmake-modules, kwin-dev (>= 4:6.3), kwin-dev (<< 4:6.4), libkf6config-dev,
+ libkf6screen-dev, libkf6globalaccel-dev, libinput-dev (>= 1.27), pkgconf
 Standards-Version: 4.7.0
 Rules-Requires-Root: no
 
@@ -20,6 +21,7 @@ Depends:
  qml6-module-qt5compat-graphicaleffects,
  qml6-module-qt-labs-folderlistmodel,
  qml6-module-qtqml-models,
+ qml6-module-qtquick-shapes,
  qml6-module-qtquick-templates,
  wildos-ui,
 Description: Wild OS changes to Plasma and KWin
@@ -42,8 +44,17 @@ Description: Wild OS changes to Plasma and KWin
     there: an outline round every window with a thick accent ring round
     the one in use, and a blur that softens and dims every window but the
     one in use;
+  * a KWin plugin for hot corners: an action for each outer corner of the
+    screen, optionally only while a key is held, and the toast that says
+    when a corner turned something on or off;
+  * a KWin effect for touchpad gestures with three or four fingers, which
+    follow the fingers: Task view, show the desktop, switch desktops, open
+    Start's apps or notifications, and three-finger drag; it also minimises
+    every window on Win+D and brings them back;
   * a KWin script that draws the taskbar underglow chosen in Settings, a
     glowing line along the top edge of the docked taskbar;
+  * a wallpaper plugin for the Overclock theme's Warp picture that draws
+    the W at its centre, lit by the underglow's flowing spectrum;
   * a "Wild OS" sign-in session in place of Plasma's own entries.
  .
  The patched files are taken from the Plasma and KWin versions named in the

@@ -1,0 +1,663 @@
+#!/usr/bin/python3 -I
+"""Start-up recovery's root side, in the recovery system.
+
+The recovery system is the reset copy, started from the installed PC's
+own encrypted disk (wildos.mode=recovery). The disk is already unlocked and
+mounted read-only at /run/initramfs/live: the Btrfs top level, or the ext4
+root. The recovery app runs as the live user and calls this through sudo.
+Every answer is one line of JSON.
+
+    recovery-env info
+    recovery-env check-password          the disk password on stdin
+    recovery-env go-back ID [hold]
+    recovery-env try-again | safe-mode | reboot | poweroff
+    recovery-env reset-keep
+    recovery-env reset-everything        restart with the image in memory
+    recovery-env prepare-wipe            then hand the disk to the installer
+    recovery-env check-disk | repair-startup
+    recovery-env usb-list
+    recovery-env report DEVICE
+"""
+
+import json
+import os
+import re
+import shutil
+import subprocess
+import sys
+import time
+
+LIVE = "/run/initramfs/live"
+SQUASHED = "/run/initramfs/squashed.img"
+WORK = "/run/wildos-recovery"
+BOOT = WORK + "/boot"
+IMAGE = WORK + "/image"
+RP = "/usr/libexec/wildos/restore-points"
+RESET_COPY = "/usr/libexec/wildos/reset-copy"
+# What the installer removes (wildos-installer's packages.conf), and what
+# must survive that, as its finalize-target checks.
+LIVE_ONLY = ["wildos-live", "wildos-installer", "calamares", "dracut-live"]
+ESSENTIAL = ["wildos-base", "wildos-desktop", "wildos-setup", "kicksecure-baremetal-cli", "plasma-workspace", "sddm"]
+LOG = WORK + "/log"
+
+sys.path.insert(0, "/usr/libexec/wildos")
+
+
+def log(msg):
+    os.makedirs(WORK, exist_ok=True)
+    with open(LOG, "a") as f:
+        f.write(time.strftime("%H:%M:%S ") + msg + "\n")
+
+
+def run(cmd, check=True, **kw):
+    log("run: " + " ".join(cmd))
+    return subprocess.run(cmd, check=check, **kw)
+
+
+def out(cmd):
+    return subprocess.run(cmd, capture_output=True, text=True).stdout.strip()
+
+
+def answer(**kw):
+    print(json.dumps(kw))
+    sys.stdout.flush()
+
+
+def cmdline():
+    with open("/proc/cmdline") as f:
+        args = f.read().split()
+    return {a.split("=", 1)[0]: (a.split("=", 1)[1] if "=" in a else "") for a in args}
+
+
+# ---------------------------------------------------------------- the disk
+
+def fstype():
+    return out(["findmnt", "-no", "FSTYPE", LIVE])
+
+
+def top():
+    return LIVE if fstype() == "btrfs" else None
+
+
+def root():
+    """The installed system's root. On Btrfs, @ mounted on its own, so the
+    system's own tools (grub-probe, dracut) see / as a mount, as at start."""
+    if fstype() != "btrfs":
+        return LIVE
+    mnt = WORK + "/root"
+    if not os.path.ismount(mnt):
+        writable()
+        os.makedirs(mnt, exist_ok=True)
+        dev = out(["findmnt", "-no", "SOURCE", LIVE]).split("[")[0]
+        run(["mount", "-o", "subvol=@", dev, mnt])
+    return mnt
+
+
+def writable():
+    if "rw" not in out(["findmnt", "-no", "OPTIONS", LIVE]).split(","):
+        run(["mount", "-o", "remount,rw", LIVE])
+
+
+def luks_device():
+    """The encrypted partition the live root sits on."""
+    dev = os.path.realpath("/run/initramfs/livedev") if os.path.exists("/run/initramfs/livedev") else out(["findmnt", "-no", "SOURCE", LIVE])
+    name = os.path.basename(dev)
+    if dev.startswith("/dev/dm-"):
+        name = out(["dmsetup", "info", "-c", "--noheadings", "-o", "name", dev])
+    status = out(["cryptsetup", "status", name])
+    m = re.search(r"^\s*device:\s*(\S+)", status, re.M)
+    return (m.group(1) if m else ""), name
+
+
+def fstab_device(mountpoint):
+    try:
+        with open(os.path.join(root(), "etc/fstab")) as f:
+            for line in f:
+                p = line.split()
+                if len(p) >= 2 and not p[0].startswith("#") and p[1] == mountpoint:
+                    if p[0].startswith("UUID="):
+                        return "/dev/disk/by-uuid/" + p[0][5:]
+                    return p[0]
+    except OSError:
+        pass
+    return ""
+
+
+def mount_boot(rw=True):
+    os.makedirs(BOOT, exist_ok=True)
+    if os.path.ismount(BOOT):
+        if rw:
+            run(["mount", "-o", "remount,rw", BOOT], check=False)
+        return BOOT
+    dev = fstab_device("/boot")
+    if dev:
+        run(["mount", "-o", "rw" if rw else "ro", dev, BOOT], check=False)
+    return BOOT
+
+
+def grubenv(*args):
+    mount_boot()
+    env = os.path.join(BOOT, "grub/grubenv")
+    if os.path.exists(env):
+        run(["grub-editenv", env] + list(args), check=False)
+
+
+def index():
+    t = top()
+    path = os.path.join(t, "@snapshots/index.json") if t else os.path.join(LIVE, "var/lib/wildos/restore-points/index.json")
+    try:
+        with open(path) as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return {"points": []}
+
+
+def reset_dir():
+    t = top()
+    return os.path.join(t, "@reset") if t else os.path.join(LIVE, "var/lib/wildos/reset")
+
+
+def keyboard():
+    layout, variant = "gb", ""
+    try:
+        with open(os.path.join(root(), "etc/default/keyboard")) as f:
+            for line in f:
+                m = re.match(r'XKBLAYOUT="?([^",\n]*)', line)
+                if m:
+                    layout = m.group(1)
+                m = re.match(r'XKBVARIANT="?([^",\n]*)', line)
+                if m:
+                    variant = m.group(1)
+    except OSError:
+        pass
+    return layout, variant
+
+
+def target_has(path):
+    return os.path.exists(os.path.join(root(), path.lstrip("/")))
+
+
+# ---------------------------------------------------------------- chroot
+
+class Chroot:
+    """The installed system mounted for running its own tools."""
+
+    def __init__(self, efi=False):
+        self.efi = efi
+        self.mounts = []
+
+    def __enter__(self):
+        writable()
+        r = root()
+        t = top()
+        if t:
+            # The reset copy and the restore points too: without them,
+            # reset-copy boot-files deletes start-up recovery from /boot and
+            # update-grub drops it and the restore points from the menu.
+            for sub, where in (("@log", "var/log"), ("@cache", "var/cache"), ("@tmp", "var/tmp"),
+                               ("@reset", "var/lib/wildos/reset"), ("@snapshots", ".snapshots")):
+                if os.path.isdir(os.path.join(t, sub)):
+                    self.bind(os.path.join(t, sub), os.path.join(r, where))
+        mount_boot()
+        self.bind(BOOT, os.path.join(r, "boot"))
+        if self.efi and os.path.isdir("/sys/firmware/efi"):
+            dev = fstab_device("/boot/efi")
+            if dev:
+                os.makedirs(os.path.join(r, "boot/efi"), exist_ok=True)
+                run(["mount", dev, os.path.join(r, "boot/efi")])
+                self.mounts.append(os.path.join(r, "boot/efi"))
+        for d in ("proc", "sys", "dev", "dev/pts", "run"):
+            self.bind("/" + d, os.path.join(r, d))
+        if os.path.isdir("/sys/firmware/efi/efivars"):
+            self.bind("/sys/firmware/efi/efivars", os.path.join(r, "sys/firmware/efi/efivars"))
+        return self
+
+    def bind(self, src, dst):
+        os.makedirs(dst, exist_ok=True)
+        run(["mount", "--bind", src, dst])
+        self.mounts.append(dst)
+
+    ENV = ["/usr/bin/env", "-i", "PATH=/usr/sbin:/usr/bin:/sbin:/bin", "DEBIAN_FRONTEND=noninteractive", "LANG=C.UTF-8"]
+
+    def run(self, cmd, check=True):
+        return run(["chroot", root()] + self.ENV + cmd, check=check)
+
+    def out(self, cmd):
+        return out(["chroot", root()] + self.ENV + cmd)
+
+    def start_files_missing(self):
+        """Kernels whose initramfs could not unlock or mount this system.
+
+        dracut only adds what it finds the running system using, so an
+        initramfs made where it cannot see the disk has no encryption and no
+        file system driver: the PC then stops at a black screen before the
+        disk password (found in the VM on 12 November)."""
+        r = root()
+        crypt = any(l.split() and not l.lstrip().startswith("#")
+                    for l in open(os.path.join(r, "etc/crypttab")).read().splitlines()) \
+            if os.path.exists(os.path.join(r, "etc/crypttab")) else False
+        fs = out(["findmnt", "-no", "FSTYPE", r])
+        missing = []
+        for k in sorted(os.listdir(os.path.join(r, "usr/lib/modules"))):
+            if not os.path.isdir(os.path.join(r, "usr/lib/modules", k, "kernel")):
+                continue
+            img = "/boot/initrd.img-" + k
+            listing = self.out(["lsinitrd", img]).splitlines() if os.path.exists(r + img) else []
+            fs_module = os.path.isdir(os.path.join(r, "usr/lib/modules", k, "kernel/fs", fs))
+            if not listing \
+                    or (crypt and "crypt" not in listing) \
+                    or (fs_module and not any("/kernel/fs/" + fs + "/" in l for l in listing)):
+                missing.append(k)
+        return missing
+
+    def start_files(self):
+        """A host-only initramfs for every kernel, or a full one where the
+        host-only one would not start the PC. True when all of them can."""
+        self.run(["dracut", "--force", "--regenerate-all"], check=False)
+        for k in self.start_files_missing():
+            log("initramfs for " + k + " cannot start this PC; making a full one")
+            self.run(["dracut", "--force", "--no-hostonly", "--kver", k], check=False)
+        return not self.start_files_missing()
+
+    def __exit__(self, *a):
+        for m in reversed(self.mounts):
+            run(["umount", "-l", m], check=False)
+
+
+# ---------------------------------------------------------------- commands
+
+def info():
+    idx = index()
+    layout, variant = keyboard()
+    reason = cmdline().get("wildos.recovery", "")
+    ok_reset = subprocess.run([RESET_COPY, "verify", reset_dir()], capture_output=True).returncode == 0 if "--verify" in sys.argv else None
+    answer(backend=fstype(), reason=reason, points=idx.get("points", []), layout=layout, variant=variant,
+           report=target_has("/usr/bin/wildos-report"), reset=os.path.exists(os.path.join(reset_dir(), "LiveOS/squashfs.img")),
+           reset_verified=ok_reset, in_ram=in_ram(), wipe_fits=wipe_fits())
+
+
+def check_password():
+    password = sys.stdin.buffer.read()
+    dev, _ = luks_device()
+    if not dev:
+        answer(ok=True, why="not encrypted")
+        return
+    r = subprocess.run(["cryptsetup", "open", "--test-passphrase", "--key-file=-", dev], input=password,
+                       capture_output=True)
+    answer(ok=r.returncode == 0)
+
+
+def go_back(pid, hold):
+    writable()
+    mount_boot()
+    cmd = [RP, "restore", str(pid), "--boot", BOOT]
+    t = top()
+    if t:
+        cmd += ["--top", t]
+    else:
+        cmd += ["--target", LIVE]
+    if hold:
+        cmd.append("--hold")
+    r = run(cmd, check=False, capture_output=True, text=True)
+    log(r.stdout + r.stderr)
+    if r.returncode == 0:
+        grubenv("unset", "wildos_tries")
+    answer(ok=r.returncode == 0, why=(r.stderr.strip().split("\n") or [""])[-1])
+
+
+def finish(action, reason=None):
+    if reason:
+        grubenv("set", "wildos_why=" + reason)
+    else:
+        grubenv("unset", "wildos_tries")
+    subprocess.run(["sync"])
+    for m in (BOOT,):
+        subprocess.run(["umount", m], capture_output=True)
+    answer(ok=True)
+    subprocess.Popen(["systemctl", action])
+
+
+def human_users(r):
+    users = []
+    try:
+        with open(os.path.join(r, "etc/passwd")) as f:
+            for line in f:
+                p = line.strip().split(":")
+                if len(p) > 5 and p[2].isdigit() and 1000 <= int(p[2]) < 60000:
+                    users.append((p[0], int(p[2]), int(p[3]), p[5]))
+    except OSError:
+        pass
+    return users
+
+
+def manual_packages(r):
+    """What `apt-mark showmanual` says, read from the files: running apt-mark
+    in a chroot without /dev left a plain file at the system's /dev/null."""
+    installed = set()
+    try:
+        with open(os.path.join(r, "var/lib/dpkg/status")) as f:
+            for block in f.read().split("\n\n"):
+                fields = dict(l.split(": ", 1) for l in block.splitlines() if ": " in l and not l.startswith(" "))
+                if fields.get("Status", "").endswith(" installed") and "Package" in fields:
+                    installed.add(fields["Package"])
+    except OSError:
+        return set()
+    auto = set()
+    try:
+        with open(os.path.join(r, "var/lib/apt/extended_states")) as f:
+            for block in f.read().split("\n\n"):
+                fields = dict(l.split(": ", 1) for l in block.splitlines() if ": " in l)
+                if fields.get("Auto-Installed") == "1" and "Package" in fields:
+                    auto.add(fields["Package"])
+    except OSError:
+        pass
+    return installed - auto
+
+
+def write_app_lists(r, home_root):
+    """Apps the person installed, for 'Apps before the reset.txt'."""
+    manual = manual_packages(r)
+    image = set(out(["dpkg-query", "-W", "-f=${Package}\\n"]).split())
+    # The boot loader packages the installer adds from its pool are not the
+    # person's apps.
+    pool = set()
+    for d in ("efi", "bios"):
+        p = os.path.join(reset_dir(), "pool", d)
+        if os.path.isdir(p):
+            pool.update(n.split("_")[0] for n in os.listdir(p) if n.endswith(".deb"))
+    apt_apps = sorted(manual - image - pool)
+    flatpaks = []
+    fp = os.path.join(r, "var/lib/flatpak/app")
+    if os.path.isdir(fp):
+        flatpaks = sorted(os.listdir(fp))
+    if not apt_apps and not flatpaks:
+        return
+    text = ["Apps on this PC before Wild OS was reset on " + time.strftime("%-d %B %Y") + ".",
+            "Install them again from the Store.", ""]
+    if flatpaks:
+        text += ["From the Store:"] + ["  " + a for a in flatpaks] + [""]
+    if apt_apps:
+        text += ["Other software:"] + ["  " + a for a in apt_apps] + [""]
+    for name, uid, gid, home in human_users(r):
+        h = os.path.join(home_root, home.lstrip("/").split("/", 1)[1] if home.startswith("/home/") else home.lstrip("/"))
+        if not os.path.isdir(h):
+            continue
+        desk = os.path.join(h, "Desktop")
+        os.makedirs(desk, exist_ok=True)
+        path = os.path.join(desk, "Apps before the reset.txt")
+        with open(path, "w") as f:
+            f.write("\n".join(text))
+        os.chown(path, uid, gid)
+
+
+def reset_keep():
+    """Keep my files: the system back to the release in the reset copy."""
+    writable()
+    mount_boot()
+    rd = reset_dir()
+    r = subprocess.run([RESET_COPY, "verify", rd], capture_output=True, text=True)
+    if r.returncode != 0:
+        answer(ok=False, why="The copy of Wild OS on this PC didn't pass its check (" + r.stdout.strip() + ").")
+        return
+    t = top()
+    target = root()
+
+    # A restore point first, so even a reset can be undone.
+    cmd = [RP, "create", "--label", "Before resetting Wild OS", "--kind", "manual", "--boot", BOOT]
+    cmd += ["--top", t] if t else ["--target", target]
+    run(cmd, check=False)
+
+    home_root = os.path.join(t, "@home") if t else os.path.join(target, "home")
+    write_app_lists(target, home_root)
+
+    os.makedirs(IMAGE, exist_ok=True)
+    if not os.path.ismount(IMAGE):
+        run(["mount", "-o", "loop,ro", os.path.join(rd, "LiveOS/squashfs.img"), IMAGE])
+    import importlib.machinery
+    import importlib.util
+    loader = importlib.machinery.SourceFileLoader("restore_points", RP)
+    spec = importlib.util.spec_from_loader("restore_points", loader)
+    rp = importlib.util.module_from_spec(spec)
+    loader.exec_module(rp)
+
+    saved = os.path.join(WORK, "accounts")
+    os.makedirs(os.path.join(saved, "etc"), exist_ok=True)
+    for f in rp.ACCOUNT_FILES:
+        if os.path.exists(target + f):
+            shutil.copy2(target + f, os.path.join(saved, "etc", os.path.basename(f)))
+    keep = rp.system_excludes(target) + rp.CARRY + rp.ACCOUNT_FILES
+    run(list(rp.RSYNC) + ["-x"] + rp.rsync_excludes(keep) + [IMAGE + "/", target + "/"])
+    rp.merge_accounts(IMAGE, saved, target)
+    # The image's kernel and its start-up files replace the old ones.
+    # grub.cfg stays until update-grub has written the new one below, so a
+    # failure there never leaves the PC at a GRUB prompt.
+    run(list(rp.RSYNC) + rp.rsync_excludes(rp.BOOT_EXCLUDES + ["/grub/grub.cfg"]) + [IMAGE + "/boot/", BOOT + "/"])
+    run(["umount", IMAGE], check=False)
+
+    with Chroot(efi=True) as c:
+        # As the installer's packages step: the live-only packages, then
+        # what only they needed (Calamares' libraries).
+        c.run(["apt-get", "--purge", "-q", "-y", "remove"] + LIVE_ONLY, check=False)
+        c.run(["apt-get", "--purge", "-q", "-y", "autoremove"], check=False)
+        gone = [p for p in ESSENTIAL if "ok installed" not in c.out(["dpkg-query", "-W", "-f=${Status}", p])]
+        if gone:
+            log("missing after removing the live packages: " + " ".join(gone))
+            answer(ok=False, why="The reset could not finish. Choose Start the earlier version to go back to before the reset.")
+            return
+        pool = os.path.join(rd, "pool", "efi" if os.path.isdir("/sys/firmware/efi") else "bios")
+        if os.path.isdir(pool):
+            staging = os.path.join(target, "var/cache/wildos-reset")
+            os.makedirs(staging, exist_ok=True)
+            debs = []
+            for n in sorted(os.listdir(pool)):
+                if n.endswith(".deb"):
+                    shutil.copy2(os.path.join(pool, n), staging)
+                    debs.append("/var/cache/wildos-reset/" + n)
+            if debs:
+                c.run(["dpkg", "--install"] + debs, check=False)
+            shutil.rmtree(staging, ignore_errors=True)
+        if os.path.isdir("/sys/firmware/efi"):
+            c.run(["grub-install", "--target=x86_64-efi", "--efi-directory=/boot/efi", "--bootloader-id=wildos",
+                   "--force-extra-removable", "--no-nvram"], check=False)
+        started = c.start_files()
+        c.run(["/usr/libexec/wildos/reset-copy", "boot-files"], check=False)
+        menu = c.run(["update-grub"], check=False)
+    grubenv("unset", "wildos_tries")
+    if not started:
+        answer(ok=False, why="Wild OS was reset, but its start-up files could not be made. Choose Start the earlier version to go back to before the reset.")
+        return
+    if menu.returncode != 0:
+        answer(ok=False, why="Wild OS was reset, but the start-up menu could not be written. Use Repair tools > Repair start-up.")
+        return
+    answer(ok=True)
+
+
+def wipe_fits():
+    """Remove everything copies the 2.2 GB image into memory first: a PC with
+    4 GB fitted shows about 3.7 GiB here."""
+    try:
+        with open("/proc/meminfo") as f:
+            return int(f.readline().split()[1]) >= 3500 * 1024
+    except (OSError, ValueError, IndexError):
+        return False
+
+
+def in_ram():
+    """Started with rd.live.ram=1: dracut copied the image into memory. The
+    disk it came from stays mounted at LIVE until prepare-wipe lets it go."""
+    return os.path.exists(SQUASHED)
+
+
+def unmount_everywhere(name):
+    """Unmount the disk in every service's own mount namespace too. Services
+    with a private namespace (jitterentropy-rngd in the VM on 12 November)
+    keep their copy of a mount after it is gone here, which holds the
+    encrypted disk open."""
+    sources = ("/dev/mapper/" + name, os.path.realpath("/dev/mapper/" + name))
+    done = set()
+    for pid in filter(str.isdigit, os.listdir("/proc")):
+        try:
+            ns = os.readlink("/proc/%s/ns/mnt" % pid)
+            if ns in done:
+                continue
+            with open("/proc/%s/mountinfo" % pid) as f:
+                points = [l.split()[4] for l in f if l.split(" - ", 1)[-1].split()[1:2] and l.split(" - ", 1)[-1].split()[1] in sources]
+        except (OSError, IndexError):
+            continue
+        done.add(ns)
+        for mp in sorted(points, key=len, reverse=True):
+            run(["nsenter", "-t", pid, "-m", "umount", mp], check=False)
+
+
+def prepare_wipe():
+    """The image runs from memory: close the disk and hand it to the installer."""
+    if not in_ram():
+        answer(ok=False, why="The copy of Wild OS is not in memory.")
+        return
+    _, name = luks_device()
+    # The installer takes the new system's reset copy from where it started
+    # (its resetcopy step). The image is in memory already; the rest of the
+    # copy (start-up recovery's kernel and initramfs, the signed list, the
+    # boot loader packages) is on the disk about to be wiped, so it goes to
+    # memory too. Without it the new install has no start-up recovery
+    # until the next release.
+    held = WORK + "/reset-copy"
+    if os.path.ismount(LIVE):
+        src = reset_dir()
+        if os.path.isdir(src):
+            run(["rsync", "-a", "--exclude", "/LiveOS/squashfs.img", "--exclude", "/state.json", src + "/", held + "/"])
+    # Nothing may keep the disk open, or it cannot be closed and wiped.
+    for m in (WORK + "/root/boot/efi", WORK + "/root/boot", WORK + "/root", BOOT, IMAGE, LIVE):
+        if os.path.ismount(m):
+            run(["umount", m], check=False)
+    if name and os.path.exists("/dev/mapper/" + name):
+        unmount_everywhere(name)
+        if run(["cryptsetup", "close", name], check=False).returncode != 0:
+            answer(ok=False, why="The disk is still in use, so it can't be wiped. Nothing was changed.")
+            return
+    if os.path.isdir(held):
+        run(["rsync", "-a", held + "/", LIVE + "/"])
+    os.makedirs(os.path.join(LIVE, "LiveOS"), exist_ok=True)
+    link = os.path.join(LIVE, "LiveOS/squashfs.img")
+    if not os.path.lexists(link):
+        os.symlink(SQUASHED, link)
+    answer(ok=True)
+
+
+def check_disk():
+    results = []
+    dev = fstab_device("/boot")
+    if dev:
+        if os.path.ismount(BOOT):
+            run(["umount", BOOT], check=False)
+        r = run(["e2fsck", "-f", "-p", dev], check=False, capture_output=True, text=True)
+        results.append(("start-up partition", r.returncode < 4))
+    efi = fstab_device("/boot/efi")
+    if efi:
+        r = run(["fsck.vfat", "-a", efi], check=False, capture_output=True, text=True)
+        results.append(("EFI partition", r.returncode < 2))
+    if fstype() == "btrfs":
+        r = run(["btrfs", "scrub", "start", "-B", "-r", LIVE], check=False, capture_output=True, text=True)
+        results.append(("system", r.returncode == 0))
+    else:
+        r = run(["e2fsck", "-f", "-n", out(["findmnt", "-no", "SOURCE", LIVE])], check=False, capture_output=True, text=True)
+        results.append(("system", r.returncode == 0))
+    bad = [n for n, ok in results if not ok]
+    answer(ok=not bad, why=", ".join(bad))
+
+
+def repair_startup():
+    with Chroot(efi=True) as c:
+        if os.path.isdir("/sys/firmware/efi"):
+            c.run(["grub-install", "--target=x86_64-efi", "--efi-directory=/boot/efi", "--bootloader-id=wildos",
+                   "--force-extra-removable", "--no-nvram"], check=False)
+        started = c.start_files()
+        menu = c.run(["update-grub"], check=False)
+    grubenv("unset", "wildos_tries")
+    fixed = started and menu.returncode == 0
+    answer(ok=fixed, why="" if fixed else "Start-up could not be repaired. Choose an earlier version instead.")
+
+
+def usb_list():
+    data = json.loads(out(["lsblk", "-J", "-p", "-o", "NAME,RM,HOTPLUG,TRAN,FSTYPE,LABEL,SIZE,TYPE"]) or "{}")
+    found = []
+
+    def walk(devs, parent_usb):
+        for d in devs:
+            usb = parent_usb or d.get("tran") == "usb" or d.get("rm") in (True, "1") or d.get("hotplug") in (True, "1")
+            if usb and d.get("type") == "part" and d.get("fstype") in ("vfat", "exfat", "ntfs", "ext4"):
+                found.append({"device": d["name"], "label": d.get("label") or "USB stick", "size": d.get("size", "")})
+            walk(d.get("children") or [], usb)
+
+    walk(data.get("blockdevices", []), False)
+    answer(sticks=found)
+
+
+def report(device):
+    usb = WORK + "/usb"
+    os.makedirs(usb, exist_ok=True)
+    run(["mount", device, usb])
+    try:
+        if not target_has("/usr/bin/wildos-report"):
+            answer(ok=False, why="Report a problem isn't installed on this PC.")
+            return
+        with Chroot() as c:
+            inside = os.path.join(root(), "run/wildos-report-usb")
+            c.bind(usb, inside)
+            r = c.run(["/usr/bin/wildos-report", "--save", "/run/wildos-report-usb", "--part", "other", "--boot", "-1",
+                       "--description", "Saved from start-up recovery"], check=False)
+        answer(ok=r.returncode == 0)
+    finally:
+        subprocess.run(["sync"])
+        run(["umount", usb], check=False)
+
+
+def main(argv):
+    if os.geteuid() != 0:
+        print(json.dumps({"ok": False, "why": "needs root"}))
+        return 1
+    cmd = argv[0] if argv else "info"
+    try:
+        if cmd == "info":
+            info()
+        elif cmd == "check-password":
+            check_password()
+        elif cmd == "go-back":
+            go_back(int(argv[1]), len(argv) > 2 and argv[2] == "hold")
+        elif cmd == "try-again":
+            finish("reboot")
+        elif cmd == "safe-mode":
+            finish("reboot", "safe")
+        elif cmd == "reboot":
+            finish("reboot")
+        elif cmd == "poweroff":
+            finish("poweroff")
+        elif cmd == "reset-keep":
+            reset_keep()
+        elif cmd == "reset-everything":
+            if wipe_fits():
+                finish("reboot", "reset-everything")
+            else:
+                answer(ok=False, why="Remove everything needs at least 4 GB of memory.")
+        elif cmd == "prepare-wipe":
+            prepare_wipe()
+        elif cmd == "check-disk":
+            check_disk()
+        elif cmd == "repair-startup":
+            repair_startup()
+        elif cmd == "usb-list":
+            usb_list()
+        elif cmd == "report":
+            report(argv[1])
+        else:
+            answer(ok=False, why="unknown request")
+            return 2
+    except (subprocess.CalledProcessError, OSError, ValueError) as e:
+        log(repr(e))
+        answer(ok=False, why=str(e))
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

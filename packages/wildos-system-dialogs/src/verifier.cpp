@@ -177,25 +177,70 @@ const QHash<QString, QString> &imagePackages()
     return packages;
 }
 
+// The hosts whose archives Wild OS trusts. record-package-sources keeps
+// the same list.
+bool trustedHost(const QString &host)
+{
+    return host == QLatin1String("deb.debian.org") || host == QLatin1String("security.debian.org") || host == QLatin1String("deb.kicksecure.com")
+        || host == QLatin1String("wildos.io") || host.endsWith(QLatin1String(".wildos.io"));
+}
+
+QString originOfHost(const QString &host)
+{
+    return host.contains(QLatin1String("wildos")) ? QStringLiteral("Wild OS") : host.contains(QLatin1String("kicksecure")) ? QStringLiteral("Kicksecure")
+                                                                                                                            : QStringLiteral("Debian");
+}
+
+// The archive each installed version came from, as record-package-sources
+// noted it when the version was installed: apt itself forgets as soon as
+// the archive lists a newer version, which deb.wildos.io does with every
+// build. Read afresh for each prompt, since updates change it.
+QString recordedHost(const QString &name, const QString &version)
+{
+    QFile file(QStringLiteral("/var/lib/wildos/package-sources"));
+    if (!file.open(QIODevice::ReadOnly)) {
+        return {};
+    }
+    const QByteArray prefix = name.toUtf8() + '\t' + version.toUtf8() + '\t';
+    while (!file.atEnd()) {
+        const QByteArray line = file.readLine().trimmed();
+        if (line.startsWith(prefix)) {
+            return QString::fromUtf8(line.mid(prefix.size()));
+        }
+    }
+    return {};
+}
+
 // Where the installed version of a package came from. It is part of Wild
 // OS when that exact version shipped in the image, which came from the
-// signed build, or when apt says that version comes from Debian (with its
-// security archive), Kicksecure or the Wild OS repository. A package's
-// own Maintainer field is not evidence: any .deb can claim any name.
+// signed build, or when apt says, or said when it was installed, that
+// version comes from Debian (with its security archive), Kicksecure or the
+// Wild OS repository. A package's own Maintainer field is not evidence:
+// any .deb can claim any name.
 Source sourceOf(const QString &package)
 {
-    static QHash<QString, Source> cache;
-    if (cache.contains(package)) {
-        return cache.value(package);
-    }
     Source source;
     const QString name = package.section(QLatin1Char(':'), 0, 0);
     const QString version = run(QStringLiteral("dpkg-query"), {QStringLiteral("-W"), QStringLiteral("-f=${Version}"), package}).trimmed();
+    // By version too: the agent runs for the whole session, and an update
+    // in the meantime makes it another package as far as trust goes.
+    const QString cacheKey = package + QLatin1Char(' ') + version;
+    static QHash<QString, Source> cache;
+    if (cache.contains(cacheKey)) {
+        return cache.value(cacheKey);
+    }
     const auto &image = imagePackages();
     if (!version.isEmpty() && (image.value(package) == version || image.value(name) == version)) {
         source.trusted = true;
         source.origin = QStringLiteral("Wild OS");
-        cache.insert(package, source);
+        cache.insert(cacheKey, source);
+        return source;
+    }
+    const QString recorded = version.isEmpty() ? QString() : recordedHost(name, version);
+    if (trustedHost(recorded)) {
+        source.trusted = true;
+        source.origin = originOfHost(recorded);
+        cache.insert(cacheKey, source);
         return source;
     }
 
@@ -208,7 +253,10 @@ Source sourceOf(const QString &package)
             continue;
         }
         if (installed) {
-            static const QRegularExpression versionLine(QStringLiteral("^ {5}\S"));
+            // The next version's line ends the installed one's sources.
+            // "\\S": a lone "\S" in a C++ string is just "S", which no line
+            // matches, so other versions' archives counted for this one.
+            static const QRegularExpression versionLine(QStringLiteral("^ {5}\\S"));
             if (versionLine.match(line).hasMatch()) {
                 break;
             }
@@ -219,23 +267,17 @@ Source sourceOf(const QString &package)
         }
     }
 
-    const auto trustedHost = [](const QString &host) {
-        return host == QLatin1String("deb.debian.org") || host == QLatin1String("security.debian.org") || host == QLatin1String("deb.kicksecure.com")
-            || host == QLatin1String("wildos.io") || host.endsWith(QLatin1String(".wildos.io"));
-    };
     for (const QString &host : std::as_const(hosts)) {
         if (trustedHost(host)) {
             source.trusted = true;
-            source.origin = host.contains(QLatin1String("wildos")) ? QStringLiteral("Wild OS")
-                : host.contains(QLatin1String("kicksecure"))       ? QStringLiteral("Kicksecure")
-                                                                  : QStringLiteral("Debian");
+            source.origin = originOfHost(host);
             break;
         }
     }
     if (!source.trusted && !hosts.isEmpty()) {
         source.origin = hosts.constFirst();
     }
-    cache.insert(package, source);
+    cache.insert(cacheKey, source);
     return source;
 }
 

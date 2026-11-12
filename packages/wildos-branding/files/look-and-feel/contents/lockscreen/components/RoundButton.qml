@@ -29,7 +29,7 @@ T.AbstractButton {
             tint: control.down ? UI.Style.glassOnWallpaperPressed
                  : control.hovered || control.checked ? UI.Style.glassOnWallpaperHover
                  : UI.Style.glassOnWallpaper
-            blurRadius: 24
+            blurRadius: 64
             Behavior on tint { ColorAnimation { duration: UI.Style.hoverDuration } }
         }
 

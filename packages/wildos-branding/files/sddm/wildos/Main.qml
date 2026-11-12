@@ -31,6 +31,12 @@ Item {
     // Set when PAM explains that signing in is blocked for now, so the
     // failure that follows does not claim the password was wrong.
     property bool blocked: false
+    // An empty password and Enter go to the fingerprint reader for an
+    // account with a finger enrolled (wildos-desktop's wildos-fingerprint
+    // PAM profile). Whose finger is enrolled can't be seen from here, so the
+    // hint follows the reader alone.
+    property bool fingerprintReader: false
+    property bool triedFingerprint: false
 
     // Values for the chosen user, read through a Repeater because SDDM's
     // models only expose their roles to delegates.
@@ -51,6 +57,7 @@ Item {
         failureMessage = "";
         infoMessage = "";
         busy = true;
+        triedFingerprint = fingerprintReader && passwordPill.text.length === 0;
         sddm.login(user, passwordPill.text, sessionIndex);
     }
 
@@ -68,8 +75,9 @@ Item {
 
         function onLoginFailed() {
             root.busy = false;
-            root.failureMessage = root.blocked ? Messages.unavailable : Messages.wrongPassword;
-            root.passwordHint = root.blocked ? "" : UI.System.passwordHint(root.hasUserList ? root.currentUserName : usernamePill.text.trim());
+            root.failureMessage = root.blocked ? Messages.unavailable : root.triedFingerprint ? Messages.fingerprintFailed : Messages.wrongPassword;
+            root.passwordHint = root.blocked || root.triedFingerprint ? "" : UI.System.passwordHint(root.hasUserList ? root.currentUserName : usernamePill.text.trim());
+            root.infoMessage = "";
             root.blocked = false;
             passwordPill.text = "";
             passwordPill.shake();
@@ -83,6 +91,11 @@ Item {
         // PAM text is never shown raw; only a recognised reason that signing
         // in is blocked comes through, as a plain sentence.
         function onInformationMessage(message) {
+            const finger = Messages.fingerprint(message);
+            if (finger !== null) {
+                root.infoMessage = finger;
+                return;
+            }
             const plain = Messages.translate(message);
             if (plain.length > 0) {
                 root.blocked = true;
@@ -248,7 +261,7 @@ Item {
                 horizontalAlignment: Text.AlignHCenter
                 text: root.hasUserList ? root.currentRealName : "Sign in"
                 size: 18
-                font.weight: Font.DemiBold
+                font.weight: UI.Style.weightSemiBold
                 color: UI.Style.inkOnWallpaper
                 bottomPadding: 6
                 layer.enabled: GraphicsInfo.api !== GraphicsInfo.Software
@@ -307,7 +320,7 @@ Item {
                 anchors.horizontalCenter: parent.horizontalCenter
                 width: parent.width
                 spacing: 6
-                visible: failureNotice.shown || hintNotice.shown || capsNotice.shown || infoNotice.shown
+                visible: failureNotice.shown || hintNotice.shown || capsNotice.shown || infoNotice.shown || fingerprintNotice.shown
 
                 Notice {
                     id: failureNotice
@@ -324,6 +337,13 @@ Item {
                     id: infoNotice
                     shown: root.infoMessage.length > 0 && root.failureMessage.length === 0
                     text: root.infoMessage
+                }
+                Notice {
+                    id: fingerprintNotice
+                    shown: root.fingerprintReader && passwordPill.visible && !root.busy && passwordPill.text.length === 0
+                        && root.failureMessage.length === 0 && root.infoMessage.length === 0
+                    text: "Or press Enter and touch the fingerprint reader"
+                    muted: true
                 }
                 Notice {
                     id: capsNotice
@@ -535,6 +555,9 @@ Item {
     Component.onCompleted: {
         focusPassword();
         access.restore();
+        // Asking fprintd starts it, which can take a moment; the screen is
+        // up first.
+        Qt.callLater(() => root.fingerprintReader = UI.System.fingerprintReader !== undefined && UI.System.fingerprintReader());
         if (access.keyboardOn && keyboardLoader.item) {
             keyboardLoader.item.wanted = true;
             Qt.inputMethod.show();

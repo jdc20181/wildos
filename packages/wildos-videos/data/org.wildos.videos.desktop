@@ -1,0 +1,15 @@
+[Desktop Entry]
+Type=Application
+Name=Videos
+GenericName=Video player
+Comment=Watch the videos on your PC
+Exec=wildos-videos %U
+Icon=wildos-videos
+Terminal=false
+StartupNotify=true
+StartupWMClass=wildos-videos
+Categories=Qt;AudioVideo;Video;Player;
+MimeType=video/mp4;video/x-m4v;video/quicktime;video/x-matroska;video/webm;video/x-msvideo;video/avi;video/msvideo;video/x-ms-wmv;video/x-ms-asf;video/x-flv;video/mpeg;video/x-mpeg;video/x-mpeg2;video/mp2t;video/vnd.mpegurl;video/3gpp;video/3gpp2;video/ogg;video/x-ogm+ogg;video/x-theora+ogg;video/dv;video/x-matroska-3d;video/vnd.avi;video/x-flic;video/x-nsv;video/x-anim;application/x-matroska;
+Keywords=video;videos;films;movies;player;mp4;mkv;subtitles;media player;films and tv;
+X-DBUS-StartupType=Unique
+X-DBUS-ServiceName=org.wildos.videos

@@ -296,7 +296,7 @@ FocusScope {
                     Layout.fillWidth: true
                     text: "Join a hidden network"
                     size: 15
-                    font.weight: Font.DemiBold
+                    font.weight: UI.Style.weightSemiBold
                     Accessible.role: Accessible.Heading
                 }
 

@@ -27,7 +27,7 @@ Item {
             width: parent.width
             text: header.title
             size: 32
-            font.weight: Font.Bold
+            font.weight: UI.Style.weightBold
             font.letterSpacing: -0.64
             Accessible.role: Accessible.Heading
         }

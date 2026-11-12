@@ -102,7 +102,7 @@ QQC.Popup {
                     Layout.fillWidth: true
                     text: peek.event.title || ""
                     size: 18
-                    font.weight: Font.DemiBold
+                    font.weight: UI.Style.weightSemiBold
                     wrapMode: Text.Wrap
                     maximumLineCount: 3
                     elide: Text.ElideRight
@@ -263,7 +263,7 @@ QQC.Popup {
                     Layout.fillWidth: true
                     text: (peek.event.people || []).length === 1 ? qsTr("1 person") : qsTr("%1 people").arg((peek.event.people || []).length)
                     size: 13
-                    font.weight: Font.DemiBold
+                    font.weight: UI.Style.weightSemiBold
                 }
                 UI.Label {
                     text: {

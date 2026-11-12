@@ -1,5 +1,7 @@
 #include "format.h"
 
+#include "clockformat.h"
+
 #include <QHash>
 #include <QLocale>
 #include <QMimeDatabase>
@@ -72,12 +74,13 @@ QString date(const QDateTime &when)
         return QString();
     }
     // The regional format chosen in Settings decides the order and the
-    // clock; the words stay English, as the rest of Wild OS is.
+    // clock, unless a 12 or 24-hour clock is chosen; the words stay
+    // English, as the rest of Wild OS is.
     const QLocale names(QLocale::English, QLocale::UnitedKingdom);
     const QLocale format = QLocale::system();
     const QDateTime local = when.toLocalTime();
     const QDate today = QDate::currentDate();
-    const QString time = format.toString(local.time(), QLocale::ShortFormat);
+    const QString time = ClockFormat::time(local.time());
     const qint64 days = local.date().daysTo(today);
     if (days == 0) {
         return QStringLiteral("Today ") + time;
@@ -105,7 +108,7 @@ QString longDate(const QDateTime &when)
         day.remove(4, 1);
     }
     return names.toString(local.date(), day) + QStringLiteral(", ")
-        + format.toString(local.time(), QLocale::ShortFormat);
+        + ClockFormat::time(local.time());
 }
 
 QString size(qint64 bytes)

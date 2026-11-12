@@ -16,12 +16,15 @@ find_package(KF6Sonnet REQUIRED)
 find_package(KF6Screen REQUIRED)
 find_package(KF6NetworkManagerQt REQUIRED)
 find_package(KF6GlobalAccel REQUIRED)
+find_package(KF6WindowSystem REQUIRED)
 find_package(packagekitqt6 REQUIRED)
 find_package(Cups REQUIRED)
 find_package(SDL2 2.0.16 REQUIRED)
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(GLIB REQUIRED IMPORTED_TARGET glib-2.0)
 pkg_check_modules(PWQUALITY REQUIRED IMPORTED_TARGET pwquality)
+pkg_check_modules(UDEV REQUIRED IMPORTED_TARGET libudev)
+find_package(PolkitQt6-1 REQUIRED)
 
 qt_standard_project_setup(REQUIRES 6.8)
 
@@ -46,6 +49,7 @@ qt_add_qml_module(wildos-settings
         src/appsmodel.cpp src/appsmodel.h
         src/windowsapps.cpp src/windowsapps.h
         src/windowsmode.cpp src/windowsmode.h
+        src/windowsusb.cpp src/windowsusb.h
         src/processor.cpp src/processor.h
         src/graphics.cpp src/graphics.h
         src/inputdevices.cpp src/inputdevices.h
@@ -55,12 +59,14 @@ qt_add_qml_module(wildos-settings
         src/keyboard.cpp src/keyboard.h
         src/printers.cpp src/printers.h
         src/users.cpp src/users.h
+        src/fingerprint.cpp src/fingerprint.h
         src/passwordcheck.cpp src/passwordcheck.h
         src/language.cpp src/language.h
         src/appaccess.cpp src/appaccess.h
         src/poweroptions.cpp src/poweroptions.h
         src/appnotifications.cpp src/appnotifications.h
         src/desktops.cpp src/desktops.h
+        src/gestures.cpp src/gestures.h
         src/autoplay.cpp src/autoplay.h
         src/gamecontrollers.cpp src/gamecontrollers.h
         src/thunderbolt.cpp src/thunderbolt.h
@@ -73,14 +79,24 @@ qt_add_qml_module(wildos-settings
         src/network.cpp src/network.h src/netshared.h
         src/soundtheme.cpp src/soundtheme.h
         src/accessibility.cpp src/accessibility.h
+        src/recovery.cpp src/recovery.h
         src/accesscore.cpp src/accesscore.h
 )
 
 target_include_directories(wildos-settings PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
 
+# Fingerprint setup's print, Fluent UI System Icons' fingerprint_48_regular
+# exactly as Microsoft publishes it (MIT, data/fluent/LICENSE).
+qt_add_resources(wildos-settings "fluent"
+    PREFIX "/fluent"
+    BASE data/fluent
+    FILES data/fluent/fingerprint_48_regular.svg
+)
+
 target_link_libraries(wildos-settings PRIVATE
     Qt6::Widgets Qt6::DBus Qt6::Network Qt6::Qml Qt6::Quick Qt6::QuickControls2
     KF6::KCMUtils KF6::KCMUtilsQuick KF6::ConfigCore KF6::CoreAddons KF6::Service KF6::I18n KF6::ColorScheme KF6::SonnetCore
+    KF6::WindowSystem
     KF6::Screen
     KF6::NetworkManagerQt
     PK::packagekitqt6
@@ -88,6 +104,8 @@ target_link_libraries(wildos-settings PRIVATE
     SDL2::SDL2
     PkgConfig::GLIB
     PkgConfig::PWQUALITY
+    PkgConfig::UDEV
+    PolkitQt6-1::Agent PolkitQt6-1::Core
     util
 )
 
@@ -95,8 +113,11 @@ install(TARGETS wildos-settings RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 install(FILES data/org.wildos.settings.desktop DESTINATION ${CMAKE_INSTALL_DATADIR}/applications)
 # The helpers are looked up by these exact paths (polkit pins the update
 # helper to it), so they do not follow the distribution's libexec layout.
-install(PROGRAMS data/settings-update-policy data/settings-users data/settings-locale data/settings-protection data/settings-network data/settings-cpu-threads data/settings-graphics-driver DESTINATION ${CMAKE_INSTALL_PREFIX}/libexec/wildos)
+install(PROGRAMS data/settings-update-policy data/settings-users data/settings-locale data/settings-protection data/settings-network data/settings-cpu-threads data/settings-graphics-driver data/settings-brave-spelling data/settings-fingerprint DESTINATION ${CMAKE_INSTALL_PREFIX}/libexec/wildos)
 install(FILES data/org.wildos.settings.policy DESTINATION ${CMAKE_INSTALL_DATADIR}/polkit-1/actions)
+# Opened from About > Credits. Not under /usr/share/doc, which the ISO
+# leaves out.
+install(FILES data/fluent/LICENSE DESTINATION ${CMAKE_INSTALL_DATADIR}/wildos-settings/licences RENAME fluent-ui-system-icons.txt)
 
 # The automatic theme runs in every session and must not pull in the
 # Settings app's QML and KCM dependencies.
@@ -112,6 +133,11 @@ target_include_directories(wildos-access PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src
 target_link_libraries(wildos-access PRIVATE Qt6::Core Qt6::Gui Qt6::DBus KF6::ConfigCore KF6::GlobalAccel)
 install(TARGETS wildos-access RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 install(FILES data/org.wildos.access.desktop DESTINATION ${CMAKE_INSTALL_SYSCONFDIR}/xdg/autostart)
+# Hands Typing's spelling languages to Brave, from Settings and once a session.
+qt_add_executable(wildos-brave-spelling src/bravespelling/main.cpp)
+target_link_libraries(wildos-brave-spelling PRIVATE Qt6::Core KF6::SonnetCore)
+install(TARGETS wildos-brave-spelling RUNTIME DESTINATION ${CMAKE_INSTALL_PREFIX}/libexec/wildos)
+install(FILES data/org.wildos.brave-spelling.desktop DESTINATION ${CMAKE_INSTALL_SYSCONFDIR}/xdg/autostart)
 # Mono audio: a PipeWire filter run as its own user service.
 install(FILES data/wildos-mono-audio.conf DESTINATION ${CMAKE_INSTALL_DATADIR}/pipewire)
 install(FILES data/wildos-mono-audio.service DESTINATION ${CMAKE_INSTALL_PREFIX}/lib/systemd/user)

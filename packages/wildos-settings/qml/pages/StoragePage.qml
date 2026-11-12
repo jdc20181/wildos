@@ -59,7 +59,7 @@ PageScroll {
                             Layout.fillWidth: true
                             text: volume.modelData.name
                             size: 15
-                            font.weight: Font.DemiBold
+                            font.weight: UI.Style.weightSemiBold
                         }
 
                         UI.Label {

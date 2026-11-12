@@ -21,8 +21,12 @@ Item {
         password.forceActiveFocus();
     }
 
+    // An empty password is a fingerprint, for a person with one enrolled
+    // (see Agent::fingerprint), unless the reader is already listening.
+    readonly property bool canSubmit: (password.text.length > 0 || (Agent.fingerprint && !Agent.listening)) && !card.waiting
+
     function submit() {
-        if (password.text.length > 0 && !Agent.busy && !card.waiting) {
+        if (card.canSubmit && !Agent.busy) {
             Agent.submit(password.text);
         }
     }
@@ -96,7 +100,7 @@ Item {
                 Layout.fillWidth: true
                 text: "Allow " + (Agent.appName.length > 0 ? Agent.appName : "this app") + " to make changes to this computer?"
                 size: 20
-                font.weight: Font.DemiBold
+                font.weight: UI.Style.weightSemiBold
                 lineHeightMode: Text.FixedHeight
                 lineHeight: Math.round(UI.Style.px(20) * 1.3)
                 wrapMode: Text.Wrap
@@ -129,7 +133,7 @@ Item {
                             Layout.fillWidth: true
                             text: Agent.appName.length > 0 ? Agent.appName : "An app"
                             size: 14
-                            font.weight: Font.DemiBold
+                            font.weight: UI.Style.weightSemiBold
                         }
 
                         RowLayout {
@@ -183,7 +187,7 @@ Item {
                 UI.Label {
                     text: "Administrator"
                     size: 13
-                    font.weight: Font.Medium
+                    font.weight: UI.Style.weightMedium
                 }
 
                 UI.ComboBox {
@@ -205,7 +209,7 @@ Item {
                         : Agent.people.length > 1 ? "Password for " + card.who.text
                         : "Administrator password (" + card.who.text + ")"
                     size: 13
-                    font.weight: Font.Medium
+                    font.weight: UI.Style.weightMedium
                 }
 
                 UI.TextField {
@@ -218,6 +222,11 @@ Item {
                     error: Agent.error.length > 0
                     Accessible.name: passwordLabel.text
                     onAccepted: card.submit()
+                    onTextChanged: {
+                        if (text.length > 0) {
+                            Agent.typing();
+                        }
+                    }
                     Keys.onEscapePressed: Agent.cancel()
                 }
 
@@ -232,6 +241,18 @@ Item {
                     wrapMode: Text.Wrap
                     elide: Text.ElideNone
                     Accessible.role: Accessible.AlertMessage
+                }
+
+                UI.Label {
+                    Layout.fillWidth: true
+                    visible: text.length > 0 && Agent.error.length === 0 && !card.waiting
+                    text: Agent.info.length > 0 ? Agent.info
+                        : Agent.fingerprint && !Agent.busy && !Agent.listening ? "Or leave it empty and select Yes, then touch the fingerprint reader."
+                        : ""
+                    size: 12
+                    color: UI.Style.inkMuted
+                    wrapMode: Text.Wrap
+                    elide: Text.ElideNone
                 }
             }
 
@@ -279,8 +300,9 @@ Item {
                                 selectByMouse: true
                                 wrapMode: TextEdit.WrapAnywhere
                                 color: UI.Style.ink
-                                selectionColor: UI.Style.accentSelected
+                                selectionColor: UI.Style.textSelection
                                 font.family: UI.Style.fontFamily
+                                font.letterSpacing: UI.Style.tracking(UI.Style.px(12))
                                 font.pixelSize: UI.Style.px(12)
                             }
                         }
@@ -311,7 +333,7 @@ Item {
                 kind: "primary"
                 text: "Yes"
                 busy: Agent.busy
-                enabled: password.text.length > 0 && !card.waiting
+                enabled: card.canSubmit
                 onClicked: card.submit()
             }
 

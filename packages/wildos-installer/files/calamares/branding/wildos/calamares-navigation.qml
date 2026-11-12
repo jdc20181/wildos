@@ -89,6 +89,7 @@ Item {
             elide: Text.ElideRight
             color: UI.Style.inkMuted
             font.family: UI.Style.fontFamily
+            font.letterSpacing: UI.Style.tracking(12)
             font.pixelSize: 12
         }
 

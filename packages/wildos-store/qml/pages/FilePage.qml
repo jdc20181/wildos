@@ -99,7 +99,7 @@ PageFlick {
                 Layout.fillWidth: true
                 text: pkg.name
                 size: 32
-                font.weight: Font.Bold
+                font.weight: UI.Style.weightBold
                 font.letterSpacing: -0.64
                 Accessible.role: Accessible.Heading
             }
@@ -149,7 +149,7 @@ PageFlick {
                             return "Getting ready";
                         }
                         size: 13
-                        font.weight: Font.DemiBold
+                        font.weight: UI.Style.weightSemiBold
                     }
 
                     Rectangle {
@@ -354,6 +354,7 @@ PageFlick {
             wrapMode: Text.Wrap
             color: Metrics.inkSecondary
             font.family: UI.Style.fontFamily
+            font.letterSpacing: UI.Style.tracking(UI.Style.px(14))
             font.pixelSize: UI.Style.px(14)
             lineHeight: 1.6
         }

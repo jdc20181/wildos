@@ -196,7 +196,7 @@ Item {
             anchors.horizontalCenter: parent.horizontalCenter
             text: kuser.fullName.length > 0 ? kuser.fullName : kuser.loginName
             size: 18
-            font.weight: Font.DemiBold
+            font.weight: UI.Style.weightSemiBold
         }
 
         Item { width: 1; height: 8 }

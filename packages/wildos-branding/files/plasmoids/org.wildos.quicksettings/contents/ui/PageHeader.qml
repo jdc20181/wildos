@@ -39,7 +39,7 @@ Item {
         anchors.verticalCenter: parent.verticalCenter
         text: header.title
         size: 15
-        font.weight: Font.DemiBold
+        font.weight: UI.Style.weightSemiBold
         Accessible.role: Accessible.Heading
     }
 

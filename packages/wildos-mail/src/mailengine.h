@@ -57,6 +57,9 @@ class MailEngine : public QObject
     Q_PROPERTY(bool passwordInWallet READ passwordInWallet CONSTANT)
 
 public:
+    // True while a refresh asked of the accounts is still running, held for
+    // at least a moment so a quick one still shows the icon turning.
+    Q_PROPERTY(bool syncing READ syncing NOTIFY syncingChanged)
     static MailEngine *instance();
     static MailEngine *create(QQmlEngine *, QJSEngine *);
 
@@ -153,6 +156,9 @@ public:
     Q_INVOKABLE void deleteFolder(const QString &accountId, const QString &fullName);
     Q_INVOKABLE void emptyFolder(const QString &accountId, const QString &fullName);
     Q_INVOKABLE void refresh();
+    bool syncing() const { return m_syncing > 0 || m_syncHold.isActive(); }
+    int m_syncing = 0;
+    QTimer m_syncHold;
 
     Q_INVOKABLE void setRead(const QString &key, bool read);
     Q_INVOKABLE void toggleRead(const QString &key);
@@ -170,6 +176,14 @@ public:
 
     Q_INVOKABLE void search(const QString &text);
     Q_INVOKABLE void clearSearch();
+    // For People and Tasks, from the summaries on this PC as search is,
+    // without touching the message list. Mail from or to an address,
+    // newest first, answered with foundWith: [{key, subject, preview,
+    // time, unread}].
+    Q_INVOKABLE void findWith(const QString &address, int limit);
+    // Every flagged message, answered with flaggedFound: [{key, subject,
+    // from, date}].
+    Q_INVOKABLE void findFlagged();
 
     // Account setup. testAccount connects with the settings given and
     // answers through accountTested; saveAccount keeps an account that
@@ -229,6 +243,7 @@ Q_SIGNALS:
     void searchChanged();
     void outboxChanged();
     void syncStatusChanged();
+    void syncingChanged();
     void accountTested(bool ok, const QString &message);
     void accountSaved(const QString &id);
     void notice(const QString &text);
@@ -236,6 +251,8 @@ Q_SIGNALS:
     void undoable(const QString &text);
     void undoChanged();
     void newMail(const QString &key, const QString &from, const QString &subject, const QString &preview);
+    void foundWith(const QString &address, const QVariantList &messages);
+    void flaggedFound(const QVariantList &messages);
 
 private:
     struct Live {

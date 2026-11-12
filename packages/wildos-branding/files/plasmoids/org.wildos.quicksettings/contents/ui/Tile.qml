@@ -139,7 +139,7 @@ Item {
                     maximumLineCount: 2
                     verticalAlignment: Text.AlignTop
                     size: 12
-                    font.weight: tile.on ? Font.DemiBold : Font.Medium
+                    font.weight: tile.on ? UI.Style.weightSemiBold : UI.Style.weightMedium
                     color: tile.inkColor
                 }
             }

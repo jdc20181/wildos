@@ -57,7 +57,7 @@ T.AbstractButton {
                 width: parent.width + 2
                 height: parent.height + 2
                 radius: 5
-                color: UI.Style.dark ? Qt.rgba(0, 0, 0, 0.30) : Qt.rgba(20 / 255, 30 / 255, 60 / 255, 0.10)
+                color: UI.Style.dark ? Qt.rgba(0, 0, 0, 0.30) : Qt.rgba(36 / 255, 38 / 255, 42 / 255, 0.10)
             }
             Rectangle {
                 x: -2
@@ -65,7 +65,7 @@ T.AbstractButton {
                 width: parent.width + 4
                 height: parent.height + 2
                 radius: 6
-                color: UI.Style.dark ? Qt.rgba(0, 0, 0, 0.14) : Qt.rgba(20 / 255, 30 / 255, 60 / 255, 0.05)
+                color: UI.Style.dark ? Qt.rgba(0, 0, 0, 0.14) : Qt.rgba(36 / 255, 38 / 255, 42 / 255, 0.05)
             }
             Rectangle {
                 id: page
@@ -73,7 +73,7 @@ T.AbstractButton {
                 radius: 4
                 color: "#ffffff"
                 border.width: UI.Style.dark ? 0 : 1
-                border.color: Qt.rgba(30 / 255, 40 / 255, 70 / 255, 0.10)
+                border.color: Qt.rgba(46 / 255, 48 / 255, 52 / 255, 0.10)
                 clip: true
 
                 Image {
@@ -132,7 +132,7 @@ T.AbstractButton {
             width: parent.width
             text: card.name
             size: 13
-            font.weight: Font.Medium
+            font.weight: UI.Style.weightMedium
         }
         UI.Label {
             visible: card.description.length > 0

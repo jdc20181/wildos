@@ -12,10 +12,12 @@ namespace WildOS.Guest
     // between the build machine and Windows.
     public static class Json
     {
+        const int MaxDepth = 32;
+
         public static object Parse(string text)
         {
             int i = 0;
-            object value = ReadValue(text, ref i);
+            object value = ReadValue(text, ref i, 0);
             SkipSpace(text, ref i);
             if (i != text.Length) throw new FormatException("trailing characters");
             return value;
@@ -64,13 +66,17 @@ namespace WildOS.Guest
             while (i < s.Length && char.IsWhiteSpace(s[i])) i++;
         }
 
-        static object ReadValue(string s, ref int i)
+        static object ReadValue(string s, ref int i, int depth)
         {
             SkipSpace(s, ref i);
             if (i >= s.Length) throw new FormatException("unexpected end");
             char c = s[i];
-            if (c == '{') return ReadObject(s, ref i);
-            if (c == '[') return ReadArray(s, ref i);
+            // Each level is a call, and a stack overflow ends the whole
+            // process where no catch can stop it: a line of a million
+            // brackets would otherwise take wild-guest down.
+            if ((c == '{' || c == '[') && depth >= MaxDepth) throw new FormatException("nested too deeply");
+            if (c == '{') return ReadObject(s, ref i, depth + 1);
+            if (c == '[') return ReadArray(s, ref i, depth + 1);
             if (c == '"') return ReadString(s, ref i);
             if (c == 't' && string.CompareOrdinal(s, i, "true", 0, 4) == 0) { i += 4; return true; }
             if (c == 'f' && string.CompareOrdinal(s, i, "false", 0, 5) == 0) { i += 5; return false; }
@@ -78,7 +84,7 @@ namespace WildOS.Guest
             return ReadNumber(s, ref i);
         }
 
-        static Dictionary<string, object> ReadObject(string s, ref int i)
+        static Dictionary<string, object> ReadObject(string s, ref int i, int depth)
         {
             var result = new Dictionary<string, object>();
             i++;
@@ -91,7 +97,7 @@ namespace WildOS.Guest
                 SkipSpace(s, ref i);
                 if (i >= s.Length || s[i] != ':') throw new FormatException("expected :");
                 i++;
-                result[key] = ReadValue(s, ref i);
+                result[key] = ReadValue(s, ref i, depth);
                 SkipSpace(s, ref i);
                 if (i < s.Length && s[i] == ',') { i++; continue; }
                 if (i < s.Length && s[i] == '}') { i++; return result; }
@@ -99,7 +105,7 @@ namespace WildOS.Guest
             }
         }
 
-        static List<object> ReadArray(string s, ref int i)
+        static List<object> ReadArray(string s, ref int i, int depth)
         {
             var result = new List<object>();
             i++;
@@ -107,7 +113,7 @@ namespace WildOS.Guest
             if (i < s.Length && s[i] == ']') { i++; return result; }
             while (true)
             {
-                result.Add(ReadValue(s, ref i));
+                result.Add(ReadValue(s, ref i, depth));
                 SkipSpace(s, ref i);
                 if (i < s.Length && s[i] == ',') { i++; continue; }
                 if (i < s.Length && s[i] == ']') { i++; return result; }

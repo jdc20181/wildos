@@ -85,7 +85,7 @@ FocusScope {
 
             UI.Label {
                 text: "Folders"
-                font.weight: Font.DemiBold
+                font.weight: UI.Style.weightSemiBold
                 color: UI.Style.inkStatus
                 Accessible.role: Accessible.Heading
             }
@@ -168,7 +168,7 @@ FocusScope {
             UI.Label {
                 topPadding: 8
                 text: "Drives"
-                font.weight: Font.DemiBold
+                font.weight: UI.Style.weightSemiBold
                 color: UI.Style.inkStatus
                 Accessible.role: Accessible.Heading
             }
@@ -253,7 +253,7 @@ FocusScope {
                                         width: Math.min(implicitWidth, parent.width - (chipPill.visible ? chipPill.width + 8 : 0))
                                         text: card.name
                                         size: 14
-                                        font.weight: Font.DemiBold
+                                        font.weight: UI.Style.weightSemiBold
                                     }
 
                                     Rectangle {

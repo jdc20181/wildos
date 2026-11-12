@@ -26,14 +26,18 @@ import re
 import shutil
 import socket
 import subprocess
+import sys
 import threading
 import time
 import urllib.error
 import urllib.request
 
-from . import config, firewall, msdl, qga, virsh
+from . import config, firewall, isocheck, msdl, qga, virsh
 
 CACHE = os.path.join(config.STATE_DIR, "cache")
+WINDOWS_ISO = os.path.join(CACHE, "windows.iso")
+VIRTIO = os.path.join(CACHE, "virtio-win.iso")
+PAYLOAD = os.path.join(CACHE, "payload.iso")
 SECRETS = os.path.join(config.STATE_DIR, "secrets")
 DISK = os.path.join(config.STATE_DIR, "windows.qcow2")
 # Present while a setup is under way, for the unit that resumes it at boot.
@@ -54,6 +58,12 @@ INSTALL_LIMIT = 2 * 3600
 BOOT_WRITTEN = 200 * 1000 ** 2
 BOOT_WAIT = 300
 BOOT_TRIES = 3
+# How long setup.ps1 has inside Windows, from the start of the tune stage.
+TUNE_LIMIT = 2 * 3600
+# How long Windows has to answer its agent once started for a later stage.
+AGENT_WAIT = 600
+# The task a retry of the tune stage runs setup.ps1 from again.
+RERUN_TASK = "Wild OS setup again"
 # setup.ps1's steps, in order (guest/setup.ps1), for the "tune" stage.
 GUEST_STEPS = ["guest-tools", "shared-folder", "wild-guest", "remote-desktop", "account", "tuning", "updates",
                "known-folders", "office-policies", "startup-trim", "opengl", "theme", "ready-task"]
@@ -71,7 +81,16 @@ ACTIVATION_KEY = "activation-key"
 KEY_ALPHABET = "BCDFGHJKMNPQRTVWXY2346789"
 GUEST_MAC = "52:54:00:57:4f:01"
 OFFICE_PRODUCTS = {"personal": "O365HomePremRetail", "family": "O365HomePremRetail",
-                   "business": "O365BusinessRetail", "work": "O365ProPlusRetail"}
+                   "business": "O365BusinessRetail", "work": "O365ProPlusRetail",
+                   # A one-off purchase: the key goes in when Word first opens,
+                   # and Home and Business 2024 is the retail edition with
+                   # Outlook that most keys are sold for.
+                   "key": "HomeBusiness2024Retail"}
+# Setup runs on whatever the PC isn't using (boards 9.5 and 9.12): the
+# worker thread and the virtual PC get the smallest share of the processor
+# and the disk while it lasts, so the desktop always comes first.
+SPARE_CPU_WEIGHT = 1
+SPARE_IO_WEIGHT = 10
 WORD = r"C:\Program Files\Microsoft Office\root\Office16\WINWORD.EXE"
 
 
@@ -104,12 +123,66 @@ class Stopped(Exception):
 
 class Problem(Exception):
     """A step failed in a way the person can act on. kind is what board 9.7
-    shows: download, space, virtualisation or failed."""
+    shows: download, space, virtualisation or failed. retry is False when
+    only the person can put it right (a licence that can't be read, their
+    own file gone), so running the step again by itself would not help."""
 
-    def __init__(self, kind, text):
+    def __init__(self, kind, text, retry=True):
         super().__init__(text)
         self.kind = kind
         self.text = text
+        self.retry = retry
+
+
+class Redo(Exception):
+    """Something an earlier stage made has gone (the virtual PC's disk, say):
+    that stage runs again before this one carries on. Not a failure."""
+
+    def __init__(self, stage, why):
+        super().__init__(why)
+        self.stage = stage
+
+
+# Automatic recovery. A stage that fails is run again once by itself; a
+# second failure in a row purges what that stage made and goes back to the
+# stage before it. If the stages after going back fail twice more, setup
+# stops and shows the problem with Try again and Start over, as it always
+# did. The person never has to press anything for the first three tries.
+RETRY_NOTICE = "Setup hit a problem and is trying that step again."
+BACK_NOTICE = "Setup hit the same problem twice, so it's going back a step and doing that again."
+# A short wait before trying again, so a cause that clears up by itself (a
+# busy disk, libvirt restarting after an update) has time to.
+RETRY_WAIT = 10
+# Times an earlier stage may be redone in one run because its result went
+# missing, before that counts as a failure.
+REDO_LIMIT = 3
+
+
+def previous_stage(stage, stages=STAGES):
+    """The stage before this one, or the first stage itself."""
+    i = stages.index(stage) if stage in stages else 0
+    return stages[max(0, i - 1)]
+
+
+def next_move(recovery, stage):
+    """What to do after `stage` failed, from the recovery record so far:
+    ("retry" | "back" | "stop", the new record). Pure, for the tests."""
+    r = dict(recovery or {})
+    if r.get("back"):
+        # Already went back once: one more try, then stop.
+        r["backFails"] = r.get("backFails", 0) + 1
+        return ("stop" if r["backFails"] >= 2 else "retry"), r
+    fails = r.get("fails", 0) + 1 if r.get("stage") == stage else 1
+    if fails < 2:
+        return "retry", {"stage": stage, "fails": fails}
+    return "back", {"stage": stage, "fails": fails, "back": previous_stage(stage), "backFails": 0}
+
+
+def recovered(recovery, stage):
+    """The recovery record once `stage` has finished: cleared when that was
+    the stage which failed, so a later stage starts with its own tries."""
+    r = recovery or {}
+    return None if r.get("stage") == stage else (r or None)
 
 
 def size_text(n):
@@ -341,10 +414,10 @@ def office_config(plan, lang):
             "</Configuration>\n")
 
 
-def stage_title(stage, licence):
+def stage_title(stage, licence, own=False):
     source = licence.get("source")
     return {
-        "media": "Download Windows 11 from Microsoft",
+        "media": "Copy Windows 11 from your file" if own else "Download Windows 11 from Microsoft",
         "install": "Install Windows",
         "activate": ("Activate with your product key" if source == "key"
                      else "Activation" if source == "none" else "Activate with this PC's licence"),
@@ -353,9 +426,11 @@ def stage_title(stage, licence):
     }[stage]
 
 
-def stage_detail(stage, licence):
+def stage_detail(stage, licence, own=False):
     if stage == "media":
-        return "About 6 GB, checked against Microsoft's signature"
+        # Only a download can be matched to Microsoft's signature; a file
+        # someone brings is only known to hold Windows 11 Pro.
+        return "Checked that it's Windows 11 Pro" if own else "About 6 GB, checked against Microsoft's signature"
     if stage == "install":
         return "Automatic, no questions to answer"
     if stage == "activate":
@@ -424,14 +499,15 @@ class Setup:
         if not rec:
             return None
         licence = rec.get("licence") or {}
+        own = bool(rec.get("iso"))
         ids = [s for s in STAGES if s != "office" or (rec.get("options") or {}).get("office")]
         stages, total, done_weight, minutes_left = [], 0, 0.0, 0.0
         for sid in ids:
             s = (rec.get("stages") or {}).get(sid) or {}
             state = s.get("state", "pending")
             pct = 100 if state == "done" else s.get("percent", 0)
-            stages.append({"id": sid, "title": stage_title(sid, licence),
-                           "detail": s.get("detail") or stage_detail(sid, licence), "state": state, "percent": pct})
+            stages.append({"id": sid, "title": stage_title(sid, licence, own),
+                           "detail": s.get("detail") or stage_detail(sid, licence, own), "state": state, "percent": pct})
             total += WEIGHTS[sid]
             done_weight += WEIGHTS[sid] * pct / 100.0
             minutes_left += MINUTES[sid] * (1 - pct / 100.0)
@@ -447,10 +523,17 @@ class Setup:
             "left": "About a minute left" if minutes <= 1 else f"About {minutes} minutes left",
             "paused": bool(rec.get("paused")),
             "problem": rec.get("problem"),
+            # Setup is putting a problem right by itself: a line to show, with
+            # no button to press.
+            "notice": (rec.get("notice") or {}).get("text"),
             "licence": {"source": licence.get("source"), "edition": licence.get("edition"),
                         "activated": licence.get("activated"), "keyEnd": licence.get("last5") if licence.get("source") == "key" else None},
             "options": rec.get("options") or {},
+            "ownIso": own,
             "failed": rec.get("failed"),
+            "background": bool(rec.get("background")),
+            "finished": rec.get("finished"),
+            "terms": rec.get("terms"),
         }
 
     # Control.
@@ -470,11 +553,27 @@ class Setup:
             for k in ("office", "openFiles"):
                 if k in o:
                     options[k] = bool(o[k])
-            self.save(failed=None, problem=None, paused=False, options=options)
+            # A file chosen again after the last one couldn't be copied.
+            if request.get("iso") and request.get("iso") != (self.rec.get("iso") or {}).get("path"):
+                own, why = check_own_iso(request.get("iso"), self.rec.get("owner", owner_uid))
+                if why:
+                    return why
+                forget_windows_iso(own=True)
+                self.save(iso=own, done=[d for d in self.rec.get("done") or [] if d != "windows-iso"])
+            # Pressed by the person: the automatic tries start again too.
+            self.save(failed=None, problem=None, paused=False, options=options, recovery=None, notice=None,
+                      **self.fresh_clocks())
             self.launch()
             return ""
         if virsh.state(self.cfg["domain"]) != "":
             return "Windows mode is set up on this PC already."
+        # The answer file skips Windows' own licence screen, and the Office
+        # Deployment Tool's, so the terms are accepted in Wild OS instead and
+        # kept with the setup they were accepted for.
+        terms = request.get("terms") if isinstance(request.get("terms"), dict) else {}
+        o = request.get("options") or {}
+        if terms.get("windows") is not True or (bool(o.get("office")) and terms.get("office") is not True):
+            return "Accept Microsoft's licence terms first."
         lic = request.get("licence") or {}
         source = lic.get("source")
         if source not in ("firmware", "key", "none"):
@@ -482,7 +581,6 @@ class Setup:
         key = (lic.get("key") or "").strip().upper()
         if source == "key" and not key_shape_ok(key):
             return "That doesn't look like a Windows product key. Check it and try again."
-        o = request.get("options") or {}
         options = {
             "office": bool(o.get("office")),
             "officePlan": o.get("officePlan") if o.get("officePlan") in OFFICE_PRODUCTS else "personal",
@@ -490,6 +588,12 @@ class Setup:
             "whenIdle": o.get("whenIdle") if o.get("whenIdle") in ("automatic", "memory", "disk") else "automatic",
             "memoryGb": max(4, min(int(o.get("memoryGb") or 4), 32)),
         }
+        own = None
+        if request.get("iso"):
+            own, why = check_own_iso(request.get("iso"), owner_uid)
+            if why:
+                return why
+        forget_windows_iso(own=bool(own))
         os.makedirs(SECRETS, mode=0o700, exist_ok=True)
         os.chmod(SECRETS, 0o700)
         if source == "key":
@@ -497,8 +601,10 @@ class Setup:
                 f.write(key + "\n")
             os.chmod(os.path.join(SECRETS, ACTIVATION_KEY), 0o600)
         self.svc.state["setup"] = {}
+        accepted = {"windows": True, "office": options["office"], "at": int(time.time())}
         self.save(running=True, started=int(time.time()), owner=owner_uid, options=options,
-                  licence={"source": source, "edition": lic.get("edition") or ""},
+                  licence={"source": source, "edition": lic.get("edition") or ""}, iso=own, terms=accepted,
+                  background=bool(request.get("background")),
                   stages={}, done=[], problem=None, failed=None, paused=False)
         self.svc.state["when_idle"] = {"memory": "keep", "disk": "save"}.get(options["whenIdle"], "automatic")
         self.svc.save_state()
@@ -512,9 +618,28 @@ class Setup:
         self.thread = threading.Thread(target=self.run, name="setup", daemon=True)
         self.thread.start()
 
+    def fresh_clocks(self):
+        """The install step's clocks, started again for a new try. Kept from
+        the first try, they ran on through failures and through the PC being
+        off, so once INSTALL_LIMIT (or BOOT_WAIT with BOOT_TRIES used up) had
+        passed, every Try again and every restart failed at once. Nothing to
+        reset before the install has begun or once it is done."""
+        clocks = {"tune_started": None} if self.rec.get("tune_started") else {}
+        if self.done("install") or not self.rec.get("install_started"):
+            return clocks
+        now = int(time.time())
+        return dict(clocks, install_started=now, booted_at=now, boot_tries=1)
+
     def resume_after_restart(self):
         if self.rec.get("running") and not (self.thread and self.thread.is_alive()):
             log("carrying on with the setup that was under way")
+            clocks = self.fresh_clocks()
+            if self.rec.get("failed"):
+                # It had stopped on a problem; a restart is a fresh start for
+                # the automatic tries, as the problem card advises.
+                clocks.update(recovery=None, notice=None)
+            if clocks:
+                self.save(**clocks)
             self.launch()
 
     def pause(self):
@@ -537,6 +662,10 @@ class Setup:
         if virsh.state(domain) != "":
             virsh.run("destroy", domain, check=False)
             virsh.run("undefine", domain, "--nvram", "--managed-save", check=False)
+        # The copy of someone's own file isn't a download to keep: they
+        # still have the file.
+        if self.rec.get("iso"):
+            forget_windows_iso(own=True)
         for path in (DISK, os.path.join(CACHE, "payload.iso"), os.path.join(SECRETS, "key"),
                      os.path.join(SECRETS, ACTIVATION_KEY), MARKER):
             try:
@@ -594,6 +723,7 @@ class Setup:
                                          stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         except OSError:
             inhibitor = None
+        spare_capacity()
         try:
             self.work()
         finally:
@@ -602,37 +732,178 @@ class Setup:
 
     def work(self):
         try:
-            self.save(problem=None, failed=None)
-            self.step_media()
-            self.step_install()
-            self.step_activate()
-            self.step_tune()
-            if (self.rec.get("options") or {}).get("office"):
-                self.step_office()
-            self.finish()
+            self.attempts()
         except Stopped:
+            # Asked to stop while waiting to try again.
             log("stopped")
-        except Problem as p:
-            log("problem:", p.kind, p.text)
-            if p.kind == "download":
-                self.save(problem={"kind": "download", "text": p.text,
-                                   "received": (self.rec.get("download") or {}).get("received", 0)}, paused=True)
-            elif p.kind == "space":
-                # Board 9.7: free some space and carry on; nothing failed.
-                self.save(problem={"kind": "space", "text": p.text}, paused=True)
-            else:
-                stage = self.rec.get("stage") or "media"
-                self.set_stage(stage, "failed")
-                self.save(problem={"kind": p.kind, "text": p.text}, failed=p.text)
-        except Exception as e:  # noqa: BLE001 (any failure is shown, never swallowed)
-            log("failed:", repr(e))
-            stage = self.rec.get("stage") or "media"
-            self.set_stage(stage, "failed")
-            text = "Windows mode couldn't finish setting up. Try again, and if it happens twice, restart the PC first."
-            # The unexpected error itself goes on the card too, small, so a
-            # failure can be reported without digging through the log.
-            self.save(problem={"kind": "failed", "text": text, "detail": f"{type(e).__name__}: {e}"[:300]},
-                      failed=f"{text} ({e})")
+
+    def attempts(self):
+        redone = 0
+        while True:
+            try:
+                self.save(problem=None, failed=None)
+                self.stages()
+                return
+            except Stopped:
+                log("stopped")
+                return
+            except Redo as r:
+                redone += 1
+                log(f"redoing {r.stage}: {r}")
+                if redone <= REDO_LIMIT:
+                    self.purge(r.stage)
+                    self.undo_from(r.stage)
+                    continue
+                if self.recover(self.rec.get("stage") or "media", r):
+                    redone = 0
+                    continue
+                self.fail_with(r)
+                return
+            except Problem as p:
+                log("problem:", p.kind, p.text)
+                if p.kind == "download":
+                    self.save(problem={"kind": "download", "text": p.text,
+                                       "received": (self.rec.get("download") or {}).get("received", 0)}, paused=True)
+                    return
+                if p.kind == "space":
+                    # Board 9.7: free some space and carry on; nothing failed.
+                    self.save(problem={"kind": "space", "text": p.text}, paused=True)
+                    return
+                if p.retry and self.recover(self.rec.get("stage") or "media", p):
+                    continue
+                self.fail_with(p)
+                return
+            except Exception as e:  # noqa: BLE001 (any failure is shown, never swallowed)
+                log("failed:", repr(e))
+                if self.recover(self.rec.get("stage") or "media", e):
+                    continue
+                self.fail_with(e)
+                return
+
+    def stages(self):
+        self.step_media()
+        self.step_install()
+        self.step_activate()
+        self.step_tune()
+        if (self.rec.get("options") or {}).get("office"):
+            self.step_office()
+        self.finish()
+
+    def fail_with(self, e):
+        """Stops on a problem, shown with Try again and Start over."""
+        stage = self.rec.get("stage") or "media"
+        self.set_stage(stage, "failed")
+        if isinstance(e, Problem):
+            self.save(problem={"kind": e.kind, "text": e.text}, failed=e.text, notice=None)
+            return
+        text = "Windows mode couldn't finish setting up. Try again, and if it happens twice, restart the PC first."
+        # The unexpected error itself goes on the card too, small, so a
+        # failure can be reported without digging through the log.
+        self.save(problem={"kind": "failed", "text": text, "detail": f"{type(e).__name__}: {e}"[:300]},
+                  failed=f"{text} ({e})", notice=None)
+
+    def recover(self, stage, error):
+        """After `stage` failed: sets up the next automatic try and returns
+        True, or returns False when setup should stop and show the problem."""
+        move, rec = next_move(self.rec.get("recovery"), stage)
+        if move == "stop":
+            log(f"{stage} failed again after going back a step; stopping")
+            self.save(recovery=rec)
+            return False
+        if move == "retry":
+            log(f"{stage} failed ({error}); trying it again")
+            self.save(recovery=rec, notice={"text": RETRY_NOTICE, "stage": stage}, **self.fresh_clocks())
+            if stage == "install" and not self.rec.get("copied_at"):
+                # Windows Setup hadn't copied Windows yet, so it starts again
+                # from the installer: on the half written disk the installer
+                # is never asked for, and Setup wipes the disk anyway.
+                self.purge("install")
+            if stage == "tune":
+                self.save(rerun_guest=True)
+        else:
+            back = rec["back"]
+            log(f"{stage} failed twice ({error}); clearing what it made and going back to {back}")
+            self.save(recovery=rec, notice={"text": BACK_NOTICE, "stage": stage})
+            self.purge(stage)
+            self.undo_from(back)
+        self.set_stage(stage, "active")
+        self.wait(RETRY_WAIT)
+        return True
+
+    def wait(self, seconds):
+        if self.stop.wait(seconds):
+            raise Stopped()
+
+    def stage_done(self, stage):
+        """A stage finished: marked done, and any automatic recovery for it
+        is over."""
+        rec = recovered(self.rec.get("recovery"), stage)
+        changes = {"recovery": rec}
+        if not rec:
+            changes["notice"] = None
+        self.save(**changes)
+        if stage != "media":
+            self.mark(stage)
+
+    def unmark(self, *steps):
+        self.save(done=[d for d in self.rec.get("done") or [] if d not in steps])
+
+    # The done flags behind each stage, for running it again.
+    STAGE_FLAGS = {"media": ("licence", "windows-iso"), "install": ("install",), "activate": ("activate",),
+                   "tune": ("tune",), "office": ("office",)}
+
+    def undo_from(self, stage):
+        """Runs `stage` and every stage after it again. Their checks find
+        what is still good, so only what is missing is made again."""
+        later = STAGES[STAGES.index(stage):]
+        self.unmark(*[f for s in later for f in self.STAGE_FLAGS[s]])
+        stages = dict(self.rec.get("stages") or {})
+        for s in later:
+            if s in stages:
+                stages[s] = dict(stages[s], state="pending", percent=0)
+        self.save(stages=stages)
+
+    def purge(self, stage):
+        """Deletes what `stage` made, so running it again starts it clean.
+        Only Windows mode's own files and virtual PC: never the shared
+        folders, the person's own Windows 11 file, or the key they typed."""
+        domain = self.cfg["domain"]
+        if stage == "media":
+            # Partial downloads go. A finished Windows download is checked
+            # against Microsoft's signature again rather than fetched again,
+            # and deleted if it fails that.
+            for name in ("windows.iso.part", "virtio-win.iso.part"):
+                _remove(os.path.join(CACHE, name))
+            if not is_iso(os.path.join(CACHE, "virtio-win.iso")):
+                _remove(os.path.join(CACHE, "virtio-win.iso"))
+            for name in ("key", "msdm.bin"):
+                _remove(os.path.join(SECRETS, name))
+        elif stage == "install":
+            if virsh.state(domain) != "":
+                virsh.run("destroy", domain, check=False)
+                virsh.run("undefine", domain, "--nvram", "--managed-save", check=False)
+            for path in (DISK, os.path.join(CACHE, "payload.iso"), os.path.join(config.STATE_DIR, "domain.xml")):
+                _remove(path)
+            self.save(install_started=None, booted_at=None, boot_tries=None, copied_at=None)
+        elif stage == "activate":
+            lic = dict(self.rec.get("licence") or {})
+            lic.pop("activated", None)
+            lic.pop("refused", None)
+            self.save(licence=lic)
+        elif stage == "tune":
+            self.save(tune_started=None, rerun_guest=True)
+            self.guest_cleanup(r"Remove-Item 'C:\ProgramData\WildOS\stage.json', 'C:\ProgramData\WildOS\ready.json' "
+                               r"-Force -ErrorAction SilentlyContinue")
+        elif stage == "office":
+            self.guest_cleanup(r"Remove-Item 'C:\ProgramData\WildOS\odt' -Recurse -Force -ErrorAction SilentlyContinue")
+
+    def guest_cleanup(self, script):
+        """Best effort: Windows may not be running to clear up after itself."""
+        try:
+            if virsh.state(self.cfg["domain"]) == "running":
+                qga.powershell(self.cfg["domain"], script, 60)
+        except (virsh.VirshError, KeyError, TimeoutError) as e:
+            log("clearing up inside Windows:", e)
 
     def check(self):
         if self.stop.is_set():
@@ -653,15 +924,19 @@ class Setup:
         self.prepare_licence()
         self.windows_iso()
         self.check()
-        self.set_stage("media", "active", 92, "Getting the drivers Windows needs")
-        self.virtio_iso()
+        if self.needs()[VIRTIO]:
+            self.set_stage("media", "active", 92, "Getting the drivers Windows needs")
+            self.virtio_iso()
         self.set_stage("media", "done", 100, "")
+        self.stage_done("media")
 
     def check_space(self):
         memory = (self.rec.get("options") or {}).get("memoryGb", 4)
         need = (30 + memory) * 1000 ** 3
-        if not os.path.exists(os.path.join(CACHE, "windows.iso")):
-            need += 9 * 1000 ** 3
+        if self.needs()[WINDOWS_ISO] and not os.path.exists(WINDOWS_ISO):
+            # Someone's own file is copied whole, and some are bigger than
+            # Microsoft's download.
+            need += max(9 * 1000 ** 3, int((self.rec.get("iso") or {}).get("bytes") or 0))
         if os.path.exists(DISK):
             need -= os.stat(DISK).st_blocks * 512
         free = shutil.disk_usage(config.STATE_DIR).free
@@ -687,9 +962,17 @@ class Setup:
                                       "online, then carry on.")
         self.svc.runtime_installed()
 
+    def licence_ready(self):
+        """What the install and activate stages read from the licence step:
+        the key for the answer file, and the firmware table's copy."""
+        if not os.path.exists(os.path.join(SECRETS, "key")):
+            return False
+        return (self.rec.get("licence") or {}).get("source") != "firmware" or os.path.exists(os.path.join(SECRETS, "msdm.bin"))
+
     def prepare_licence(self):
-        if self.done("licence"):
+        if self.done("licence") and self.licence_ready():
             return
+        os.makedirs(SECRETS, mode=0o700, exist_ok=True)
         lic = dict(self.rec.get("licence") or {})
         msdm_copy = os.path.join(SECRETS, "msdm.bin")
         key = None
@@ -701,7 +984,8 @@ class Setup:
                 table = b""
             key = parse_msdm(table)
             if not key:
-                raise Problem("failed", "This PC's licence couldn't be read. Go back and add a product key instead.")
+                raise Problem("failed", "This PC's licence couldn't be read. Go back and add a product key instead.",
+                              retry=False)
             # QEMU reads the table from a root-only copy (brief 5.3).
             with open(msdm_copy, "wb") as f:
                 f.write(table)
@@ -712,21 +996,45 @@ class Setup:
                 os.chmod(SECRETS, 0o710)
             os.chmod(msdm_copy, 0o640)
         elif lic.get("source") == "key":
-            with open(os.path.join(SECRETS, ACTIVATION_KEY)) as f:
-                key = f.read().strip()
+            try:
+                with open(os.path.join(SECRETS, ACTIVATION_KEY)) as f:
+                    key = f.read().strip()
+            except OSError:
+                # Already put into Windows and forgotten, as it should be,
+                # when this runs again after going back a step.
+                if not lic.get("last5"):
+                    raise Problem("failed", "The product key couldn't be read. Start over and type it again.",
+                                  retry=False) from None
         else:
             key = GENERIC_PRO_KEY
         with open(os.path.join(SECRETS, "key"), "w") as f:
             f.write(GENERIC_PRO_KEY + "\n")
         os.chmod(os.path.join(SECRETS, "key"), 0o600)
-        lic["last5"] = key[-5:]
+        if key:
+            lic["last5"] = key[-5:]
         self.save(licence=lic)
         self.mark("licence")
 
     def windows_iso(self):
         iso = os.path.join(CACHE, "windows.iso")
         meta_path = os.path.join(CACHE, "windows-iso.json")
-        if self.done("windows-iso") and os.path.exists(iso):
+        if not self.needs()[WINDOWS_ISO]:
+            # Windows has copied itself to its disk: the installer isn't
+            # read again, so a missing one isn't fetched again.
+            return
+        if self.done("windows-iso") and is_iso(iso):
+            return
+        if self.rec.get("iso"):
+            if is_iso(iso) and (_read_json(meta_path) or {}).get("source") == "own":
+                # Checked again after going back a step, without needing
+                # the person's drive to be connected still.
+                try:
+                    isocheck.check(iso)
+                    self.mark("windows-iso")
+                    return
+                except isocheck.Unusable:
+                    _remove(iso)
+            self.copy_own_iso(iso, meta_path)
             return
         lang, _, _ = host_locale()
         for attempt in range(2):
@@ -768,6 +1076,63 @@ class Setup:
                 with open(meta_path, "w") as f:
                     json.dump(meta, f)
         raise Problem("download", "The Windows download didn't match Microsoft's signature twice, so it was deleted.")
+
+    def copy_own_iso(self, iso, meta_path):
+        """Copies the person's own Windows 11 file into the cache, where the
+        virtual PC reads it like a download. Used where it is, libvirt would
+        give the file to its own account and never give it back (it leaves
+        a read-only disc's owner as it set it), a home folder or USB drive
+        may be out of the virtual PC's reach, and the file could go before
+        the install, which restarts, is done with it. cat runs as the person
+        who chose the file, so the service only copies what they can read."""
+        own = self.rec["iso"]
+        part = iso + ".part"
+        _remove(part)
+        total = int(own.get("bytes") or 0)
+        label = "Copying Windows 11 from your file"
+        self.set_stage("media", "active", 1, label)
+        missing = "Your Windows 11 file couldn't be read. Check the drive it's on is connected, then try again."
+        try:
+            proc = subprocess.Popen(["cat", "--", own["path"]], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+                                    **as_user(self.rec.get("owner")))
+        except OSError as e:
+            raise Problem("failed", missing, retry=False) from e
+        got, last = 0, time.monotonic()
+        try:
+            with open(part, "wb") as out:
+                while True:
+                    self.check()
+                    block = proc.stdout.read(4 * 1024 * 1024)
+                    if not block:
+                        break
+                    out.write(block)
+                    got += len(block)
+                    if time.monotonic() - last >= 2:
+                        last = time.monotonic()
+                        pct = 1 + 84 * got / total if total else 1
+                        self.set_stage("media", "active", pct, f"{label}: {size_text(got)} of {size_text(total)}")
+        except BaseException:
+            proc.kill()
+            proc.wait()
+            _remove(part)
+            raise
+        finally:
+            proc.stdout.close()
+        if proc.wait() != 0 or got != total:
+            _remove(part)
+            raise Problem("failed", missing, retry=False)
+        os.replace(part, iso)
+        # Checked again on the copy, which only this service can change, in
+        # case the file changed after the wizard looked at it.
+        self.set_stage("media", "active", 86, "Checking it's Windows 11 Pro")
+        try:
+            found = isocheck.check(iso)
+        except isocheck.Unusable as e:
+            _remove(iso)
+            raise Problem("failed", e.text, retry=False) from e
+        with open(meta_path, "w") as f:
+            json.dump({"source": "own", "file": own.get("file", ""), "build": found["build"], "fetched": 0}, f)
+        self.mark("windows-iso")
 
     def download(self, url, target, stage, start, end, label, agent=None):
         """HTTPS download with resume (Range), pause and progress, into
@@ -851,21 +1216,31 @@ class Setup:
             return
         self.set_stage("install", "active", 0)
         domain = self.cfg["domain"]
-        if virsh.state(domain) == "":
-            self.payload()
-            self.network()
-            self.define()
-        elif virsh.state(domain) == "shut off":
-            # Trying again: defined afresh, so a fix to the definition (the
-            # licence table) reaches a virtual PC an earlier try made.
-            self.define()
-        self.check()
         started = self.rec.get("install_started")
-        if virsh.state(domain) in ("shut off", "saved"):
+        if started and not self.rec.get("copied_at") and virsh.state(domain) in ("", "shut off", "saved"):
+            # Stopped before Windows had copied itself (the PC restarted, or
+            # this is a try again): the half written disk can't boot and the
+            # installer is only asked for on a new install, so start one.
+            log("Windows hadn't finished copying; starting its install again")
+            self.purge("install")
+            started = None
+        if not started:
+            # A new install gets a payload and disk made for it, never ones
+            # an earlier Windows mode left behind (Windows Setup wipes that
+            # disk anyway, and the check for Setup having started reads it).
+            _remove(PAYLOAD)
+            if virsh.state(domain) not in ("running", "paused"):
+                _remove(DISK)
+        st = self.prepare_start(domain)
+        self.check()
+        if st in ("shut off", "saved"):
             firewall.apply(self.cfg, False)
             virsh.start(domain)
             if not started:
                 self.press_to_boot(domain)
+        # Each start, including the one after a restart of the PC, makes a
+        # fresh cgroup at the default weights.
+        self.weigh(domain, spare=True)
         if not started:
             started = int(time.time())
             self.save(install_started=started, boot_tries=1, booted_at=started)
@@ -910,7 +1285,15 @@ class Setup:
             self.set_stage("install", "active", int(pct))
             time.sleep(15)
         self.set_stage("install", "done", 100)
-        self.mark("install")
+        self.stage_done("install")
+
+    @staticmethod
+    def weigh(domain, spare):
+        """The virtual PC's share of the processor and disk: the least while
+        setup runs, the default (100) once Windows is someone's to use."""
+        cpu, io = (SPARE_CPU_WEIGHT, SPARE_IO_WEIGHT) if spare else (100, 100)
+        virsh.run("schedinfo", domain, "--live", f"cpu_shares={cpu}", check=False, timeout=10)
+        virsh.run("blkiotune", domain, "--live", "--weight", str(io), check=False, timeout=10)
 
     def press_to_boot(self, domain):
         """OVMF asks "Press any key to boot from CD or DVD" for a few seconds
@@ -920,6 +1303,69 @@ class Setup:
         for _ in range(30):
             virsh.run("send-key", domain, "KEY_ENTER", check=False)
             time.sleep(1)
+
+    # What each stage needs, checked before the virtual PC starts.
+    def needs(self):
+        """The setup discs the virtual PC still reads: Windows' installer
+        until Windows has copied itself to its disk, the drivers until
+        setup.ps1 has installed them, and the setup payload (answer file,
+        setup.ps1, office.xml) until setup finishes."""
+        return {WINDOWS_ISO: not self.done("install") and not self.rec.get("copied_at"),
+                VIRTIO: not self.done("tune"),
+                PAYLOAD: True}
+
+    def prepare_start(self, domain):
+        """Makes sure everything the virtual PC's definition points at is
+        there before it starts, and returns its state. What setup still
+        needs is made again: the payload here, the downloads by the media
+        stage. A disc it no longer needs is left out of the definition
+        instead. A virtual PC that is already running has what it needs."""
+        if self.done("install") and not os.path.exists(DISK):
+            raise Redo("install", "the virtual PC's disk is missing")
+        st = virsh.state(domain)
+        if st in ("running", "paused"):
+            return st
+        needs = self.needs()
+        if any(needed and not is_iso(path) for path, needed in needs.items() if path != PAYLOAD):
+            log("a download the virtual PC needs is missing; fetching it again")
+            stage = self.rec.get("stage")
+            self.step_media()
+            if stage and stage != "media":
+                self.set_stage(stage, "active")
+        if not os.path.exists(PAYLOAD):
+            if self.rec.get("install_started"):
+                log("the setup payload is missing; making it again")
+            self.prepare_licence()
+            self.payload()
+        self.network()
+        if st == "saved" and any(not os.path.exists(path) for path in needs):
+            # Its saved memory refers to a disc that has gone.
+            virsh.run("managedsave-remove", domain, check=False)
+            st = "shut off"
+        if st in ("", "shut off"):
+            # Defined afresh every time, so a fix to the definition (the
+            # licence table, a disc that went) reaches a virtual PC an
+            # earlier try made.
+            self.define()
+            st = "shut off"
+        return st
+
+    def ensure_running(self, domain):
+        """For the stages that work inside Windows: it is running and its
+        agent answers."""
+        st = self.prepare_start(domain)
+        if st in ("shut off", "saved"):
+            firewall.apply(self.cfg, False)
+            virsh.start(domain)
+            self.weigh(domain, spare=True)
+        elif st == "paused":
+            virsh.resume(domain)
+        deadline = time.time() + AGENT_WAIT
+        while not qga.ping(domain, 3):
+            self.check()
+            if time.time() > deadline:
+                raise Problem("failed", "Windows didn't start. Try again, and if it happens twice, restart the PC first.")
+            time.sleep(5)
 
     def payload(self):
         lang, keyboard, tz = host_locale()
@@ -940,6 +1386,7 @@ class Setup:
         guest = os.path.join(config.DATA, "guest")
         shutil.copy(os.path.join(guest, "setup.ps1"), os.path.join(work, "wildos", "setup.ps1"))
         shutil.copy(os.path.join(guest, "opengl.ps1"), os.path.join(work, "wildos", "opengl.ps1"))
+        shutil.copy(os.path.join(guest, "tune.ps1"), os.path.join(work, "wildos", "tune.ps1"))
         shutil.copy(self.cfg["guest_exe"], os.path.join(work, "wildos", "wild-guest.exe"))
         plan = (self.rec.get("options") or {}).get("officePlan", "personal")
         with open(os.path.join(work, "wildos", "office.xml"), "w", encoding="utf-8") as f:
@@ -948,7 +1395,7 @@ class Setup:
             json.dump({"host": self.cfg["host_address"], "guest": self.cfg["guest_address"],
                        "account": self.cfg["account"], "folders": self.cfg["folders"], "drive": self.cfg["drive"],
                        "transport": "rdp"}, f)
-        out = os.path.join(CACHE, "payload.iso")
+        out = PAYLOAD
         # Windows Setup looks for autounattend.xml at the root of every drive.
         p = subprocess.run(["xorriso", "-as", "mkisofs", "-quiet", "-J", "-joliet-long", "-r", "-V", "WILDOS_SETUP",
                             "-o", out + ".new", work], capture_output=True, text=True)
@@ -997,10 +1444,13 @@ class Setup:
         os.makedirs(self.cfg["share_root"], exist_ok=True)
         xml = render("domain.xml.in", {
             "NAME": self.cfg["domain"], "MEMORY_MB": memory_mb, "CPUS": cpus, "CPU_OFF": cpu_off, "DISK": DISK,
-            "WINDOWS_ISO": os.path.join(CACHE, "windows.iso"), "VIRTIO_ISO": os.path.join(CACHE, "virtio-win.iso"),
-            "PAYLOAD_ISO": os.path.join(CACHE, "payload.iso"), "NET": self.cfg["network"], "GUEST_MAC": GUEST_MAC,
+            "WINDOWS_ISO": WINDOWS_ISO, "VIRTIO_ISO": VIRTIO, "PAYLOAD_ISO": PAYLOAD, "NET": self.cfg["network"], "GUEST_MAC": GUEST_MAC,
             "SHARE": self.cfg["share_root"], "VIRTIOFSD_BINARY": "", "SMBIOS_MANUFACTURER": xml_escape(vendor),
             "SMBIOS_PRODUCT": xml_escape(product), "ACPI_TABLES": acpi})
+        for path, needed in self.needs().items():
+            if not needed and not os.path.exists(path):
+                # An empty drive: the disc has gone and isn't needed now.
+                xml = re.sub(r"\s*<source file='" + re.escape(path) + r"'/>", "", xml)
         if virsh.state(self.cfg["domain"]) != "":
             # Defining it again: libvirt only updates a domain whose UUID
             # matches, and refuses a second one under the same name.
@@ -1020,15 +1470,21 @@ class Setup:
         lic = dict(self.rec.get("licence") or {})
         if lic.get("source") == "none":
             self.set_stage("activate", "done", 100)
-            self.mark("activate")
+            self.stage_done("activate")
             return
         self.set_stage("activate", "active", 10)
         domain = self.cfg["domain"]
+        self.ensure_running(domain)
         key = self.activation_key(lic)
-        if not key:
-            raise Problem("failed", "This PC's licence couldn't be read. Go back and add a product key instead.")
         taken = None
-        for _ in range(3):
+        if not key and lic.get("taken"):
+            # Put in on an earlier try and forgotten since: only activating
+            # is left to do.
+            taken = True
+        elif not key:
+            raise Problem("failed", "This PC's licence couldn't be read. Go back and add a product key instead.",
+                          retry=False)
+        for _ in range(0 if taken else 3):
             self.check()
             try:
                 _, out, _ = qga.powershell(domain, (
@@ -1041,6 +1497,9 @@ class Setup:
             if taken is not None:
                 break
             time.sleep(10)
+        if taken:
+            lic["taken"] = True
+            self.save(licence=lic)
         if taken is False:
             # Not a Windows 11 Pro key, most often one for Home. Windows
             # stays Pro, unactivated, and works the same.
@@ -1052,7 +1511,7 @@ class Setup:
                             if lic.get("source") == "firmware" else
                             "Windows didn't accept that key. It may be for Home, which Windows mode can't use. ")
                            + "Windows works without activating; add a Windows 11 Pro key any time in Settings.")
-            self.mark("activate")
+            self.stage_done("activate")
             return
         code = None
         answer = ""
@@ -1084,7 +1543,7 @@ class Setup:
                        None if code == 1 else
                        (reason + " " if reason else "Not activated yet. ")
                        + "Windows works without activating; add a Windows 11 Pro key any time in Settings.")
-        self.mark("activate")
+        self.stage_done("activate")
 
     def activation_key(self, lic):
         if lic.get("source") == "firmware":
@@ -1151,12 +1610,19 @@ class Setup:
             return
         self.set_stage("tune", "active", 0)
         domain = self.cfg["domain"]
-        started = self.rec.get("install_started") or int(time.time())
+        self.ensure_running(domain)
+        if self.rec.get("rerun_guest"):
+            self.rerun_guest_setup(domain)
+        started = self.rec.get("tune_started")
+        if not started:
+            started = int(time.time())
+            self.save(tune_started=started)
         while True:
             self.check()
-            if time.time() - started > INSTALL_LIMIT + 3600:
+            if time.time() - started > TUNE_LIMIT:
                 raise Problem("failed", "Windows didn't finish getting ready. Try again.")
-            if virsh.state(domain) == "shut off":
+            if virsh.state(domain) in ("shut off", "saved"):
+                self.prepare_start(domain)
                 virsh.start(domain)
             ready = self._guest_json(r"C:\ProgramData\WildOS\ready.json")
             if ready:
@@ -1166,7 +1632,8 @@ class Setup:
                 self.save(licence=lic)
                 if lic["edition"] == "home":
                     # Windows 11 Home has no Remote Desktop host (brief 2.2).
-                    raise Problem("home", "This licence is for Windows 11 Home, which can't show Windows apps on Wild OS.")
+                    raise Problem("home", "This licence is for Windows 11 Home, which can't show Windows apps on Wild OS.",
+                                  retry=False)
                 break
             stage = self._guest_json(r"C:\ProgramData\WildOS\stage.json") or {}
             if stage.get("state") == "failed":
@@ -1175,8 +1642,35 @@ class Setup:
             if name in GUEST_STEPS:
                 self.set_stage("tune", "active", 100 * GUEST_STEPS.index(name) // len(GUEST_STEPS))
             time.sleep(10)
+        self.guest_cleanup(f"Unregister-ScheduledTask -TaskName '{RERUN_TASK}' -Confirm:$false -ErrorAction SilentlyContinue")
         self.set_stage("tune", "done", 100)
-        self.mark("tune")
+        self.stage_done("tune")
+
+    def rerun_guest_setup(self, domain):
+        """setup.ps1 runs once, at Windows' first sign-in. To run it again
+        after it failed, the account gets a new password, which only this
+        task is given (the person's agent sets its own the first time it
+        connects, as it does after every setup), and a task runs it as that
+        account, so its per-user steps reach the right profile. Its steps
+        that passed are skipped."""
+        password = self.svc.new_guest_password()
+        account = self.cfg["account"]
+        script = rf"""$ErrorActionPreference = 'Stop'
+$cd = Get-PSDrive -PSProvider FileSystem | Where-Object {{ Test-Path "$($_.Root)wildos\setup.ps1" }} | Select-Object -First 1
+if (-not $cd) {{ throw 'the setup disc is missing' }}
+Remove-Item 'C:\ProgramData\WildOS\stage.json', 'C:\ProgramData\WildOS\ready.json' -Force -ErrorAction SilentlyContinue
+$pw = '{password}'
+Set-LocalUser -Name '{account}' -Password (ConvertTo-SecureString $pw -AsPlainText -Force)
+$a = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument "-NoProfile -ExecutionPolicy Bypass -File `"$($cd.Root)wildos\setup.ps1`""
+Register-ScheduledTask -TaskName '{RERUN_TASK}' -Action $a -User '{account}' -Password $pw -RunLevel Highest -Force | Out-Null
+Start-ScheduledTask -TaskName '{RERUN_TASK}'
+'started'
+"""
+        code, out, err = qga.powershell(domain, script, 120)
+        if code != 0 or "started" not in out:
+            raise RuntimeError(f"running setup.ps1 again: {(err or out).strip()[-300:]}")
+        log("running setup.ps1 inside Windows again")
+        self.save(rerun_guest=False)
 
     def _guest_json(self, path):
         try:
@@ -1192,6 +1686,7 @@ class Setup:
             return
         self.set_stage("office", "active", 5)
         domain = self.cfg["domain"]
+        self.ensure_running(domain)
         check = f"Test-Path '{WORD}'"
         _, have, _ = qga.powershell(domain, check, 30)
         if have.strip() != "True":
@@ -1223,7 +1718,7 @@ $p = Start-Process "$d\setup.exe" -ArgumentList '/configure', "$d\office.xml" -W
                 self.set_stage("office", "active", min(95, 5 + (time.time() - t0) * 90 / (MINUTES["office"] * 60)))
                 time.sleep(15)
         self.set_stage("office", "done", 100)
-        self.mark("office")
+        self.stage_done("office")
 
     def finish(self):
         domain = self.cfg["domain"]
@@ -1233,9 +1728,90 @@ $p = Start-Process "$d\setup.exe" -ArgumentList '/configure', "$d\office.xml" -W
             virsh.run("change-media", domain, dev, "--eject", "--live", "--config", check=False)
         for name in ("windows.iso", "windows.iso.part", "payload.iso"):
             _remove(os.path.join(CACHE, name))
+        if self.rec.get("iso"):
+            _remove(os.path.join(CACHE, "windows-iso.json"))
         _remove(MARKER)
+        self.save(recovery=None, notice=None, rerun_guest=False)
+        # Upkeep keeps tune.ps1 current only in a Windows that has it, which
+        # a setup started before it shipped does not.
+        try:
+            code, out, _ = qga.powershell(domain, r"(Get-Content -Raw 'C:\ProgramData\WildOS\tune.json' | ConvertFrom-Json).version", 30)
+            if code == 0 and out.strip():
+                self.svc.state["tune"] = out.strip().splitlines()[-1]
+                self.svc.save_state()
+        except (virsh.VirshError, ValueError, KeyError, TimeoutError) as e:
+            log("tune:", e)
+        # The payload carried this package's wild-guest (guest_outdated).
+        digest = self.svc.guest_exe_digest()
+        if digest:
+            self.svc.state["guest_exe"] = digest
+            self.svc.save_state()
+        self.weigh(domain, spare=False)
         self.save(running=False, stage="done", problem=None, finished=int(time.time()))
         log("Windows mode is ready")
+
+
+def spare_capacity():
+    """Puts the calling thread, and the downloads, copies and checksums it
+    does, behind everything else: the lowest processor priority and the
+    idle disk class. Both are per thread on Linux, so the service's own
+    D-Bus thread stays as quick as ever."""
+    tid = threading.get_native_id()
+    try:
+        os.setpriority(os.PRIO_PROCESS, tid, 19)
+    except OSError as e:
+        log("lowering the setup thread's priority:", e)
+    # ioprio_set(IOPRIO_WHO_PROCESS, tid, IOPRIO_CLASS_IDLE << 13); the
+    # programs it starts (xorriso, qemu-img) inherit both.
+    try:
+        import ctypes
+        libc = ctypes.CDLL(None, use_errno=True)
+        if libc.syscall(251, 1, tid, 3 << 13) != 0:
+            log("the setup thread's disk class:", os.strerror(ctypes.get_errno()))
+    except (OSError, AttributeError) as e:
+        log("the setup thread's disk class:", e)
+
+
+def as_user(uid):
+    """Popen arguments that run a program as the account that asked, so it
+    reads only the files that account can. Nothing to change when the
+    service isn't root (the tests) or root itself asked."""
+    if not uid or os.geteuid() != 0:
+        return {}
+    import pwd
+    pw = pwd.getpwuid(uid)
+    return {"user": uid, "group": pw.pw_gid, "extra_groups": os.getgrouplist(pw.pw_name, pw.pw_gid), "cwd": "/"}
+
+
+def check_own_iso(path, uid):
+    """(what the file is, "") for a Windows 11 Pro ISO someone already has,
+    or (None, why not). The check runs as them: the service is root, and
+    must not read, or say anything about, a file they couldn't open."""
+    if not isinstance(path, str) or not path.startswith("/") or "\0" in path or len(path) > 4096:
+        return None, "That file couldn't be found."
+    try:
+        p = subprocess.run([sys.executable, "-I", isocheck.__file__, path], capture_output=True, text=True, timeout=120,
+                           env={"PATH": "/usr/bin:/bin", "LANG": "C.UTF-8"}, **as_user(uid))
+        found = json.loads(p.stdout)
+    except (OSError, subprocess.SubprocessError, ValueError, KeyError) as e:
+        log("checking an own ISO:", e)
+        found = None
+    if not isinstance(found, dict):
+        return None, "Your Windows 11 file couldn't be checked. Try again."
+    if not found.get("ok"):
+        return None, str(found.get("text") or isocheck.UNREADABLE)
+    return {"path": path, "file": str(found.get("file") or os.path.basename(path)), "bytes": int(found.get("bytes") or 0),
+            "name": str(found.get("name") or ""), "build": int(found.get("build") or 0)}, ""
+
+
+def forget_windows_iso(own):
+    """Clears the cached Windows ISO a new setup won't use: any, when it is
+    to copy someone's own file; only an earlier own file's copy, when it is
+    to download, so a download that was kept isn't fetched twice."""
+    meta = _read_json(os.path.join(CACHE, "windows-iso.json")) or {}
+    if own or meta.get("source") == "own":
+        for name in ("windows.iso", "windows.iso.part", "windows-iso.json"):
+            _remove(os.path.join(CACHE, name))
 
 
 def _gid(group):

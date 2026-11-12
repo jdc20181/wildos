@@ -36,6 +36,8 @@ public:
     static QString soffice();
     // Whether this account already has LibreOffice running.
     static bool running();
+    // Gives new documents the spelling language chosen in Settings > Typing.
+    static void followSpellingLanguage();
 
     explicit Office(QObject *parent = nullptr);
 

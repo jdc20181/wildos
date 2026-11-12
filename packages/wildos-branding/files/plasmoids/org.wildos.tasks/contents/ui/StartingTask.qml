@@ -37,7 +37,8 @@ Item {
 
     Rectangle {
         anchors.fill: parent
-        radius: Style.buttonRadius
+        anchors.margins: Style.highlightInset
+        radius: Style.highlightRadius
         color: hover.hovered ? Style.hover : "transparent"
         Behavior on color {
             ColorAnimation { duration: Style.hoverDuration }
@@ -47,7 +48,8 @@ Item {
     Rectangle {
         id: glow
         anchors.fill: parent
-        radius: Style.buttonRadius
+        anchors.margins: Style.highlightInset
+        radius: Style.highlightRadius
         color: Style.startingGlow
         opacity: 0
         visible: !starting.reducedMotion

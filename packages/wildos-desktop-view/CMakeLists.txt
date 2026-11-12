@@ -23,7 +23,6 @@ foreach(file ${QML_SOURCES})
     get_filename_component(name ${file} NAME)
     set_source_files_properties(${file} PROPERTIES QT_RESOURCE_ALIAS ${name})
 endforeach()
-file(GLOB GLYPHS RELATIVE ${CMAKE_CURRENT_SOURCE_DIR} glyphs/*.svg)
 
 qt_add_qml_module(wildosdesktop
     URI WildOS.Desktop
@@ -31,7 +30,6 @@ qt_add_qml_module(wildosdesktop
     PLUGIN_TARGET wildosdesktop
     NO_PLUGIN_OPTIONAL
     QML_FILES ${QML_SOURCES}
-    RESOURCES ${GLYPHS}
     SOURCES
         src/deskops.cpp src/deskops.h
         src/desktopmodel.cpp src/desktopmodel.h

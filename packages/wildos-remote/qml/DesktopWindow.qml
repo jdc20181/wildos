@@ -17,6 +17,8 @@ UI.AppWindow {
 
     property var desktop
     property rect sourceRect: Qt.rect(0, 0, 0, 0)
+    // With all monitors, the screen this window fills (its connector name).
+    property string targetScreen
     // With all monitors, the first window carries the toolbar's choices.
     property bool primary: true
     property bool pinned: false
@@ -29,8 +31,11 @@ UI.AppWindow {
 
     title: desktop ? qsTr("%1, Remote").arg(desktop.name) : qsTr("Remote")
     color: full ? "#000000" : "transparent"
-    width: desktop && desktop.desktopSize.width > 0 ? Math.min(desktop.desktopSize.width / Screen.devicePixelRatio, Screen.desktopAvailableWidth - 40) : 1280
-    height: desktop && desktop.desktopSize.height > 0 ? Math.min(desktop.desktopSize.height / Screen.devicePixelRatio + 40, Screen.desktopAvailableHeight - 40) : 800
+    // Full screen, a window is its screen's size. Sized from the remote
+    // desktop it grew, once connected, to the span of every monitor with All
+    // my monitors, and showed its part of the picture shrunk inside it.
+    width: full ? Screen.width : desktop && desktop.desktopSize.width > 0 ? Math.min(desktop.desktopSize.width / Screen.devicePixelRatio, Screen.desktopAvailableWidth - 40) : 1280
+    height: full ? Screen.height : desktop && desktop.desktopSize.height > 0 ? Math.min(desktop.desktopSize.height / Screen.devicePixelRatio + 40, Screen.desktopAvailableHeight - 40) : 800
     minimumWidth: 480
     minimumHeight: 320
     visible: true
@@ -39,6 +44,9 @@ UI.AppWindow {
     Component.onCompleted: {
         if (full) {
             showFullScreen();
+            if (targetScreen.length > 0) {
+                App.fullScreenOn(window, targetScreen);
+            }
             hint.show();
         }
         view.forceActiveFocus();
@@ -51,6 +59,9 @@ UI.AppWindow {
         displaysMenu.close();
         if (full) {
             showFullScreen();
+            if (targetScreen.length > 0) {
+                App.fullScreenOn(window, targetScreen);
+            }
         } else {
             showNormal();
         }
@@ -127,7 +138,7 @@ UI.AppWindow {
                 anchors.verticalCenter: parent.verticalCenter
                 text: window.desktop ? window.desktop.name : ""
                 size: 14
-                font.weight: Font.DemiBold
+                font.weight: UI.Style.weightSemiBold
             }
             UI.Label {
                 anchors.verticalCenter: parent.verticalCenter
@@ -165,7 +176,7 @@ UI.AppWindow {
         y: window.full ? 0 : titleBar.height
         width: parent.width
         height: parent.height - y
-        color: window.full ? "#000000" : "#0b0f1c"
+        color: window.full ? "#000000" : "#121317"
         bottomLeftRadius: window.full || window.maximised ? 0 : UI.Style.windowRadius
         bottomRightRadius: bottomLeftRadius
         clip: true
@@ -206,9 +217,9 @@ UI.AppWindow {
             width: Math.min(450, parent.width - 40)
             height: lostColumn.implicitHeight + 56
             radius: 16
-            color: Qt.rgba(22 / 255, 27 / 255, 46 / 255, 0.97)
+            color: UI.Style.glassDialog
             border.width: 1
-            border.color: UI.Style.tone(0.12)
+            border.color: UI.Style.borderDialog
             ColumnLayout {
                 id: lostColumn
                 anchors.left: parent.left
@@ -227,8 +238,7 @@ UI.AppWindow {
                     horizontalAlignment: Text.AlignHCenter
                     text: window.lost ? qsTr("Connection lost") : window.desktop ? window.desktop.endTitle : ""
                     size: 18
-                    font.weight: Font.Bold
-                    color: "#eef1f8"
+                    font.weight: UI.Style.weightBold
                 }
                 UI.Label {
                     Layout.fillWidth: true
@@ -238,7 +248,7 @@ UI.AppWindow {
                             .arg(window.desktop.name).arg(window.desktop.attempt).arg(window.desktop.attempts)
                         : window.desktop ? window.desktop.endText : ""
                     size: 14
-                    color: Qt.rgba(238 / 255, 241 / 255, 248 / 255, 0.78)
+                    color: UI.Style.inkMuted
                     wrapMode: Text.Wrap
                     lineHeight: 1.35
                 }
@@ -270,9 +280,9 @@ UI.AppWindow {
         height: 48
         bottomLeftRadius: 14
         bottomRightRadius: 14
-        color: Qt.rgba(16 / 255, 20 / 255, 36 / 255, 0.92)
+        color: UI.Style.glassOnWallpaper
         border.width: 1
-        border.color: UI.Style.tone(0.1)
+        border.color: UI.Style.borderOnWallpaper
         z: 10
         Behavior on y {
             NumberAnimation { duration: UI.Style.motionNormal; easing.type: UI.Style.easeEnter }
@@ -301,10 +311,10 @@ UI.AppWindow {
                 Layout.leftMargin: 6
                 text: window.desktop ? window.desktop.name : ""
                 size: 14
-                font.weight: Font.DemiBold
-                color: "#eef1f8"
+                font.weight: UI.Style.weightSemiBold
+                color: UI.Style.inkOnWallpaper
             }
-            Latency { Layout.leftMargin: 8; Layout.rightMargin: 8 }
+            Latency { onPicture: true; Layout.leftMargin: 8; Layout.rightMargin: 8 }
             Divider {}
             ToolText { id: keysButton; glyph: RemoteIcons.keyboard; text: qsTr("Keys"); on: keysMenu.opened; onClicked: keysMenu.openAt(keysButton) }
             ToolText { id: clipButton; glyph: RemoteIcons.clipboard; text: qsTr("Clipboard"); on: clipboardMenu.opened; onClicked: clipboardMenu.openAt(clipButton) }
@@ -325,7 +335,7 @@ UI.AppWindow {
                 height: 32
                 iconName: window.pinned ? "unpin" : "pin"
                 iconSize: 15
-                iconColor: window.pinned ? UI.Style.accent : "#eef1f8"
+                iconColor: window.pinned ? UI.Style.systemAccent : UI.Style.inkOnWallpaper
                 tip: window.pinned ? qsTr("Let the toolbar hide") : qsTr("Keep the toolbar showing")
                 focusPolicy: Qt.NoFocus
                 onClicked: window.pinned = !window.pinned
@@ -350,7 +360,7 @@ UI.AppWindow {
         width: hintRow.implicitWidth + 32
         height: 36
         radius: 10
-        color: Qt.rgba(16 / 255, 20 / 255, 36 / 255, 0.92)
+        color: UI.Style.glassOnWallpaper
         z: 10
         function show() {
             opacity = 1;
@@ -372,13 +382,13 @@ UI.AppWindow {
                 anchors.verticalCenter: parent.verticalCenter
                 name: "monitor"
                 size: 14
-                color: "#eef1f8"
+                color: UI.Style.inkOnWallpaper
             }
             UI.Label {
                 anchors.verticalCenter: parent.verticalCenter
                 text: qsTr("Full screen. Move to the top edge for the toolbar, or press Ctrl+Alt+Home")
                 size: 13
-                color: "#eef1f8"
+                color: UI.Style.inkOnWallpaper
             }
         }
     }
@@ -462,6 +472,10 @@ UI.AppWindow {
 
     component Latency: Row {
         spacing: 6
+        // On the full screen toolbar it sits on dark glass whatever the
+        // theme, so it keeps the pale colours there.
+        property bool onPicture: false
+        readonly property color colour: down ? (onPicture ? "#ff9a8a" : UI.Style.danger) : (onPicture ? "#5fd39a" : UI.Style.success)
         readonly property bool down: window.lost
         visible: window.desktop !== undefined && (down || window.desktop.latency > 0)
         UI.Glyph {
@@ -469,13 +483,13 @@ UI.AppWindow {
             width: 13
             height: 13
             path: RemoteIcons.signal
-            color: parent.down ? "#ff9a8a" : "#5fd39a"
+            color: parent.colour
         }
         UI.Label {
             anchors.verticalCenter: parent.verticalCenter
             text: parent.down ? qsTr("No connection") : qsTr("%1 ms").arg(window.desktop ? window.desktop.latency : 0)
             size: 13
-            color: parent.down ? "#ff9a8a" : "#5fd39a"
+            color: parent.colour
         }
     }
     component Divider: Rectangle {
@@ -483,7 +497,7 @@ UI.AppWindow {
         Layout.preferredHeight: 22
         Layout.leftMargin: 4
         Layout.rightMargin: 4
-        color: UI.Style.tone(0.12)
+        color: UI.Style.borderOnWallpaper
     }
     component ToolIcon: UI.IconButton {
         width: 32
@@ -498,12 +512,12 @@ UI.AppWindow {
         property string glyph
         property string iconName
         property bool on: false
-        property color colour: "#eef1f8"
+        property color colour: UI.Style.inkOnWallpaper
         signal clicked()
         implicitWidth: toolLabelRow.implicitWidth + 20
         implicitHeight: 34
         radius: 8
-        color: on ? Qt.rgba(143 / 255, 180 / 255, 255 / 255, 0.18) : toolMouse.containsMouse ? Qt.rgba(1, 1, 1, 0.08) : "transparent"
+        color: on ? UI.Style.controlOnWallpaperSelected : toolMouse.containsMouse ? UI.Style.controlOnWallpaperHover : "transparent"
         Accessible.role: Accessible.Button
         Accessible.name: text
         Row {
@@ -516,7 +530,7 @@ UI.AppWindow {
                 width: 15
                 height: 15
                 path: tool.glyph
-                color: tool.on ? "#8fb4ff" : tool.colour
+                color: tool.colour
             }
             UI.Icon {
                 visible: tool.iconName.length > 0
@@ -529,8 +543,8 @@ UI.AppWindow {
                 anchors.verticalCenter: parent.verticalCenter
                 text: tool.text
                 size: 14
-                font.weight: Font.DemiBold
-                color: tool.on ? "#8fb4ff" : tool.colour
+                font.weight: UI.Style.weightSemiBold
+                color: tool.colour
             }
         }
         MouseArea {
@@ -557,9 +571,9 @@ UI.AppWindow {
         onClosed: view.forceActiveFocus()
         background: Rectangle {
             radius: 12
-            color: Qt.rgba(22 / 255, 27 / 255, 46 / 255, 0.97)
+            color: UI.Style.glassMenu
             border.width: 1
-            border.color: UI.Style.tone(0.12)
+            border.color: UI.Style.borderMenu
         }
         contentItem: Column {
             id: menuColumn
@@ -576,21 +590,21 @@ UI.AppWindow {
         width: 302
         height: detail.length > 0 ? 52 : 36
         radius: 7
-        color: rowMouse.containsMouse ? Qt.rgba(1, 1, 1, 0.07) : "transparent"
+        color: rowMouse.containsMouse ? UI.Style.surfaceHover : "transparent"
         UI.Icon {
             visible: row.ticked
             x: 10
             anchors.verticalCenter: parent.verticalCenter
             name: "check"
             size: 14
-            color: "#8fb4ff"
+            color: UI.Style.iconInk
         }
         Column {
             x: 12 + (row.ticked ? 20 : 0)
             anchors.verticalCenter: parent.verticalCenter
             spacing: 2
-            UI.Label { text: row.text; size: 14; color: "#eef1f8" }
-            UI.Label { visible: row.detail.length > 0; text: row.detail; size: 12; color: Qt.rgba(238 / 255, 241 / 255, 248 / 255, 0.6) }
+            UI.Label { text: row.text; size: 14 }
+            UI.Label { visible: row.detail.length > 0; text: row.detail; size: 12; color: UI.Style.inkMuted }
         }
         UI.Label {
             anchors.right: parent.right
@@ -598,7 +612,7 @@ UI.AppWindow {
             anchors.verticalCenter: parent.verticalCenter
             text: row.shortcut
             size: 12
-            color: Qt.rgba(238 / 255, 241 / 255, 248 / 255, 0.55)
+            color: UI.Style.inkSubtle
         }
         MouseArea {
             id: rowMouse
@@ -615,7 +629,7 @@ UI.AppWindow {
         width: 290
         x: 6
         height: 1
-        color: Qt.rgba(1, 1, 1, 0.08)
+        color: UI.Style.divider
     }
     component MenuToggle: Item {
         id: toggleRow
@@ -631,13 +645,13 @@ UI.AppWindow {
             anchors.verticalCenter: parent.verticalCenter
             width: parent.width - 80
             spacing: 3
-            UI.Label { width: parent.width; text: toggleRow.text; size: 14; font.weight: Font.DemiBold; color: "#eef1f8" }
+            UI.Label { width: parent.width; text: toggleRow.text; size: 14; font.weight: UI.Style.weightSemiBold }
             UI.Label {
                 visible: toggleRow.detail.length > 0
                 width: parent.width
                 text: toggleRow.detail
                 size: 12
-                color: Qt.rgba(238 / 255, 241 / 255, 248 / 255, 0.62)
+                color: UI.Style.inkMuted
                 wrapMode: Text.Wrap
             }
         }
@@ -656,13 +670,13 @@ UI.AppWindow {
         width: 302
         topPadding: 6
         spacing: 8
-        Rectangle { width: 290; x: 6; height: 1; color: Qt.rgba(1, 1, 1, 0.08) }
+        Rectangle { width: 290; x: 6; height: 1; color: UI.Style.divider }
         UI.Label {
             x: 12
             width: 278
             text: qsTr("Remote Desktop settles what's shared as it connects, so this takes effect when you reconnect.")
             size: 12
-            color: Qt.rgba(238 / 255, 241 / 255, 248 / 255, 0.62)
+            color: UI.Style.inkMuted
             wrapMode: Text.Wrap
         }
         UI.Button {

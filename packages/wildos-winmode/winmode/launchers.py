@@ -57,6 +57,10 @@ def describe(app):
     stem = exe_stem(app.get("target", ""))
     known = KNOWN.get(stem)
     out = {"name": app.get("name", stem).strip()[:80], "target": app.get("target", ""), "arguments": app.get("arguments", "")}
+    # A Microsoft Store app: wild-guest starts it by this id whether the
+    # launch names its program or its shell:AppsFolder address.
+    if isinstance(app.get("aumid"), str):
+        out["aumid"] = app["aumid"][:200]
     if known:
         out["id"], out["mime"], out["categories"] = known
     else:
@@ -90,6 +94,18 @@ def app_id_for_image(image, registry):
             if exe_stem(app.get("target", "")) == stem:
                 return app_id
         return make_id(stem)
+    return None
+
+
+def app_id_for_aumid(aumid, registry):
+    """The Store app a window belongs to, from the AUMID wild-guest reports
+    for a frame-hosted app, whose window's own program is
+    ApplicationFrameHost."""
+    if isinstance(aumid, str) and aumid:
+        key = aumid.lower()
+        for app_id, app in registry.items():
+            if app.get("aumid", "").lower() == key:
+                return app_id
     return None
 
 

@@ -1,0 +1,11 @@
+#!/bin/sh
+# A kernel apt has just removed may still be the one a restore point needs
+# to start from the start-up menu. Its files are kept in
+# /boot/wildos-restore/<version> until no restore point uses it.
+set -e
+version="$1"
+[ -n "$version" ] || exit 0
+if [ -x /usr/libexec/wildos/restore-points ]; then
+    /usr/libexec/wildos/restore-points kernel-removed "$version" || true
+fi
+exit 0

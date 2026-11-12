@@ -1,5 +1,7 @@
 #include "office.h"
 
+#include "clockformat.h"
+
 #include <QCoreApplication>
 #include <QDBusConnection>
 #include <QDBusMessage>
@@ -16,6 +18,7 @@
 #include <QProcess>
 #include <QRegularExpression>
 #include <QSaveFile>
+#include <QSettings>
 #include <QStandardPaths>
 #include <QThread>
 #include <QUrl>
@@ -89,6 +92,86 @@ bool Office::modeTables()
 bool Office::running()
 {
     return libreOfficeRunning();
+}
+
+// Settings > Typing keeps its spelling language as Sonnet's default, where
+// KDE apps read it. LibreOffice takes the language of new documents from
+// the display language instead, so without this Write kept checking British
+// English after someone chose American (#21). A language picked in
+// LibreOffice's own options since Wild OS last set one is left alone.
+void Office::followSpellingLanguage()
+{
+    const QSettings sonnet(QStringLiteral("KDE"), QStringLiteral("Sonnet"));
+    static const QRegularExpression code(QStringLiteral("^([a-z]{2,3})(?:_([A-Z]{2}))?"));
+    const QRegularExpressionMatch match = code.match(sonnet.value(QStringLiteral("defaultLanguage")).toString());
+    if (!match.hasMatch() || libreOfficeRunning()) {
+        return;
+    }
+    // Sonnet names dictionaries like en_GB or de_DE_frami; LibreOffice wants en-GB.
+    const QString chosen = match.captured(2).isEmpty() ? match.captured(1) : match.captured(1) + QLatin1Char('-') + match.captured(2);
+
+    const QString stateDir = QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation) + QStringLiteral("/wildos-office");
+    const QString stateFile = stateDir + QStringLiteral("/spelling-language");
+    QString lastSet;
+    QFile state(stateFile);
+    if (state.open(QIODevice::ReadOnly)) {
+        lastSet = QString::fromUtf8(state.readAll()).trimmed();
+        state.close();
+    }
+    auto remember = [&] {
+        QDir().mkpath(stateDir);
+        QSaveFile out(stateFile);
+        if (out.open(QIODevice::WriteOnly)) {
+            out.write(chosen.toUtf8());
+            out.commit();
+        }
+    };
+
+    // A new profile has no registry yet; LibreOffice makes one on its first
+    // start, and the next start from Write or Tables sets the language.
+    QFile file(registryFile());
+    if (!file.open(QIODevice::ReadOnly)) {
+        return;
+    }
+    QStringList lines = QString::fromUtf8(file.readAll()).split(QLatin1Char('\n'));
+    file.close();
+
+    const QString path = QStringLiteral("oor:path=\"/org.openoffice.Office.Linguistic/General\"");
+    const QString prop = QStringLiteral("oor:name=\"DefaultLocale\"");
+    const QString line = QStringLiteral("<item %1><prop %2 oor:op=\"fuse\"><value>%3</value></prop></item>").arg(path, prop, chosen);
+    static const QRegularExpression valueText(QStringLiteral("<value>([^<]*)</value>"));
+    int at = -1;
+    QString current;
+    for (int i = 0; i < lines.size(); ++i) {
+        if (lines.at(i).contains(path) && lines.at(i).contains(prop)) {
+            at = i;
+            current = valueText.match(lines.at(i)).captured(1).trimmed();
+            break;
+        }
+    }
+    if (current == chosen) {
+        remember();
+        return;
+    }
+    if (!current.isEmpty() && current != lastSet) {
+        return;
+    }
+    if (at >= 0) {
+        lines[at] = line;
+    } else {
+        const int end = int(lines.indexOf(QStringLiteral("</oor:items>")));
+        if (end < 0) {
+            return;
+        }
+        lines.insert(end, line);
+    }
+    QSaveFile save(registryFile());
+    if (save.open(QIODevice::WriteOnly)) {
+        save.write(lines.join(QLatin1Char('\n')).toUtf8());
+        if (save.commit()) {
+            remember();
+        }
+    }
 }
 
 QString Office::soffice()
@@ -197,7 +280,7 @@ QString Office::whenText(const QDateTime &time)
     const QDate day = local.date();
     const QDate today = QDate::currentDate();
     if (day == today) {
-        return tr("Today, %1").arg(local.toString(QStringLiteral("HH:mm")));
+        return tr("Today, %1").arg(ClockFormat::time(local.time()));
     }
     if (day == today.addDays(-1)) {
         return tr("Yesterday");
@@ -372,6 +455,7 @@ void Office::reload()
 
 bool Office::launch(const QStringList &arguments)
 {
+    followSpellingLanguage();
     if (!QProcess::startDetached(soffice(), QStringList{QStringLiteral("--nologo")} + arguments)) {
         Q_EMIT failed(tr("%1 couldn't start. Try again in a moment.").arg(appName()));
         return false;

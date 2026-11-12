@@ -66,7 +66,7 @@ Item {
             color: UI.Style.ink
             font.family: UI.Style.fontFamily
             font.pixelSize: 30
-            font.weight: Font.DemiBold
+            font.weight: UI.Style.weightSemiBold
             font.letterSpacing: -0.3
         }
         Text {
@@ -78,6 +78,7 @@ Item {
                   : qsTr("Remove the USB stick, then restart. Next you'll create your account and join Wi-Fi.")
             color: Qt.rgba(232 / 255, 236 / 255, 248 / 255, 0.82)
             font.family: UI.Style.fontFamily
+            font.letterSpacing: UI.Style.tracking(15)
             font.pixelSize: 15
             lineHeight: 1.55
             wrapMode: Text.WordWrap
@@ -103,8 +104,9 @@ Item {
                     text: qsTr("Your recovery key")
                     color: UI.Style.ink
                     font.family: UI.Style.fontFamily
+                    font.letterSpacing: UI.Style.tracking(14)
                     font.pixelSize: 14
-                    font.weight: Font.DemiBold
+                    font.weight: UI.Style.weightSemiBold
                 }
                 Text {
                     Layout.fillWidth: true
@@ -119,6 +121,7 @@ Item {
                     text: qsTr("It unlocks the disk if you forget your disk password. This is the only time it is shown, and it is not kept on this computer.")
                     color: UI.Style.inkStatus
                     font.family: UI.Style.fontFamily
+                    font.letterSpacing: UI.Style.tracking(12)
                     font.pixelSize: 12
                     lineHeight: 1.4
                     wrapMode: Text.WordWrap
@@ -154,6 +157,7 @@ Item {
                               : qsTr("Save it on:")
                         color: UI.Style.inkStatus
                         font.family: UI.Style.fontFamily
+                        font.letterSpacing: UI.Style.tracking(12)
                         font.pixelSize: 12
                     }
                     Repeater {
@@ -185,6 +189,7 @@ Item {
                         text: page.saveProblem
                         color: UI.Style.danger
                         font.family: UI.Style.fontFamily
+                        font.letterSpacing: UI.Style.tracking(12)
                         font.pixelSize: 12
                     }
                 }
@@ -227,6 +232,7 @@ Item {
                         text: modelData
                         color: Qt.rgba(232 / 255, 236 / 255, 248 / 255, 0.85)
                         font.family: UI.Style.fontFamily
+                        font.letterSpacing: UI.Style.tracking(13)
                         font.pixelSize: 13
                     }
                 }
@@ -268,8 +274,9 @@ Item {
                         wrapMode: Text.WordWrap
                         color: UI.Style.ink
                         font.family: UI.Style.fontFamily
+                        font.letterSpacing: UI.Style.tracking(14)
                         font.pixelSize: 14
-                        font.weight: Font.DemiBold
+                        font.weight: UI.Style.weightSemiBold
                     }
                     Text {
                         Layout.fillWidth: true
@@ -279,6 +286,7 @@ Item {
                         wrapMode: Text.WrapAtWordBoundaryOrAnywhere
                         color: UI.Style.inkStatus
                         font.family: UI.Style.fontFamily
+                        font.letterSpacing: UI.Style.tracking(12)
                         font.pixelSize: 12
                     }
                     Text {
@@ -287,6 +295,7 @@ Item {
                         wrapMode: Text.WordWrap
                         color: UI.Style.inkMuted
                         font.family: UI.Style.fontFamily
+                        font.letterSpacing: UI.Style.tracking(12)
                         font.pixelSize: 12
                     }
                 }

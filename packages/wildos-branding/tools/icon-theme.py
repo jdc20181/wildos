@@ -1,20 +1,30 @@
 #!/usr/bin/env python3
-"""Generate the Wild OS icon theme from the design's drawings.
+"""Generate the Wild OS icon themes, WildOS and WildOS-dark.
 
-The app, folder and document icons are drawn as inline SVG in the design
-mockups (Start, Taskbar, StartSearch and Main). They are copied here as source
-data because the design folder lives outside the repository. This script
-normalises each one to a standalone 48 x 48 SVG that Qt's SVG Tiny renderer
-draws faithfully, turns the calendar and PDF lettering into outlines so no
-font is needed at run time, and writes one file per icon name Plasma and the
-shipped apps ask for. It also writes the design's line glyphs as symbolic
-icons for the tray, popups and window controls.
+They sit on the Fluent icon theme (wildos-fluent-icons), which draws the
+folders, the bin and the drives, and hold only what Wild OS draws itself.
+The document icons and a few app icons are drawn as inline SVG in the
+design mockups (Start, Taskbar, StartSearch and Main). They are copied here as
+source data because the design folder lives outside the repository. This
+script normalises each one to a standalone 48 x 48 SVG that Qt's SVG Tiny
+renderer draws faithfully, turns the PDF lettering into outlines so no font is
+needed at run time, and writes one file per icon name Plasma and the shipped
+apps ask for.
 
-    python3 tools/icon-theme.py files/icons/WildOS
+App icons the design hands over as files are copied from icons/apps: the
+Wild OS icon page's files where it has the app (Terminal, Calculator, Store,
+Settings and the everyday apps), board 16.9, "Facelift: system app icons",
+for Files, Web, Photos, Text editor and Calendar. The calendar's date is
+Albert Sans, as on the board, and is turned into outlines from the copy in
+files/fonts. Their drop shadows are rewritten as filters Qt's renderer draws. This computer comes from icons/devices. The script also
+writes the design's line glyphs as symbolic icons for the tray, popups and
+window controls.
 
-Needs fontTools (python3-fonttools) and Inter (fonts-inter). Set INTER_DIR if
-Inter is not in /usr/share/fonts/opentype/inter. The output is committed, so
-the package build does not run this.
+    python3 tools/icon-theme.py files/icons
+
+Needs fontTools (python3-fonttools) and Inter (fonts-inter) for the PDF
+lettering. Set INTER_DIR if Inter is not in /usr/share/fonts/opentype/inter.
+The output is committed, so the package build does not run this.
 
 Aliases are written as real files rather than symlinks: the tree is edited on
 Windows checkouts, where git turns symlinks into small text files that would
@@ -30,8 +40,10 @@ from pathlib import Path
 from fontTools.pens.svgPathPen import SVGPathPen
 from fontTools.pens.transformPen import TransformPen
 from fontTools.ttLib import TTFont
+from fontTools.varLib.instancer import instantiateVariableFont
 
 INTER_DIR = Path(os.environ.get("INTER_DIR", "/usr/share/fonts/opentype/inter"))
+ALBERT_SANS = Path(__file__).resolve().parent.parent / "files" / "fonts" / "albert-sans" / "AlbertSans[wght].ttf"
 
 
 def text_path(text, font_file, size, x, baseline, spacing=0.0):
@@ -55,6 +67,43 @@ def text_path(text, font_file, size, x, baseline, spacing=0.0):
     return " ".join(out)
 
 
+_albert = {}
+
+
+def albert_sans(weight):
+    if weight not in _albert:
+        _albert[weight] = instantiateVariableFont(TTFont(ALBERT_SANS), {"wght": weight})
+    return _albert[weight]
+
+
+def outline_text(svg_text):
+    """Replace each <text> in a drawn icon with its outline in Albert Sans.
+
+    Placed as the board's browser places it: letter spacing follows every
+    letter, the last one too, and text-anchor measures that full advance."""
+    def one(m):
+        attrs = dict(re.findall(r'([a-z-]+)="([^"]*)"', m.group(1)))
+        font = albert_sans(int(attrs.get("font-weight", "400")))
+        glyphs = font.getGlyphSet()
+        cmap = font.getBestCmap()
+        size = float(attrs["font-size"])
+        spacing = float(attrs.get("letter-spacing", "0"))
+        scale = size / font["head"].unitsPerEm
+        names = [cmap[ord(c)] for c in m.group(2)]
+        width = sum(glyphs[n].width * scale + spacing for n in names)
+        x = float(attrs["x"])
+        anchor = attrs.get("text-anchor", "start")
+        pen_x = x - width / 2 if anchor == "middle" else x - width if anchor == "end" else x
+        out = []
+        for name in names:
+            pen = SVGPathPen(glyphs)
+            glyphs[name].draw(TransformPen(pen, (scale, 0, 0, -scale, pen_x, float(attrs["y"]))))
+            out.append(pen.getCommands())
+            pen_x += glyphs[name].width * scale + spacing
+        return f'<path d="{rounded(" ".join(out))}" fill="{attrs["fill"]}"/>'
+    return re.sub(r"<text([^>]*)>([^<]*)</text>", one, svg_text)
+
+
 def rounded(d):
     """Trim fontTools' long decimals so the files stay readable."""
     return re.sub(r"-?\d*\.?\d+", lambda m: fmt(m.group()), d)
@@ -64,12 +113,6 @@ def fmt(n):
     v = round(float(n), 2)
     s = f"{v:.2f}".rstrip("0").rstrip(".")
     return "0" if s == "-0" else s
-
-
-def grad(gid, top, bottom):
-    return (f'<defs><linearGradient id="{gid}" x1="0" y1="0" x2="0" y2="1">'
-            f'<stop offset="0" stop-color="{top}"/><stop offset="1" stop-color="{bottom}"/>'
-            f'</linearGradient></defs>')
 
 
 def sector(cx, cy, r, a0, a1):
@@ -92,9 +135,6 @@ def arc(cx, cy, r, a0, a1):
 PAGE = ('<path d="M11 4h18l9 9v29a2 2 0 0 1-2 2H11a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z" fill="#f3f5fa"/>'
         '<path d="M29 4v7a2 2 0 0 0 2 2h7z" fill="#c9d1e0"/>')
 
-FOLDER_BACK = '<path d="M6 12a3 3 0 0 1 3-3h10l4 4h16a3 3 0 0 1 3 3v3H6z" fill="#c97f24"/>'
-FOLDER_FRONT = 'M5 18a3 3 0 0 1 3-3h32a3 3 0 0 1 3 3v19a3 3 0 0 1-3 3H8a3 3 0 0 1-3-3z'
-
 HEADPHONES = ('<path d="M9 30v-5a15 15 0 0 1 30 0v5" fill="none" stroke="#cdbfff" stroke-width="3.6" stroke-linecap="round"/>'
               '<rect x="5" y="26" width="11" height="16" rx="4.5" ry="4.5" fill="{fill}"/>'
               '<rect x="32" y="26" width="11" height="16" rx="4.5" ry="4.5" fill="{fill}"/>')
@@ -104,88 +144,10 @@ CLAPPER = ('<rect x="6" y="19" width="36" height="23" rx="3.5" ry="3.5" fill="#3
            '<path d="M12 10l5 7.5h5L17 10zM22 10l5 7.5h5L27 10zM32 10l5 7.5h5L37 10z" fill="#3a3f54"/></g>'
            '<path d="M20.5 25.5l10 5-10 5z" fill="#ff5f6d"/>')
 
-# Place glyphs from the Files sidebar in Main, on the 24 px UI grid.
-PLACE_GLYPHS = {
-    "home": '<path d="M4 11l8-7 8 7v9H4z"/>',
-    "desktop": '<rect x="3" y="4" width="18" height="13" rx="2" ry="2"/><path d="M8 21h8M12 17v4"/>',
-    "documents": '<path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5"/>',
-    "downloads": '<path d="M12 4v11M7 10l5 5 5-5M5 20h14"/>',
-    "pictures": '<rect x="3" y="4" width="18" height="16" rx="2" ry="2"/><path d="M3 16l5-5 5 5 3-3 5 5"/>',
-    "music": '<path d="M9 18V5l11-2v13"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="17.5" cy="16" r="2.5"/>',
-    "videos": '<rect x="3" y="6" width="13" height="12" rx="2" ry="2"/><path d="M16 10.5l5-3v9l-5-3z"/>',
-}
-
-
-def folder(emblem=None):
-    """The desktop folder from Main, optionally carrying a place glyph.
-
-    The glyph is pressed into the front in the tab colour, the way the design
-    tints every folder detail from the folder's own palette rather than
-    adding a new colour."""
-    body = ('<path d="M6 12a3 3 0 0 1 3-3h10l4 4h16a3 3 0 0 1 3 3v3H6z" fill="#d48a2a"/>'
-            f'<path d="{FOLDER_FRONT}" fill="#f2b84d"/>'
-            '<rect x="5" y="15" width="38" height="2.2" rx="1.1" ry="1.1" fill="#ffe2a0" fill-opacity="0.6"/>')
-    if emblem:
-        s = 0.62
-        tx, ty = 24 - 12 * s, 28.5 - 12 * s
-        body += (f'<g transform="translate({tx:.2f} {ty:.2f}) scale({s})" fill="none" stroke="#c97f24" '
-                 f'stroke-width="{2.5 / s:.2f}" stroke-linecap="round" stroke-linejoin="round">'
-                 f'{PLACE_GLYPHS[emblem]}</g>')
-    return body
-
-
 def drawings():
-    nov = rounded(text_path("NOV", "Inter-Bold.otf", 7, 24, 15.2, 0.6))
-    six = rounded(text_path("6", "Inter-SemiBold.otf", 17, 24, 36.5))
     pdf = rounded(text_path("PDF", "Inter-Bold.otf", 6.5, 24, 34.6))
 
     d = {}
-
-    # Main desktop and taskbar versions, which carry the design's soft shading.
-    d["files"] = (grad("g", "#f8cb64", "#e59c33") + FOLDER_BACK
-                  + f'<path d="{FOLDER_FRONT}" fill="url(#g)"/>'
-                  '<rect x="5" y="15" width="38" height="2.2" rx="1.1" ry="1.1" fill="#ffe7ad" fill-opacity="0.65"/>')
-    d["browser"] = (grad("g", "#4fb0ff", "#2356cf")
-                    + '<circle cx="24" cy="24" r="20" fill="url(#g)"/>'
-                    '<g fill="none" stroke="#ffffff" stroke-opacity="0.85" stroke-width="2">'
-                    '<ellipse cx="24" cy="24" rx="8" ry="19.5"/><path d="M4.5 24h39M7.5 14h33M7.5 34h33"/></g>')
-    d["mail"] = (grad("g", "#ffffff", "#dbe3f2")
-                 + '<rect x="4" y="10" width="40" height="28" rx="4.5" ry="4.5" fill="url(#g)"/>'
-                 '<path d="M6 13l18 13.5L42 13" fill="none" stroke="#4d7fe0" stroke-width="2.6" stroke-linejoin="round"/>'
-                 '<path d="M6 36l13-11M42 36L29 25" fill="none" stroke="#b9c6de" stroke-width="1.6"/>')
-    d["music"] = grad("g", "#a98bff", "#6447dc") + HEADPHONES.format(fill="url(#g)")
-    d["photos"] = (grad("g", "#8fd0ff", "#3c7fd8")
-                   + '<rect x="6" y="9" width="32" height="28" rx="3" ry="3" fill="#c8d2e6" transform="rotate(-9 22 23)"/>'
-                   '<g transform="rotate(5 26 26)"><rect x="9" y="11" width="32" height="30" rx="3" ry="3" fill="#ffffff"/>'
-                   '<rect x="12" y="14" width="26" height="19" rx="1.5" ry="1.5" fill="url(#g)"/>'
-                   '<path d="M12 33l7.5-8.5 5 5 4-4L38 33z" fill="#2c6b4d"/>'
-                   '<circle cx="32" cy="19.5" r="2.6" fill="#ffd56b"/></g>')
-    d["store"] = (grad("g", "#5ad897", "#1f8f55")
-                  + '<path d="M9 16h30l-2.4 25.5a2.5 2.5 0 0 1-2.5 2.3H13.9a2.5 2.5 0 0 1-2.5-2.3z" fill="url(#g)"/>'
-                  '<path d="M17.5 21v-6a6.5 6.5 0 0 1 13 0v6" fill="none" stroke="#d6f7e5" stroke-width="2.8" stroke-linecap="round"/>'
-                  '<rect x="9" y="16" width="30" height="2.4" fill="#b6f0d0" fill-opacity="0.5"/>')
-
-    # Start menu versions.
-    d["calendar"] = ('<rect x="6" y="6" width="36" height="37" rx="6" ry="6" fill="#f6f7fb"/>'
-                     '<path d="M6 12a6 6 0 0 1 6-6h24a6 6 0 0 1 6 6v5H6z" fill="#ec5546"/>'
-                     f'<path d="{nov}" fill="#ffffff"/><path d="{six}" fill="#1d2233"/>')
-    d["notes"] = ('<rect x="9" y="5" width="30" height="38" rx="4" ry="4" fill="#ffe58c"/>'
-                  '<path d="M9 9a4 4 0 0 1 4-4h22a4 4 0 0 1 4 4v4H9z" fill="#f0b02f"/>'
-                  '<path d="M14 20h20M14 26h20M14 32h14" fill="none" stroke="#d6ac45" stroke-width="1.8" stroke-linecap="round"/>')
-    # The cog is drawn on the 24 px grid in the design; doubling it keeps the
-    # same 2 to 22 extent as the 48 px icons.
-    d["settings"] = ('<g transform="scale(2)"><path fill="#c3cad8" d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/>'
-                     '<circle cx="12" cy="12" r="3.2" fill="#2c3244"/></g>')
-    d["terminal"] = ('<rect x="5" y="8" width="38" height="32" rx="6" ry="6" fill="#1a1e2b" stroke="#4a5266" stroke-width="1.5"/>'
-                     '<path d="M13 19l6 5-6 5" fill="none" stroke="#7dffb0" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>'
-                     '<path d="M23 30h11" fill="none" stroke="#e8ecf6" stroke-width="2.6" stroke-linecap="round"/>')
-    keys = "".join(f'<circle cx="{x}" cy="{y}" r="2.4"/>' for y in (24, 31, 38) for x in (17.5, 24))
-    d["calculator"] = ('<rect x="10" y="4" width="28" height="40" rx="6" ry="6" fill="#2b303f"/>'
-                       '<rect x="14" y="8.5" width="20" height="9" rx="2" ry="2" fill="#9fe0c4"/>'
-                       f'<g fill="#6a7389">{keys}</g>'
-                       '<g fill="#ff9a3c"><circle cx="30.5" cy="24" r="2.4"/><circle cx="30.5" cy="31" r="2.4"/>'
-                       '<circle cx="30.5" cy="38" r="2.4"/></g>')
-    d["videos"] = CLAPPER
 
     # Documents, from Start's recent files.
     d["document"] = PAGE + ('<path d="M14 20h20M14 25h20M14 30h20M14 35h12" fill="none" stroke="#3d72d6" '
@@ -198,10 +160,6 @@ def drawings():
     d["spreadsheet"] = PAGE + ('<rect x="14" y="20" width="20" height="14" rx="1.5" ry="1.5" fill="none" stroke="#2e9a5c" stroke-width="1.8"/>'
                                '<path d="M14 25h20M14 29.5h20M21 20v14" fill="none" stroke="#2e9a5c" stroke-width="1.8"/>')
 
-    d["folder"] = folder()
-    for place in PLACE_GLYPHS:
-        d[f"folder-{place}"] = folder(place)
-
     # New drawings for apps and types the design does not show, built from
     # the same parts: the paper page, the Photos print, the Videos body and
     # the metal, ink and accent tones already in the palette.
@@ -212,18 +170,6 @@ def drawings():
                    '<circle cx="31" cy="31" r="8.2" fill="#cfe0ff" fill-opacity="0.75" stroke="#3a3f54" stroke-width="3.2"/>'
                    '<path d="M27 28.5a5 5 0 0 1 3-2.6" fill="none" stroke="#ffffff" stroke-width="1.8" stroke-linecap="round"/>')
 
-    # Archive: a kraft box with a zip down the lid, so it does not read as a
-    # second folder at small sizes.
-    teeth = "".join(f'<rect x="{x}" y="{y}" width="2.4" height="1.6" rx="0.5" ry="0.5"/>'
-                    for i, y in enumerate((20.5, 23.5, 26.5, 29.5))
-                    for x in ((22.2,) if i % 2 == 0 else (23.4,)))
-    d["archive"] = ('<path d="M7 18h34v21a3 3 0 0 1-3 3H10a3 3 0 0 1-3-3z" fill="#d9a05a"/>'
-                    '<rect x="5" y="9" width="38" height="10" rx="2.5" ry="2.5" fill="#b9793a"/>'
-                    '<rect x="7" y="19" width="34" height="2.2" fill="#8f5a26" fill-opacity="0.35"/>'
-                    '<rect x="21" y="9" width="6" height="25" fill="#f3e2c2"/>'
-                    f'<g fill="#8f5a26">{teeth}</g>'
-                    '<rect x="20.5" y="31" width="7" height="8" rx="2" ry="2" fill="#5b6378"/>'
-                    '<rect x="22.6" y="33.2" width="2.8" height="3.6" rx="1.2" ry="1.2" fill="#d9a05a"/>')
     d["archive-file"] = (PAGE
                          + '<rect x="21" y="4" width="6" height="22" fill="#d9dfe9"/>'
                          + "".join(f'<rect x="{x}" y="{y}" width="2.6" height="1.6" rx="0.5" ry="0.5" fill="#7b8498"/>'
@@ -287,16 +233,7 @@ def drawings():
 # Simplified drawings for 16 px, where the full ones turn to mush. Each keeps
 # the silhouette and colours but drops detail below a pixel.
 def small_drawings():
-    six = rounded(text_path("6", "Inter-Bold.otf", 22, 24, 40))
     s = {}
-    s["calendar"] = ('<rect x="5" y="5" width="38" height="39" rx="6" ry="6" fill="#f6f7fb"/>'
-                     '<path d="M5 11a6 6 0 0 1 6-6h26a6 6 0 0 1 6 6v6H5z" fill="#ec5546"/>'
-                     f'<path d="{six}" fill="#1d2233"/>')
-    s["calculator"] = ('<rect x="9" y="3" width="30" height="42" rx="6" ry="6" fill="#2b303f"/>'
-                       '<rect x="13" y="7" width="22" height="10" rx="2" ry="2" fill="#9fe0c4"/>'
-                       '<g fill="#6a7389"><rect x="13" y="21" width="9" height="9" rx="2" ry="2"/>'
-                       '<rect x="13" y="33" width="9" height="8" rx="2" ry="2"/></g>'
-                       '<rect x="26" y="21" width="9" height="20" rx="2" ry="2" fill="#ff9a3c"/>')
     s["pdf"] = (PAGE + '<rect x="11" y="24" width="26" height="14" rx="2.5" ry="2.5" fill="#d9483b"/>'
                 '<path d="M15 18h18" fill="none" stroke="#9aa5bb" stroke-width="3" stroke-linecap="round"/>')
     s["document"] = PAGE + ('<path d="M15 20h18M15 27h18M15 34h12" fill="none" stroke="#3d72d6" '
@@ -305,21 +242,6 @@ def small_drawings():
                         'stroke-width="3.2" stroke-linecap="round"/>')
     s["spreadsheet"] = PAGE + ('<rect x="13.5" y="19" width="21" height="17" rx="1.5" ry="1.5" fill="none" stroke="#2e9a5c" stroke-width="3"/>'
                                '<path d="M13.5 27.5h21M22 19v17" fill="none" stroke="#2e9a5c" stroke-width="3"/>')
-    s["notes"] = ('<rect x="8" y="4" width="32" height="40" rx="4" ry="4" fill="#ffe58c"/>'
-                  '<path d="M8 8a4 4 0 0 1 4-4h24a4 4 0 0 1 4 4v6H8z" fill="#f0b02f"/>'
-                  '<path d="M14 23h20M14 32h14" fill="none" stroke="#c99a2e" stroke-width="3.2" stroke-linecap="round"/>')
-    s["terminal"] = ('<rect x="4" y="7" width="40" height="34" rx="6" ry="6" fill="#1a1e2b" stroke="#4a5266" stroke-width="2"/>'
-                     '<path d="M12 17l7 7-7 7" fill="none" stroke="#7dffb0" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"/>'
-                     '<path d="M23 32h12" fill="none" stroke="#e8ecf6" stroke-width="3.6" stroke-linecap="round"/>')
-    s["browser"] = (grad("g", "#4fb0ff", "#2356cf")
-                    + '<circle cx="24" cy="24" r="21" fill="url(#g)"/>'
-                    '<g fill="none" stroke="#ffffff" stroke-opacity="0.9" stroke-width="3">'
-                    '<ellipse cx="24" cy="24" rx="8.5" ry="20"/><path d="M4 24h40"/></g>')
-    s["photos"] = ('<rect x="4" y="7" width="40" height="34" rx="4" ry="4" fill="#ffffff"/>'
-                   + grad("g", "#8fd0ff", "#3c7fd8")
-                   + '<rect x="8" y="11" width="32" height="22" rx="1.5" ry="1.5" fill="url(#g)"/>'
-                   '<path d="M8 33l9-10 6 6 5-5 12 9z" fill="#2c6b4d"/>'
-                   '<circle cx="33" cy="17" r="3.4" fill="#ffd56b"/>')
     s["viewer"] = (PAGE + '<path d="M15 20h18" fill="none" stroke="#3d72d6" stroke-width="3.2" stroke-linecap="round"/>'
                    '<path d="M37 37l6 6" fill="none" stroke="#3a3f54" stroke-width="6" stroke-linecap="round"/>'
                    '<circle cx="30" cy="30" r="9" fill="#cfe0ff" stroke="#3a3f54" stroke-width="4"/>')
@@ -330,10 +252,6 @@ def small_drawings():
     s["audio"] = PAGE + ('<g transform="translate(9.5 13) scale(0.6)">'
                          + HEADPHONES.format(fill="#7d5fe6").replace('stroke="#cdbfff"', 'stroke="#a995f5"').replace('stroke-width="3.6"', 'stroke-width="5"')
                          + '</g>')
-    s["videos"] = ('<rect x="5" y="19" width="38" height="24" rx="4" ry="4" fill="#3a3f54"/>'
-                   '<g transform="rotate(-9 5 17)"><rect x="5" y="8" width="38" height="9" rx="2" ry="2" fill="#f2f3f7"/>'
-                   '<path d="M17 8l5 9h7L24 8z" fill="#3a3f54"/></g>'
-                   '<path d="M19 25l12 6-12 6z" fill="#ff5f6d"/>')
     s["video"] = PAGE + ('<rect x="12" y="20" width="24" height="17" rx="3" ry="3" fill="#3a3f54"/>'
                          '<path d="M21 24.5l7.5 4-7.5 4z" fill="#ff5f6d"/>')
     s["hardware"] = ('<g fill="#c3cad8"><rect x="12" y="4" width="24" height="40" rx="2" ry="2"/>'
@@ -346,10 +264,6 @@ def small_drawings():
                     f'<path d="{arc(24, 25, 13.5, -40, 40)}" fill="none" stroke="#f2b84d" stroke-width="6"/>'
                     f'<path d="{arc(24, 25, 13.5, 45, 120)}" fill="none" stroke="#ec5546" stroke-width="6"/>'
                     '<path d="M24 25l8-9" fill="none" stroke="#f3f5fa" stroke-width="4" stroke-linecap="round"/>')
-    for place in PLACE_GLYPHS:
-        # The pressed-in glyph is under a pixel at 16 px; the plain folder
-        # reads better than a smudge.
-        s[f"folder-{place}"] = folder()
     return s
 
 
@@ -358,35 +272,11 @@ def small_drawings():
 # and alternative names Plasma falls back to, or that a later install of a
 # KDE player would use.
 APPS = {
-    "files": ["org.wildos.files", "org.kde.dolphin", "dolphin", "system-file-manager"],
-    "browser": ["web-browser", "internet-web-browser"],
-    "mail": ["internet-mail"],
-    "calendar": ["office-calendar", "x-office-calendar"],
-    "photos": ["gwenview", "org.kde.gwenview", "multimedia-photo-viewer"],
-    "music": ["multimedia-audio-player", "elisa", "org.kde.elisa"],
-    "notes": ["kwrite", "org.kde.kwrite", "accessories-text-editor"],
-    "store": ["org.wildos.store", "plasmadiscover", "org.kde.discover"],
-    "settings": ["org.wildos.settings", "preferences-system", "systemsettings", "org.kde.systemsettings"],
-    "terminal": ["org.wildos.terminal", "utilities-terminal", "org.kde.konsole", "konsole"],
-    "calculator": ["accessories-calculator", "org.kde.kcalc", "kcalc"],
-    "videos": ["multimedia-video-player", "dragonplayer", "org.kde.dragonplayer", "haruna", "org.kde.haruna"],
     "viewer": ["okular", "org.kde.okular"],
-    "archive": ["ark", "org.kde.ark", "utilities-file-archiver"],
     "screenshot": ["spectacle", "org.kde.spectacle", "accessories-screenshot", "applets-screenshooter"],
     "partitions": ["partitionmanager", "org.kde.partitionmanager"],
     "monitor": ["utilities-system-monitor", "org.kde.plasma-systemmonitor", "ksysguard"],
     "hardware": ["hwinfo", "org.kde.kinfocenter", "kinfocenter"],
-}
-
-PLACES = {
-    "folder": ["folder", "folder-open", "inode-directory"],
-    "folder-home": ["user-home", "folder-home"],
-    "folder-desktop": ["user-desktop", "folder-desktop"],
-    "folder-documents": ["folder-documents", "folder-text"],
-    "folder-downloads": ["folder-download", "folder-downloads"],
-    "folder-pictures": ["folder-pictures", "folder-image", "folder-images"],
-    "folder-music": ["folder-music", "folder-sound", "folder-audio"],
-    "folder-videos": ["folder-videos", "folder-video"],
 }
 
 # KIconLoader tries the full mime name through every inherited theme before
@@ -409,10 +299,9 @@ MIMETYPES = {
                      "application-x-bzip-compressed-tar", "application-x-xz-compressed-tar",
                      "application-x-zstd-compressed-tar", "application-x-7z-compressed",
                      "application-x-rar", "application-gzip"],
-    "calendar": ["text-calendar"],
 }
 
-CONTEXTS = (("apps", "Applications", APPS), ("places", "Places", PLACES), ("mimetypes", "MimeTypes", MIMETYPES))
+CONTEXTS = (("apps", "Applications", APPS), ("mimetypes", "MimeTypes", MIMETYPES))
 
 
 # Symbolic UI glyphs: the design's line icons on a 24 px grid, round caps and
@@ -824,49 +713,87 @@ SYMBOLIC_ONLY = {
     "bin": ["user-trash-symbolic", "user-trash-full-symbolic"],
 }
 
-# Names that need a line glyph in panels and lists but a coloured drawing on
-# the desktop and in Dolphin's icon view. The line version goes in the
-# symbolic directories, which stop at 32 px; the coloured one in
-# scalable/places takes over above that.
-DUAL = {
-    "bin": ["user-trash", "user-trash-full"],
-    "harddisk": ["drive-harddisk"],
-    "usb": ["drive-removable-media", "drive-removable-media-usb", "drive-removable-media-usb-pendrive"],
+# App icons the design draws as files (the icon page, and board 16.9 for
+# the system apps it does not cover), with every name the apps and Plasma ask
+# for. The first name is the app's own; the rest are the stock apps Wild OS
+# renames (wildos-app-names) or replaces, and the generic names Plasma falls
+# back to. The board draws one set for light and dark.
+DRAWN_APPS = {
+    "wildos-files.svg": ["org.wildos.files", "system-file-manager", "org.kde.dolphin", "dolphin"],
+    "wildos-settings.svg": ["org.wildos.settings", "preferences-system", "systemsettings", "org.kde.systemsettings"],
+    "wildos-store.svg": ["org.wildos.store", "plasmadiscover", "org.kde.discover", "system-software-install"],
+    # Brave and Mullvad Browser keep their own icons; this is for anything
+    # that asks for the generic web browser.
+    "wildos-web.svg": ["web-browser", "internet-web-browser"],
+    "wildos-terminal.svg": ["wildos-terminal", "org.wildos.terminal", "utilities-terminal", "org.kde.konsole", "konsole"],
+    "wildos-photos.svg": ["gwenview", "org.kde.gwenview", "multimedia-photo-viewer"],
+    "wildos-text.svg": ["accessories-text-editor", "org.kde.kwrite", "kwrite", "text-editor"],
+    "wildos-calculator.svg": ["wildos-calculator", "accessories-calculator", "org.kde.kcalc", "kcalc"],
+    "wildos-calendar.svg": ["org.wildos.calendar", "office-calendar", "x-office-calendar"],
+    # The icon page names these wildos-<app>, which is what the apps'
+    # launchers ask for. Without that name here the lookup skipped this theme
+    # for the app's own hicolor copy, or the Wild OS logo if that was missing.
+    # Ark and the stock players take the same drawings.
+    "wildos-music.svg": ["wildos-music", "org.wildos.music", "multimedia-audio-player", "elisa", "org.kde.elisa"],
+    "wildos-videos.svg": ["wildos-videos", "org.wildos.videos", "multimedia-video-player", "dragonplayer",
+                          "org.kde.dragonplayer", "haruna", "org.kde.haruna"],
+    "wildos-pdf.svg": ["wildos-pdf", "org.wildos.pdf"],
+    "wildos-archive.svg": ["wildos-archive", "org.wildos.archive", "ark", "org.kde.ark", "utilities-file-archiver"],
+    "wildos-backup.svg": ["wildos-backup", "org.wildos.backup"],
+    "wildos-capture.svg": ["wildos-capture", "org.wildos.capture"],
+    "wildos-notes.svg": ["wildos-notes", "org.wildos.notes"],
+    "wildos-voice.svg": ["wildos-voice", "org.wildos.voice"],
+    "wildos-report.svg": ["wildos-report", "org.wildos.report"],
+}
+
+# Apps that draw their own icon from a file (title bar, About, the media
+# controls), so their copy needs the same Qt-ready shadow as the theme's.
+# Written from the masters above; never edit these by hand.
+PACKAGE_COPIES = {
+    "wildos-capture.svg": "wildos-capture/data/wildos-capture.svg",
+    "wildos-pdf.svg": "wildos-pdf/data/wildos-pdf.svg",
+    "wildos-music.svg": "wildos-music/data/wildos-music.svg",
+    "wildos-report.svg": "wildos-report/data/wildos-report.svg",
+    "wildos-store.svg": "wildos-store/data/org.wildos.store.svg",
+}
+
+# Calendar files show the Calendar app's icon.
+DRAWN_MIMETYPES = {
+    "wildos-calendar.svg": ["text-calendar"],
+}
+
+# Apps that install their icon into hicolor themselves, with any generic
+# names that should show it too. The theme carries a copy so it holds every
+# Wild OS app icon; run this again after changing one. Board 16.9 draws Mail,
+# Write, Tables and Remote exactly as these files.
+PACKAGE_APPS = {
+    "wildos-mail/data/org.wildos.mail.svg": ["internet-mail"],
+    "wildos-office/data/org.wildos.write.svg": [],
+    "wildos-office/data/org.wildos.tables.svg": [],
+    "wildos-remote/data/org.wildos.remote.svg": [],
+}
+
+# Fluent's This computer with the dawn wallpaper on its screen. Folders, the
+# bin and drives come from Fluent unchanged, so they are not in this theme.
+DEVICES = ["computer.svg", "computer-laptop.svg"]
+
+HERE = Path(__file__).resolve().parent
+SOURCES = HERE.parent / "icons"
+PACKAGES = HERE.parent.parent
+
+# Each Wild OS theme sits on the Fluent theme of the same brightness. Light
+# takes Fluent's -light variant: plain Fluent draws its panel glyphs light
+# for a dark taskbar, which would vanish on the light one.
+THEMES = {
+    "WildOS": ("Wild OS", "Fluent-yellow-light,breeze,hicolor"),
+    "WildOS-dark": ("Wild OS dark", "Fluent-yellow-dark,breeze-dark,hicolor"),
 }
 
 
-def colour_extras():
-    metal = grad("g", "#e6eaf1", "#9aa4b8")
-    bin_body = ('<path d="M11 16h26l-2.3 25.2a3 3 0 0 1-3 2.8H16.3a3 3 0 0 1-3-2.8z" fill="url(#g)"/>'
-                '<path d="M19 22v15M24 22v15M29 22v15" fill="none" stroke="#7b8498" stroke-width="2" '
-                'stroke-linecap="round"/>')
-    lid = ('<path d="M20 10V8a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" fill="none" stroke="#8f98ab" stroke-width="2.6"/>'
-           '<rect x="7" y="10" width="34" height="5.5" rx="2.75" ry="2.75" fill="#c3cad8"/>')
-    trash = metal + bin_body + lid
-    full = (metal + bin_body
-            + '<path d="M14 15.5l2.5-8.5 9 2.2-1.6 6.3z" fill="#f3f5fa"/>'
-            '<path d="M24 15.5l6-9.5 7.5 5-2.8 4.5z" fill="#ffe58c"/>'
-            '<g transform="rotate(-8 40 13)">' + lid + '</g>')
-    disk = (metal + '<rect x="4" y="12" width="40" height="25" rx="5" ry="5" fill="url(#g)"/>'
-            '<rect x="4" y="12" width="40" height="2.2" rx="1.1" ry="1.1" fill="#ffffff" fill-opacity="0.5"/>'
-            '<path d="M10 30h15" fill="none" stroke="#7b8498" stroke-width="2.6" stroke-linecap="round"/>'
-            '<circle cx="37" cy="30" r="2" fill="#7dffb0"/>')
-    stick = (grad("b", "#4fb0ff", "#2356cf")
-             + '<rect x="18" y="4" width="12" height="14" rx="1.5" ry="1.5" fill="#c3cad8"/>'
-             '<rect x="20.5" y="8" width="2.6" height="3" fill="#7b8498"/>'
-             '<rect x="24.9" y="8" width="2.6" height="3" fill="#7b8498"/>'
-             '<rect x="14" y="16" width="20" height="28" rx="4.5" ry="4.5" fill="url(#b)"/>'
-             '<rect x="14" y="16" width="20" height="2.2" rx="1.1" ry="1.1" fill="#ffffff" fill-opacity="0.3"/>'
-             '<circle cx="24" cy="37" r="2" fill="#ffffff" fill-opacity="0.85"/>')
-    return {"user-trash": trash, "user-trash-full": full, "drive-harddisk": disk,
-            "drive-removable-media": stick, "drive-removable-media-usb": stick,
-            "drive-removable-media-usb-pendrive": stick}
-
-
 INDEX = """[Icon Theme]
-Name=Wild OS
-Comment=App, folder, document and interface icons drawn for Wild OS
-Inherits=breeze-dark,hicolor
+Name={name}
+Comment=Wild OS app, document and interface icons on the Fluent icon theme
+Inherits={inherits}
 Example=folder
 DisplayDepth=32
 # Lets KIconLoader swap in the colour scheme for the symbolic glyphs, and
@@ -922,8 +849,34 @@ def write_text(path, text):
     path.write_text(text, encoding="utf-8", newline="\n")
 
 
-def main(out):
-    out = Path(out)
+def drop_shadow(svg_text):
+    """Spell each feDropShadow out as the primitives it stands for.
+
+    Qt's SVG renderer (6.7 on) draws feGaussianBlur, feOffset, feFlood,
+    feComposite and feMerge but skips a filter holding anything else, so the
+    design's soft shadow under every tile and card vanished in Start, the
+    taskbar and Alt+Tab. This chain is the one the SVG spec defines
+    feDropShadow as, so browsers draw it identically."""
+    def one(m):
+        a = dict(re.findall(r'([A-Za-z-]+)="([^"]*)"', m.group(1)))
+        return (f'<feGaussianBlur in="SourceAlpha" stdDeviation="{a.get("stdDeviation", "2")}"/>'
+                f'<feOffset dx="{a.get("dx", "2")}" dy="{a.get("dy", "2")}" result="offset"/>'
+                f'<feFlood flood-color="{a.get("flood-color", "#000")}" flood-opacity="{a.get("flood-opacity", "1")}"/>'
+                '<feComposite in2="offset" operator="in"/>'
+                '<feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge>')
+    return re.sub(r"<feDropShadow([^>]*)/>", one, svg_text)
+
+
+def copy(src, dest):
+    """Copy a drawing as it is, comments and all: the design's files are the
+    masters, and Fluent's licence notice must stay with its icons. Only the
+    lettering changes, into outlines, and the shadow into filters Qt draws."""
+    write_text(dest, drop_shadow(outline_text(src.read_text(encoding="utf-8"))))
+
+
+def main(parent):
+    parent = Path(parent)
+    out = parent / "WildOS"
     full, small = drawings(), small_drawings()
 
     glyphs = symbolic_glyphs()
@@ -931,10 +884,9 @@ def main(out):
     for name, key in symbolic_names().items():
         names[name] = key
         names[name + "-symbolic"] = key
-    for table in (SYMBOLIC_ONLY, DUAL):
-        for key, extra in table.items():
-            for name in extra:
-                names[name] = key
+    for key, extra in SYMBOLIC_ONLY.items():
+        for name in extra:
+            names[name] = key
     for name, key in sorted(names.items()):
         write_text(out / "16x16" / "symbolic" / f"{name}.svg", symbolic_svg(glyphs[key], 16, 2))
         write_text(out / "scalable" / "symbolic" / f"{name}.svg", symbolic_svg(glyphs[key], 24, 1.8))
@@ -956,10 +908,33 @@ def main(out):
         sections.append(f"[{dirs_small}]\nSize=16\nContext={ctx_name}\nType=Fixed\n")
         sections.append(f"[scalable/{ctx}]\nSize=48\nMinSize=16\nMaxSize=512\nContext={ctx_name}\nType=Scalable\n")
         dirs += [dirs_small, f"scalable/{ctx}"]
-    for name, body in colour_extras().items():
-        write(out / "scalable" / "places" / f"{name}.svg", body)
-    index = INDEX.format(dirs=",".join(dirs)) + "\n" + "\n".join(sections)
-    (out / "index.theme").write_text(index, encoding="utf-8", newline="\n")
+
+    for source, names_ in DRAWN_APPS.items():
+        for name in names_:
+            copy(SOURCES / "apps" / source, out / "scalable" / "apps" / f"{name}.svg")
+    for source, dest in PACKAGE_COPIES.items():
+        copy(SOURCES / "apps" / source, PACKAGES / dest)
+    for source, names_ in DRAWN_MIMETYPES.items():
+        for name in names_:
+            copy(SOURCES / "apps" / source, out / "scalable" / "mimetypes" / f"{name}.svg")
+    for source, names_ in PACKAGE_APPS.items():
+        for name in [Path(source).stem] + names_:
+            copy(PACKAGES / source, out / "scalable" / "apps" / f"{name}.svg")
+    for source in DEVICES:
+        copy(SOURCES / "devices" / source, out / "scalable" / "devices" / source)
+    sections.append("[scalable/devices]\nSize=64\nMinSize=16\nMaxSize=512\nContext=Devices\nType=Scalable\n")
+    dirs.append("scalable/devices")
+    # Only Fluent's frosted bin lives here, linked in by the package
+    # (debian/links): from 16 to 24 px Fluent draws the bin as a flat glyph,
+    # and the design wants the glass bin at every size and in both modes.
+    sections.append("[scalable/places]\nSize=64\nMinSize=16\nMaxSize=512\nContext=Places\nType=Scalable\n")
+    dirs.append("scalable/places")
+
+    # The dark theme is the same files under another parent; the package
+    # links its directories to these rather than shipping them twice.
+    for theme, (name, inherits) in THEMES.items():
+        index = INDEX.format(name=name, inherits=inherits, dirs=",".join(dirs)) + "\n" + "\n".join(sections)
+        write_text(parent / theme / "index.theme", index)
 
 
 if __name__ == "__main__":

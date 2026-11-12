@@ -1,0 +1,12 @@
+#!/bin/sh
+# Safe mode (start-up recovery > More options > Safe mode): with
+# wildos.safe=1 on the kernel command line, apps that start by themselves
+# at sign-in do not. Plasma starts them through xdg-desktop-autostart.target,
+# which is masked here for this start only (generators run every start).
+case " $(cat /proc/cmdline) " in
+    *" wildos.safe=1 "*) ;;
+    *) exit 0 ;;
+esac
+early="${2:-$1}"
+mkdir -p "$early"
+ln -sf /dev/null "$early/xdg-desktop-autostart.target"

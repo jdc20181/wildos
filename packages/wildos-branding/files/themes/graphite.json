@@ -12,8 +12,16 @@
     "textOnAccent": "#06120a",
     "accentText": "#dfe2e8",
     "glass": {
-        "colour": "#0e1016",
-        "alpha": 0.86
+        "colour": "#1a1a1e",
+        "alpha": 0.95
+    },
+    "panelGlass": {
+        "colour": "#202025",
+        "alpha": 0.96
+    },
+    "taskbarGlass": {
+        "colour": "#141418",
+        "alpha": 0.92
     },
     "wallpaper": "/usr/share/wallpapers/WildOS-black-curve",
     "moreWallpapers": [

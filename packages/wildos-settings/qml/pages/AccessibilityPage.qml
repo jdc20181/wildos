@@ -227,6 +227,20 @@ PageScroll {
                     }
 
                     UI.SettingRow {
+                        visible: Accessibility.outlineWindows && Accessibility.windowEffectsSupported
+                        title: "Outline maximised windows"
+                        description: "Off leaves windows that fill the screen without an edge"
+                        status: page.onOff(Accessibility.outlineFillingScreen)
+
+                        UI.Toggle {
+                            anchors.verticalCenter: parent.verticalCenter
+                            checked: Accessibility.outlineFillingScreen
+                            Accessible.name: "Outline maximised windows"
+                            onToggled: Accessibility.setOutlineFillingScreen(checked)
+                        }
+                    }
+
+                    UI.SettingRow {
                         title: "Stronger text on glass"
                         description: "Solid backing and brighter text on the taskbar, Start, flyouts and Wild OS apps"
                         status: page.onOff(Accessibility.strongerText)

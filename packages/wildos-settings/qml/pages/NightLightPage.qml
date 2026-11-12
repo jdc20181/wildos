@@ -29,8 +29,8 @@ PageScroll {
         const list = [];
         for (let h = 0; h < 24; ++h) {
             for (const m of [0, 30]) {
-                const text = (h < 10 ? "0" : "") + h + ":" + (m === 0 ? "00" : "30");
-                list.push({ value: text.replace(":", ""), text: text });
+                const value = (h < 10 ? "0" : "") + h + (m === 0 ? "00" : "30");
+                list.push({ value: value, text: Format.time(new Date(2000, 0, 1, h, m)) });
             }
         }
         return list;

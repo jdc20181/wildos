@@ -60,7 +60,7 @@ Item {
                 width: parent.width
                 text: info.name
                 font.pixelSize: UI.Style.px(15)
-                font.weight: Font.DemiBold
+                font.weight: UI.Style.weightSemiBold
                 wrapMode: Text.Wrap
                 maximumLineCount: 3
                 horizontalAlignment: Text.AlignHCenter

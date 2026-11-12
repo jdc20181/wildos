@@ -126,7 +126,7 @@ PageScroll {
             UI.Label {
                 Layout.fillWidth: true
                 text: "One more step at the next restart"
-                font.weight: Font.DemiBold
+                font.weight: UI.Style.weightSemiBold
                 wrapMode: Text.WordWrap
             }
 
@@ -140,7 +140,7 @@ PageScroll {
             UI.Label {
                 text: Graphics.enrolCode
                 size: 28
-                font.weight: Font.DemiBold
+                font.weight: UI.Style.weightSemiBold
                 font.letterSpacing: 3
             }
 

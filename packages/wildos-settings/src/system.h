@@ -78,10 +78,11 @@ class System : public QObject
     Q_PROPERTY(bool snapLayouts READ snapLayouts WRITE setSnapLayouts NOTIFY kwinChanged)
     Q_PROPERTY(bool snapAssist READ snapAssist WRITE setSnapAssist NOTIFY kwinChanged)
     Q_PROPERTY(bool altTabAllDesktops READ altTabAllDesktops WRITE setAltTabAllDesktops NOTIFY kwinChanged)
-    // What each screen corner does, keyed by KWin's corner number (1 top
-    // right, 3 bottom right, 5 bottom left, 7 top left): "taskview",
-    // "desktop", "lock" or "none".
-    Q_PROPERTY(QVariantMap screenCorners READ screenCorners NOTIFY kwinChanged)
+    // Hot corners, as wildosrc [HotCorners] holds them for KWin's
+    // wildos_hotcorners plugin: TopLeft, TopRight, BottomLeft, BottomRight
+    // (an action), the same with Key after them (a key to hold), Delay (ms)
+    // and SkipFullScreen.
+    Q_PROPERTY(QVariantMap hotCorners READ hotCorners NOTIFY hotCornersChanged)
 
     Q_PROPERTY(QString timeZone READ timeZone CONSTANT)
     Q_PROPERTY(QString region READ region CONSTANT)
@@ -144,8 +145,9 @@ public:
     void setSnapAssist(bool on);
     bool altTabAllDesktops() const;
     void setAltTabAllDesktops(bool on);
-    QVariantMap screenCorners() const;
-    Q_INVOKABLE void setScreenCorner(int corner, const QString &action);
+    QVariantMap hotCorners() const;
+    Q_INVOKABLE void setHotCorner(const QString &key, const QVariant &value);
+    Q_INVOKABLE void resetHotCorners();
 
     QString timeZone() const;
     QString region() const;
@@ -227,6 +229,7 @@ Q_SIGNALS:
     void appUpdatesChanged();
     void powerChanged();
     void kwinChanged();
+    void hotCornersChanged();
     void binEmptied();
 
 private:

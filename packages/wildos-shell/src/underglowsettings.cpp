@@ -44,25 +44,48 @@ Effect running(const Settings &settings, bool onBattery, bool fullScreen, bool r
     return settings.effect;
 }
 
-QList<qreal> glowRows(int reach)
+namespace
 {
-    constexpr qreal lineHeight = 2;
-    constexpr qreal spread = 2;
-    constexpr qreal sigma = 14.0 / 2;
-    const qreal half = lineHeight / 2 + spread;
+constexpr int lineHeight = 2;
+
+// Coverage of each one-pixel row of the strip for a band `height` pixels
+// tall, centred on the line and blurred with a Gaussian of `sigma`.
+QList<qreal> bandRows(int reach, qreal height, qreal sigma)
+{
+    const qreal half = height / 2;
     const auto phi = [](qreal x) {
         return 0.5 * (1 + std::erf(x / std::sqrt(2.0)));
     };
 
     QList<qreal> rows;
-    const int count = reach * 2 + int(lineHeight);
+    const int count = reach * 2 + lineHeight;
     rows.reserve(count);
-    const qreal centre = reach + lineHeight / 2;
+    const qreal centre = reach + lineHeight / 2.0;
     for (int y = 0; y < count; ++y) {
         const qreal d = y + 0.5 - centre;
         rows.append(phi((d + half) / sigma) - phi((d - half) / sigma));
     }
     return rows;
+}
+}
+
+QList<qreal> glowRows(int reach)
+{
+    constexpr qreal spread = 2;
+    constexpr qreal blur = 6;
+    return bandRows(reach, lineHeight + spread * 2, blur / 2);
+}
+
+QList<qreal> spectrumCopyRows(int reach)
+{
+    constexpr qreal height = 6;
+    constexpr qreal blur = 4;
+    return bandRows(reach, height, blur);
+}
+
+qreal flowPhase(qint64 msecsSinceEpoch)
+{
+    return qreal(msecsSinceEpoch % flowCycleMs) / flowCycleMs;
 }
 
 QString effectName(Effect effect)

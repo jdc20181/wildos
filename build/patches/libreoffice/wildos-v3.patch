@@ -1,0 +1,1384 @@
+--- a/framework/source/uielement/recentfilesmenucontroller.cxx
++++ b/framework/source/uielement/recentfilesmenucontroller.cxx
+@@ -35,6 +35,12 @@
+ #include <vcl/settings.hxx>
+ #include <vcl/svapp.hxx>
+ #include <o3tl/string_view.hxx>
++#include <osl/file.hxx>
++#include <com/sun/star/i18n/CalendarItem2.hpp>
++#include <tools/date.hxx>
++#include <tools/datetime.hxx>
++#include <unotools/localedatawrapper.hxx>
++#include <unotools/syslocale.hxx>
+ 
+ #include <officecfg/Office/Common.hxx>
+ 
+@@ -150,6 +156,51 @@
+ 
+ 
+ // private function
++namespace
++{
++// Wild OS: a recent file's folder and when it last changed, "Documents ·
++// Today", shown at the right of its row as on the OfficeFileMenu board.
++OUString lcl_wildosWhereAndWhen(const INetURLObject& rURL)
++{
++    INetURLObject aFolder(rURL);
++    aFolder.removeSegment();
++    OUString aWhere = aFolder.GetLastName(INetURLObject::DecodeMechanism::WithCharset);
++    if (aWhere.isEmpty())
++        aWhere = aFolder.getFSysPath(FSysStyle::Detect);
++
++    osl::DirectoryItem aItem;
++    osl::FileStatus aStatus(osl_FileStatus_Mask_ModifyTime);
++    if (osl::DirectoryItem::get(rURL.GetMainURL(INetURLObject::DecodeMechanism::NONE), aItem)
++            != osl::FileBase::E_None
++        || aItem.getFileStatus(aStatus) != osl::FileBase::E_None)
++        return aWhere;
++
++    TimeValue aModified = aStatus.getModifyTime();
++    ::DateTime aWhen(::DateTime::CreateFromUnixTime(aModified.Seconds));
++    aWhen.ConvertToLocalTime();
++    const ::Date aToday(::Date::SYSTEM);
++    const sal_Int32 nDaysAgo = aToday - ::Date(aWhen);
++    OUString aDay;
++    if (nDaysAgo == 0)
++        aDay = u"Today"_ustr;
++    else if (nDaysAgo == 1)
++        aDay = u"Yesterday"_ustr;
++    else
++    {
++        const LocaleDataWrapper& rLocale = SvtSysLocale().GetLocaleData();
++        const css::uno::Sequence<css::i18n::CalendarItem2> aMonths
++            = rLocale.getDefaultCalendarMonths();
++        const sal_uInt16 nMonth = aWhen.GetMonth();
++        aDay = OUString::number(aWhen.GetDay()) + " "
++               + (nMonth >= 1 && nMonth <= aMonths.getLength() ? aMonths[nMonth - 1].AbbrevName
++                                                              : OUString::number(nMonth));
++        if (aWhen.GetYear() != aToday.GetYear())
++            aDay += " " + OUString::number(aWhen.GetYear());
++    }
++    return aWhere + u" · "_ustr + aDay;
++}
++}
++
+ void RecentFilesMenuController::fillPopupMenu(std::unique_lock<std::mutex>& /*rGuard*/, Reference<css::awt::XPopupMenu> const & rPopupMenu)
+ {
+     SolarMutexGuard aSolarMutexGuard;
+@@ -234,21 +285,8 @@
+         for ( sal_uInt32 i = 0; i < nCount; i++ )
+         {
+ 
++            // Wild OS: the name alone, no number before it, as on the boards.
+             OUStringBuffer aMenuShortCut;
+-            if ( i <= 9 )
+-            {
+-                if ( i == 9 )
+-                    aMenuShortCut.append( "1~0. " );
+-                else
+-                {
+-                    aMenuShortCut.append( "~N. " );
+-                    aMenuShortCut[ 1 ] = sal_Unicode( i + '1' );
+-                }
+-            }
+-            else
+-            {
+-                aMenuShortCut.append( OUString::number(sal_Int32( i + 1 ) ) + ". " );
+-            }
+ 
+             OUString aURLString = "vnd.sun.star.popup:RecentFileList?entry=" + OUString::number(i);
+ 
+@@ -269,6 +307,10 @@
+             }
+ 
+             aMenuShortCut.append( aMenuTitle );
++            // The folder and date at the row's right, where a menu shows a
++            // shortcut.
++            if (aURL.GetProtocol() == INetProtocol::File)
++                aMenuShortCut.append("\t" + lcl_wildosWhereAndWhen(aURL));
+ 
+             rPopupMenu->insertItem(sal_uInt16( i+1 ), aMenuShortCut.makeStringAndClear(), 0, -1);
+ 
+@@ -293,15 +335,13 @@
+ 
+         rPopupMenu->insertSeparator(-1);
+         // Clear List menu entry
+-        rPopupMenu->insertItem(sal_uInt16(nCount + 1), FwkResId(STR_CLEAR_RECENT_FILES), 0, -1);
++        rPopupMenu->insertItem(sal_uInt16(nCount + 1), u"Clear the list"_ustr, 0, -1);
+         rPopupMenu->setCommand(sal_uInt16(nCount + 1), CMD_CLEAR_LIST);
+         rPopupMenu->setHelpText(sal_uInt16(nCount + 1), FwkResId(STR_CLEAR_RECENT_FILES_HELP));
+ 
+-        // Toggle current module only
+-        rPopupMenu->insertItem(sal_uInt16(nCount + 2), FwkResId(STR_TOGGLE_CURRENT_MODULE), 0, -1);
+-        rPopupMenu->checkItem(sal_uInt16(nCount + 2), bShowCurrentModuleOnly);
+-        rPopupMenu->setCommand(sal_uInt16(nCount + 2), CMD_TOGGLE_CURRENTMODULE);
+-        rPopupMenu->setHelpText(sal_uInt16(nCount + 2), FwkResId(STR_TOGGLE_CURRENT_MODULE_HELP));
++        // Wild OS: no "current module only" toggle; the list holds Write and
++        // Tables files alike, each with its app's icon.
++        (void)bShowCurrentModuleOnly;
+ 
+         // Open remote menu entry
+         if ( m_bShowToolbarEntries )
+--- a/include/vcl/tabctrl.hxx
++++ b/include/vcl/tabctrl.hxx
+@@ -207,6 +207,7 @@
+     virtual bool set_property( const OUString& rKey, const OUString& rValue ) override;
+     virtual void StateChanged( StateChangedType nType ) override;
+     virtual void DataChanged( const DataChangedEvent& rDCEvt ) override;
++    virtual void MouseButtonDown( const MouseEvent& rMEvt ) override;
+ 
+ protected:
+     virtual bool ImplPlaceTabs( tools::Long nWidth ) override;
+@@ -214,6 +215,10 @@
+ 
+ private:
+     bool m_bWildOS = false;
++    // The ribbon folded to its tab row by the chevron at its far right;
++    // picking a tab unfolds it.
++    bool m_bWildOSCollapsed = false;
++    SAL_DLLPRIVATE tools::Rectangle ImplWildOSChevronRect() const;
+     OUString m_aWildOSFileMenu;
+     VclPtr<PushButton> m_pWildOSFile;
+     VclPtr<PushButton> m_pWildOSSearch;
+--- a/sc/sdi/docsh.sdi
++++ b/sc/sdi/docsh.sdi
+@@ -31,6 +31,7 @@
+     SID_AUTO_OUTLINE        [ ExecMethod = Execute; StateMethod = GetState; ]
+     SID_OUTLINE_DELETEALL   [ ExecMethod = Execute; StateMethod = GetState; ]
+     SID_FORMATPAGE          [ ExecMethod = Execute; StateMethod = GetState; ]
++    SID_PREVIEW_MARGIN      [ ExecMethod = Execute; StateMethod = GetState; ]
+     SID_HFEDIT              [ ExecMethod = Execute; StateMethod = GetState; ]
+     SID_DETECTIVE_DEL_ALL   [ ExecMethod = Execute; StateMethod = GetState; ]
+     FID_TABLE_VISIBLE   [ ExecMethod = ExecuteTable; StateMethod = GetStateTable; ]
+--- a/sc/source/ui/docshell/docsh4.cxx
++++ b/sc/source/ui/docshell/docsh4.cxx
+@@ -1960,6 +1960,9 @@
+     {
+         case SID_STATUS_PAGESTYLE:  // click on StatusBar control
+         case SID_FORMATPAGE:
++        // Wild OS: the ribbon's Margins outside print preview, where Calc
++        // has no margins command of its own; margins are on the Page tab.
++        case SID_PREVIEW_MARGIN:
+             {
+                 if ( pReqArgs == nullptr )
+                 {
+@@ -1983,6 +1986,8 @@
+                         ScAbstractDialogFactory* pFact = ScAbstractDialogFactory::Create();
+ 
+                         VclPtr<SfxAbstractTabDialog> pDlg(pFact->CreateScStyleDlg(GetActiveDialogParent(), *pStyleSheet, true));
++                        if (rReq.GetSlot() == SID_PREVIEW_MARGIN)
++                            pDlg->SetCurPageId(u"page"_ustr);
+ 
+                         auto xRequest = std::make_shared<SfxRequest>(rReq);
+                         rReq.Ignore(); // the 'old' request is not relevant any more
+--- a/sc/source/ui/view/tabvwsh3.cxx
++++ b/sc/source/ui/view/tabvwsh3.cxx
+@@ -407,6 +407,7 @@
+             break;
+ 
+         case SID_FORMATPAGE:
++        case SID_PREVIEW_MARGIN:
+         case SID_STATUS_PAGESTYLE:
+         case SID_HFEDIT:
+             GetViewData().GetDocShell()->
+--- a/sc/source/ui/view/tabvwsha.cxx
++++ b/sc/source/ui/view/tabvwsha.cxx
+@@ -516,6 +516,7 @@
+                 break;
+ 
+             case SID_FORMATPAGE:
++            case SID_PREVIEW_MARGIN:
+                 // in protected tables
+                 if ( pDocShell && ( pDocShell->IsReadOnly() || pDocShell->IsDocShared() ) )
+                     rSet.DisableItem( nWhich );
+--- a/sfx2/source/doc/objserv.cxx
++++ b/sfx2/source/doc/objserv.cxx
+@@ -1570,10 +1570,10 @@
+                     rSet.DisableItem( nWhich );
+                     break;
+                 }
++                // Wild OS: no label of its own here, so the File menu keeps
++                // the command's label ("Save as...") from the registry.
+                 if ( /*!pCombinedFilters ||*/ !GetMedium() )
+                     rSet.DisableItem( nWhich );
+-                else
+-                    rSet.Put( SfxStringItem( nWhich, SfxResId(STR_SAVEASDOC) ) );
+                 break;
+             }
+ 
+@@ -1584,10 +1584,10 @@
+                     rSet.DisableItem( nWhich );
+                     break;
+                 }
++                // Wild OS: no label of its own here, so the File menu keeps
++                // the command's label ("Save as...") from the registry.
+                 if ( /*!pCombinedFilters ||*/ !GetMedium() )
+                     rSet.DisableItem( nWhich );
+-                else
+-                    rSet.Put( SfxStringItem( nWhich, SfxResId(STR_SAVEACOPY) ) );
+                 break;
+             }
+ 
+--- a/svx/source/inc/StylesPreviewWindow.hxx
++++ b/svx/source/inc/StylesPreviewWindow.hxx
+@@ -161,6 +161,9 @@
+ 
+ private:
+     void ApplyCardsBackground();
++    // Wild OS: the strip at the gallery's right with up, down and expand.
++    VclPtr<vcl::Window> m_xWildOSStrip;
++    DECL_LINK(WildOSViewEvent, VclWindowEvent&, void);
+ };
+ 
+ #endif
+--- a/svx/source/tbxctrls/StylesPreviewWindow.cxx
++++ b/svx/source/tbxctrls/StylesPreviewWindow.cxx
+@@ -29,9 +29,22 @@
+ #include <cmath>
+ #include <vcl/layout.hxx>
+ #include <vcl/settings.hxx>
++#include <vcl/event.hxx>
++#include <comphelper/dispatchcommand.hxx>
++#include <basegfx/polygon/b2dpolygon.hxx>
+ 
+ // Wild OS: the cards are the boards' pixels at 100 %; on a scaled screen
+ // (a 4K laptop at 250 %) they grow with everything else.
++// The ribbon band's colour (the tab control's lcl_wildosBandColor): white
++// 6 % over the window in dark mode, nearly white in light mode.
++static Color lcl_bandColor()
++{
++    const Color& rWindow = Application::GetSettings().GetStyleSettings().GetDialogColor();
++    Color aBand(rWindow);
++    aBand.Merge(COL_WHITE, sal_uInt8(255 * (rWindow.IsDark() ? 0.94 : 0.2)));
++    return aBand;
++}
++
+ static tools::Long lcl_cpx(double fPixels)
+ {
+     return std::lround(fPixels * Application::GetDefaultDevice()->GetDPIScaleFactor());
+@@ -598,34 +611,32 @@
+            && pStyle->GetName() != m_aStyleName.second)
+         pStyle = pPool->Next();
+ 
+-    // The card is paper: white with dark ink in light and dark mode alike.
+-    const Color aPaper(COL_WHITE);
+-    const Color aInk(0x1f, 0x26, 0x33);
+-    const Color aQuiet(0x5a, 0x62, 0x74);
++    // A tile in the ribbon band's colour, dark on dark and white on light,
++    // with a quiet edge; the current style's edge is the accent, 1.5 px.
+     const StyleSettings& rSettings = Application::GetSettings().GetStyleSettings();
++    const bool bDark = rSettings.GetDialogColor().IsDark();
++    const Color aBand(lcl_bandColor());
++    const Color aTile(bDark ? aBand : COL_WHITE);
++    const Color aInk(bDark ? COL_WHITE : Color(0x1f, 0x26, 0x33));
++    Color aQuiet(aTile);
++    aQuiet.Merge(aInk, sal_uInt8(255 * 0.45));
+ 
+     rRenderContext.Push(vcl::PushFlags::LINECOLOR | vcl::PushFlags::FILLCOLOR
+                         | vcl::PushFlags::FONT | vcl::PushFlags::TEXTCOLOR);
+     rRenderContext.SetAntialiasing(rRenderContext.GetAntialiasing() | AntialiasingFlags::Enable);
+     const tools::Rectangle aCard(Point(0, 0), Size(lcl_cpx(CARD_WIDTH), lcl_cpx(CARD_HEIGHT)));
+     rRenderContext.SetLineColor();
+-    if (bCurrent)
+-    {
+-        rRenderContext.SetFillColor(rSettings.GetAccentColor());
+-        rRenderContext.DrawRect(aCard, lcl_cpx(5), lcl_cpx(5));
+-        rRenderContext.SetFillColor(aPaper);
+-        rRenderContext.DrawRect(tools::Rectangle(Point(lcl_cpx(2), lcl_cpx(2)), Size(lcl_cpx(CARD_WIDTH) - lcl_cpx(4), lcl_cpx(CARD_HEIGHT) - lcl_cpx(4))), lcl_cpx(3), lcl_cpx(3));
+-    }
+-    else
+-    {
+-        Color aEdge(aPaper);
+-        aEdge.Merge(COL_BLACK, 230);
+-        rRenderContext.SetFillColor(aEdge);
+-        rRenderContext.DrawRect(aCard, lcl_cpx(5), lcl_cpx(5));
+-        rRenderContext.SetFillColor(aPaper);
+-        const tools::Long nEdge = std::max<tools::Long>(1, lcl_cpx(1));
+-        rRenderContext.DrawRect(tools::Rectangle(Point(nEdge, nEdge), Size(lcl_cpx(CARD_WIDTH) - 2 * nEdge, lcl_cpx(CARD_HEIGHT) - 2 * nEdge)), lcl_cpx(4), lcl_cpx(4));
+-    }
++    // The corners show the band.
++    rRenderContext.SetFillColor(aBand);
++    rRenderContext.DrawRect(aCard);
++    Color aEdge(aTile);
++    aEdge.Merge(aInk, sal_uInt8(255 * (bDark ? 0.88 : 0.9)));
++    const tools::Long nEdge = bCurrent ? std::max<tools::Long>(2, std::lround(1.5 * Application::GetDefaultDevice()->GetDPIScaleFactor()))
++                                       : std::max<tools::Long>(1, lcl_cpx(1));
++    rRenderContext.SetFillColor(bCurrent ? rSettings.GetAccentColor() : aEdge);
++    rRenderContext.DrawRect(aCard, lcl_cpx(6), lcl_cpx(6));
++    rRenderContext.SetFillColor(aTile);
++    rRenderContext.DrawRect(tools::Rectangle(Point(nEdge, nEdge), Size(lcl_cpx(CARD_WIDTH) - 2 * nEdge, lcl_cpx(CARD_HEIGHT) - 2 * nEdge)), lcl_cpx(5), lcl_cpx(5));
+ 
+     // "Aa" in the style's font, colour, weight and slant, its size kept
+     // between 12 and 18 px so every card reads at a glance.
+@@ -648,9 +659,18 @@
+             aSample.SetStrikeout(STRIKEOUT_NONE);
+             aSample.SetCaseMap(SvxCaseMap::NotMapped);
+         }
+-        const Color aStyleColor = GetTextColorFromItemSet(pItemSet);
++        Color aStyleColor = GetTextColorFromItemSet(pItemSet);
+         if (aStyleColor != COL_AUTO)
++        {
++            // On a dark tile, a near-black ink (Body text, Title) reads as
++            // white and a dark colour (the headings' blue) is lifted, as on
++            // the boards.
++            if (bDark && aStyleColor.GetLuminance() < 70)
++                aStyleColor = aInk;
++            else if (bDark && aStyleColor.GetLuminance() < 140)
++                aStyleColor.Merge(COL_WHITE, sal_uInt8(255 * 0.55));
+             aSampleColor = aStyleColor;
++        }
+     }
+     aSample.SetAlignment(ALIGN_TOP);
+     aSample.SetTransparent(true);
+@@ -677,7 +697,9 @@
+                                                         bool bCurrent)
+ {
+     // Kept apart from the plain previews of the same style in the cache.
+-    const OUString aKey = rStyle.second + (bCurrent ? u"#wildos-current-card"_ustr : u"#wildos-card"_ustr);
++    const bool bDark = Application::GetSettings().GetStyleSettings().GetDialogColor().IsDark();
++    const OUString aKey = rStyle.second + (bCurrent ? u"#wildos-current-card"_ustr : u"#wildos-card"_ustr)
++                          + (bDark ? u"-dark"_ustr : u"-light"_ustr);
+     auto aFound = StylePreviewCache::Get().find(aKey);
+     if (aFound != StylePreviewCache::Get().end())
+         return aFound->second;
+@@ -868,6 +890,62 @@
+     m_xStylesView->thaw();
+ }
+ 
++namespace
++{
++// Wild OS: the thin strip at the gallery's right, as on the boards: up and
++// down, quiet while every style card is in view, and expand, which opens
++// the Styles deck with all the document's styles.
++class WildOSGalleryStrip final : public vcl::Window
++{
++public:
++    explicit WildOSGalleryStrip(vcl::Window* pParent)
++        : vcl::Window(pParent, 0)
++    {
++    }
++
++    virtual void Paint(vcl::RenderContext& rRenderContext, const tools::Rectangle&) override
++    {
++        const StyleSettings& rStyle = rRenderContext.GetSettings().GetStyleSettings();
++        const Color aBand(lcl_bandColor());
++        const Color aInk(rStyle.GetDialogColor().IsDark() ? COL_WHITE : Color(0x1f, 0x26, 0x33));
++        Color aActive(aBand), aQuiet(aBand);
++        aActive.Merge(aInk, sal_uInt8(255 * 0.45));
++        aQuiet.Merge(aInk, sal_uInt8(255 * 0.78));
++        const Size aSize(GetOutputSizePixel());
++        rRenderContext.Push(vcl::PushFlags::LINECOLOR | vcl::PushFlags::FILLCOLOR);
++        rRenderContext.SetAntialiasing(rRenderContext.GetAntialiasing() | AntialiasingFlags::Enable);
++        rRenderContext.SetLineColor();
++        rRenderContext.SetFillColor(aBand);
++        rRenderContext.DrawRect(tools::Rectangle(Point(0, 0), aSize));
++        const double fThird = aSize.Height() / 3.0, fHalf = aSize.Width() * 0.25,
++                     fRise = aSize.Width() * 0.13;
++        const double fLine = std::max(1.0, 1.5 * GetDPIScaleFactor());
++        auto chevron = [&](double fY, bool bUp) {
++            const double fX = aSize.Width() / 2.0;
++            basegfx::B2DPolygon aPoly;
++            aPoly.append(basegfx::B2DPoint(fX - fHalf, fY + (bUp ? fRise : -fRise)));
++            aPoly.append(basegfx::B2DPoint(fX, fY + (bUp ? -fRise : fRise)));
++            aPoly.append(basegfx::B2DPoint(fX + fHalf, fY + (bUp ? fRise : -fRise)));
++            rRenderContext.DrawPolyLine(aPoly, fLine);
++        };
++        rRenderContext.SetFillColor();
++        rRenderContext.SetLineColor(aQuiet);
++        chevron(fThird * 0.5, true);
++        chevron(fThird * 1.5, false);
++        rRenderContext.SetLineColor(aActive);
++        chevron(fThird * 2.5 - fRise, false);
++        chevron(fThird * 2.5 + fRise * 0.9, false);
++        rRenderContext.Pop();
++    }
++
++    virtual void MouseButtonDown(const MouseEvent& rMEvt) override
++    {
++        if (rMEvt.IsLeft() && rMEvt.GetPosPixel().Y() > GetOutputSizePixel().Height() * 2 / 3)
++            comphelper::dispatchCommand(u".uno:SidebarDeck.StyleListDeck"_ustr, {});
++    }
++};
++}
++
+ static vcl::Window* lcl_findTreeListBox(vcl::Window* pParent)
+ {
+     for (vcl::Window* pChild = pParent->GetWindow(GetWindowType::FirstChild); pChild;
+@@ -905,7 +983,10 @@
+             }
+             pView->set_width_request(nCount * (lcl_cpx(StyleItemController::CARD_WIDTH)
+                                                + lcl_cpx(StyleItemController::CARD_GAP))
+-                                     + lcl_cpx(StyleItemController::CARD_GAP));
++                                     + lcl_cpx(StyleItemController::CARD_GAP) + lcl_cpx(18));
++            m_xWildOSStrip = VclPtr<WildOSGalleryStrip>::Create(pView);
++            m_xWildOSStrip->Show();
++            pView->AddEventListener(LINK(this, StylesPreviewWindow_Impl, WildOSViewEvent));
+             pView->set_height_request(lcl_cpx(StyleItemController::CARD_HEIGHT) + lcl_cpx(10));
+             ApplyCardsBackground();
+         }
+@@ -915,6 +996,16 @@
+ 
+ // A tree list box always paints the field colour; the cards sit on the
+ // ribbon's own colour instead.
++IMPL_LINK(StylesPreviewWindow_Impl, WildOSViewEvent, VclWindowEvent&, rEvent, void)
++{
++    if (rEvent.GetId() != VclEventId::WindowResize || !m_xWildOSStrip)
++        return;
++    const Size aView(rEvent.GetWindow()->GetOutputSizePixel());
++    const tools::Long nStrip = lcl_cpx(14);
++    m_xWildOSStrip->SetPosSizePixel(Point(aView.Width() - nStrip, lcl_cpx(4)),
++                                    Size(nStrip, std::max<tools::Long>(aView.Height() - lcl_cpx(8), 1)));
++}
++
+ void StylesPreviewWindow_Impl::ApplyCardsBackground()
+ {
+     vcl::Window* pView = m_bCards ? lcl_findTreeListBox(this) : nullptr;
+@@ -922,7 +1013,7 @@
+         return;
+     AllSettings aSettings(pView->GetSettings());
+     StyleSettings aStyle(aSettings.GetStyleSettings());
+-    aStyle.SetFieldColor(GetSettings().GetStyleSettings().GetDialogColor());
++    aStyle.SetFieldColor(lcl_bandColor());
+     aSettings.SetStyleSettings(aStyle);
+     pView->SetSettings(aSettings);
+ }
+@@ -939,6 +1030,12 @@
+ 
+ void StylesPreviewWindow_Impl::dispose()
+ {
++    if (m_xWildOSStrip)
++    {
++        if (vcl::Window* pView = m_xWildOSStrip->GetParent())
++            pView->RemoveEventListener(LINK(this, StylesPreviewWindow_Impl, WildOSViewEvent));
++        m_xWildOSStrip.disposeAndClear();
++    }
+     m_xStylesView.reset();
+ 
+     InterimItemWindow::dispose();
+--- a/vcl/Library_vclplug_qt5.mk
++++ b/vcl/Library_vclplug_qt5.mk
+@@ -37,6 +37,9 @@
+ 
+ $(eval $(call gb_Library_use_sdk_api,vclplug_qt5))
+ 
++# Wild OS: the file picker talks to the desktop portal.
++$(eval $(call gb_Library_add_libs,vclplug_qt5,-lQt5DBus))
++
+ $(eval $(call gb_Library_use_libraries,vclplug_qt5,\
+     tl \
+     utl \
+--- a/vcl/Library_vclplug_qt6.mk
++++ b/vcl/Library_vclplug_qt6.mk
+@@ -36,6 +36,9 @@
+ 
+ $(eval $(call gb_Library_use_sdk_api,vclplug_qt6))
+ 
++# Wild OS: the file picker talks to the desktop portal.
++$(eval $(call gb_Library_add_libs,vclplug_qt6,-lQt6DBus))
++
+ $(eval $(call gb_Library_use_libraries,vclplug_qt6,\
+     tl \
+     utl \
+--- a/vcl/inc/qt5/QtFilePicker.hxx
++++ b/vcl/inc/qt5/QtFilePicker.hxx
+@@ -40,6 +40,8 @@
+ #include <QtCore/QString>
+ #include <QtCore/QStringList>
+ #include <QtCore/QHash>
++#include <QtCore/QUrl>
++#include <QtCore/QVariantMap>
+ #include <QtWidgets/QFileDialog>
+ 
+ #include <memory>
+@@ -80,6 +82,16 @@
+ 
+     QWidget* m_pParentWidget;
+ 
++    // Wild OS: the dialog runs through the desktop portal (the Wild OS
++    // Open and Save dialog) when the session asks for portals.
++    QString m_aDefaultName;
++    bool m_bPortalUsed = false;
++    QList<QUrl> m_aPortalUrls;
++    class QEventLoop* m_pPortalLoop = nullptr;
++    uint m_nPortalResponse = 2;
++    QVariantMap m_aPortalResults;
++    bool execPortal(int& rResult);
++
+ protected:
+     std::unique_ptr<QFileDialog> m_pFileDialog; ///< the file picker dialog
+     QWidget* m_pExtraControls; ///< widget to contain extra custom controls
+@@ -181,6 +193,7 @@
+     // (un)set automatic file extension
+     virtual void updateAutomaticFileExtension();
+     void finished(int);
++    void portalResponse(uint nResponse, const QVariantMap& rResults);
+ };
+ 
+ /* vim:set shiftwidth=4 softtabstop=4 expandtab cinoptions=b1,g0,N-s cinkeys+=0=break: */
+--- a/vcl/inc/toolbox.h
++++ b/vcl/inc/toolbox.h
+@@ -128,6 +128,10 @@
+     // Wild OS: the .ui's wildos-no-arrows. Items lose their drop-down
+     // arrows and menus, and a click runs the command itself.
+     bool mbWildOSNoArrows = false;
++    // Wild OS: the .ui's wildos-row-height (pixels at 100 %) and
++    // wildos-checks (toggles drawn as a checkbox with their label).
++    tools::Long mnWildOSRowHeight = 0;
++    bool mbWildOSChecks = false;
+     Timer   maDropdownTimer { "vcl::ToolBox mpData->maDropdownTimer" }; // for opening dropdown items on "long click"
+ 
+     // large or small buttons ?
+--- a/vcl/qt5/QtData.cxx
++++ b/vcl/qt5/QtData.cxx
+@@ -43,6 +43,8 @@
+     pSVData->maNWFData.mbRolloverMenubar = true;
+     pSVData->maNWFData.mbNoFocusRects = true;
+     pSVData->maNWFData.mbNoFocusRectsForFlatButtons = true;
++    // Wild OS: shortcut letters are underlined only while Alt is held.
++    pSVData->maNWFData.mbAutoAccel = true;
+ 
+     QStyle* style = QApplication::style();
+     pSVData->maNWFData.mnMenuFormatBorderX = style->pixelMetric(QStyle::PM_MenuPanelWidth)
+--- a/vcl/qt5/QtFilePicker.cxx
++++ b/vcl/qt5/QtFilePicker.cxx
+@@ -65,6 +65,15 @@
+ #include <QtWidgets/QMessageBox>
+ #include <QtWidgets/QPushButton>
+ #include <QtWidgets/QWidget>
++#include <QtCore/QEventLoop>
++#include <QtCore/QFile>
++#include <QtCore/QRandomGenerator>
++#include <QtDBus/QDBusArgument>
++#include <QtDBus/QDBusConnection>
++#include <QtDBus/QDBusConnectionInterface>
++#include <QtDBus/QDBusMessage>
++#include <QtDBus/QDBusMetaType>
++#include <QtDBus/QDBusObjectPath>
+ 
+ #include <unx/geninst.h>
+ #include <fpicker/strings.hrc>
+@@ -154,6 +163,348 @@
+         [this, &title]() { m_pFileDialog->setWindowTitle(toQString(title)); });
+ }
+ 
++// Wild OS: Open, Save as, Export and Insert picture use the Wild OS Open and
++// Save dialog, the one every other app gets through the desktop portal
++// (PLASMA_INTEGRATION_USE_PORTAL=1 in a Wild OS session). LibreOffice's own
++// options (Save with password, Edit filter settings, Insert as link, an
++// image's anchor) travel as the portal's choices. Without a portal, or with
++// a control the portal can't carry, LibreOffice's own dialog is used.
++namespace wildosportal
++{
++struct FilterRule
++{
++    uint type = 0;
++    QString pattern;
++};
++struct Filter
++{
++    QString name;
++    QList<FilterRule> rules;
++};
++struct ChoiceOption
++{
++    QString id;
++    QString label;
++};
++struct Choice
++{
++    QString id;
++    QString label;
++    QList<ChoiceOption> options;
++    QString selected;
++};
++}
++Q_DECLARE_METATYPE(wildosportal::FilterRule)
++Q_DECLARE_METATYPE(wildosportal::Filter)
++Q_DECLARE_METATYPE(QList<wildosportal::Filter>)
++Q_DECLARE_METATYPE(wildosportal::ChoiceOption)
++Q_DECLARE_METATYPE(wildosportal::Choice)
++Q_DECLARE_METATYPE(QList<wildosportal::Choice>)
++
++namespace wildosportal
++{
++QDBusArgument& operator<<(QDBusArgument& a, const FilterRule& r)
++{
++    a.beginStructure();
++    a << r.type << r.pattern;
++    a.endStructure();
++    return a;
++}
++const QDBusArgument& operator>>(const QDBusArgument& a, FilterRule& r)
++{
++    a.beginStructure();
++    a >> r.type >> r.pattern;
++    a.endStructure();
++    return a;
++}
++QDBusArgument& operator<<(QDBusArgument& a, const Filter& f)
++{
++    a.beginStructure();
++    a << f.name;
++    a.beginArray(qMetaTypeId<FilterRule>());
++    for (const FilterRule& r : f.rules)
++        a << r;
++    a.endArray();
++    a.endStructure();
++    return a;
++}
++const QDBusArgument& operator>>(const QDBusArgument& a, Filter& f)
++{
++    a.beginStructure();
++    a >> f.name;
++    a.beginArray();
++    f.rules.clear();
++    while (!a.atEnd())
++    {
++        FilterRule r;
++        a >> r;
++        f.rules.append(r);
++    }
++    a.endArray();
++    a.endStructure();
++    return a;
++}
++QDBusArgument& operator<<(QDBusArgument& a, const ChoiceOption& o)
++{
++    a.beginStructure();
++    a << o.id << o.label;
++    a.endStructure();
++    return a;
++}
++const QDBusArgument& operator>>(const QDBusArgument& a, ChoiceOption& o)
++{
++    a.beginStructure();
++    a >> o.id >> o.label;
++    a.endStructure();
++    return a;
++}
++QDBusArgument& operator<<(QDBusArgument& a, const Choice& c)
++{
++    a.beginStructure();
++    a << c.id << c.label;
++    a.beginArray(qMetaTypeId<ChoiceOption>());
++    for (const ChoiceOption& o : c.options)
++        a << o;
++    a.endArray();
++    a << c.selected;
++    a.endStructure();
++    return a;
++}
++const QDBusArgument& operator>>(const QDBusArgument& a, Choice& c)
++{
++    a.beginStructure();
++    a >> c.id >> c.label;
++    a.beginArray();
++    c.options.clear();
++    while (!a.atEnd())
++    {
++        ChoiceOption o;
++        a >> o;
++        c.options.append(o);
++    }
++    a.endArray();
++    a >> c.selected;
++    a.endStructure();
++    return a;
++}
++
++void registerTypes()
++{
++    static bool bDone = false;
++    if (bDone)
++        return;
++    bDone = true;
++    qDBusRegisterMetaType<FilterRule>();
++    qDBusRegisterMetaType<Filter>();
++    qDBusRegisterMetaType<QList<Filter>>();
++    qDBusRegisterMetaType<ChoiceOption>();
++    qDBusRegisterMetaType<Choice>();
++    qDBusRegisterMetaType<QList<Choice>>();
++}
++
++// "Word 2007 (*.docx)" -> its name and patterns, as appendFilter built it.
++Filter toFilter(const QString& rNamed)
++{
++    Filter f;
++    const int nOpen = rNamed.lastIndexOf(QStringLiteral(" ("));
++    f.name = nOpen > 0 ? rNamed.left(nOpen) : rNamed;
++    const QString sGlobs = nOpen > 0 ? rNamed.mid(nOpen + 2).chopped(1) : QString();
++    for (const QString& sGlob : sGlobs.split(u' ', Qt::SkipEmptyParts))
++        f.rules.append(FilterRule{ 0, sGlob });
++    f.name.replace(QStringLiteral("\\/"), QStringLiteral("/"));
++    return f;
++}
++
++QString plainLabel(QString s)
++{
++    s.remove(u'&');
++    s.remove(u'~');
++    return s;
++}
++}
++
++bool QtFilePicker::execPortal(int& rResult)
++{
++    using namespace wildosportal;
++    // Wild OS: every Open and Save goes through the desktop portal, the one
++    // dialog all apps share, whenever the portal is running.
++    if (m_bIsFolderPicker)
++        return false;
++    QDBusConnection aBus = QDBusConnection::sessionBus();
++    if (!aBus.isConnected() || !aBus.interface()
++        || !aBus.interface()->isServiceRegistered(QStringLiteral("org.freedesktop.portal.Desktop")))
++        return false;
++    registerTypes();
++
++    const bool bSave = m_pFileDialog->acceptMode() == QFileDialog::AcceptSave;
++    QVariantMap aOptions;
++    const QString sToken = QStringLiteral("wildos%1").arg(QRandomGenerator::global()->generate());
++    aOptions[QStringLiteral("handle_token")] = sToken;
++    aOptions[QStringLiteral("modal")] = true;
++    if (!bSave)
++        aOptions[QStringLiteral("multiple")] = m_pFileDialog->fileMode() == QFileDialog::ExistingFiles;
++
++    QList<Filter> aFilters;
++    const QString sCurrent = !m_aCurrentFilter.isEmpty() ? m_aCurrentFilter
++                                                         : m_pFileDialog->selectedNameFilter();
++    for (const QString& rNamed : std::as_const(m_aNamedFilterList))
++    {
++        aFilters.append(toFilter(rNamed));
++        if (rNamed == sCurrent)
++            aOptions[QStringLiteral("current_filter")] = QVariant::fromValue(aFilters.constLast());
++    }
++    if (!aFilters.isEmpty())
++        aOptions[QStringLiteral("filters")] = QVariant::fromValue(aFilters);
++
++    // LibreOffice's options as choices: its checkboxes (bar the automatic
++    // extension, which the dialog keeps in step with the type itself, and
++    // a preview the dialog can't show) and its lists.
++    QList<Choice> aChoices;
++    for (auto it = m_aCustomWidgetsMap.cbegin(); it != m_aCustomWidgetsMap.cend(); ++it)
++    {
++        QWidget* pWidget = it.value();
++        if (pWidget->isHidden())
++            continue;
++        if (QCheckBox* pBox = qobject_cast<QCheckBox*>(pWidget))
++        {
++            if (it.key() == CHECKBOX_AUTOEXTENSION || it.key() == CHECKBOX_PREVIEW)
++                continue;
++            if (!pBox->isEnabled())
++                continue;
++            aChoices.append(Choice{ QString::number(it.key()), plainLabel(pBox->text()), {},
++                                    pBox->isChecked() ? QStringLiteral("true")
++                                                      : QStringLiteral("false") });
++        }
++        else if (QComboBox* pList = qobject_cast<QComboBox*>(pWidget))
++        {
++            if (pList->count() == 0)
++                continue;
++            Choice aChoice;
++            aChoice.id = QString::number(it.key());
++            for (auto lit = m_aCustomWidgetsMap.cbegin(); lit != m_aCustomWidgetsMap.cend(); ++lit)
++            {
++                QLabel* pLabel = qobject_cast<QLabel*>(lit.value());
++                if (pLabel && pLabel->buddy() == pList)
++                    aChoice.label = plainLabel(pLabel->text());
++            }
++            for (int i = 0; i < pList->count(); ++i)
++                aChoice.options.append(ChoiceOption{ QString::number(i), pList->itemText(i) });
++            aChoice.selected = QString::number(std::max(pList->currentIndex(), 0));
++            aChoices.append(aChoice);
++        }
++        else if (!qobject_cast<QLabel*>(pWidget))
++            return false; // a control the portal can't carry: LibreOffice's own dialog
++    }
++    if (!aChoices.isEmpty())
++        aOptions[QStringLiteral("choices")] = QVariant::fromValue(aChoices);
++
++    if (bSave && !m_aDefaultName.isEmpty())
++        aOptions[QStringLiteral("current_name")] = m_aDefaultName;
++    const QString sFolder = m_pFileDialog->directory().absolutePath();
++    if (!sFolder.isEmpty())
++        aOptions[QStringLiteral("current_folder")] = QByteArray(QFile::encodeName(sFolder) + '\0');
++
++    // The request's object, known before the call so its answer can't be missed.
++    QString sSender = aBus.baseService().mid(1);
++    sSender.replace(u'.', u'_');
++    QString sRequest = QStringLiteral("/org/freedesktop/portal/desktop/request/%1/%2").arg(sSender, sToken);
++    const QString sDesktop = QStringLiteral("org.freedesktop.portal.Desktop");
++    const QString sRequestIface = QStringLiteral("org.freedesktop.portal.Request");
++    aBus.connect(sDesktop, sRequest, sRequestIface, QStringLiteral("Response"), this,
++                 SLOT(portalResponse(uint, QVariantMap)));
++
++    QDBusMessage aCall = QDBusMessage::createMethodCall(
++        sDesktop, QStringLiteral("/org/freedesktop/portal/desktop"),
++        QStringLiteral("org.freedesktop.portal.FileChooser"),
++        bSave ? QStringLiteral("SaveFile") : QStringLiteral("OpenFile"));
++    aCall << QString() << m_pFileDialog->windowTitle() << aOptions;
++    const QDBusMessage aReply = aBus.call(aCall);
++    if (aReply.type() != QDBusMessage::ReplyMessage || aReply.arguments().isEmpty())
++    {
++        aBus.disconnect(sDesktop, sRequest, sRequestIface, QStringLiteral("Response"), this,
++                        SLOT(portalResponse(uint, QVariantMap)));
++        return false;
++    }
++    const QString sHandle = qvariant_cast<QDBusObjectPath>(aReply.arguments().constFirst()).path();
++    if (!sHandle.isEmpty() && sHandle != sRequest)
++    {
++        aBus.disconnect(sDesktop, sRequest, sRequestIface, QStringLiteral("Response"), this,
++                        SLOT(portalResponse(uint, QVariantMap)));
++        sRequest = sHandle;
++        aBus.connect(sDesktop, sRequest, sRequestIface, QStringLiteral("Response"), this,
++                     SLOT(portalResponse(uint, QVariantMap)));
++    }
++
++    m_nPortalResponse = 2;
++    m_aPortalResults.clear();
++    QEventLoop aLoop;
++    m_pPortalLoop = &aLoop;
++    {
++        SolarMutexReleaser aReleaser;
++        aLoop.exec();
++    }
++    m_pPortalLoop = nullptr;
++    aBus.disconnect(sDesktop, sRequest, sRequestIface, QStringLiteral("Response"), this,
++                    SLOT(portalResponse(uint, QVariantMap)));
++
++    m_bPortalUsed = true;
++    m_aPortalUrls.clear();
++    rResult = QFileDialog::Rejected;
++    if (m_nPortalResponse != 0)
++        return true;
++
++    for (const QString& sUri : m_aPortalResults.value(QStringLiteral("uris")).toStringList())
++        m_aPortalUrls.append(QUrl(sUri));
++
++    const QVariant aChosen = m_aPortalResults.value(QStringLiteral("choices"));
++    if (aChosen.canConvert<QDBusArgument>())
++    {
++        const QDBusArgument aArg = aChosen.value<QDBusArgument>();
++        aArg.beginArray();
++        while (!aArg.atEnd())
++        {
++            QString sId, sValue;
++            aArg.beginStructure();
++            aArg >> sId >> sValue;
++            aArg.endStructure();
++            QWidget* pWidget = m_aCustomWidgetsMap.value(sId.toShort());
++            if (QCheckBox* pBox = qobject_cast<QCheckBox*>(pWidget))
++                pBox->setChecked(sValue == u"true");
++            else if (QComboBox* pList = qobject_cast<QComboBox*>(pWidget))
++                pList->setCurrentIndex(sValue.toInt());
++        }
++        aArg.endArray();
++    }
++    if (QCheckBox* pAuto = qobject_cast<QCheckBox*>(m_aCustomWidgetsMap.value(CHECKBOX_AUTOEXTENSION)))
++        pAuto->setChecked(true);
++
++    const QVariant aFilter = m_aPortalResults.value(QStringLiteral("current_filter"));
++    if (aFilter.canConvert<QDBusArgument>())
++    {
++        Filter aChosenFilter;
++        aFilter.value<QDBusArgument>() >> aChosenFilter;
++        for (const QString& rNamed : std::as_const(m_aNamedFilterList))
++        {
++            if (toFilter(rNamed).name == aChosenFilter.name)
++            {
++                m_aCurrentFilter = rNamed;
++                m_pFileDialog->selectNameFilter(rNamed);
++                break;
++            }
++        }
++    }
++    rResult = m_aPortalUrls.isEmpty() ? QFileDialog::Rejected : QFileDialog::Accepted;
++    return true;
++}
++
++void QtFilePicker::portalResponse(uint nResponse, const QVariantMap& rResults)
++{
++    m_nPortalResponse = nResponse;
++    m_aPortalResults = rResults;
++    if (m_pPortalLoop)
++        m_pPortalLoop->quit();
++}
++
+ void QtFilePicker::prepareExecute()
+ {
+     QWidget* pTransientParent = m_pParentWidget;
+@@ -214,8 +565,12 @@
+         return ret;
+     }
+ 
+-    prepareExecute();
+-    int result = m_pFileDialog->exec();
++    int result;
++    if (!execPortal(result))
++    {
++        prepareExecute();
++        result = m_pFileDialog->exec();
++    }
+ 
+     if (QFileDialog::Rejected == result)
+         return ExecutableDialogResults::CANCEL;
+@@ -229,6 +584,12 @@
+ QtFilePicker::startExecuteModal(const Reference<css::ui::dialogs::XDialogClosedListener>& xListener)
+ {
+     m_xClosedListener = xListener;
++    int nPortalResult;
++    if (execPortal(nPortalResult))
++    {
++        finished(nPortalResult);
++        return;
++    }
+     prepareExecute();
+     m_pFileDialog->show();
+ }
+@@ -248,6 +609,7 @@
+ void SAL_CALL QtFilePicker::setDefaultName(const OUString& name)
+ {
+     SolarMutexGuard g;
++    m_aDefaultName = toQString(name);
+     GetQtInstance().RunInMainThread(
+         [this, &name]() { m_pFileDialog->selectFile(toQString(name)); });
+ }
+@@ -282,7 +644,10 @@
+ {
+     SolarMutexGuard g;
+     QList<QUrl> urls;
+-    GetQtInstance().RunInMainThread([&urls, this]() { urls = m_pFileDialog->selectedUrls(); });
++    if (m_bPortalUsed)
++        urls = m_aPortalUrls;
++    else
++        GetQtInstance().RunInMainThread([&urls, this]() { urls = m_pFileDialog->selectedUrls(); });
+ 
+     uno::Sequence<OUString> seq(urls.size());
+     auto seqRange = asNonConstRange(seq);
+--- a/vcl/qt5/QtFrame.cxx
++++ b/vcl/qt5/QtFrame.cxx
+@@ -1121,6 +1121,14 @@
+     style.SetDefaultActionButtonPressedRolloverTextColor(aButn);
+     style.SetActionButtonPressedRolloverTextColor(aButn);
+     style.SetFlatButtonPressedRolloverTextColor(aButn);
++    // Wild OS: the default button is filled with the accent by the style, so
++    // its label takes the text-on-accent colour, as Kvantum's own does.
++    style.SetDefaultButtonTextColor(aHighText);
++    style.SetDefaultActionButtonTextColor(aHighText);
++    style.SetDefaultButtonRolloverTextColor(aHighText);
++    style.SetDefaultActionButtonRolloverTextColor(aHighText);
++    style.SetDefaultButtonPressedRolloverTextColor(aHighText);
++    style.SetDefaultActionButtonPressedRolloverTextColor(aHighText);
+ 
+     // Tabs
+     style.SetTabTextColor(aButn);
+--- a/vcl/qt5/QtGraphics_Controls.cxx
++++ b/vcl/qt5/QtGraphics_Controls.cxx
+@@ -773,6 +773,15 @@
+                     boundingRect.adjust(-size, -size, size, size);
+                     retVal = true;
+                 }
++                // Wild OS: dialog buttons are 32 px tall (DialogKit).
++                const int nMinHeight = upscale(32, Round::Ceil);
++                if (boundingRect.height() < nMinHeight)
++                {
++                    const int nGrow = nMinHeight - boundingRect.height();
++                    boundingRect.adjust(0, -nGrow / 2, 0, nGrow - nGrow / 2);
++                    contentRect = boundingRect;
++                    retVal = true;
++                }
+             }
+             else if (part == ControlPart::Focus)
+                 retVal = true;
+@@ -821,6 +830,15 @@
+                 boundingRect.setHeight(boundingRect.height() + nDiff);
+                 contentRect.setHeight(contentRect.height() + nDiff);
+             }
++            // Wild OS: single-line fields are 32 px tall (DialogKit), the
++            // extra split above and below the text.
++            const int nWildOSField = upscale(32, Round::Ceil);
++            if (type == ControlType::Editbox && boundingRect.height() < nWildOSField)
++            {
++                const int nDiff = nWildOSField - boundingRect.height();
++                boundingRect.adjust(0, -(nDiff / 2), 0, nDiff - nDiff / 2);
++                contentRect.adjust(0, -(nDiff / 2), 0, nDiff - nDiff / 2);
++            }
+ 
+             retVal = true;
+             break;
+--- a/vcl/source/control/tabctrl.cxx
++++ b/vcl/source/control/tabctrl.cxx
+@@ -2288,8 +2288,19 @@
+     Resize();
+ }
+ 
++namespace
++{
++vcl::Window* lcl_wildosChevron(const vcl::Window& rTabControl);
++}
++
+ void NotebookbarTabControlBase::dispose()
+ {
++    if (vcl::Window* pChevron = lcl_wildosChevron(*this))
++    {
++        VclPtr<vcl::Window> xChevron(pChevron);
++        pChevron->release();
++        xChevron.disposeAndClear();
++    }
+     m_pWildOSFile.disposeAndClear();
+     m_pWildOSSearch.disposeAndClear();
+     m_pShortcuts.disposeAndClear();
+@@ -2361,15 +2372,19 @@
+     return aColor;
+ }
+ 
+-// In dark mode the tab row is the window colour, so it runs on from the
+-// title bar, which the window decoration draws in that colour, instead of
+-// a darker stripe between the title and the band. In light mode it sits a
+-// shade into the ink.
++// The tab row is the window colour, so it runs on from the title bar,
++// which the window decoration draws in that colour.
+ Color lcl_wildosRowColor(const StyleSettings& rStyle)
+ {
++    return rStyle.GetDialogColor();
++}
++
++// The band under the tab row: a shade lighter than the window, white 6 %
++// over it in dark mode and nearly white in light mode.
++Color lcl_wildosBandColor(const StyleSettings& rStyle)
++{
+     const Color& rWindow = rStyle.GetDialogColor();
+-    return rWindow.IsDark() ? rWindow
+-                            : lcl_mix(rWindow, rStyle.GetDialogTextColor(), 0.035);
++    return lcl_mix(rWindow, COL_WHITE, rWindow.IsDark() ? 0.06 : 0.8);
+ }
+ 
+ // File and the search field draw themselves to the boards rather than as
+@@ -2521,10 +2536,20 @@
+         aHandle.append(basegfx::B2DPoint(fX + lcl_wpxf(this, 6.5), fY + lcl_wpxf(this, 6.5)));
+         rRenderContext.DrawPolyLine(aHandle, fLine);
+ 
++        // The shortcut, Alt+Q as in Word, quieter at the field's right end.
++        rRenderContext.SetFont(LabelFont(0.85, WEIGHT_NORMAL));
++        rRenderContext.SetTextColor(lcl_mix(aRow, rInk, 0.45));
++        const OUString aShortcut(u"Alt+Q"_ustr);
++        const tools::Long nShortcut = rRenderContext.GetTextWidth(aShortcut);
++        rRenderContext.DrawText(
++            tools::Rectangle(Point(aSize.Width() - lcl_wpx(this, 10) - nShortcut, 0), Size(nShortcut, aSize.Height())),
++            aShortcut, DrawTextFlags::Right | DrawTextFlags::VCenter);
++
+         rRenderContext.SetFont(LabelFont(0.96, WEIGHT_NORMAL));
+         rRenderContext.SetTextColor(aQuiet);
+         rRenderContext.DrawText(
+-            tools::Rectangle(Point(lcl_wpx(this, 31), 0), Size(aSize.Width() - lcl_wpx(this, 41), aSize.Height())), GetText(),
++            tools::Rectangle(Point(lcl_wpx(this, 31), 0),
++                             Size(aSize.Width() - lcl_wpx(this, 51) - nShortcut, aSize.Height())), GetText(),
+             DrawTextFlags::Left | DrawTextFlags::VCenter | DrawTextFlags::EndEllipsis);
+         DrawFocusRing(rRenderContext, rStyle.GetAccentColor());
+         rRenderContext.Pop();
+@@ -2532,6 +2557,61 @@
+ };
+ }
+ 
++namespace
++{
++constexpr OUString WILDOS_CHEVRON_ID = u"wildos-collapse-chevron"_ustr;
++
++// The collapse chevron at the band's far right. The ribbon's page window
++// lies over the band, so the chevron is its own window on top of the page,
++// and hands its click to the tab control.
++class WildOSChevronCatcher final : public vcl::Window
++{
++public:
++    explicit WildOSChevronCatcher(vcl::Window* pParent)
++        : vcl::Window(pParent, 0)
++    {
++        SetHelpId(WILDOS_CHEVRON_ID);
++    }
++
++    virtual void Paint(vcl::RenderContext& rRenderContext, const tools::Rectangle&) override
++    {
++        const StyleSettings& rStyle = rRenderContext.GetSettings().GetStyleSettings();
++        const Size aSize(GetOutputSizePixel());
++        rRenderContext.Push(vcl::PushFlags::LINECOLOR | vcl::PushFlags::FILLCOLOR);
++        rRenderContext.SetAntialiasing(rRenderContext.GetAntialiasing() | AntialiasingFlags::Enable);
++        rRenderContext.SetLineColor();
++        rRenderContext.SetFillColor(lcl_wildosBandColor(rStyle));
++        rRenderContext.DrawRect(tools::Rectangle(Point(0, 0), aSize));
++        const double fHalf = aSize.Width() * 0.28, fRise = aSize.Width() * 0.16;
++        const double fX = aSize.Width() / 2.0, fY = aSize.Height() / 2.0;
++        basegfx::B2DPolygon aChevron;
++        aChevron.append(basegfx::B2DPoint(fX - fHalf, fY + fRise));
++        aChevron.append(basegfx::B2DPoint(fX, fY - fRise));
++        aChevron.append(basegfx::B2DPoint(fX + fHalf, fY + fRise));
++        rRenderContext.SetLineColor(lcl_mix(rStyle.GetDialogColor(), rStyle.GetDialogTextColor(), 0.55));
++        rRenderContext.SetFillColor();
++        rRenderContext.DrawPolyLine(aChevron, std::max(1.0, 1.5 * GetDPIScaleFactor()));
++        rRenderContext.Pop();
++    }
++
++    virtual void MouseButtonDown(const MouseEvent& rMEvt) override
++    {
++        const MouseEvent aEvt(rMEvt.GetPosPixel() + GetPosPixel(), rMEvt.GetClicks(),
++                              rMEvt.GetMode(), rMEvt.GetButtons(), rMEvt.GetModifier());
++        GetParent()->MouseButtonDown(aEvt);
++    }
++};
++
++vcl::Window* lcl_wildosChevron(const vcl::Window& rTabControl)
++{
++    for (vcl::Window* pChild = rTabControl.GetWindow(GetWindowType::FirstChild); pChild;
++         pChild = pChild->GetWindow(GetWindowType::Next))
++        if (pChild->GetHelpId() == WILDOS_CHEVRON_ID)
++            return pChild;
++    return nullptr;
++}
++}
++
+ void NotebookbarTabControlBase::ImplWildOSEnable()
+ {
+     if (m_bWildOS)
+@@ -2539,6 +2619,9 @@
+     m_bWildOS = true;
+     // The search field takes the menu button's place.
+     m_pOpenMenu->Hide();
++    // Held by its own reference until dispose(), found again by its help id.
++    VclPtr<WildOSChevronCatcher> pChevron = VclPtr<WildOSChevronCatcher>::Create(this);
++    pChevron->acquire();
+ }
+ 
+ bool NotebookbarTabControlBase::set_property(const OUString& rKey, const OUString& rValue)
+@@ -2796,9 +2879,65 @@
+     // not inset in a tab pane's frame.
+     if (m_bWildOS)
+         aSize.AdjustHeight(lcl_wpx(this, WILDOS_ROW_HEIGHT) + 1 - (m_nHeaderHeight + TAB_OFFSET * 2));
++    if (m_bWildOS && m_bWildOSCollapsed)
++        aSize.setHeight(lcl_wpx(this, WILDOS_ROW_HEIGHT) + 1);
+     return aSize;
+ }
+ 
++// The collapse chevron: 16 px square, 12 px in from the band's right edge
++// and 6 px up from its foot.
++tools::Rectangle NotebookbarTabControlBase::ImplWildOSChevronRect() const
++{
++    const Size aSize(GetOutputSizePixel());
++    const tools::Long nBox = lcl_wpx(this, 16);
++    return tools::Rectangle(Point(aSize.Width() - lcl_wpx(this, 12) - nBox,
++                                  aSize.Height() - lcl_wpx(this, 6) - nBox),
++                            Size(nBox, nBox));
++}
++
++namespace
++{
++// The notebook bar keeps the height it was given, and the frame lays out
++// round it; after folding or unfolding, give it its new height and lay the
++// frame out again.
++void lcl_wildosRefit(vcl::Window& rTabControl)
++{
++    rTabControl.queue_resize();
++    rTabControl.Invalidate();
++    for (vcl::Window* pWin = rTabControl.GetParent(); pWin; pWin = pWin->GetParent())
++    {
++        if (NotebookBar* pBar = dynamic_cast<NotebookBar*>(pWin))
++        {
++            const Size aOptimal(pBar->GetOptimalSize());
++            pBar->setPosSizePixel(0, 0, pBar->GetSizePixel().Width(), aOptimal.Height(),
++                                  PosSizeFlags::Height);
++            if (vcl::Window* pBorder = pBar->GetParent())
++                pBorder->Resize();
++            break;
++        }
++    }
++}
++}
++
++void NotebookbarTabControlBase::MouseButtonDown(const MouseEvent& rMEvt)
++{
++    if (m_bWildOS && rMEvt.IsLeft())
++    {
++        if (!m_bWildOSCollapsed && ImplWildOSChevronRect().Contains(rMEvt.GetPosPixel()))
++        {
++            m_bWildOSCollapsed = true;
++            lcl_wildosRefit(*this);
++            return;
++        }
++        if (m_bWildOSCollapsed && rMEvt.GetPosPixel().Y() < lcl_wpx(this, WILDOS_ROW_HEIGHT))
++        {
++            m_bWildOSCollapsed = false;
++            lcl_wildosRefit(*this);
++        }
++    }
++    TabControl::MouseButtonDown(rMEvt);
++}
++
+ void NotebookbarTabControlBase::Paint(vcl::RenderContext& rRenderContext, const tools::Rectangle& rRect)
+ {
+     if (!m_bWildOS)
+@@ -2821,14 +2960,27 @@
+     rRenderContext.SetLineColor();
+     rRenderContext.SetFillColor(lcl_wildosRowColor(rStyle));
+     rRenderContext.DrawRect(tools::Rectangle(Point(0, 0), Size(aSize.Width(), lcl_wpx(this, WILDOS_ROW_HEIGHT))));
+-    rRenderContext.SetFillColor(rWindow);
++    rRenderContext.SetFillColor(lcl_wildosBandColor(rStyle));
+     rRenderContext.DrawRect(tools::Rectangle(
+         Point(0, lcl_wpx(this, WILDOS_ROW_HEIGHT)), Size(aSize.Width(), aSize.Height() - lcl_wpx(this, WILDOS_ROW_HEIGHT))));
+     rRenderContext.SetFillColor(lcl_mix(rWindow, rInk, 0.08));
+     rRenderContext.DrawRect(tools::Rectangle(Point(0, aSize.Height() - 1), Size(aSize.Width(), 1)));
+-    if (TabPage* pPage = GetTabPage(mnCurPageId))
++    if (TabPage* pPage = m_bWildOSCollapsed ? nullptr : GetTabPage(mnCurPageId))
+         lcl_wildosDividers(*this, pPage, rRenderContext, lcl_wpx(this, WILDOS_ROW_HEIGHT), aSize.Height() - lcl_wpx(this, 6));
+ 
++    // The collapse chevron at the band's far right.
++    if (vcl::Window* pChevron = lcl_wildosChevron(*this))
++    {
++        const tools::Rectangle aBox(ImplWildOSChevronRect());
++        if (pChevron->GetPosPixel() != aBox.TopLeft() || pChevron->GetSizePixel() != aBox.GetSize())
++            pChevron->SetPosSizePixel(aBox.TopLeft(), aBox.GetSize());
++        if (pChevron->IsVisible() == m_bWildOSCollapsed)
++        {
++            pChevron->Show(!m_bWildOSCollapsed);
++            pChevron->SetZOrder(nullptr, ZOrderFlags::First);
++        }
++    }
++
+     const Point aPointer(GetPointerPosPixel());
+     for (const auto& item : mpTabCtrlData->maItemList)
+     {
+--- a/vcl/source/window/builder.cxx
++++ b/vcl/source/window/builder.cxx
+@@ -1963,6 +1963,15 @@
+                 aRequest = Size(aRequest.Width() * fScale, aRequest.Height() * fScale);
+                 pToolBox->InsertItem(aCommand, m_xFrame, nBits, aRequest);
+                 nItemId = pToolBox->GetItemId(aCommand);
++                // Wild OS: a label in the .ui gives this button its own words
++                // where its command sits elsewhere under another name
++                // (Comments pane on View, Show comments on Review).
++                OUString sOwnLabel(extractLabel(rMap));
++                if (!sOwnLabel.isEmpty())
++                {
++                    pToolBox->SetItemText(nItemId, sOwnLabel);
++                    pToolBox->SetQuickHelpText(nItemId, sOwnLabel);
++                }
+             }
+             else
+             {
+--- a/vcl/source/window/layout.cxx
++++ b/vcl/source/window/layout.cxx
+@@ -1523,6 +1523,20 @@
+ 
+     if (pLabel && pLabel->IsVisible())
+     {
++        // Wild OS: the group's heading is regular weight in the muted ink.
++        if (pLabel->IsControlFont() && pLabel->GetControlFont().GetWeight() > WEIGHT_NORMAL)
++        {
++            vcl::Font aFont(pLabel->GetControlFont());
++            aFont.SetWeight(WEIGHT_NORMAL);
++            pLabel->SetControlFont(aFont);
++        }
++        if (!pLabel->IsControlForeground())
++        {
++            const StyleSettings& rStyle = pLabel->GetSettings().GetStyleSettings();
++            Color aMuted(rStyle.GetLabelTextColor());
++            aMuted.Merge(rStyle.GetDialogColor(), 255 * 0.62);
++            pLabel->SetControlForeground(aMuted);
++        }
+         Size aLabelSize = getLayoutRequisition(*pLabel);
+         aLabelSize.setHeight( std::min(aLabelSize.Height(), aAllocation.Height()) );
+         aLabelSize.setWidth( std::min(aLabelSize.Width(), aAllocation.Width()) );
+--- a/vcl/source/window/toolbox.cxx
++++ b/vcl/source/window/toolbox.cxx
+@@ -1629,6 +1629,20 @@
+             nMaxWidth = nFixedWidth;
+     }
+ 
++    // Wild OS ribbon rows: the board's height, and no room kept for a
++    // drop-down box when the row has none.
++    if (mpData->mnWildOSRowHeight > 0 && mbHorz)
++    {
++        bool bWindows = false;
++        for (const auto& item : mpData->m_aItems)
++            bWindows = bWindows || item.mpWindow;
++        if (!bWindows)
++        {
++            mnWinHeight = 0;
++            nMaxHeight = std::lround(mpData->mnWildOSRowHeight * GetDPIScaleFactor());
++        }
++    }
++
+     mbCalc = false;
+     mbFormat = true;
+ 
+@@ -2661,12 +2675,17 @@
+             if ( meTextPosition == ToolBoxTextPosition::Right )
+                 nImageOffY += (nBtnHeight-aImageSize.Height())/2;
+         }
+-        if ( nHighlight != 0 || (pItem->meState == TRISTATE_TRUE) )
++        // Wild OS: in a toolbox with wildos-checks (View > Show) a toggle is
++        // a checkbox and its label, so its state shows in the box, not as a
++        // pressed button.
++        const bool bWildOSCheck = mpData->mbWildOSChecks;
++        if ( nHighlight != 0 || (pItem->meState == TRISTATE_TRUE && !bWildOSCheck) )
+         {
+             if( bHasOpenPopup )
+                 ImplDrawFloatwinBorder(rRenderContext, pItem);
+             else
+-                ImplDrawButton(rRenderContext, aButtonRect, nHighlight, pItem->meState == TRISTATE_TRUE,
++                ImplDrawButton(rRenderContext, aButtonRect, nHighlight,
++                               pItem->meState == TRISTATE_TRUE && !bWildOSCheck,
+                                pItem->mbEnabled && IsEnabled(), pItem->mbShowWindow);
+ 
+             if( nHighlight != 0 )
+@@ -2675,7 +2694,25 @@
+                     nImageStyle |= DrawImageFlags::ColorTransform;
+             }
+         }
+-        rRenderContext.DrawImage(Point( nImageOffX, nImageOffY ), *pImage, nImageStyle);
++        if (bWildOSCheck)
++        {
++            const tools::Rectangle aBox(Point(nImageOffX, nImageOffY), aImageSize);
++            ControlState nState = ControlState::NONE;
++            if (pItem->mbEnabled && IsEnabled())
++                nState |= ControlState::ENABLED;
++            ImplControlValue aValue(pItem->meState == TRISTATE_TRUE ? ButtonValue::On : ButtonValue::Off);
++            if (!rRenderContext.DrawNativeControl(ControlType::Checkbox, ControlPart::Entire, aBox,
++                                                  nState, aValue, OUString()))
++            {
++                DecorationView aDecoView(&rRenderContext);
++                aDecoView.DrawFrame(aBox, DrawFrameStyle::In);
++                if (pItem->meState == TRISTATE_TRUE)
++                    aDecoView.DrawSymbol(aBox, SymbolType::CHECKMARK,
++                                         rRenderContext.GetSettings().GetStyleSettings().GetButtonTextColor());
++            }
++        }
++        else
++            rRenderContext.DrawImage(Point( nImageOffX, nImageOffY ), *pImage, nImageStyle);
+     }
+ 
+     // draw the text
+@@ -2727,7 +2764,7 @@
+         }
+ 
+         // draw selection only if not already drawn during image output (see above)
+-        if ( !bImage && (nHighlight != 0 || (pItem->meState == TRISTATE_TRUE) ) )
++        if ( !bImage && (nHighlight != 0 || (pItem->meState == TRISTATE_TRUE && !mpData->mbWildOSChecks) ) )
+         {
+             if( bHasOpenPopup )
+                 ImplDrawFloatwinBorder(rRenderContext, pItem);
+--- a/vcl/source/window/window2.cxx
++++ b/vcl/source/window/window2.cxx
+@@ -1608,6 +1608,16 @@
+         if (ToolBox* pToolBox = dynamic_cast<ToolBox*>(this))
+             pToolBox->ImplGetToolBoxPrivateData()->mbWildOSNoArrows = toBool(rValue);
+     }
++    else if (rKey == "wildos-row-height")
++    {
++        if (ToolBox* pToolBox = dynamic_cast<ToolBox*>(this))
++            pToolBox->ImplGetToolBoxPrivateData()->mnWildOSRowHeight = rValue.toInt32();
++    }
++    else if (rKey == "wildos-checks")
++    {
++        if (ToolBox* pToolBox = dynamic_cast<ToolBox*>(this))
++            pToolBox->ImplGetToolBoxPrivateData()->mbWildOSChecks = toBool(rValue);
++    }
+     else if (rKey == "width-request")
+         set_width_request(rValue.toInt32());
+     else if (rKey == "hexpand")

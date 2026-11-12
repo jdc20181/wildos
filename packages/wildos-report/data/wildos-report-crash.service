@@ -1,0 +1,8 @@
+[Unit]
+Description=Offer Report a problem after an app crashes
+PartOf=graphical-session.target
+After=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/wildos-report --crash-notify

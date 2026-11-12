@@ -66,16 +66,16 @@ Rectangle {
                     text: card.roleText(row.model, card.textRole)
                     elide: Text.ElideRight
                     color: UI.Style.ink
-                    font.family: "Inter"
+                    font.family: "Albert Sans"
                     font.pixelSize: 13
-                    font.weight: row.selected ? Font.DemiBold : Font.Normal
+                    font.weight: row.selected ? UI.Style.weightSemiBold : UI.Style.weightRegular
                 }
                 Text {
                     visible: text !== ""
                     text: card.roleText(row.model, card.detailRole)
                     elide: Text.ElideRight
                     color: UI.Style.inkMuted
-                    font.family: "Inter"
+                    font.family: "Albert Sans"
                     font.pixelSize: 12
                 }
                 Canvas {

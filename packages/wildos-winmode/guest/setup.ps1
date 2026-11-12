@@ -163,23 +163,9 @@ Step 'account' $true {
     Remove-ItemProperty $wl -Name 'DefaultPassword', 'AutoLogonCount' -ErrorAction SilentlyContinue
 }
 
-# 3. Speed and privacy. Diagnostic data goes to Required (1), the lowest Pro
-# honours; 0 only applies to Enterprise and Education.
+# 3. Speed and privacy, per user. The machine-wide policies, services, tasks
+# and apps are tune.ps1's, which keeps them in place after setup too.
 Step 'tuning' $false {
-    $p = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows'
-    Set-Value "$p\DataCollection" 'AllowTelemetry' 1
-    Set-Value "$p\AdvertisingInfo" 'DisabledByGroupPolicy' 1
-    Set-Value "$p\CloudContent" 'DisableWindowsConsumerFeatures' 1
-    Set-Value "$p\CloudContent" 'DisableSoftLanding' 1
-    Set-Value "$p\CloudContent" 'DisableTailoredExperiencesWithDiagnosticData' 1
-    Set-Value "$p\CloudContent" 'DisableConsumerAccountStateContent' 1
-    Set-Value "$p\Windows Search" 'DisableWebSearch' 1
-    Set-Value "$p\Windows Search" 'ConnectedSearchUseWeb' 0
-    Set-Value "$p\Windows Search" 'AllowCortana' 0
-    Set-Value "$p\WindowsCopilot" 'TurnOffWindowsCopilot' 1
-    Set-Value "$p\WindowsAI" 'DisableAIDataAnalysis' 1
-    Set-Value "$p\OneDrive" 'DisableFileSyncNGSC' 1
-    Set-Value 'HKLM:\SOFTWARE\Policies\Microsoft\Dsh' 'AllowNewsAndInterests' 0
     Set-Value 'HKCU:\Software\Policies\Microsoft\Windows\Explorer' 'DisableSearchBoxSuggestions' 1
     Set-Value 'HKCU:\Software\Policies\Microsoft\Windows\WindowsCopilot' 'TurnOffWindowsCopilot' 1
     Set-Value 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Search' 'BingSearchEnabled' 0
@@ -197,28 +183,6 @@ Step 'tuning' $false {
     Set-Value 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced' 'Start_IrisRecommendations' 0
     # Visual effects: best performance. Nobody sees the Windows desktop.
     Set-Value 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects' 'VisualFXSetting' 2
-
-    # Apps nobody asked for, removed for every account so they never come
-    # back. The Store, Edge, Photos, Notepad and Calculator stay.
-    $unwanted = 'Clipchamp.Clipchamp', 'Microsoft.BingNews', 'Microsoft.BingWeather', 'Microsoft.BingSearch', 'Microsoft.GamingApp',
-                'Microsoft.MicrosoftSolitaireCollection', 'Microsoft.Xbox.TCUI', 'Microsoft.XboxGamingOverlay', 'Microsoft.XboxIdentityProvider',
-                'Microsoft.XboxSpeechToTextOverlay', 'Microsoft.GetHelp', 'Microsoft.Getstarted', 'MicrosoftTeams', 'MSTeams', 'Microsoft.YourPhone',
-                'Microsoft.OutlookForWindows', 'Microsoft.Todos', 'Microsoft.PowerAutomateDesktop', 'Microsoft.MicrosoftOfficeHub', 'Microsoft.People',
-                'Microsoft.WindowsFeedbackHub', 'Microsoft.ZuneMusic', 'Microsoft.ZuneVideo', 'Microsoft.549981C3F5F10', 'Microsoft.Copilot',
-                'Microsoft.Windows.DevHome', 'Microsoft.MicrosoftStickyNotes', 'Microsoft.WindowsMaps', 'Microsoft.WindowsAlarms'
-    $provisioned = Get-AppxProvisionedPackage -Online
-    foreach ($name in $unwanted) {
-        $provisioned | Where-Object DisplayName -eq $name | ForEach-Object {
-            Remove-AppxProvisionedPackage -Online -PackageName $_.PackageName -ErrorAction SilentlyContinue | Out-Null
-        }
-        Get-AppxPackage -Name $name -AllUsers -ErrorAction SilentlyContinue | Remove-AppxPackage -AllUsers -ErrorAction SilentlyContinue
-    }
-
-    # Indexing and SysMain cost disk and processor time for nothing here.
-    foreach ($svc in 'WSearch', 'SysMain') {
-        Stop-Service $svc -Force -ErrorAction SilentlyContinue
-        Set-Service $svc -StartupType Disabled -ErrorAction SilentlyContinue
-    }
 
     # Wild OS decides when Windows pauses or is saved; Windows must never
     # sleep or hibernate on its own.
@@ -298,6 +262,7 @@ Step 'office-policies' $false {
 
 # Windows start-up trimming (brief 5.5a): nothing starts with the session
 # that Windows mode does not need, so a cold app has the whole machine.
+# tune.ps1 does the machine-wide part and stays behind to keep it so.
 Step 'startup-trim' $false {
     foreach ($run in 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run', 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Run') {
         $values = Get-Item $run -ErrorAction SilentlyContinue
@@ -307,30 +272,7 @@ Step 'startup-trim' $false {
             }
         }
     }
-    $tasks = '\Microsoft\Windows\Application Experience\Microsoft Compatibility Appraiser',
-             '\Microsoft\Windows\Application Experience\ProgramDataUpdater',
-             '\Microsoft\Windows\Application Experience\StartupAppTask',
-             '\Microsoft\Windows\Customer Experience Improvement Program\Consolidator',
-             '\Microsoft\Windows\Customer Experience Improvement Program\UsbCeip',
-             '\Microsoft\Windows\DiskDiagnostic\Microsoft-Windows-DiskDiagnosticDataCollector',
-             '\Microsoft\Windows\Feedback\Siuf\DmClient',
-             '\Microsoft\Windows\Feedback\Siuf\DmClientOnScenarioDownload',
-             '\Microsoft\Windows\Maps\MapsUpdateTask',
-             '\Microsoft\Windows\Maps\MapsToastTask',
-             '\Microsoft\Windows\Windows Error Reporting\QueueReporting',
-             '\Microsoft\XblGameSave\XblGameSaveTask'
-    foreach ($t in $tasks) {
-        $path = $t.Substring(0, $t.LastIndexOf('\') + 1)
-        Disable-ScheduledTask -TaskPath $path -TaskName $t.Substring($t.LastIndexOf('\') + 1) -ErrorAction SilentlyContinue | Out-Null
-    }
-    # Telemetry upload, push routing for it, maps, Xbox, fax, the retail
-    # demo and the compatibility assistant (which checks every program as it
-    # starts). Defender, Windows Update and everything RemoteApp needs stay.
-    foreach ($svc in 'DiagTrack', 'dmwappushservice', 'MapsBroker', 'XblAuthManager', 'XblGameSave', 'XboxNetApiSvc', 'XboxGipSvc',
-                     'Fax', 'RetailDemo', 'PcaSvc', 'WerSvc') {
-        Stop-Service $svc -Force -ErrorAction SilentlyContinue
-        Set-Service $svc -StartupType Disabled -ErrorAction SilentlyContinue
-    }
+    & "$here\tune.ps1" -Install
 }
 
 # OpenGL past 1.1 for the programs that need it (opengl.ps1 says why). Not

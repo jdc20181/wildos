@@ -67,7 +67,7 @@ Item {
                 anchors.verticalCenter: parent.verticalCenter
                 width: Math.min(implicitWidth, 380)
                 size: 14
-                font.weight: Font.Medium
+                font.weight: UI.Style.weightMedium
                 text: footer.userName
             }
         }

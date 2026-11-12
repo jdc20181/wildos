@@ -28,7 +28,7 @@ StepPage {
         UI.Label {
             text: "Taskbar"
             size: 14
-            font.weight: Font.DemiBold
+            font.weight: UI.Style.weightSemiBold
             Accessible.role: Accessible.Heading
         }
 
@@ -89,7 +89,7 @@ StepPage {
         UI.Label {
             text: "Appearance"
             size: 14
-            font.weight: Font.DemiBold
+            font.weight: UI.Style.weightSemiBold
             Accessible.role: Accessible.Heading
         }
 
@@ -107,9 +107,9 @@ StepPage {
                 model: [
                     // Each theme's page ground, as WildOS.UI draws it: a
                     // preview of the scheme itself.
-                    { name: "Dark", scheme: "WildOS", swatch: ["#0f1326"] },
+                    { name: "Dark", scheme: "WildOS", swatch: ["#16181c"] },
                     { name: "Light", scheme: "WildOSLight", swatch: ["#eef1f7"] },
-                    { name: "Automatic", scheme: "", swatch: ["#eef1f7", "#0f1326"] }
+                    { name: "Automatic", scheme: "", swatch: ["#eef1f7", "#16181c"] }
                 ]
 
                 Item {
@@ -171,7 +171,7 @@ StepPage {
                                 Layout.fillWidth: true
                                 text: mode.modelData.name
                                 size: 14
-                                font.weight: modeCard.checked ? Font.DemiBold : Font.Medium
+                                font.weight: modeCard.checked ? UI.Style.weightSemiBold : UI.Style.weightMedium
                             }
                         }
                     }
@@ -187,7 +187,7 @@ StepPage {
         UI.Label {
             text: "Accent colour"
             size: 14
-            font.weight: Font.DemiBold
+            font.weight: UI.Style.weightSemiBold
             Accessible.role: Accessible.Heading
         }
 

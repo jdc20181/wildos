@@ -8,7 +8,10 @@ import WildOS.UI as UI
 DeskDialog {
     id: prompt
 
-    readonly property var p: DeskOps.prompt
+    // Keeps the question it opened with while the dialog fades out. Answering
+    // clears DeskOps.prompt at once, and a live binding emptied the title and
+    // text and turned Cancel into Stop during the fade (#23).
+    property var p: ({})
     readonly property string kind: p.kind ?? ""
     property bool all: false
     property bool answered: false
@@ -20,28 +23,44 @@ DeskDialog {
         } else if (kind === "skip") {
             reply("skip");
         } else if (kind === "confirm") {
-            reply("primary");
+            reply(cancelDefault ? "cancel" : "primary");
         }
     }
+    // A question where going ahead could do harm (running a program nothing
+    // has checked) puts the keyboard on Cancel, and Enter cancels.
+    readonly property bool cancelDefault: p.cancelDefault === true
+    onOpened: if (cancelDefault) cancelButton.forceActiveFocus(Qt.TabFocusReason)
     text: p.text ?? ""
 
-    onPChanged: {
-        all = false;
-        answered = false;
-        if ((p.kind ?? "").length > 0) {
-            present();
-        } else {
-            close();
+    // Reads DeskOps.prompt itself, as a binding on it may not have caught up
+    // when this handler runs.
+    Connections {
+        target: DeskOps
+        function onPromptChanged() {
+            const next = DeskOps.prompt;
+            prompt.all = false;
+            prompt.answered = false;
+            if ((next.kind ?? "").length > 0) {
+                prompt.p = next;
+                prompt.present();
+            } else {
+                prompt.close();
+            }
         }
     }
 
     // Escape, or the job ending under it, counts as Cancel.
-    onAboutToHide: if (!answered && kind.length > 0) {
+    onAboutToHide: if (!answered && (DeskOps.prompt.kind ?? "").length > 0) {
         answered = true;
         DeskOps.answer("cancel", false);
     }
 
     function reply(choice) {
+        // The buttons and Enter stay live while the dialog fades out, and
+        // pressing one then would answer the next question in the queue.
+        if (answered || (DeskOps.prompt.kind ?? "").length === 0) {
+            return;
+        }
         answered = true;
         close();
         DeskOps.answer(choice, all);
@@ -90,7 +109,8 @@ DeskDialog {
         },
         UI.Button {
             visible: prompt.kind === "confirm"
-            kind: "primary"
+            kind: prompt.cancelDefault ? "secondary" : "primary"
+            danger: prompt.cancelDefault
             text: prompt.p.primary ?? "Continue"
             onClicked: prompt.reply("primary")
         },
@@ -100,6 +120,7 @@ DeskDialog {
             onClicked: prompt.reply("secondary")
         },
         UI.Button {
+            id: cancelButton
             visible: prompt.p.informational !== true
             text: prompt.kind === "confirm" ? "Cancel" : "Stop"
             onClicked: prompt.reply("cancel")

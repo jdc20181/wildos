@@ -3,8 +3,9 @@ import QtQuick.Layouts
 import WildOS.Settings
 import WildOS.UI as UI
 
-// Touchpad, after Windows 11: on or off, speed, taps and scrolling. KWin
-// applies each change straight away and keeps it for the touchpad.
+// Touchpad, after Windows 11: on or off, speed, taps, scrolling and a
+// link to gestures. KWin applies each change straight away and keeps it
+// for the touchpad.
 PageScroll {
     id: page
 
@@ -130,6 +131,23 @@ PageScroll {
                         onToggled: InputDevices.set("touchpad", "naturalScroll", checked)
                     }
                 }
+            }
+        }
+    }
+
+    UI.Card {
+        Layout.fillWidth: true
+        visible: page.pad !== null
+
+        Column {
+            width: parent.width
+
+            UI.SettingRow {
+                iconName: "touchpad"
+                title: "Gestures"
+                description: "Swipes with two, three or four fingers"
+                chevron: true
+                onClicked: Navigator.open("touchpadgestures")
             }
         }
     }

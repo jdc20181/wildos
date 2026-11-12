@@ -56,7 +56,7 @@ Item {
     // Each artboard's keyframes, in seconds of its own loop (BootIntro's
     // 14 s, AfterUnlockD's 10 s), from the moment the final trace starts.
     readonly property var introTimes: ({
-        start: 8.33, lap: 1.75, lapFrames: 88, background: "#05070d",
+        start: 8.33, lap: 1.75, lapFrames: 88, background: "#000000",
         lightOff: [8.33, 8.61], trace: [8.33, 9.24], traceOff: [9.24, 9.8],
         baseOff: [8.54, 9.1], fillUp: [8.47, 9.24], fillOff: [9.8, 10.3],
         statusOff: [8.4, 8.96], pulse: [8.68, 9.31, 9.66], sparkOff: [9.66, 10.22],
@@ -64,7 +64,7 @@ Item {
         clock: 11.76, clockEnd: 12.6
     })
     readonly property var unlockTimes: ({
-        start: 5.1, lap: 1.6, lapFrames: 80, background: "#0b0f1e",
+        start: 5.1, lap: 1.6, lapFrames: 80, background: "#000000",
         lightOff: [5.1, 5.4], trace: [5.1, 5.9], traceOff: [5.9, 6.4],
         baseOff: [5.4, 6.0], fillUp: [5.4, 6.1], fillOff: [6.4, 6.9],
         statusOff: [5.2, 5.7], pulse: [5.6, 5.9, 6.2], sparkOff: [6.2, 6.7],
@@ -208,7 +208,7 @@ Item {
         Rectangle {
             anchors.fill: parent
             visible: handoff.scrim
-            color: Qt.rgba(8 / 255, 12 / 255, 30 / 255, 0.22 * handoff.uiOpacity)
+            color: Qt.rgba(15 / 255, 17 / 255, 21 / 255, 0.22 * handoff.uiOpacity)
         }
     }
 

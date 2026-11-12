@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>org.wildos.videos</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0-or-later</project_license>
+  <name>Videos</name>
+  <summary>Watch the videos on your PC</summary>
+  <description>
+    <p>
+      Videos plays the films and clips on your PC. Chapters show on the
+      seek bar, subtitles come from the file or a .srt file beside it, and
+      you can pick the audio track, change the speed, watch full screen or
+      keep the video in a small window on top of your other windows.
+    </p>
+    <p>
+      The other videos in the same folder are listed beside the picture,
+      and Videos remembers where you stopped in each one, so it picks up
+      there next time. The media keys and the media controls in the taskbar
+      work with it. Positions and thumbnails stay on this PC: nothing is
+      streamed or looked up online.
+    </p>
+  </description>
+  <launchable type="desktop-id">org.wildos.videos.desktop</launchable>
+  <icon type="stock">wildos-videos</icon>
+  <categories>
+    <category>AudioVideo</category>
+    <category>Video</category>
+    <category>Player</category>
+  </categories>
+  <provides>
+    <binary>wildos-videos</binary>
+  </provides>
+  <pkgname>wildos-videos</pkgname>
+  <url type="homepage">https://wildos.io</url>
+  <developer id="io.wildos">
+    <name>Wild OS</name>
+  </developer>
+  <content_rating type="oars-1.1"/>
+  <releases>
+    <release version="0.1.0" date="2026-11-11"/>
+  </releases>
+</component>

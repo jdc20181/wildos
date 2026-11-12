@@ -55,6 +55,11 @@ class Theme : public QObject
     // A taskbar glass of its own (Overclock's is darker than its windows).
     Q_PROPERTY(bool hasTaskbarTint READ hasTaskbarTint NOTIFY themeChanged)
     Q_PROPERTY(QColor taskbarTint READ taskbarTint NOTIFY themeChanged)
+    // A glass of its own for Start, the flyouts and menus. Mica's tints are
+    // near neutral, so one tint cannot scale Dawn's blue panel glass to a
+    // theme's window glass and its panel glass at once.
+    Q_PROPERTY(bool hasPanelTint READ hasPanelTint NOTIFY themeChanged)
+    Q_PROPERTY(QColor panelTint READ panelTint NOTIFY themeChanged)
     // The theme's text colours hold only for the theme's own accent in its
     // own mode; any other accent gets the computed ones.
     Q_PROPERTY(bool themeAccent READ themeAccent NOTIFY themeChanged)
@@ -78,6 +83,8 @@ public:
     QColor glassTint() const;
     bool hasTaskbarTint() const { return themeMode() && m_taskbarTint.isValid(); }
     QColor taskbarTint() const { return m_taskbarTint; }
+    bool hasPanelTint() const { return themeMode() && m_panelTint.isValid(); }
+    QColor panelTint() const { return m_panelTint; }
     bool themeAccent() const;
     QColor textOnAccent() const { return m_textOnAccent; }
     QColor accentText() const { return m_accentText; }
@@ -115,6 +122,7 @@ private:
     QColor m_themeAccent;
     QColor m_glass;
     QColor m_taskbarTint;
+    QColor m_panelTint;
     QColor m_textOnAccent;
     QColor m_accentText;
 };

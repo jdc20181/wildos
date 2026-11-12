@@ -56,7 +56,7 @@ T.AbstractButton {
                 height: Math.max(implicitHeight, UI.Style.px(15) + 3)
                 text: heading.total
                 size: 15
-                font.weight: Font.DemiBold
+                font.weight: UI.Style.weightSemiBold
                 font.features: { "tnum": 1 }
                 horizontalAlignment: heading.alignRight ? Text.AlignRight : Text.AlignLeft
             }

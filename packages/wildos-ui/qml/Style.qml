@@ -7,8 +7,12 @@ import WildOS.UI
 // tokens.json and the dark artboards; light values from the light artboards
 // (MainLight, SettingsLight, FlyoutsLight, StartLight, TaskbarLight) and the
 // "Light mode" rules in the design system README: glass becomes
-// rgba(250,251,254,a), ink is #151b2c, and hairlines, hovers and cards use
-// rgba(30,40,70,a) at three quarters of the dark white alpha.
+// rgba(250,251,254,a), ink is #1d1f23, and hairlines, hovers and cards use
+// rgba(46,48,52,a) at three quarters of the dark white alpha.
+//
+// Design system v2 (docs/design-v2/DESIGN-V2.md) turns the glass into Mica
+// and sets the text, cards and edges on it at WinUI's values; those tokens
+// say so where they are.
 //
 // The accent, the scheme and the theme's glass come from the system (Theme
 // reads kdeglobals and wildosrc), so nothing here needs an app's own
@@ -39,7 +43,7 @@ QtObject {
     }
 
     // Text size contract: Settings > Personalisation > Text size sets the
-    // system font, Inter 10 pt by default, and Theme follows it live. Every
+    // system font, Albert Sans 10 pt by default, and Theme follows it live. Every
     // font pixel size is the design size times this, so text grows with the
     // setting while spacing and icons stay at design size.
     readonly property real textScale: Math.max(0.75, Theme.fontPointSize / 10)
@@ -47,7 +51,21 @@ QtObject {
         return Math.round(size * textScale);
     }
 
-    readonly property string fontFamily: "Inter"
+    readonly property string fontFamily: "Albert Sans"
+    // Albert Sans at a given weight looks heavier than the General Sans the
+    // design is drawn in, so every weight above Regular sits one notch
+    // lighter. The in-between values need the variable font, which Wild OS
+    // ships; use these rather than Qt's Font enums.
+    readonly property int weightLight: 300
+    readonly property int weightRegular: 400
+    readonly property int weightMedium: 480
+    readonly property int weightSemiBold: 550
+    readonly property int weightBold: 600
+    // Albert Sans is set a touch wider than General Sans; every text in
+    // Style.fontFamily takes this letter spacing at its pixel size.
+    function tracking(pixelSize) {
+        return -0.006 * pixelSize;
+    }
     readonly property int fontClockLock: px(136)
     readonly property int fontDialogLarge: px(22)
     readonly property int fontTitleXl: px(28)
@@ -59,34 +77,53 @@ QtObject {
     readonly property int fontCaption: px(12)
     readonly property int fontLabelXs: px(11)
 
-    // A white-alpha layer in dark mode is the same layer in deep navy at
-    // three quarters strength in light mode.
+    // A white-alpha layer in dark mode is the same layer in near-black grey
+    // at three quarters strength in light mode.
     function tone(alpha) {
         if (contrast) {
             return Qt.rgba(1, 1, 1, Math.min(1, alpha * 1.6));
         }
-        return dark ? Qt.rgba(1, 1, 1, alpha) : Qt.rgba(30 / 255, 40 / 255, 70 / 255, alpha * 0.75);
+        return dark ? Qt.rgba(1, 1, 1, alpha) : Qt.rgba(46 / 255, 48 / 255, 52 / 255, alpha * 0.75);
     }
+    // Text on Mica is plain white or black at WinUI's alphas, so the glass
+    // under it, not the ink, carries the theme's colour.
     function inkAlpha(darkAlpha, lightAlpha) {
         if (contrast) {
             return darkAlpha >= 0.5 ? "#ffffff" : "#a6a6a6";
         }
-        return dark ? Qt.rgba(232 / 255, 236 / 255, 248 / 255, legible(darkAlpha)) : Qt.rgba(21 / 255, 27 / 255, 44 / 255, legible(lightAlpha));
+        return dark ? Qt.rgba(1, 1, 1, legible(darkAlpha)) : Qt.rgba(0, 0, 0, legible(lightAlpha));
     }
-    // The deep navy shade under a title bar or a side column (Main.dc
-    // rgba(6,8,20,a)); light mode uses the navy tone instead.
+    // A layer of plain white or black, for the Mica cards and edges, where
+    // WinUI's light values are not the dark ones at a lower strength. High
+    // contrast keeps its own layers (tone), as before.
+    function layer(darkAlpha, lightWhite, lightAlpha) {
+        return dark ? Qt.rgba(1, 1, 1, darkAlpha) : lightWhite ? Qt.rgba(1, 1, 1, lightAlpha) : Qt.rgba(0, 0, 0, lightAlpha);
+    }
+    // The deep shade under a title bar or a side column (Main.dc
+    // rgba(9,11,15,a)); light mode uses the dark tone instead.
     function shade(darkAlpha, lightAlpha) {
         if (contrast) {
             return "#000000";
         }
-        return dark ? tinted(6, 8, 20, darkAlpha) : Qt.rgba(30 / 255, 40 / 255, 70 / 255, lightAlpha);
+        return dark ? tinted(9, 11, 15, darkAlpha) : Qt.rgba(46 / 255, 48 / 255, 52 / 255, lightAlpha);
     }
     function glass(r, g, b, darkAlpha, lightAlpha) {
+        return mica(r, g, b, darkAlpha, 250, 251, 254, lightAlpha);
+    }
+    // Mica: a near neutral tint over the blurred wallpaper, its colour in each
+    // scheme given in full. Dawn keeps a little blue in the dark, as Windows'
+    // own dark mode does; the themes' tints are neutral, so the wallpaper
+    // gives them their colour.
+    function mica(r, g, b, darkAlpha, lr, lg, lb, lightAlpha) {
         if (contrast) {
             return "#000000";
         }
-        const c = dark ? tinted(r, g, b, darkAlpha) : tinted(250, 251, 254, lightAlpha);
+        const c = dark ? tinted(r, g, b, darkAlpha) : tinted(lr, lg, lb, lightAlpha);
         return Qt.rgba(c.r, c.g, c.b, solid(c.a));
+    }
+    // Start, the flyouts and menus: a theme may give their glass in full.
+    function panel(r, g, b, darkAlpha, lr, lg, lb, lightAlpha) {
+        return contrast ? "#000000" : Theme.hasPanelTint ? solidified(Theme.panelTint) : mica(r, g, b, darkAlpha, lr, lg, lb, lightAlpha);
     }
     // A theme gives one glass colour (Settings > Personalisation > Themes);
     // every surface keeps its relation to the reference surface it was
@@ -105,29 +142,31 @@ QtObject {
             Math.max(0, Math.min(1, a + t.a - ref.a)));
     }
 
-    readonly property color ink: contrast || (stronger && dark) ? "#ffffff" : dark ? "#eef1f8" : stronger ? "#0b1020" : "#151b2c"
-    readonly property color inkStrong: dark ? "#ffffff" : "#0b1020"
-    readonly property color inkField: contrast ? "#ffffff" : dark ? "#f3f5fb" : "#151b2c"
-    readonly property color inkMuted: inkAlpha(0.72, 0.66)
-    readonly property color inkStatus: inkAlpha(0.80, 0.74)
-    readonly property color inkPlaceholder: inkAlpha(0.60, 0.55)
-    readonly property color inkSubtle: inkAlpha(0.58, 0.55)
-    readonly property color inkDisabled: contrast ? "#a6a6a6" : dark ? Qt.rgba(232 / 255, 236 / 255, 248 / 255, 0.40) : Qt.rgba(21 / 255, 27 / 255, 44 / 255, 0.38)
+    readonly property color ink: contrast || dark ? "#ffffff" : stronger ? "#121418" : Qt.rgba(0, 0, 0, 0.896)
+    readonly property color inkStrong: dark ? "#ffffff" : "#121418"
+    readonly property color inkField: contrast ? "#ffffff" : dark ? "#f3f5fb" : "#1d1f23"
+    readonly property color inkMuted: inkAlpha(0.786, 0.606)
+    readonly property color inkStatus: inkAlpha(0.786, 0.606)
+    readonly property color inkPlaceholder: inkAlpha(0.545, 0.446)
+    readonly property color inkSubtle: inkAlpha(0.545, 0.446)
+    readonly property color inkDisabled: contrast ? "#a6a6a6" : dark ? Qt.rgba(232 / 255, 236 / 255, 248 / 255, 0.40) : Qt.rgba(29 / 255, 31 / 255, 35 / 255, 0.38)
     // UI line icons; app icons never change between schemes.
-    readonly property color iconInk: contrast ? "#ffffff" : dark ? "#eef1f8" : "#2a3147"
-    readonly property color iconMuted: contrast ? "#ffffff" : dark ? Qt.rgba(238 / 255, 241 / 255, 248 / 255, legible(0.75)) : Qt.rgba(42 / 255, 49 / 255, 71 / 255, legible(0.75))
+    readonly property color iconInk: contrast ? "#ffffff" : dark ? "#eef1f8" : "#34363a"
+    readonly property color iconMuted: contrast ? "#ffffff" : dark ? Qt.rgba(238 / 255, 241 / 255, 248 / 255, legible(0.75)) : Qt.rgba(52 / 255, 54 / 255, 58 / 255, legible(0.75))
     // Desktop labels and the lock screen sit on the photograph.
     readonly property color inkOnWallpaper: "#ffffff"
     // Everything else that sits straight on the photograph (the lock and
     // sign-in screens, Lock.dc) keeps the same dark glass and light ink in
     // either scheme, so it reads on any picture.
     readonly property color inkOnWallpaperMuted: contrast ? "#ffffff" : Qt.rgba(232 / 255, 236 / 255, 248 / 255, legible(0.72))
-    readonly property color wallpaperDim: Qt.rgba(8 / 255, 12 / 255, 30 / 255, 0.22)
-    readonly property color textShadowOnWallpaper: Qt.rgba(8 / 255, 12 / 255, 30 / 255, 0.45)
-    readonly property color glassOnWallpaper: contrast ? "#000000" : Qt.rgba(12 / 255, 16 / 255, 32 / 255, solid(0.45))
-    readonly property color glassOnWallpaperField: contrast ? "#000000" : Qt.rgba(12 / 255, 16 / 255, 32 / 255, solid(0.50))
-    readonly property color glassOnWallpaperHover: Qt.rgba(28 / 255, 33 / 255, 54 / 255, solid(0.60))
-    readonly property color glassOnWallpaperPressed: Qt.rgba(40 / 255, 46 / 255, 72 / 255, solid(0.68))
+    readonly property color wallpaperDim: Qt.rgba(15 / 255, 17 / 255, 21 / 255, 0.22)
+    readonly property color textShadowOnWallpaper: Qt.rgba(15 / 255, 17 / 255, 21 / 255, 0.45)
+    // Mica, like every other floating surface: the photograph shows through
+    // only as a soft gradient. Hover and pressed keep their steps above it.
+    readonly property color glassOnWallpaper: contrast ? "#000000" : Qt.rgba(24 / 255, 26 / 255, 34 / 255, solid(0.92))
+    readonly property color glassOnWallpaperField: contrast ? "#000000" : Qt.rgba(24 / 255, 26 / 255, 34 / 255, solid(0.94))
+    readonly property color glassOnWallpaperHover: Qt.rgba(39 / 255, 41 / 255, 45 / 255, solid(0.94))
+    readonly property color glassOnWallpaperPressed: Qt.rgba(50 / 255, 52 / 255, 56 / 255, solid(0.95))
     readonly property color borderOnWallpaper: contrast ? contrastEdge : Qt.rgba(1, 1, 1, 0.14)
     readonly property color borderOnWallpaperField: contrast ? contrastEdge : Qt.rgba(1, 1, 1, 0.22)
     // Controls drawn straight on a dimmed photograph (CtrlAltDel.dc): the
@@ -164,6 +203,9 @@ QtObject {
     readonly property bool themeAccent: !contrast && Theme.themeAccent
     readonly property color accent: contrast ? "#75e9fc" : dark || themeAccent ? systemAccent : glacier ? "#3563d8" : deepen(systemAccent, 0.676, 0.527, 4.5)
     readonly property color textOnAccent: contrast ? "#000000" : themeAccent ? Theme.textOnAccent : dark ? "#0f1530" : "#ffffff"
+    // A small fill on the accent (a checked radio's centre, an on switch's
+    // knob) is a neutral dark, not the ink, so it never reads as navy.
+    readonly property color accentDot: contrast ? "#000000" : themeAccent ? Theme.textOnAccent : dark ? "#1a1c20" : "#ffffff"
     // Glacier's dark accent-text is #b9cfff, 40% of the way to white; the
     // other accents get the same lift.
     readonly property color accentText: contrast ? accent : themeAccent ? Theme.accentText : dark
@@ -174,78 +216,97 @@ QtObject {
     function accentAlpha(darkAlpha, lightAlpha) {
         return Qt.rgba(accent.r, accent.g, accent.b, dark ? darkAlpha : lightAlpha);
     }
-    readonly property color accentSoft: accentAlpha(0.12, 0.09)
-    readonly property color accentTint: accentAlpha(0.10, 0.09)
-    readonly property color accentChip: accentAlpha(0.14, 0.11)
-    readonly property color accentSelected: accentAlpha(0.20, 0.16)
+    // Fills on Mica are neutral, as in WinUI: a selected, current or
+    // highlighted item is white at 6.1% (black 3.7% in light), a soft fill
+    // white at 4%. The accent is for controls, focus rings, selection bars
+    // and links. High contrast keeps its accent fills as before.
+    function fillSelected(darkAlpha, lightAlpha) {
+        return contrast ? accentAlpha(darkAlpha, lightAlpha) : layer(0.061, false, 0.037);
+    }
+    function fillSubtle(darkAlpha, lightAlpha) {
+        return contrast ? accentAlpha(darkAlpha, lightAlpha) : layer(0.04, false, 0.03);
+    }
+    readonly property color accentSoft: fillSubtle(0.12, 0.09)
+    readonly property color accentTint: fillSubtle(0.10, 0.09)
+    readonly property color accentChip: fillSubtle(0.14, 0.11)
+    readonly property color accentSelected: fillSelected(0.20, 0.16)
+    // Selected text keeps the accent, or the selection would not show.
+    readonly property color textSelection: accentAlpha(0.20, 0.16)
     readonly property color accentBorder: accentAlpha(0.28, 0.21)
     readonly property color accentBorderStrong: accentAlpha(0.55, 0.413)
 
-    readonly property color glassBar: glass(12, 16, 32, 0.55, 0.55)
+    // Floating surfaces (the taskbar pills, the window switcher, on-screen
+    // displays) are Mica too, with the same blur as windows.
+    readonly property color glassFloat: contrast ? "#000000" : mica(24, 26, 34, 0.92, 243, 243, 243, 0.94)
+    readonly property color glassBar: glassFloat
     // The taskbar (wildos-shell): docked along the bottom, or the floating
     // pills. A theme can give the docked bar a glass of its own; the pills
     // then take the same colour, as much lighter as the stock pills are.
     readonly property color taskbarDocked: contrast ? "#000000" : solidified(Theme.hasTaskbarTint ? Theme.taskbarTint
-        : dark ? tinted(14, 18, 34, 0.88) : tinted(246, 248, 252, 0.90))
-    readonly property color taskbarFloating: contrast ? "#000000" : solidified(Theme.hasTaskbarTint
-        ? Qt.rgba(Theme.taskbarTint.r, Theme.taskbarTint.g, Theme.taskbarTint.b, Math.max(0, Theme.taskbarTint.a - (dark ? 0.33 : 0.23)))
-        : dark ? tinted(12, 16, 32, 0.55) : tinted(250, 251, 254, 0.67))
+        : dark ? tinted(18, 20, 28, 0.92) : tinted(238, 238, 238, 0.94))
+    // The pills are the floating Mica: the window colour at the taskbar's
+    // opacity, so they stay as much lighter than the docked bar as before.
+    readonly property color taskbarFloating: glassFloat
     function solidified(c) {
         return Qt.rgba(c.r, c.g, c.b, solid(c.a));
     }
-    readonly property color taskbarShadow: dark ? tinted(6, 10, 28, 0.35) : Qt.rgba(20 / 255, 30 / 255, 60 / 255, 0.14)
-    readonly property color glassPanel: glass(16, 20, 38, 0.76, 0.86)
-    readonly property color glassWindow: glass(20, 24, 42, 0.80, 0.92)
-    readonly property color glassWindowDeep: glass(18, 22, 40, 0.86, 0.94)
-    readonly property color glassMenu: glass(22, 26, 46, 0.94, 0.96)
-    readonly property color glassDialog: glass(18, 22, 40, 0.90, 0.95)
-    // Every right-click menu (MenusShell.dc, MenusApps.dc): rgba(16,20,38,
+    readonly property color taskbarShadow: dark ? tinted(13, 15, 19, 0.35) : Qt.rgba(36 / 255, 38 / 255, 42 / 255, 0.14)
+    readonly property color glassPanel: panel(35, 37, 41, 0.96, 240, 240, 240, 0.96)
+    readonly property color glassWindow: mica(24, 26, 34, 0.95, 243, 243, 243, 0.96)
+    // A window's deeper glass stays as much more opaque than its plain glass
+    // as before Mica; dialogs take the window glass.
+    readonly property color glassWindowDeep: mica(24, 26, 34, 0.97, 243, 243, 243, 0.97)
+    readonly property color glassMenu: panel(35, 37, 41, 0.96, 240, 240, 240, 0.96)
+    readonly property color glassDialog: mica(24, 26, 34, 0.95, 243, 243, 243, 0.96)
+    // Every right-click menu (MenusShell.dc, MenusApps.dc): rgba(23,25,29,
     // 0.86) behind a 0.12 edge, 12px corners, a 0 20px 50px shadow at 0.45
     // and 7px row corners.
-    readonly property color glassContextMenu: glass(16, 20, 38, 0.86, 0.95)
+    readonly property color glassContextMenu: panel(35, 37, 41, 0.96, 240, 240, 240, 0.96)
     readonly property color borderContextMenu: contrast ? contrastEdge : tone(0.12)
-    readonly property color shadowContextMenu: dark ? tinted(4, 8, 24, 0.45) : Qt.rgba(20 / 255, 30 / 255, 60 / 255, 0.18)
+    readonly property color shadowContextMenu: dark ? tinted(10, 12, 16, 0.45) : Qt.rgba(36 / 255, 38 / 255, 42 / 255, 0.18)
     // Behind a window when transparency effects are off or blur is missing.
-    readonly property color windowOpaque: contrast ? "#000000" : dark ? tinted(21, 26, 47, 1) : "#f4f6fb"
-    readonly property color ground: contrast ? "#000000" : dark ? tinted(15, 19, 38, 1) : "#eef1f7"
-    readonly property color lakeNavy: "#1d2b52"
+    readonly property color windowOpaque: contrast ? "#000000" : dark ? tinted(24, 26, 34, 1) : "#f3f3f3"
+    readonly property color ground: contrast ? "#000000" : dark ? tinted(22, 24, 28, 1) : "#eef1f7"
+    readonly property color lakeNavy: "#333539"
 
-    readonly property color surfaceSunken: contrast ? "#000000" : dark ? tinted(6, 8, 20, 0.35) : tinted(250, 251, 254, 0.55)
-    readonly property color surfaceRaised: tone(0.05)
+    readonly property color surfaceSunken: contrast ? "#000000" : dark ? tinted(9, 11, 15, 0.35) : tinted(250, 251, 254, 0.55)
+    // Cards and setting rows: in light mode white at 72%, lighter panels on
+    // the grey Mica, as in Windows 11's light Settings.
+    readonly property color surfaceRaised: contrast ? tone(0.05) : layer(0.051, true, 0.72)
     readonly property color surfaceRest: tone(0.04)
     readonly property color surfaceControl: tone(0.06)
-    readonly property color surfaceHover: tone(0.09)
-    readonly property color surfaceSelected: tone(0.10)
+    readonly property color surfaceHover: contrast ? tone(0.09) : layer(0.084, true, 0.5)
+    readonly property color surfaceSelected: contrast ? tone(0.10) : layer(0.061, false, 0.037)
     readonly property color surfacePressed: tone(0.12)
     readonly property color surfaceTrack: tone(0.12)
     readonly property color surfaceTile: tone(0.08)
     // The band along the foot of Start and the flyouts (account and power,
     // battery): darker than the glass in dark mode, paler in light
-    // (Flyouts.dc rgba(4,6,18,0.30), FlyoutsLight.dc rgba(250,251,254,0.55)).
-    readonly property color surfaceBand: contrast ? "#000000" : dark ? tinted(4, 6, 18, 0.30) : tinted(250, 251, 254, 0.55)
+    // (Flyouts.dc rgba(7,9,13,0.30), FlyoutsLight.dc rgba(250,251,254,0.55)).
+    readonly property color surfaceBand: contrast ? "#000000" : dark ? tinted(7, 9, 13, 0.30) : tinted(250, 251, 254, 0.55)
 
-    readonly property color borderSubtle: contrast ? contrastEdge : tone(0.07)
+    readonly property color borderSubtle: contrast ? contrastEdge : layer(0.07, false, 0.058)
     readonly property color divider: contrast ? contrastDivider : tone(0.06)
     readonly property color borderField: contrast ? contrastEdge : tone(0.10)
-    readonly property color windowEdge: contrast ? contrastEdge : tone(0.11)
-    readonly property color borderGlass: contrast ? contrastEdge : tone(0.12)
+    readonly property color windowEdge: contrast ? contrastEdge : layer(0.093, false, 0.073)
+    readonly property color borderGlass: contrast ? contrastEdge : layer(0.093, false, 0.073)
     readonly property color borderMenu: contrast ? contrastEdge : tone(0.14)
     readonly property color borderControl: contrast ? contrastEdge : tone(0.16)
     readonly property color borderDialog: contrast ? contrastEdge : tone(0.13)
 
-    readonly property color toggleOffBorder: contrast ? contrastEdge : dark ? Qt.rgba(238 / 255, 241 / 255, 248 / 255, 0.55) : Qt.rgba(30 / 255, 40 / 255, 70 / 255, 0.413)
+    readonly property color toggleOffBorder: contrast ? contrastEdge : dark ? Qt.rgba(238 / 255, 241 / 255, 248 / 255, 0.55) : Qt.rgba(46 / 255, 48 / 255, 52 / 255, 0.413)
     // SettingsLight draws the off knob in the dark-mode #eef1f8, which
     // vanishes on white; the light knob takes the icon ink instead.
-    readonly property color toggleOffKnob: contrast ? "#ffffff" : dark ? "#eef1f8" : "#2a3147"
-    readonly property color radioRing: contrast ? contrastEdge : dark ? Qt.rgba(238 / 255, 241 / 255, 248 / 255, 0.6) : Qt.rgba(30 / 255, 40 / 255, 70 / 255, 0.45)
+    readonly property color toggleOffKnob: contrast ? "#ffffff" : dark ? "#eef1f8" : "#34363a"
+    readonly property color radioRing: contrast ? contrastEdge : dark ? Qt.rgba(238 / 255, 241 / 255, 248 / 255, 0.6) : Qt.rgba(46 / 255, 48 / 255, 52 / 255, 0.45)
     readonly property color scrollThumb: tone(0.30)
     readonly property color scrollThumbPressed: tone(0.45)
-    readonly property color scrim: contrast ? Qt.rgba(0, 0, 0, 0.75) : dark ? Qt.rgba(6 / 255, 10 / 255, 26 / 255, 0.45) : Qt.rgba(20 / 255, 30 / 255, 60 / 255, 0.22)
+    readonly property color scrim: contrast ? Qt.rgba(0, 0, 0, 0.75) : dark ? Qt.rgba(12 / 255, 14 / 255, 18 / 255, 0.45) : Qt.rgba(36 / 255, 38 / 255, 42 / 255, 0.22)
 
     // Shadows keep their shape and drop to about 40% strength in light mode.
-    readonly property color shadowWindow: dark ? tinted(4, 8, 24, 0.45) : Qt.rgba(20 / 255, 30 / 255, 60 / 255, 0.18)
-    readonly property color shadowFlyout: dark ? tinted(4, 8, 24, 0.55) : Qt.rgba(20 / 255, 30 / 255, 60 / 255, 0.22)
-    readonly property color shadowMenu: dark ? tinted(4, 8, 24, 0.60) : Qt.rgba(20 / 255, 30 / 255, 60 / 255, 0.24)
+    readonly property color shadowWindow: dark ? tinted(10, 12, 16, 0.45) : Qt.rgba(36 / 255, 38 / 255, 42 / 255, 0.18)
+    readonly property color shadowFlyout: dark ? tinted(10, 12, 16, 0.55) : Qt.rgba(36 / 255, 38 / 255, 42 / 255, 0.22)
+    readonly property color shadowMenu: dark ? tinted(10, 12, 16, 0.60) : Qt.rgba(36 / 255, 38 / 255, 42 / 255, 0.24)
 
     readonly property color closeHover: "#c4463f"
     readonly property color closePressed: "#a63a34"

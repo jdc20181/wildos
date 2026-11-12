@@ -5,6 +5,7 @@
 #include <KConfigWatcher>
 #include <KLocalizedString>
 #include <KSharedConfig>
+#include <KWindowSystem>
 
 #include <QApplication>
 #include <QCommandLineParser>
@@ -26,7 +27,10 @@ const QString interfaceName = QStringLiteral("org.wildos.Settings");
 }
 
 // A second "wildos-settings --page x" brings the open window forward on the
-// requested page instead of opening another Settings, as Windows does.
+// requested page instead of opening another Settings, as Windows does. On
+// Wayland only the compositor can bring a window back from the taskbar, and
+// only with the activation token the launcher (the desktop menu, Start, a
+// flyout) handed the second Settings, so that token is passed along.
 class Remote : public QObject
 {
     Q_OBJECT
@@ -42,6 +46,11 @@ public:
 public Q_SLOTS:
     Q_SCRIPTABLE void showPage(const QString &page)
     {
+        showPageActivated(page, QString());
+    }
+
+    Q_SCRIPTABLE void showPageActivated(const QString &page, const QString &token)
+    {
         const auto roots = m_engine->rootObjects();
         if (roots.isEmpty()) {
             return;
@@ -51,9 +60,17 @@ public Q_SLOTS:
             QMetaObject::invokeMethod(root, "showPage", Q_ARG(QVariant, page));
         }
         if (auto window = qobject_cast<QQuickWindow *>(root)) {
+            window->setWindowStates(window->windowStates() & ~Qt::WindowMinimized);
             window->show();
             window->raise();
-            window->requestActivate();
+            if (KWindowSystem::isPlatformWayland()) {
+                if (!token.isEmpty()) {
+                    KWindowSystem::setCurrentXdgActivationToken(token);
+                }
+                KWindowSystem::activateWindow(window);
+            } else {
+                window->requestActivate();
+            }
         }
     }
 
@@ -91,6 +108,10 @@ static void applyScheme(QApplication &app)
 
 int main(int argc, char *argv[])
 {
+    // Read before QApplication: Qt's Wayland plugin takes the token out of
+    // the environment as it starts.
+    const QString activationToken = QString::fromUtf8(qgetenv("XDG_ACTIVATION_TOKEN"));
+
     // Widgets are needed for the handful of KDE modules that are still
     // QWidget based and open in their own window.
     QApplication app(argc, argv);
@@ -119,9 +140,15 @@ int main(int argc, char *argv[])
 
     QDBusConnection bus = QDBusConnection::sessionBus();
     if (bus.isConnected() && bus.interface()->isServiceRegistered(serviceName)) {
-        auto message = QDBusMessage::createMethodCall(serviceName, objectPath, interfaceName, QStringLiteral("showPage"));
-        message << page;
-        bus.call(message, QDBus::Block, 5000);
+        auto message = QDBusMessage::createMethodCall(serviceName, objectPath, interfaceName, QStringLiteral("showPageActivated"));
+        message << page << activationToken;
+        const QDBusMessage reply = bus.call(message, QDBus::Block, 5000);
+        // A Settings started before an update has only the older call.
+        if (reply.type() == QDBusMessage::ErrorMessage && reply.errorName() == QLatin1String("org.freedesktop.DBus.Error.UnknownMethod")) {
+            auto older = QDBusMessage::createMethodCall(serviceName, objectPath, interfaceName, QStringLiteral("showPage"));
+            older << page;
+            bus.call(older, QDBus::Block, 5000);
+        }
         return 0;
     }
 

@@ -1,0 +1,14 @@
+#!/usr/bin/make -f
+
+%:
+	dh $@
+
+override_dh_auto_configure:
+	dh_auto_configure -- -Wno-dev -DCMAKE_BUILD_TYPE=Release
+
+# Windows checkouts lose the executable bit; these must run.
+execute_after_dh_fixperms:
+	chmod 0755 debian/wildos-recovery/etc/kernel/postrm.d/zz-wildos-restore-points
+	chmod 0755 debian/wildos-recovery/usr/lib/wildos/grub.d/15_wildos_recovery
+	chmod 0755 debian/wildos-recovery/usr/lib/systemd/user-generators/wildos-safe-mode
+	chmod 0755 debian/wildos-recovery/usr/lib/dracut/modules.d/91wildos-restore/*.sh

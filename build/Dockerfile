@@ -61,7 +61,6 @@ RUN apt-get update \
         debhelper \
         dosfstools \
         dpkg-dev \
-        fonts-inter \
         grub-efi-amd64-bin \
         grub-pc-bin \
         imagemagick \
@@ -132,8 +131,42 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends libpwquality-dev \
     && rm -rf /var/lib/apt/lists/*
 
+# PDF (wildos-pdf) draws pages, fills in forms and writes notes and
+# signatures with Poppler's Qt 6 library.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends libpoppler-qt6-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Music (wildos-music) plays through Qt Multimedia, whose trixie build
+# decodes with FFmpeg, and reads tags, covers and lyrics with TagLib 2.
+RUN apt-get update     && apt-get install -y --no-install-recommends qt6-multimedia-dev libtag-dev     && rm -rf /var/lib/apt/lists/*
+
 # Compiles go through ccache (a volume shared by every build, see
 # build-iso.sh), so a package whose code barely changed rebuilds in seconds.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends ccache \
+    && rm -rf /var/lib/apt/lists/*
+
+# LibreOffice is rebuilt with build/patches/libreoffice (see build.sh). Its
+# build dependencies come to about 1000 packages and 3 GB, so they are
+# installed once here instead of at every rebuild. Debian's own build
+# profiles leave out the tests and documentation.
+RUN echo "deb-src http://deb.debian.org/debian trixie main" > /etc/apt/sources.list.d/libreoffice-src.list \
+    && apt-get update \
+    && DEBIAN_FRONTEND=noninteractive apt-get build-dep -y -P nocheck,nodoc,noinsttest libreoffice \
+    && rm /etc/apt/sources.list.d/libreoffice-src.list \
+    && rm -rf /var/lib/apt/lists/*
+
+# Videos (wildos-videos) plays and draws video with libmpv, through its
+# OpenGL render API, and makes its thumbnails with it too. Last, so the
+# LibreOffice layer above stays cached.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends libmpv-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Voice (wildos-voice) writes its recordings with libopusenc and reads them
+# back for waveforms and transcripts with opusfile. whisper.cpp is built
+# from the copy in the package. Last, so the LibreOffice layer stays cached.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends libopusenc-dev libopusfile-dev \
     && rm -rf /var/lib/apt/lists/*

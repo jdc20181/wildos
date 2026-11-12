@@ -73,6 +73,13 @@ public:
 
     // The window's size in device pixels for a size in Windows' pixels.
     QSize logicalSize(const QSize &remote) const;
+    // Windows' pixels per logical unit for this window: the scale of the
+    // monitor it is on in Windows.
+    double scale() const;
+    // Moves the window in Windows to the monitor of the screen it is on
+    // here, where Windows draws it at that screen's scale. Windows cannot
+    // see where the compositor puts a window, so this is how it learns.
+    void followScreen();
     // The window's pixels as Windows last sent them.
     QImage snapshot() const;
     // The loading window as it looks now.
@@ -110,7 +117,14 @@ private:
     void releaseKeys();
     void sendIcon();
     void finishMoveSize(const QPointF &local);
-    double scale() const;
+    // Where a window this size (in the target's pixels) goes on monitor
+    // `to`, at about the same place it had on `from`.
+    QRect placeOn(int from, int to, const QSize &size) const;
+    // Asks Windows to move the window to monitor `to`, at this logical size.
+    void moveToMonitor(int to, const QSize &logical);
+    // A frame from Windows while a move to another monitor is under way;
+    // true when the window here keeps its size meanwhile.
+    bool followFrame();
 
     Rail *m_rail;
     Client *m_client;
@@ -158,8 +172,25 @@ private:
     QList<quint32> m_keysDown;
     int m_wheelX = 0;
     int m_wheelY = 0;
+    int m_pinch = 0;
     bool m_moveSize = false;
     quint16 m_moveSizeType = 0;
     QPoint m_pressRemote;
     QRect m_moveSizeStart;
+
+    // A move to another of Windows' monitors: which one, the size the window
+    // keeps here, and whether Windows has been asked once more for that
+    // size after the move (an app that rescaled itself twice, or not at
+    // all, when its scale changed).
+    struct Follow {
+        int monitor = -1;
+        QSize logical;
+        bool corrected = false;
+        QElapsedTimer since;
+    };
+    Follow m_follow;
+    // Quiet for a moment after the last frame: the app has rescaled.
+    QTimer m_followSettle;
+    QTimer m_screenSettle;
+    void followSettled();
 };

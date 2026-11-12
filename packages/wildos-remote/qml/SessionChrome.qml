@@ -17,8 +17,9 @@ Item {
     readonly property bool glass: host.blurAvailable
     readonly property real radius: host.maximised ? 0 : UI.Style.windowRadius
     readonly property rect area: host.terminalArea
-    // RemoteTerminal.dc: the bars are rgba(14,18,34,0.88) over the blur.
-    readonly property color barColour: Qt.rgba(14 / 255, 18 / 255, 34 / 255, glass ? 0.88 : 1)
+    // The bars are the window's own Mica, so they follow light and dark
+    // like every other window; without blur they have to be solid.
+    readonly property color barColour: glass ? UI.Style.glassWindow : UI.Style.windowOpaque
     property bool runAll: false
 
     // While any of these is up, the whole window belongs to this layer.
@@ -138,7 +139,7 @@ Item {
                 width: Math.min(200, tabText.implicitWidth + 58)
                 height: 32
                 radius: 8
-                color: current ? UI.Style.tone(0.09) : tabMouse.containsMouse ? UI.Style.tone(0.05) : "transparent"
+                color: current ? UI.Style.surfaceSelected : tabMouse.containsMouse ? UI.Style.surfaceHover : "transparent"
                 Accessible.role: Accessible.PageTab
                 Accessible.name: modelData.title
 
@@ -157,7 +158,7 @@ Item {
                     width: Math.min(implicitWidth, 130)
                     text: tabItem.modelData.title
                     size: 14
-                    font.weight: tabItem.current ? Font.DemiBold : Font.Medium
+                    font.weight: tabItem.current ? UI.Style.weightSemiBold : UI.Style.weightMedium
                     color: tabItem.current ? UI.Style.ink : UI.Style.inkMuted
                 }
                 MouseArea {
@@ -317,7 +318,7 @@ Item {
             anchors.verticalCenter: parent.verticalCenter
             name: "info"
             size: 17
-            color: UI.Style.accent
+            color: UI.Style.iconInk
         }
         UI.Label {
             x: 46
@@ -360,9 +361,9 @@ Item {
             return below + height > root.area.y + root.area.height ? root.area.y + cursor.y - height - 8 : below;
         }
         radius: 10
-        color: Qt.rgba(22 / 255, 27 / 255, 46 / 255, 0.98)
+        color: UI.Style.glassMenu
         border.width: 1
-        border.color: UI.Style.tone(0.12)
+        border.color: UI.Style.borderMenu
 
         Column {
             id: suggestionColumn
@@ -379,14 +380,14 @@ Item {
                     width: suggestionColumn.width
                     height: 34
                     radius: 7
-                    color: current ? UI.Style.tone(0.09) : "transparent"
+                    color: current ? UI.Style.surfaceSelected : "transparent"
                     UI.Glyph {
                         x: 10
                         anchors.verticalCenter: parent.verticalCenter
                         width: 14
                         height: 14
                         path: suggestion.modelData.kind === "snippet" ? RemoteIcons.snippets : RemoteIcons.clock
-                        color: suggestion.modelData.kind === "snippet" ? UI.Style.accent : UI.Style.iconMuted
+                        color: suggestion.modelData.kind === "snippet" ? UI.Style.iconInk : UI.Style.iconMuted
                     }
                     UI.Label {
                         x: 34
@@ -437,7 +438,7 @@ Item {
         UI.Label {
             text: root.tab ? root.tab.userHost : ""
             size: 13
-            font.weight: Font.DemiBold
+            font.weight: UI.Style.weightSemiBold
         }
         Row {
             spacing: 7
@@ -462,7 +463,7 @@ Item {
                 width: 13
                 height: 13
                 path: RemoteIcons.forward
-                color: "#c78bff"
+                color: UI.Style.iconMuted
             }
             UI.Label {
                 anchors.verticalCenter: parent.verticalCenter

@@ -42,12 +42,15 @@ int systemRank(const QString &kind)
     return 3;
 }
 
-QString firstName()
+// The home folder holds Documents, Downloads, Pictures and the rest, so it is
+// "Alex's files" rather than a bare name that reads like a single folder.
+// Without a name on the account it is just "My files".
+QString homeLabel()
 {
     const KUser user;
     const QString full = user.property(KUser::FullName).toString().section(QLatin1Char(','), 0, 0).trimmed();
     const QString first = full.section(QLatin1Char(' '), 0, 0);
-    return first.isEmpty() ? user.loginName() : first;
+    return first.isEmpty() ? QStringLiteral("My files") : first + QStringLiteral("'s files");
 }
 
 QUrl stripped(const QUrl &url)
@@ -127,7 +130,7 @@ void DesktopModel::makeSystemEntries()
     home.key = homeKey;
     home.kind = QStringLiteral("home");
     home.url = QUrl::fromLocalFile(QDir::homePath());
-    home.name = firstName();
+    home.name = homeLabel();
     home.fileName = home.name;
     home.isDir = true;
     home.type = QStringLiteral("System folder");
@@ -142,6 +145,17 @@ void DesktopModel::makeSystemEntries()
     beginResetModel();
     m_entries = {computer, home, bin};
     endResetModel();
+}
+
+// Files that belong to the system, not to the person: Windows' recycle bin
+// and folder settings in the folders shared with Windows mode, the thumbnail
+// cache, and KDE's own folder files. Like Windows' protected system files,
+// they stay out of sight even with hidden items shown.
+static bool isSystemItem(const QString &name)
+{
+    static const QStringList names = {QStringLiteral("$RECYCLE.BIN"), QStringLiteral("desktop.ini"),
+                                      QStringLiteral("Thumbs.db"), QStringLiteral(".directory"), QStringLiteral(".hidden")};
+    return names.contains(name, Qt::CaseInsensitive);
 }
 
 DesktopModel::Entry DesktopModel::entryFor(const KFileItem &item) const
@@ -195,7 +209,7 @@ void DesktopModel::addItems(const KFileItemList &items)
 {
     QList<Entry> added;
     for (const KFileItem &item : items) {
-        if (rowForUrl(item.url()) >= 0) {
+        if (isSystemItem(item.name()) || rowForUrl(item.url()) >= 0) {
             continue;
         }
         added.append(entryFor(item));

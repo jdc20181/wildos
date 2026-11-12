@@ -101,7 +101,7 @@ T.Button {
                 anchors.verticalCenter: parent.verticalCenter
                 text: control.text
                 size: control.fontSize
-                font.weight: control.primary ? Font.DemiBold : control.textKind ? Font.Normal : Font.Medium
+                font.weight: control.primary ? Style.weightSemiBold : control.textKind ? Style.weightRegular : Style.weightMedium
                 color: control.textColor
             }
 

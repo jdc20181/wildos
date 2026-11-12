@@ -1,7 +1,7 @@
 import QtQuick
 import QtQuick.Layouts
 import WildOS.UI as UI
-import WildOS.WinMode.Backend
+import WildOS.WinMode.Setup
 
 // 9.6, Ready (WinModeReady.dc): the Start entries setup made, and what
 // Windows reports about itself.
@@ -108,7 +108,7 @@ Page {
                             Layout.fillWidth: true
                             text: tile.modelData.name
                             size: 14
-                            font.weight: Font.DemiBold
+                            font.weight: UI.Style.weightSemiBold
                         }
 
                         UI.Label {

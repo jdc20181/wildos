@@ -8,12 +8,35 @@ import org.kde.plasma.private.kicker as Kicker
 import org.kde.plasma.private.sessions as Sessions
 import org.kde.coreaddons as KCoreAddons
 import org.kde.plasma.plasma5support as P5Support
+import org.wildos.shell as WildOS
 import "code/helpers.js" as Helpers
 
 PlasmoidItem {
     id: start
 
     property string query: ""
+
+    // Set before opening to start at All apps rather than the pinned apps.
+    property bool openAtAllApps: false
+
+    // KWin's hot corners and touchpad gestures ask for the app list through
+    // plasmashell. Each screen's taskbar may have a Start; only the one on
+    // the screen they name answers.
+    Connections {
+        target: WildOS.ShellRequests
+        function onAllAppsRequested(x: int, y: int): void {
+            const screen = Plasmoid.containment ? Plasmoid.containment.screenGeometry : null;
+            if (!screen || x < screen.x || y < screen.y || x >= screen.x + screen.width || y >= screen.y + screen.height) {
+                return;
+            }
+            if (start.expanded) {
+                start.expanded = false;
+            } else {
+                start.openAtAllApps = true;
+                start.expanded = true;
+            }
+        }
+    }
 
     // Set by the Start button: an item in the panel whose centre is the centre
     // of the screen. The popup is anchored to it so Start opens centred.
@@ -61,8 +84,19 @@ PlasmoidItem {
                     offered = Helpers.pinsBeforeOffice;
                 }
                 for (const id of defaults) {
-                    if (!offered.includes(id) && !kickerRoot.favoritesModel.isFavorite(id)) {
-                        kickerRoot.favoritesModel.addFavorite(id);
+                    if (!offered.includes(id) && !Helpers.newAccountPins.includes(id) && !kickerRoot.favoritesModel.isFavorite(id)) {
+                        const old = Helpers.replacesPin[id];
+                        const pins = Array.from(kickerRoot.favoritesModel.favorites ?? []);
+                        let place = old ? pins.indexOf(old) : -1;
+                        if (old && place < 0) {
+                            place = pins.indexOf("applications:" + old);
+                        }
+                        if (place >= 0) {
+                            kickerRoot.favoritesModel.removeFavorite(old);
+                            kickerRoot.favoritesModel.addFavorite(id, place);
+                        } else {
+                            kickerRoot.favoritesModel.addFavorite(id);
+                        }
                     }
                 }
             }

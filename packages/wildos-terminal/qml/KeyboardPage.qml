@@ -116,7 +116,7 @@ PageScroll {
                                                         anchors.centerIn: parent
                                                         text: cap.modelData
                                                         size: 12
-                                                        font.weight: Font.Medium
+                                                        font.weight: UI.Style.weightMedium
                                                     }
                                                 }
                                             }

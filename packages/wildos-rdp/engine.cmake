@@ -20,6 +20,7 @@ add_library(wildos-rdp-engine STATIC
     ${WILDOS_RDP_ENGINE_DIR}/src/keymap.cpp ${WILDOS_RDP_ENGINE_DIR}/src/keymap.h
     ${WILDOS_RDP_ENGINE_DIR}/src/input.cpp ${WILDOS_RDP_ENGINE_DIR}/src/input.h
     ${WILDOS_RDP_ENGINE_DIR}/src/desktop.cpp ${WILDOS_RDP_ENGINE_DIR}/src/desktop.h
+    ${WILDOS_RDP_ENGINE_DIR}/src/monitors.cpp ${WILDOS_RDP_ENGINE_DIR}/src/monitors.h
 )
 set_target_properties(wildos-rdp-engine PROPERTIES AUTOMOC ON POSITION_INDEPENDENT_CODE ON)
 target_include_directories(wildos-rdp-engine PUBLIC ${WILDOS_RDP_ENGINE_DIR}/src)

@@ -47,7 +47,7 @@ T.AbstractButton {
                 anchors.verticalCenter: parent.verticalCenter
                 text: control.text
                 size: control.size
-                font.weight: Font.Medium
+                font.weight: UI.Style.weightMedium
                 font.underline: control.hovered
                 color: UI.Style.accent
             }

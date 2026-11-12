@@ -30,6 +30,48 @@ PageScroll {
     Component.onCompleted: {
         System.refreshUpdatePolicy();
         System.refreshAppUpdates();
+        takeRequest();
+    }
+
+    // Install on the taskbar's Updates icon opens this page with
+    // Navigator.request "install". Settings may have only just started and
+    // still be reading the list, so the install waits for it; when the list
+    // turns out empty there is nothing to do.
+    property bool installWanted: false
+
+    function takeRequest() {
+        if (Navigator.request !== "install") {
+            return;
+        }
+        Navigator.request = "";
+        installWanted = true;
+        installIfWanted();
+    }
+
+    function installIfWanted() {
+        if (!installWanted) {
+            return;
+        }
+        if (Updates.state === "available" || (Updates.state === "error" && Updates.updates.length > 0)) {
+            installWanted = false;
+            Updates.install();
+        } else if (Updates.state !== "checking" && Updates.state !== "idle") {
+            installWanted = false;
+        }
+    }
+
+    Connections {
+        target: Navigator
+        function onRequestChanged() {
+            page.takeRequest();
+        }
+    }
+
+    Connections {
+        target: Updates
+        function onStateChanged() {
+            page.installIfWanted();
+        }
     }
 
     Connections {
@@ -43,7 +85,7 @@ PageScroll {
         }
     }
 
-    readonly property bool busy: Updates.state === "checking" || Updates.state === "installing"
+    readonly property bool working: Updates.state === "checking" || Updates.state === "installing"
     readonly property var policy: System.updatePolicy
     readonly property string version: System.osName + (System.osVersion.length > 0 ? " " + System.osVersion : "") + "."
     readonly property string lastChecked: {
@@ -157,13 +199,23 @@ PageScroll {
     }
 
     StatusCard {
-        iconCircle: 60
-        iconSize: 30
-        iconStroke: Updates.state === "uptodate" || Updates.state === "installed" ? 2.6 : 2.2
+        flat: true
+        iconCircle: 56
+        iconSize: 28
+        // A list read before the first check is empty, which is not the same
+        // as up to date.
+        readonly property bool unchecked: Updates.state === "uptodate" && page.lastChecked.length === 0
+        readonly property bool working: Updates.state === "checking" || Updates.state === "installing"
+        readonly property bool restartWaiting: Updates.restartNeeded && !working && Updates.state !== "error"
+        readonly property bool done: !restartWaiting && ((Updates.state === "uptodate" && !unchecked) || Updates.state === "installed")
+        iconStroke: done ? 2.6 : 2.2
         spinning: Updates.state === "checking"
-        warning: Updates.state === "error" || (Updates.state === "available" && Updates.securityCount > 0)
+        tone: done ? "success"
+            : restartWaiting || Updates.state === "error" || (Updates.state === "available" && Updates.securityCount > 0) ? "warning"
+            : "accent"
         iconName: Updates.state === "error" ? "warning"
-                : Updates.state === "uptodate" || Updates.state === "installed" ? "check"
+                : done ? "checkmark"
+                : restartWaiting ? "restart"
                 : "update"
         title: {
             switch (Updates.state) {
@@ -174,15 +226,19 @@ PageScroll {
                     ? Format.plural(Updates.securityCount, "security fix is", "security fixes are") + " ready to install"
                     : Format.plural(Updates.updates.length, "update is", "updates are") + " ready to install";
             case "installed": return Updates.restartNeeded ? "Restart to finish updating" : "Updates installed";
-            case "uptodate": return "You're up to date";
+            case "uptodate": return unchecked ? "Not checked for updates yet" : "You're up to date";
             case "error": return Updates.updates.length > 0 ? "The updates were not installed" : "Wild OS could not check for updates";
             default: return Updates.available ? "Updates" : "Updates are not available";
             }
         }
         description: {
             switch (Updates.state) {
-            case "checking": return "This can take a minute on a slow connection.";
+            case "checking":
+                return Updates.waiting ? "Waiting for another install to finish first, such as the automatic security updates."
+                                       : "This can take a minute on a slow connection.";
             case "installing":
+                if (Updates.waiting)
+                    return "Waiting for another install to finish first, such as the automatic security updates. Your updates start straight after.";
                 return (Updates.progress > 0 ? Updates.progress + "% done." : "Getting ready.")
                     + (Updates.detail.length > 0 ? " Now: " + Updates.detail + "." : "");
             case "available":
@@ -192,7 +248,7 @@ PageScroll {
                     ? (page.restartAt.length > 0 ? "Wild OS will restart " + page.restartAt.charAt(0).toLowerCase() + page.restartAt.slice(1) + ", as you chose." : "Some updates only take effect after a restart.")
                     : page.version + " " + page.lastChecked;
             case "error": return Updates.error;
-            case "uptodate": return page.version + " " + page.lastChecked;
+            case "uptodate": return unchecked ? page.version + " Check now to see what's new." : page.version + " " + page.lastChecked;
             default:
                 return Updates.available ? page.version + " " + page.lastChecked : "The update service is not installed on this computer.";
             }
@@ -232,6 +288,14 @@ PageScroll {
         barHeight: 8
         value: Updates.progress / 100
         indeterminate: Updates.progress <= 0
+    }
+
+    StatusCard {
+        visible: Updates.skippedSources.length > 0 && Updates.state !== "checking" && Updates.state !== "error"
+        iconName: "warning"
+        warning: true
+        title: "Not every software source could be checked"
+        description: Updates.skippedSources
     }
 
     ColumnLayout {
@@ -366,6 +430,15 @@ PageScroll {
                         title: page.historyTitle(modelData)
                         description: page.historyDetail(modelData)
 
+                        // The restore point taken just before this build
+                        // installed (System > Recovery's go-back dialog).
+                        UI.LinkButton {
+                            anchors.verticalCenter: parent.verticalCenter
+                            visible: index === page.newestRelease && page.goBackPoint >= 0
+                            text: "Go back"
+                            onClicked: goBackDialog.openFor(page.goBackPoint)
+                        }
+
                         UI.LinkButton {
                             anchors.verticalCenter: parent.verticalCenter
                             visible: index === page.newestRelease && page.installedNotes.length > 0
@@ -411,6 +484,12 @@ PageScroll {
         }
     }
 
+    readonly property int goBackPoint: Recovery.points, Recovery.pointForBuild(Updates.installedBuild)
+
+    GoBackDialog {
+        id: goBackDialog
+    }
+
     UI.Dialog {
         id: notesDialog
         title: "What's new in Wild OS"
@@ -444,7 +523,7 @@ PageScroll {
                             text: "Build " + buildNotes.modelData.build
                                 + (Format.isValid(buildNotes.modelData.date) ? ", " + Format.day(buildNotes.modelData.date) : "")
                             size: 15
-                            font.weight: Font.DemiBold
+                            font.weight: UI.Style.weightSemiBold
                             Accessible.role: Accessible.Heading
                         }
 

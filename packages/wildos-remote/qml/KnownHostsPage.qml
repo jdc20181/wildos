@@ -23,7 +23,7 @@ Item {
             Layout.preferredHeight: 44
             text: qsTr("Known hosts")
             size: 26
-            font.weight: Font.Bold
+            font.weight: UI.Style.weightBold
         }
         UI.Label {
             Layout.fillWidth: true
@@ -49,9 +49,9 @@ Item {
                 width: ListView.view.width
                 height: 62
                 radius: 12
-                color: UI.Style.tone(0.045)
+                color: UI.Style.surfaceRaised
                 border.width: 1
-                border.color: UI.Style.tone(0.07)
+                border.color: UI.Style.borderSubtle
                 UI.Glyph {
                     x: 18
                     anchors.verticalCenter: parent.verticalCenter
@@ -70,7 +70,7 @@ Item {
                         text: row.modelData.name.length > 0 ? row.modelData.name
                             : row.modelData.hashed ? qsTr("A server you haven't saved (its name is hashed)") : qsTr("Unnamed")
                         size: 14
-                        font.weight: Font.DemiBold
+                        font.weight: UI.Style.weightSemiBold
                         color: row.modelData.name.length > 0 ? UI.Style.ink : UI.Style.inkMuted
                     }
                     UI.Label {
@@ -101,7 +101,7 @@ Item {
                 horizontalAlignment: Text.AlignHCenter
                 text: qsTr("No known hosts yet")
                 size: 18
-                font.weight: Font.DemiBold
+                font.weight: UI.Style.weightSemiBold
             }
         }
     }

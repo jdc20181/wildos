@@ -57,7 +57,7 @@ Rectangle {
                     horizontalAlignment: Text.AlignRight
                     text: rowItem.modelData.value
                     size: 14
-                    font.weight: Font.DemiBold
+                    font.weight: UI.Style.weightSemiBold
                     font.family: rowItem.modelData.mono ? "JetBrains Mono" : UI.Style.fontFamily
                     color: rowItem.modelData.colour || UI.Style.ink
                 }
@@ -79,7 +79,7 @@ Rectangle {
                         selectByMouse: true
                         wrapMode: TextEdit.WrapAnywhere
                         color: UI.Style.ink
-                        selectionColor: UI.Style.accentSelected
+                        selectionColor: UI.Style.textSelection
                         font.family: "JetBrains Mono"
                         font.pixelSize: UI.Style.px(12)
                     }

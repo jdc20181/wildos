@@ -51,7 +51,7 @@ T.AbstractButton {
             tint: row.down ? UI.Style.glassOnWallpaperPressed
                  : row.hovered || menu.opened ? UI.Style.glassOnWallpaperHover
                  : UI.Style.glassOnWallpaper
-            blurRadius: 24
+            blurRadius: 64
             Behavior on tint { ColorAnimation { duration: UI.Style.hoverDuration } }
         }
 

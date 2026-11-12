@@ -60,7 +60,7 @@ T.AbstractButton {
             UI.Label {
                 width: parent.width
                 text: tile.title
-                font.weight: Font.DemiBold
+                font.weight: UI.Style.weightSemiBold
             }
 
             UI.Label {

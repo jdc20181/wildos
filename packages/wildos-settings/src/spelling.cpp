@@ -40,7 +40,14 @@ Spelling::Spelling(QObject *parent)
     readWords();
 }
 
-Spelling::~Spelling() = default;
+Spelling::~Spelling()
+{
+    // Closing Settings straight after a change would otherwise kill the
+    // hand-over to Brave half way.
+    if (m_brave && m_brave->state() != QProcess::NotRunning) {
+        m_brave->waitForFinished(5000);
+    }
+}
 
 bool Spelling::enabled() const
 {
@@ -80,6 +87,28 @@ void Spelling::save()
     Q_EMIT changed();
 }
 
+// Brave takes its spelling languages from a policy only root can write;
+// wildos-brave-spelling asks for it. One at a time, so quick changes in a
+// row cannot land out of order.
+void Spelling::followInBrave()
+{
+    if (!m_brave) {
+        m_brave = new QProcess(this);
+        m_brave->setProgram(QStringLiteral("/usr/libexec/wildos/wildos-brave-spelling"));
+        connect(m_brave, &QProcess::finished, this, [this] {
+            if (m_braveAgain) {
+                m_braveAgain = false;
+                m_brave->start();
+            }
+        });
+    }
+    if (m_brave->state() != QProcess::NotRunning) {
+        m_braveAgain = true;
+        return;
+    }
+    m_brave->start();
+}
+
 void Spelling::setEnabled(bool on)
 {
     m_settings->setCheckerEnabledByDefault(on);
@@ -102,6 +131,7 @@ void Spelling::setAutodetect(bool on)
 {
     m_settings->setAutodetectLanguage(on);
     save();
+    followInBrave();
 }
 
 void Spelling::setLanguage(const QString &code)
@@ -120,6 +150,7 @@ void Spelling::setLanguage(const QString &code)
     m_settings->setCurrentIgnoreList(stored.value(QStringLiteral("ignore_%1").arg(code), Sonnet::Settings::defaultIgnoreList()).toStringList());
     save();
     readWords();
+    followInBrave();
 }
 
 void Spelling::setOtherLanguage(const QString &code, bool on)
@@ -135,6 +166,7 @@ void Spelling::setOtherLanguage(const QString &code, bool on)
     }
     m_settings->setPreferredLanguages(list);
     save();
+    followInBrave();
 }
 
 QString Spelling::personalFile() const

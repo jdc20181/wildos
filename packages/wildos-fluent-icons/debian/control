@@ -1,0 +1,18 @@
+Source: wildos-fluent-icons
+Section: x11
+Priority: optional
+Maintainer: Wild OS Developers <dev@wildos.io>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.7.0
+Rules-Requires-Root: no
+
+Package: wildos-fluent-icons
+Architecture: all
+Multi-Arch: foreign
+Depends: ${misc:Depends}, hicolor-icon-theme
+Description: Fluent icon theme, yellow, for Wild OS
+ The Fluent icon theme by vinceliuice, built from its source at commit
+ c8a244f571ef8fb47812bdc9dbce76546cedce69 with the yellow folder colour:
+ Fluent-yellow, Fluent-yellow-light and Fluent-yellow-dark. The Wild OS
+ icon themes are drawn on top of it and take their folders, This computer
+ and the Recycle Bin from it.

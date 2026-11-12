@@ -86,18 +86,6 @@ Item {
         }
         return spans.length ? stages.length : 0;
     }
-    function stageFraction(stage) {
-        var from = 1, to = 0;
-        for (var i = 0; i < spans.length; ++i) {
-            if (spans[i].stage === stage) {
-                from = Math.min(from, spans[i].from);
-                to = Math.max(to, spans[i].to);
-            }
-        }
-        if (to <= from)
-            return progress > 0 ? 1 : 0;
-        return Math.max(0, Math.min(1, (progress - from) / (to - from)));
-    }
 
     function onActivate() {
         startedAt = Date.now();
@@ -136,7 +124,7 @@ Item {
                 color: UI.Style.ink
                 font.family: UI.Style.fontFamily
                 font.pixelSize: 28
-                font.weight: Font.DemiBold
+                font.weight: UI.Style.weightSemiBold
                 font.letterSpacing: -0.28
             }
             Text {
@@ -144,6 +132,7 @@ Item {
                 text: qsTr("This takes about 10 minutes. You can leave it running and come back.")
                 color: Qt.rgba(232 / 255, 236 / 255, 248 / 255, 0.8)
                 font.family: UI.Style.fontFamily
+                font.letterSpacing: UI.Style.tracking(14)
                 font.pixelSize: 14
                 lineHeightMode: Text.FixedHeight
                 lineHeight: 21
@@ -177,8 +166,9 @@ Item {
                         elide: Text.ElideRight
                         color: UI.Style.ink
                         font.family: UI.Style.fontFamily
+                        font.letterSpacing: UI.Style.tracking(13)
                         font.pixelSize: 13
-                        font.weight: Font.Medium
+                        font.weight: UI.Style.weightMedium
                     }
                     Text {
                         text: show.minutesLeft < 0 ? qsTr("Working out the time left")
@@ -186,6 +176,7 @@ Item {
                                                        : qsTr("About %1 minutes left").arg(show.minutesLeft))
                         color: UI.Style.inkMuted
                         font.family: UI.Style.fontFamily
+                        font.letterSpacing: UI.Style.tracking(13)
                         font.pixelSize: 13
                     }
                 }
@@ -209,6 +200,7 @@ Item {
                     text: Math.round(show.progress * 100) + "%"
                     color: UI.Style.inkMuted
                     font.family: UI.Style.fontFamily
+                    font.letterSpacing: UI.Style.tracking(12)
                     font.pixelSize: 12
                 }
             }
@@ -222,8 +214,9 @@ Item {
                 text: qsTr("While you wait")
                 color: UI.Style.ink
                 font.family: UI.Style.fontFamily
+                font.letterSpacing: UI.Style.tracking(15)
                 font.pixelSize: 15
-                font.weight: Font.DemiBold
+                font.weight: UI.Style.weightSemiBold
             }
 
             Row {
@@ -306,8 +299,9 @@ Item {
                                     text: modelData.title
                                     color: UI.Style.ink
                                     font.family: UI.Style.fontFamily
+                                    font.letterSpacing: UI.Style.tracking(14)
                                     font.pixelSize: 14
-                                    font.weight: Font.DemiBold
+                                    font.weight: UI.Style.weightSemiBold
                                 }
                             }
                             Text {
@@ -315,6 +309,7 @@ Item {
                                 text: modelData.body
                                 color: UI.Style.inkMuted
                                 font.family: UI.Style.fontFamily
+                                font.letterSpacing: UI.Style.tracking(12)
                                 font.pixelSize: 12
                                 lineHeightMode: Text.FixedHeight
                                 lineHeight: 18
@@ -334,8 +329,9 @@ Item {
                 text: qsTr("What's happening")
                 color: UI.Style.ink
                 font.family: UI.Style.fontFamily
+                font.letterSpacing: UI.Style.tracking(15)
                 font.pixelSize: 15
-                font.weight: Font.DemiBold
+                font.weight: UI.Style.weightSemiBold
             }
 
             Rectangle {
@@ -382,7 +378,7 @@ Item {
                                 width: 22
                                 height: 22
                                 radius: 11
-                                color: step.done ? UI.Style.accent : "#1a2140"
+                                color: step.done ? UI.Style.accent : "#27292d"
                                 border.width: step.done ? 0 : 2
                                 border.color: step.current ? UI.Style.accent : Qt.rgba(1, 1, 1, 0.22)
                                 WIcon {
@@ -412,19 +408,21 @@ Item {
                                 color: step.current ? UI.Style.ink
                                        : (step.done ? UI.Style.inkMuted : Qt.rgba(232 / 255, 236 / 255, 248 / 255, 0.6))
                                 font.family: UI.Style.fontFamily
+                                font.letterSpacing: UI.Style.tracking(13)
                                 font.pixelSize: 13
-                                font.weight: step.current ? Font.DemiBold : Font.Medium
+                                font.weight: step.current ? UI.Style.weightSemiBold : UI.Style.weightMedium
                             }
                             Text {
                                 anchors.horizontalCenter: parent.horizontalCenter
                                 anchors.top: label.bottom
                                 anchors.topMargin: 4
                                 text: step.done ? (step.index === 1 && !show.encrypted ? qsTr("Off") : qsTr("Done"))
-                                      : step.current ? Math.round(show.stageFraction(step.index) * 100) + "%"
+                                      : step.current ? qsTr("Now")
                                       : step.index === show.stages.length - 1 ? qsTr("Last")
                                       : step.index === show.currentStage + 1 ? qsTr("Next") : ""
                                 color: Qt.rgba(232 / 255, 236 / 255, 248 / 255, 0.6)
                                 font.family: UI.Style.fontFamily
+                                font.letterSpacing: UI.Style.tracking(12)
                                 font.pixelSize: 12
                             }
                         }

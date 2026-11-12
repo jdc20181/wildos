@@ -1,0 +1,62 @@
+#!/bin/sh
+# Reads what Report a problem needs from the system journal, which only
+# administrators can read: the log for a time window, the crash records and
+# this boot's whole log, plus the PC's serial numbers so the app can remove
+# them. Runs through pkexec (org.wildos.report.read-logs), or as root from
+# start-up recovery.
+#
+#   report-logs collect SINCE UNTIL [BOOT]
+#
+# SINCE and UNTIL are seconds since 1970; BOOT is 0 for this start-up (the
+# default) or -1 for the one before, which is the one that failed when
+# start-up recovery asks.
+#
+# Only the system's own entries and the asking account's are given out;
+# other accounts' entries stay in the journal. Nothing here writes anywhere.
+set -eu
+
+{ [ "$#" -eq 3 ] || [ "$#" -eq 4 ]; } && [ "$1" = collect ] || { echo "usage: report-logs collect SINCE UNTIL [BOOT]" >&2; exit 2; }
+case "$2$3" in *[!0-9]*|'') echo "report-logs: times are whole seconds" >&2; exit 2 ;; esac
+since=$2
+until=$3
+boot=${4:-0}
+case "$boot" in 0|-[1-9]) ;; *) echo "report-logs: BOOT is 0 to -9" >&2; exit 2 ;; esac
+[ "$since" -le "$until" ] || { echo "report-logs: SINCE is after UNTIL" >&2; exit 2; }
+
+uid=${PKEXEC_UID:-}
+case "$uid" in *[!0-9]*) exit 2 ;; esac
+
+fields=__REALTIME_TIMESTAMP,_TRANSPORT,SYSLOG_IDENTIFIER,_COMM,MESSAGE,PRIORITY,_UID
+
+# journalctl ORs matches joined by "+": the kernel, every system account
+# (below 1000, and systemd's dynamic users) and the asking account.
+set --
+for u in $(journalctl -F _UID 2>/dev/null); do
+    case "$u" in *[!0-9]*) continue ;; esac
+    if [ "$u" -lt 1000 ] || { [ "$u" -ge 61184 ] && [ "$u" -le 65519 ]; } || [ "$u" = "$uid" ] || [ -z "$uid" ]; then
+        set -- "$@" "_UID=$u" +
+    fi
+done
+set -- "$@" _TRANSPORT=kernel
+
+echo "@@ ids"
+for f in product_serial board_serial chassis_serial product_uuid; do
+    v=$(cat "/sys/class/dmi/id/$f" 2>/dev/null || true)
+    [ -n "$v" ] && printf '%s=%s\n' "$f" "$v"
+done
+for f in /sys/class/nvme/*/serial /sys/block/*/device/serial; do
+    [ -r "$f" ] && printf 'disk_serial=%s\n' "$(tr -d ' \n' < "$f")"
+done
+
+echo "@@ logs"
+journalctl --no-pager -q -o json --output-fields="$fields" --since "@$since" --until "@$until" -n 20000 "$@" 2>/dev/null || true
+
+echo "@@ crashes"
+if [ -n "$uid" ]; then
+    coredumpctl info --no-pager -q --since "@$since" --until "@$until" "COREDUMP_UID=$uid" 2>/dev/null || true
+else
+    coredumpctl info --no-pager -q --since "@$since" --until "@$until" 2>/dev/null || true
+fi
+
+echo "@@ boot"
+journalctl --no-pager -q -o json --output-fields="$fields" -b "$boot" -n 60000 "$@" 2>/dev/null || true

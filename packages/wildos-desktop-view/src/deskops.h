@@ -137,6 +137,7 @@ private:
     explicit DeskOps(QObject *parent = nullptr);
     KJobUiDelegate *delegate();
     void reportLaunch(KJob *job);
+    void askToRun(const QUrl &url);
     void watchJob(KJob *job, const QString &verb);
     void transfer(const QList<QUrl> &urls, const QUrl &folder, bool move);
     QString uniqueName(const QUrl &folder, const QString &base, const QString &suffix) const;

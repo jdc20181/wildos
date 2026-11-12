@@ -107,7 +107,7 @@ Forwarded: no
 +    void rebuild( const QRect& sheetRect )
 +    {
 +        QImage canvas( size(), QImage::Format_ARGB32_Premultiplied );
-+        canvas.fill( QColor( 0x1d, 0x2b, 0x52 ) );
++        canvas.fill( QColor( 0x33, 0x35, 0x39 ) );
 +        QPainter p( &canvas );
 +        p.setRenderHint( QPainter::Antialiasing );
 +        p.setRenderHint( QPainter::SmoothPixmapTransform );
@@ -121,7 +121,7 @@ Forwarded: no
 +            const int y = int( ( cover.height() - height() ) * 0.45 );
 +            p.drawImage( 0, 0, cover, x, y, width(), height() );
 +        }
-+        p.fillRect( rect(), QColor( 6, 10, 26, 102 ) );
++        p.fillRect( rect(), QColor( 12, 14, 18, 102 ) );
 +
 +        if ( sheetRect.isValid() )
 +        {
@@ -133,7 +133,7 @@ Forwarded: no
 +                QPainter sp( &shadow );
 +                sp.setRenderHint( QPainter::Antialiasing );
 +                sp.setPen( Qt::NoPen );
-+                sp.setBrush( QColor( 4, 8, 24, 140 ) );
++                sp.setBrush( QColor( 10, 12, 16, 140 ) );
 +                sp.drawRoundedRect(
 +                    QRectF( spread, spread, sheetRect.width(), sheetRect.height() ), radius, radius );
 +            }
@@ -144,7 +144,7 @@ Forwarded: no
 +            sheet.addRoundedRect( QRectF( sheetRect ), radius, radius );
 +            p.setClipPath( sheet );
 +            p.drawImage( sheetRect.topLeft(), behind );
-+            p.fillRect( sheetRect, QColor( 18, 22, 40, 219 ) );
++            p.fillRect( sheetRect, QColor( 25, 27, 31, 242 ) );
 +            p.setClipping( false );
 +            p.setPen( QPen( QColor( 255, 255, 255, 31 ), 1 ) );
 +            p.setBrush( Qt::NoBrush );

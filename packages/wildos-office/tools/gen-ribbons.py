@@ -2,6 +2,7 @@
 """Writes the Wild OS ribbons for Write and Tables.
 
     tools/gen-ribbons.py            regenerate lo/ui/{swriter,scalc}/notebookbar_wildos.ui
+                                    and lo/popupmenu/{swriter,scalc}/wildosfile.xml
     tools/gen-ribbons.py --labels   print the command label overrides the ribbons expect
 
 The .ui files are GtkBuilder files in LibreOffice's notebookbar dialect. They
@@ -20,6 +21,7 @@ from xml.sax.saxutils import escape
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 UI = os.path.join(HERE, "..", "lo", "ui")
+POPUPMENU = os.path.join(HERE, "..", "lo", "popupmenu")
 
 FIND = "vnd.sun.star.findbar:FocusToFindbar"
 
@@ -27,10 +29,18 @@ FIND = "vnd.sun.star.findbar:FocusToFindbar"
 # Ribbon description. A tab is (id, label, groups); a group is
 # (id, label, priority, columns). A column is one of
 #   ("big", [items])          large icons with the label underneath
-#   ("rows", [row, row])      up to three stacked rows, each a list of items
+#   ("rows", [row, row])      stacked rows, each a list of items; past three
+#                             the rows go on in a column beside them
+#   ("gallery", [command])    a control that draws itself, such as the style cards
 # and an item is "command" followed by optional flags: "|menu" for a
 # drop-down arrow, "|text" to show the label beside a small icon, "|w=N" to
-# fix the width of a box such as the font name.
+# fix the width of a box such as the font name, "|gap" for 4 px of space
+# before the item (the font name and size boxes are apart on the boards),
+# "|check" for a toggle drawn as a checkbox with its label (View > Show),
+# "|label=Text" for a button's own words where its command's label won't do,
+# "|noarrow" for a command
+# whose LibreOffice control adds a menu arrow the boards do not show (its
+# toolbox then shows no split arrows: Paste and Table keep their main action).
 # Bigger priority numbers fold away first in a narrow window, into the >>
 # button at the end of the ribbon.
 
@@ -41,6 +51,38 @@ def big(*items):
 def rows(*rs):
     return ("rows", [list(r) for r in rs])
 
+
+def gallery(command):
+    return ("gallery", [command])
+
+
+# The File button's menu: a LibreOffice popup menu, so the recent documents
+# entry opens its list as it does in the menu bar.
+FILE_MENU_NAME = "wildosfile"
+
+
+# The File menu's wording, as on the OfficeFileMenu board. A popup menu
+# shows each command's registry label, so these go into the label overrides
+# with the ribbon's (see labels()).
+FILE_LABELS = {
+    ".uno:AddDirect": "New",
+    ".uno:Open": "Open…",
+    ".uno:RecentFileList": "Recent",
+    ".uno:Save": "Save",
+    ".uno:SaveAs": "Save as…",
+    ".uno:SaveACopy": "Save a copy…",
+    ".uno:ExportToPDF": "Export as PDF…",
+    ".uno:ExportTo": "Export…",
+    ".uno:SendMailDocAsPDF": "Email as PDF…",
+    ".uno:PrintPreview": "Print preview",
+    ".uno:Print": "Print…",
+    ".uno:PrinterSetup": "Printer settings…",
+    ".uno:SetDocumentProperties": "Properties…",
+    ".uno:Signature": "Digital signatures…",
+    ".uno:OptionsTreeDialog": "Options…",
+    ".uno:HelpIndex": "Help",
+    ".uno:CloseDoc": "Close",
+}
 
 FILE_MENU = {
     "swriter": [
@@ -65,39 +107,41 @@ FILE_MENU = {
 
 CLIPBOARD = ("Clipboard", "Clipboard", 1, [
     big(".uno:Paste|menu"),
-    rows([".uno:Cut|text"], [".uno:Copy|text"]),
+    rows([".uno:Cut|text"], [".uno:Copy|text"], [".uno:FormatPaintbrush|text"]),
 ])
 
 WRITER = [
     ("Home", "Home", [
         CLIPBOARD,
-        ("Text", "Text", 1, [
-            rows([".uno:CharFontName|w=140", ".uno:FontHeight|w=70"],
-                 [".uno:Bold", ".uno:Italic", ".uno:Underline|menu", ".uno:Strikeout",
-                  ".uno:Color|menu", ".uno:CharBackColor|menu"]),
+        ("Font", "Font", 1, [
+            rows([".uno:CharFontName|w=150", ".uno:FontHeight|w=54|gap", ".uno:Grow", ".uno:Shrink"],
+                 [".uno:Bold", ".uno:Italic", ".uno:Underline|menu", ".uno:Strikeout", ".uno:SubScript",
+                  ".uno:SuperScript", ".uno:Color|menu", ".uno:CharBackColor|menu", ".uno:ResetAttributes"]),
         ]),
         ("Paragraph", "Paragraph", 2, [
-            rows([".uno:DefaultBullet", ".uno:DefaultNumbering", ".uno:IncrementIndent",
-                  ".uno:LineSpacing|menu"],
-                 [".uno:LeftPara", ".uno:CenterPara", ".uno:RightPara", ".uno:JustifyPara"]),
+            rows([".uno:DefaultBullet|menu", ".uno:DefaultNumbering|menu", ".uno:DecrementIndent",
+                  ".uno:IncrementIndent", ".uno:ControlCodes"],
+                 [".uno:LeftPara", ".uno:CenterPara", ".uno:RightPara", ".uno:JustifyPara",
+                  ".uno:LineSpacing|menu", ".uno:SetBorderStyle|menu"]),
         ]),
         ("Styles", "Styles", 4, [
-            big(".uno:TextBodyParaStyle", ".uno:TitleParaStyle", ".uno:Heading1ParaStyle",
-                ".uno:Heading2ParaStyle", ".uno:QuoteParaStyle"),
-        ]),
-        ("Insert", "Insert", 5, [
-            big(".uno:InsertGraphic", ".uno:InsertTable|menu"),
+            gallery(".uno:StylesPreview"),
         ]),
         ("Editing", "Editing", 2, [
-            rows([FIND + "|text"], [".uno:SearchDialog|text"]),
+            rows([FIND + "|text"], [".uno:SearchDialog|text"], [".uno:SelectAll|text"]),
         ]),
     ]),
     ("Insert", "Insert", [
+        ("Pages", "Pages", 2, [
+            big(".uno:TitlePageDialog"),
+            rows([".uno:InsertPagebreak|text"], [".uno:InsertColumnBreak|text"],
+                 [".uno:InsertBreak|text"]),
+        ]),
         ("Tables", "Tables", 1, [
             big(".uno:InsertTable|menu"),
         ]),
         ("Illustrations", "Illustrations", 1, [
-            big(".uno:InsertGraphic", ".uno:InsertObjectChart", ".uno:BasicShapes|menu"),
+            big(".uno:InsertGraphic", ".uno:BasicShapes|menu", ".uno:InsertObjectChart"),
         ]),
         ("Links", "Links", 2, [
             big(".uno:HyperlinkDialog"),
@@ -129,8 +173,7 @@ WRITER = [
         ]),
         ("PageStyle", "Page", 2, [
             big(".uno:PageDialog"),
-            rows([".uno:TitlePageDialog|text"], [".uno:FormatColumns|text"]),
-            rows([".uno:LineNumberingDialog|text"], [".uno:Hyphenate|text"]),
+            rows([".uno:LineNumberingDialog|text"], [".uno:Hyphenate|text"], [".uno:Watermark|text"]),
         ]),
         ("Arrange", "Arrange", 3, [
             big(".uno:WrapMenu|menu"),
@@ -140,7 +183,7 @@ WRITER = [
     ]),
     ("References", "References", [
         ("Contents", "Table of contents", 1, [
-            big(".uno:InsertMultiIndex"),
+            big(".uno:IndexesMenu|menu"),
             rows([".uno:UpdateCurIndex|text"], [".uno:UpdateAllIndexes|text"]),
         ]),
         ("Footnotes", "Footnotes", 1, [
@@ -149,6 +192,7 @@ WRITER = [
         ]),
         ("Citations", "Citations", 2, [
             big(".uno:InsertAuthoritiesEntry"),
+            rows([".uno:BibliographyComponent|text"]),
         ]),
         ("Captions", "Captions", 2, [
             big(".uno:InsertCaptionDialog"),
@@ -156,9 +200,7 @@ WRITER = [
         ]),
         ("Index", "Index", 3, [
             big(".uno:InsertIndexesEntry"),
-        ]),
-        ("Update", "Update", 2, [
-            big(".uno:UpdateAll"),
+            rows([".uno:InsertMultiIndex|text"]),
         ]),
     ]),
     ("Review", "Review", [
@@ -167,19 +209,22 @@ WRITER = [
             rows([".uno:SpellOnline|text"], [".uno:ThesaurusDialog|text"],
                  [".uno:WordCountDialog|text"]),
         ]),
+        ("Language", "Language", 2, [
+            big(".uno:LanguageMenu|menu"),
+        ]),
         ("Comments", "Comments", 1, [
             big(".uno:InsertAnnotation"),
             rows([".uno:ShowAnnotations|text"], [".uno:DeleteAllNotes|text"]),
         ]),
         ("Tracking", "Track changes", 1, [
             big(".uno:TrackChanges"),
-            rows([".uno:ShowTrackedChanges|text"], [".uno:AcceptTrackedChanges|text"]),
+            rows([".uno:ShowTrackedChanges|text|noarrow"], [".uno:AcceptTrackedChanges|text"]),
         ]),
         ("Changes", "Changes", 2, [
             rows([".uno:AcceptTrackedChange|text"], [".uno:RejectTrackedChange|text"]),
             rows([".uno:PreviousTrackedChange|text"], [".uno:NextTrackedChange|text"]),
         ]),
-        ("Compare", "Compare", 3, [
+        ("Compare", "Compare and protect", 3, [
             rows([".uno:CompareDocuments|text"], [".uno:ProtectTraceChangeMode|text"]),
         ]),
     ]),
@@ -188,8 +233,8 @@ WRITER = [
             big(".uno:PrintLayout", ".uno:BrowseView"),
         ]),
         ("Show", "Show", 1, [
-            rows([".uno:Ruler|text"], [".uno:ControlCodes|text"], [".uno:ShowWhitespace|text"]),
-            rows([".uno:Navigator|text"], [".uno:Sidebar|text"]),
+            rows([".uno:Ruler|check"], [".uno:ControlCodes|check"], [".uno:ShowWhitespace|check"]),
+            rows([".uno:Navigator|check"], [".uno:Sidebar|check"], [".uno:ShowAnnotations|check|label=Comments pane"]),
         ]),
         ("Zoom", "Zoom", 1, [
             big(".uno:Zoom", ".uno:Zoom100Percent"),
@@ -204,37 +249,43 @@ WRITER = [
 CALC = [
     ("Home", "Home", [
         CLIPBOARD,
-        ("Text", "Text", 1, [
-            rows([".uno:CharFontName|w=140", ".uno:FontHeight|w=70"],
-                 [".uno:Bold", ".uno:Italic", ".uno:Underline|menu",
-                  ".uno:Color|menu", ".uno:BackgroundColor|menu"]),
+        ("Font", "Font", 1, [
+            rows([".uno:CharFontName|w=128", ".uno:FontHeight|w=54|gap", ".uno:Grow", ".uno:Shrink"],
+                 [".uno:Bold", ".uno:Italic", ".uno:Underline|menu", ".uno:SetBorderStyle|menu",
+                  ".uno:BackgroundColor|menu", ".uno:Color|menu"]),
         ]),
         ("Alignment", "Alignment", 2, [
-            rows([".uno:AlignLeft", ".uno:AlignHorizontalCenter", ".uno:AlignRight"],
-                 [".uno:WrapText", ".uno:ToggleMergeCells"]),
+            rows([".uno:AlignTop", ".uno:AlignVCenter", ".uno:AlignBottom", ".uno:WrapText|text"],
+                 [".uno:AlignLeft", ".uno:AlignHorizontalCenter", ".uno:AlignRight",
+                  ".uno:DecrementIndent", ".uno:IncrementIndent"],
+                 [".uno:ToggleMergeCells|menu|text"]),
         ]),
         ("Number", "Number", 2, [
-            rows([".uno:NumberFormatType"],
-                 [".uno:NumberFormatCurrency|menu", ".uno:NumberFormatPercent",
+            rows([".uno:NumberFormatType|w=124"],
+                 [".uno:NumberFormatCurrency|menu", ".uno:NumberFormatPercent", ".uno:NumberFormatThousands",
                   ".uno:NumberFormatIncDecimals", ".uno:NumberFormatDecDecimals"]),
         ]),
-        ("Cells", "Cells", 3, [
-            big(".uno:InsertCell", ".uno:FormatCellDialog"),
+        ("Styles", "Styles", 3, [
+            big(".uno:ConditionalFormatMenu|menu", ".uno:AutoFormat"),
         ]),
-        ("Data", "Data", 3, [
-            big(".uno:DataSort", ".uno:DataFilterAutoFilter", ".uno:InsertObjectChart"),
+        ("Cells", "Cells", 3, [
+            big(".uno:InsertCell|menu", ".uno:DeleteCell|menu", ".uno:FormatCellDialog|menu"),
         ]),
         ("Editing", "Editing", 2, [
-            rows([".uno:AutoSum|menu|text"], [FIND + "|text"]),
+            rows([".uno:AutoSum|menu|text"], [".uno:FillCellsMenu|menu|text"], [".uno:Delete|menu|text"]),
+            big(".uno:DataSort|menu", FIND + "|menu"),
         ]),
     ]),
     ("Insert", "Insert", [
         ("Tables", "Tables", 1, [
             big(".uno:DataDataPilotRun"),
         ]),
-        ("Illustrations", "Illustrations", 1, [
-            big(".uno:InsertGraphic", ".uno:InsertObjectChart", ".uno:BasicShapes|menu"),
+        ("Charts", "Charts", 1, [
+            big(".uno:InsertObjectChart"),
             rows([".uno:InsertSparkline|text"]),
+        ]),
+        ("Illustrations", "Illustrations", 1, [
+            big(".uno:InsertGraphic", ".uno:BasicShapes|menu"),
         ]),
         ("Links", "Links", 2, [
             big(".uno:HyperlinkDialog"),
@@ -254,22 +305,20 @@ CALC = [
     ]),
     ("Layout", "Layout", [
         ("PageSetup", "Page setup", 1, [
-            big(".uno:PageFormatDialog", ".uno:Margins|menu"),
-            rows([".uno:EditHeaderAndFooter|text"]),
+            big(".uno:Margins"),
+            rows([".uno:PageFormatDialog|text|label=Page settings"], [".uno:EditHeaderAndFooter|text"]),
         ]),
         ("PrintArea", "Print area", 1, [
             rows([".uno:DefinePrintArea|text"], [".uno:EditPrintArea|text"],
                  [".uno:DeletePrintArea|text"]),
         ]),
         ("Breaks", "Breaks", 2, [
-            rows([".uno:InsertRowBreak|text"], [".uno:InsertColumnBreak|text"]),
+            rows([".uno:InsertRowBreak|text"], [".uno:InsertColumnBreak|text"],
+                 [".uno:DeleteAllBreaks|text"]),
         ]),
         ("Size", "Cell size", 2, [
             rows([".uno:RowHeight|text"], [".uno:SetOptimalRowHeight|text"]),
             rows([".uno:ColumnWidth|text"], [".uno:SetOptimalColumnWidth|text"]),
-        ]),
-        ("Styles", "Styles", 3, [
-            big(".uno:ConditionalFormatMenu|menu", ".uno:AutoFormat"),
         ]),
     ]),
     ("Data", "Data", [
@@ -318,10 +367,10 @@ CALC = [
             big(".uno:NormalViewMode", ".uno:PagebreakMode"),
         ]),
         ("Show", "Show", 1, [
-            rows([".uno:InputLineVisible|text"], [".uno:ViewRowColumnHeaders|text"],
-                 [".uno:ToggleSheetGrid|text"]),
-            rows([".uno:ViewValueHighlighting|text"], [".uno:ToggleFormula|text"],
-                 [".uno:Sidebar|text"]),
+            rows([".uno:InputLineVisible|check"], [".uno:ViewRowColumnHeaders|check"],
+                 [".uno:ToggleSheetGrid|check"]),
+            rows([".uno:ViewValueHighlighting|check"], [".uno:ToggleFormula|check"],
+                 [".uno:Sidebar|check"]),
         ]),
         ("Zoom", "Zoom", 1, [
             big(".uno:Zoom", ".uno:Zoom100Percent"),
@@ -334,7 +383,7 @@ CALC = [
     ("Sheet", "Sheet", [
         ("Sheets", "Sheets", 1, [
             big(".uno:Insert", ".uno:Remove"),
-            rows([".uno:RenameTable|text"], [".uno:Move|text"], [".uno:SetTabBgColor|text"]),
+            rows([".uno:RenameTable|text"], [".uno:Move|text"], [".uno:SetTabBgColor|menu|text"]),
             rows([".uno:Hide|text"], [".uno:Show|text"], [".uno:InsertSheetFromFile|text"]),
         ]),
         ("Rows", "Rows and columns", 1, [
@@ -410,7 +459,7 @@ LABELS = {
     ".uno:BringToFront": "Bring to front",
     ".uno:SendToBack": "Send to back",
     ".uno:ObjectAlign": "Align",
-    ".uno:InsertMultiIndex": "Table of contents",
+    ".uno:InsertMultiIndex": "Insert index",
     ".uno:UpdateCurIndex": "Update table",
     ".uno:UpdateAllIndexes": "Update all tables",
     ".uno:InsertFootnote": "Footnote",
@@ -418,7 +467,7 @@ LABELS = {
     ".uno:FootnoteDialog": "Note settings",
     ".uno:InsertAuthoritiesEntry": "Citation",
     ".uno:InsertCaptionDialog": "Caption",
-    ".uno:InsertIndexesEntry": "Index entry",
+    ".uno:InsertIndexesEntry": "Mark entry",
     ".uno:UpdateAll": "Update all",
     ".uno:SpellingAndGrammarDialog": "Spelling",
     ".uno:SpellDialog": "Spelling",
@@ -442,7 +491,7 @@ LABELS = {
     ".uno:BrowseView": "Web layout",
     ".uno:Ruler": "Ruler",
     ".uno:ControlCodes": "Formatting marks",
-    ".uno:ShowWhitespace": "Page gaps",
+    ".uno:ShowWhitespace": "Whitespace",
     ".uno:Navigator": "Navigator",
     ".uno:Sidebar": "Sidebar",
     ".uno:Zoom": "Zoom",
@@ -483,7 +532,7 @@ LABELS = {
     ".uno:ColumnWidth": "Column width",
     ".uno:SetOptimalColumnWidth": "Fit columns",
     ".uno:ConditionalFormatMenu": "Conditional",
-    ".uno:AutoFormat": "Table styles",
+    ".uno:AutoFormat": "As table",
     ".uno:SortAscending": "Sort A to Z",
     ".uno:SortDescending": "Sort Z to A",
     ".uno:DataFilterStandardFilter": "Advanced filter",
@@ -531,6 +580,24 @@ LABELS = {
     ".uno:DeleteCell": "Delete",
     ".uno:FillDown": "Fill down",
     ".uno:Delete": "Clear",
+    ".uno:IndexesMenu": "Contents",
+    ".uno:FormatPaintbrush": "Clone",
+    ".uno:Grow": "Grow font",
+    ".uno:Shrink": "Shrink font",
+    ".uno:SubScript": "Subscript",
+    ".uno:SuperScript": "Superscript",
+    ".uno:ResetAttributes": "Clear formatting",
+    ".uno:SetBorderStyle": "Borders",
+    ".uno:SelectAll": "Select all",
+    ".uno:Watermark": "Watermark",
+    ".uno:BibliographyComponent": "Bibliography",
+    ".uno:LanguageMenu": "Language",
+    ".uno:AlignTop": "Align top",
+    ".uno:AlignVCenter": "Middle",
+    ".uno:AlignBottom": "Align bottom",
+    ".uno:NumberFormatThousands": "Thousands separator",
+    ".uno:FillCellsMenu": "Fill",
+    ".uno:DeleteAllBreaks": "Remove breaks",
 }
 
 
@@ -583,6 +650,16 @@ class Writer:
         p.append(("show_arrow", "False"))
         if large:
             p.append(("icon_size", "3"))
+        elif style != "icons":
+            # Stacked rows are 24 px tall on the boards (the Wild OS
+            # LibreOffice reads this; otherwise every row keeps room for a
+            # drop-down box).
+            p.append(("wildos-row-height", "24"))
+        if any("noarrow" in it.split("|")[1:] for it in items):
+            p.append(("wildos-no-arrows", "True"))
+        # Show toggles (Ruler, Gridlines) are drawn as a checkbox and label.
+        if any("check" in it.split("|")[1:] for it in items):
+            p.append(("wildos-checks", "True"))
         self.props(d + 1, p)
         for it in items:
             parts = it.split("|")
@@ -592,6 +669,7 @@ class Writer:
             self.w(d + 1, "<child>")
             self.w(d + 2, '<object class="%s" id="%s">' % (cls, self.uid(prefix + "-" + name)))
             props = [("visible", "True"), ("action_name", cmd)]
+            props += [("label", x[6:]) for x in parts[1:] if x.startswith("label=")]
             props += [("width_request", x[2:]) for x in parts[1:] if x.startswith("w=")]
             self.props(d + 3, props)
             self.w(d + 2, "</object>")
@@ -599,46 +677,83 @@ class Writer:
             self.w(d + 1, "</child>")
         self.w(d, "</object>")
 
+    def row(self, d, row, prefix, style):
+        # A row is one toolbox, unless it mixes labelled and icon-only
+        # buttons (a toolbox shows every label or none: Align top, Middle
+        # and Align bottom beside "Wrap text"), or a "|gap" item asks for
+        # 4 px of space (a spacer item inside one toolbox upsets the widths
+        # LibreOffice gives its boxes). Then each run is a toolbox of its own.
+        def labelled(it):
+            return any(f in it.split("|")[1:] for f in ("text", "check"))
+
+        runs, gaps = [], []
+        for it in row:
+            gap = "gap" in it.split("|")[1:]
+            if runs and not gap and labelled(it) == labelled(runs[-1][-1]):
+                runs[-1].append(it)
+            else:
+                runs.append([it])
+                gaps.append(gap)
+        if len(runs) == 1:
+            self.toolbox(d, row, prefix, "both-horiz" if labelled(row[0]) else style)
+            return
+        self.w(d, '<object class="GtkBox" id="%s">' % self.uid(prefix + "-split"))
+        self.props(d + 1, [("visible", "True"), ("can_focus", "False"),
+                           ("spacing", "4" if any(gaps[1:]) else "0")])
+        for i, run in enumerate(runs):
+            self.box_child(d + 1, i, lambda dd, run=run: self.toolbox(
+                dd, run, prefix, "both-horiz" if labelled(run[0]) else None))
+        self.w(d, "</object>")
+
     def column(self, d, col, prefix):
         kind, body = col
+        # The band holds up to three rows, as on the boards: a fourth row
+        # goes on into a column of its own beside them.
+        if kind == "rows" and len(body) > 3:
+            self.w(d, '<object class="GtkBox" id="%s">' % self.uid(prefix + "-cols"))
+            self.props(d + 1, [("visible", "True"), ("can_focus", "False"), ("valign", "center"),
+                               ("spacing", "4")])
+            for i in range(0, len(body), 3):
+                self.box_child(d + 1, i // 3, lambda dd, part=body[i:i + 3]:
+                               self.column(dd, ("rows", part), prefix))
+            self.w(d, "</object>")
+            return
         if kind == "big":
             self.toolbox(d, body, prefix, "both", large=True)
+            return
+        if kind == "gallery":
+            self.toolbox(d, body, prefix, "icons")
             return
         bid = self.uid(prefix + "-rows")
         self.w(d, '<object class="GtkBox" id="%s">' % bid)
         self.props(d + 1, [("visible", "True"), ("can_focus", "False"), ("valign", "center"),
                            ("orientation", "vertical"), ("spacing", "2")])
         for i, row in enumerate(body):
-            texty = any("text" in it.split("|")[1:] for it in row)
+            texty = any(f in it.split("|")[1:] for it in row for f in ("text", "check"))
             self.box_child(d + 1, i, lambda dd, row=row, texty=texty:
-                           self.toolbox(dd, row, prefix, "both-horiz" if texty else None))
+                           self.row(dd, row, prefix, "both-horiz" if texty else None))
         self.w(d, "</object>")
 
-    def group(self, d, tab, grp, first):
+    def group(self, d, tab, grp):
         gid, label, prio, cols = grp
         prefix = "%s-%s" % (tab, gid)
         self.w(d, '<object class="VclOptionalBox" id="%s">' % self.uid(prefix))
         self.props(d + 1, [("visible", "True"), ("can_focus", "False"), ("vexpand", "True")])
-        pos = 0
-        if not first:
-            def sep(dd):
-                self.w(dd, '<object class="GtkSeparator" id="%s">' % self.uid(prefix + "-sep"))
-                self.props(dd + 1, [("visible", "True"), ("can_focus", "False"),
-                                    ("margin_top", "4"), ("margin_bottom", "4"),
-                                    ("orientation", "vertical")])
-                self.w(dd, "</object>")
-            self.box_child(d + 1, pos, sep, padding=3)
-            pos += 1
 
+        # As on the boards: 4 px above and below, 10 px either side, and the
+        # controls centred over a small label. The ribbon draws the hairline
+        # after every group itself.
         def stack(dd):
             self.w(dd, '<object class="GtkBox" id="%s">' % self.uid(prefix + "-stack"))
             self.props(dd + 1, [("visible", "True"), ("can_focus", "False"),
-                                ("orientation", "vertical"), ("spacing", "2")])
+                                ("margin_start", "10"), ("margin_end", "10"),
+                                ("margin_top", "4"), ("margin_bottom", "4"),
+                                ("orientation", "vertical")])
 
             def content(d3):
                 self.w(d3, '<object class="GtkBox" id="%s">' % self.uid(prefix + "-content"))
                 self.props(d3 + 1, [("visible", "True"), ("can_focus", "False"),
-                                    ("valign", "center"), ("vexpand", "True"), ("spacing", "2")])
+                                    ("valign", "center"), ("vexpand", "True"), ("spacing", "4")])
                 for i, col in enumerate(cols):
                     self.box_child(d3 + 1, i, lambda d4, col=col: self.column(d4, col, prefix))
                 self.w(d3, "</object>")
@@ -655,7 +770,7 @@ class Writer:
                 self.w(d3, "</object>")
             self.box_child(dd + 1, 1, lab)
             self.w(dd, "</object>")
-        self.box_child(d + 1, pos, stack)
+        self.box_child(d + 1, 0, stack)
         self.w(d + 1, "<style>")
         # LibreOffice folds the lowest priority value first.
         self.w(d + 2, '<class name="priority-%d"/>' % (10 - prio))
@@ -672,10 +787,10 @@ class Writer:
             def merged(d3):
                 self.w(d3, '<object class="sfxlo-PriorityMergedHBox" id="%s">' % tid)
                 self.props(d3 + 1, [("visible", "True"), ("can_focus", "False"),
-                                    ("margin_start", "2"), ("margin_top", "4"),
-                                    ("margin_bottom", "2"), ("vexpand", "True")])
+                                    ("margin_start", "6"), ("margin_end", "6"),
+                                    ("vexpand", "True")])
                 for i, g in enumerate(groups):
-                    self.box_child(d3 + 1, i, lambda d4, g=g, i=i: self.group(d4, tid, g, i == 0))
+                    self.box_child(d3 + 1, i, lambda d4, g=g: self.group(d4, tid, g))
                 self.w(d3, "</object>")
             # Expanded so the merged box gets the page's whole width to
             # decide what fits; it asks for almost none itself.
@@ -694,69 +809,38 @@ class Writer:
         self.packing(d + 1, [("position", str(pos)), ("tab_fill", "False")])
         self.w(d, "</child>")
 
-    def file_menu(self, d):
-        self.w(d, '<object class="GtkMenu" id="FileMenu">')
-        self.props(d + 1, [("visible", "True"), ("can_focus", "False")])
-        for i, cmd in enumerate(FILE_MENU[self.module]):
-            self.w(d + 1, "<child>")
-            if cmd == "-":
-                self.w(d + 2, '<object class="GtkSeparatorMenuItem" id="%s">' % self.uid("File-sep"))
-                self.props(d + 3, [("visible", "True"), ("can_focus", "False")])
-            else:
-                self.w(d + 2, '<object class="GtkMenuItem" id="%s">' % self.uid("File-" + cmd.split(":")[-1]))
-                self.props(d + 3, [("visible", "True"), ("can_focus", "False"), ("action_name", cmd)])
-            self.w(d + 2, "</object>")
-            self.w(d + 1, "</child>")
-        self.w(d, "</object>")
-
     def build(self, tabs):
         self.w(0, '<?xml version="1.0" encoding="UTF-8"?>')
         self.w(0, "<!-- Generated by packages/wildos-office/tools/gen-ribbons.py; edit that, not this. -->")
         self.w(0, '<interface domain="%s">' % ("sw" if self.module == "swriter" else "sc"))
         self.w(1, '<requires lib="gtk+" version="3.20"/>')
         self.w(1, '<requires lib="LibreOffice" version="1.0"/>')
-        self.file_menu(1)
         self.w(1, '<object class="GtkGrid" id="NotebookBar">')
         self.props(2, [("visible", "True"), ("can_focus", "False")])
         self.w(2, "<child>")
+        # NotebookBar sizes the root's first child to the window, and the
+        # tab control lays itself out from its own allocation, so it sits in
+        # a box rather than straight in the grid.
         self.w(3, '<object class="GtkBox" id="box">')
-        self.props(4, [("visible", "True"), ("can_focus", "False"), ("hexpand", "True"),
-                       ("spacing", "4")])
+        self.props(4, [("visible", "True"), ("can_focus", "False"), ("hexpand", "True")])
 
-        # File sits left of the tabs and Find a command right of them, as on
-        # the boards. Neither can live in the tab row itself, so both are
-        # siblings of the notebook, pinned to its top edge.
-        def file_button(d):
-            self.w(d, '<object class="svtlo-ManagedMenuButton" id="FileButton:FileMenu">')
-            self.props(d + 1, [("visible", "True"), ("can_focus", "True"),
-                               ("has_default", "True"), ("valign", "start"),
-                               ("margin_start", "4"), ("margin_top", "6")])
-            self.w(d + 1, '<property name="label" translatable="yes">File</property>')
-            self.w(d, "</object>")
-        self.box_child(4, 0, file_button)
-
-        def notebook(d):
-            self.w(d, '<object class="GtkNotebook" id="Tabs">')
-            # A notebook asks for the width of its widest page, which would
-            # make the whole bar wider than a small window. The fixed request
-            # lets it shrink, and each page then folds groups to fit.
+        def tab_control(d):
+            self.w(d, '<object class="sfxlo-NotebookbarTabControl" id="Tabs">')
+            # File before the tabs and the search field after them are drawn
+            # by the Wild OS LibreOffice (build/patches/libreoffice), which
+            # reads these properties.
+            # A tab control asks for the width of its widest page, which
+            # would hold the window wider than a small screen; with a fixed
+            # request it can shrink, and each page folds groups to fit.
             self.props(d + 1, [("visible", "True"), ("can_focus", "True"), ("hexpand", "True"),
-                               ("width_request", "400"), ("show_border", "False")])
+                               ("width_request", "400")])
+            self.w(d + 1, '<property name="wildos-file-label" translatable="yes">File</property>')
+            self.props(d + 1, [("wildos-file-menu", FILE_MENU_NAME)])
+            self.w(d + 1, '<property name="wildos-search-label" translatable="yes">Find a command</property>')
             for i, t in enumerate(tabs):
                 self.tab(d + 1, i, t)
             self.w(d, "</object>")
-        self.box_child(4, 1, notebook, expand=True)
-
-        def find_command(d):
-            self.w(d, '<object class="GtkButton" id="FindCommand">')
-            self.props(d + 1, [("visible", "True"), ("can_focus", "True"),
-                               ("receives_default", "False"), ("valign", "start"),
-                               ("width_request", "170"), ("margin_end", "4"), ("margin_top", "6"),
-                               ("action_name", ".uno:CommandPopup"),
-                               ("xalign", "0")])
-            self.w(d + 1, '<property name="label" translatable="yes">Find a command</property>')
-            self.w(d, "</object>")
-        self.box_child(4, 2, find_command)
+        self.box_child(4, 0, tab_control, expand=True)
         self.w(3, "</object>")
         self.packing(3, [("left_attach", "0"), ("top_attach", "0")])
         self.w(2, "</child>")
@@ -770,7 +854,7 @@ def commands(tabs):
     for _, _, groups in tabs:
         for _, _, _, cols in groups:
             for kind, body in cols:
-                for it in (body if kind == "big" else [i for r in body for i in r]):
+                for it in (body if kind != "rows" else [i for r in body for i in r]):
                     c = it.split("|")[0]
                     if c not in seen:
                         seen.append(c)
@@ -806,29 +890,38 @@ def labels():
                         v = p.find("value")
                         if st.get(O + "name") == "Commands" or p.get(O + "name") not in d:
                             d[p.get(O + "name")] = v.text if v is not None else None
-    used = set(commands(WRITER)) | set(commands(CALC)) | {".uno:CommandPopup"}
+    used = (set(commands(WRITER)) | set(commands(CALC)) | {".uno:CommandPopup"}
+            | {c for m in FILE_MENU.values() for c in m if c != "-"})
     out = []
     for comp, table in comps.items():
         # A command with a TargetURL may show its target's label, so the
         # target gets the same name.
         wanted = {}
         for cmd in sorted(used):
-            if cmd in LABELS and cmd in table:
-                wanted[cmd] = LABELS[cmd]
+            label = LABELS.get(cmd, FILE_LABELS.get(cmd))
+            if label and cmd in table:
+                wanted[cmd] = label
                 target = table[cmd].get("TargetURL")
                 if target in table:
-                    wanted[target] = LABELS[cmd]
+                    wanted[target] = label
         sets = {}
         for cmd, label in sorted(wanted.items()):
             orig = table[cmd]
-            if (orig.get("Label") or "").replace("~", "") == label:
+            # The File menu is ours, so its items show the Wild OS name too:
+            # a menu reads PopupLabel, then ContextLabel, before Label.
+            in_menu = cmd in FILE_LABELS
+            menu_props = [k for k in ("PopupLabel", "ContextLabel")
+                          if in_menu and (orig.get(k) or "").replace("~", "") != label]
+            if (orig.get("Label") or "").replace("~", "") == label and not menu_props:
                 continue
+            value = '<value xml:lang="en-US">%s</value><value xml:lang="en-GB">%s</value>' % ((escape(label),) * 2)
             for st in orig["sets"]:
                 nodes = sets.setdefault(st, [])
                 nodes.append('        <node oor:name="%s">' % escape(cmd, {'"': "&quot;"}))
-                nodes.append('          <prop oor:name="Label"><value xml:lang="en-US">%s</value>'
-                             '<value xml:lang="en-GB">%s</value></prop>' % ((escape(label),) * 2))
-                if not orig.get("ContextLabel") and orig.get("Label"):
+                nodes.append('          <prop oor:name="Label">%s</prop>' % value)
+                for k in menu_props:
+                    nodes.append('          <prop oor:name="%s">%s</prop>' % (k, value))
+                if not in_menu and not orig.get("ContextLabel") and orig.get("Label"):
                     nodes.append('          <prop oor:name="ContextLabel"><value xml:lang="en-US">%s</value></prop>'
                                  % escape(orig["Label"]))
                 nodes.append("        </node>")
@@ -844,16 +937,28 @@ def labels():
     return "\n".join(out) + "\n"
 
 
+def file_menu(module):
+    out = ['<?xml version="1.0" encoding="UTF-8"?>',
+           "<!-- Generated by packages/wildos-office/tools/gen-ribbons.py; edit that, not this. -->",
+           '<menu:menupopup xmlns:menu="http://openoffice.org/2001/menu">']
+    for cmd in FILE_MENU[module]:
+        out.append("  <menu:menuseparator/>" if cmd == "-" else
+                   '  <menu:menuitem menu:id="%s"/>' % escape(cmd, {'"': "&quot;"}))
+    out.append("</menu:menupopup>")
+    return "\n".join(out) + "\n"
+
+
 def main():
     if len(sys.argv) > 1 and sys.argv[1] == "--labels":
         sys.stdout.write(labels())
         return
     for module, tabs in (("swriter", WRITER), ("scalc", CALC)):
-        path = os.path.join(UI, module, "notebookbar_wildos.ui")
-        os.makedirs(os.path.dirname(path), exist_ok=True)
-        with open(path, "w", encoding="utf-8", newline="\n") as f:
-            f.write(Writer(module).build(tabs))
-        print(path)
+        for path, text in ((os.path.join(UI, module, "notebookbar_wildos.ui"), Writer(module).build(tabs)),
+                           (os.path.join(POPUPMENU, module, FILE_MENU_NAME + ".xml"), file_menu(module))):
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            with open(path, "w", encoding="utf-8", newline="\n") as f:
+                f.write(text)
+            print(path)
 
 
 if __name__ == "__main__":

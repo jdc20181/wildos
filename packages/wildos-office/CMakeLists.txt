@@ -55,6 +55,14 @@ install(FILES lo/registry/wildos.xcd lo/registry/wildos-labels.xcd DESTINATION $
 # LibreOffice updates never overwrite them.
 install(FILES lo/ui/swriter/notebookbar_wildos.ui DESTINATION ${LO}/share/config/soffice.cfg/modules/swriter/ui)
 install(FILES lo/ui/scalc/notebookbar_wildos.ui DESTINATION ${LO}/share/config/soffice.cfg/modules/scalc/ui)
+# The File button's menu, which the ribbon names in its wildos-file-menu
+# property.
+install(FILES lo/popupmenu/swriter/wildosfile.xml DESTINATION ${LO}/share/config/soffice.cfg/modules/swriter/popupmenu)
+install(FILES lo/popupmenu/scalc/wildosfile.xml DESTINATION ${LO}/share/config/soffice.cfg/modules/scalc/popupmenu)
+# The Print dialog laid out as on the WritePrint board. LibreOffice reads it
+# only from this path, which libreoffice-uiconfig-common owns, so the
+# package diverts LibreOffice's copy (debian/preinst, debian/postrm).
+install(FILES lo/ui/vcl/printdialog.ui DESTINATION ${LO}/share/config/soffice.cfg/vcl/ui)
 
 # The Wild OS icon themes, built from the line icons in lo/icons. LibreOffice
 # finds icon themes as images_*.zip in share/config; wildos.xcd selects one.

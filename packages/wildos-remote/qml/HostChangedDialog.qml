@@ -52,13 +52,13 @@ Panel {
             Layout.preferredWidth: 56
             Layout.preferredHeight: 56
             radius: 14
-            color: Qt.rgba(255 / 255, 154 / 255, 138 / 255, 0.16)
+            color: Qt.alpha(UI.Style.danger, 0.16)
             UI.Icon {
                 anchors.centerIn: parent
                 name: "shield-alert"
                 size: 26
                 strokeWidth: 1.8
-                color: "#ff9a8a"
+                color: UI.Style.danger
             }
         }
         UI.Label {
@@ -66,7 +66,7 @@ Panel {
             horizontalAlignment: Text.AlignHCenter
             text: dialog.kind === "ssh" ? qsTr("%1 isn't the same server").arg(dialog.host.name || "") : qsTr("%1 isn't the same computer").arg(dialog.host.name || "")
             size: 20
-            font.weight: Font.Bold
+            font.weight: UI.Style.weightBold
             wrapMode: Text.Wrap
         }
         UI.Label {
@@ -105,7 +105,7 @@ Panel {
                     text: dialog.shortFingerprint(dialog.previous.fingerprint)
                     size: 13
                     font.family: "JetBrains Mono"
-                    font.weight: Font.DemiBold
+                    font.weight: UI.Style.weightSemiBold
                     UI.Tooltip { text: dialog.previous.fingerprint || ""; visible: lastMouse.containsMouse }
                     MouseArea { id: lastMouse; anchors.fill: parent; hoverEnabled: true }
                 }
@@ -122,8 +122,8 @@ Panel {
                     text: dialog.shortFingerprint(dialog.result.fingerprint)
                     size: 13
                     font.family: "JetBrains Mono"
-                    font.weight: Font.DemiBold
-                    color: "#ff9a8a"
+                    font.weight: UI.Style.weightSemiBold
+                    color: UI.Style.danger
                     UI.Tooltip { text: dialog.result.fingerprint || ""; visible: nowMouse.containsMouse }
                     MouseArea { id: nowMouse; anchors.fill: parent; hoverEnabled: true }
                 }
@@ -131,7 +131,7 @@ Panel {
                     Layout.preferredHeight: 40
                     text: qsTr("Different")
                     size: 13
-                    color: "#ff9a8a"
+                    color: UI.Style.danger
                 }
             }
         }
@@ -148,9 +148,9 @@ Panel {
             Layout.alignment: Qt.AlignHCenter
             text: dialog.kind === "ssh" ? qsTr("It was rebuilt, trust the new identity") : qsTr("It was reinstalled, trust the new identity")
             size: 14
-            font.weight: Font.DemiBold
+            font.weight: UI.Style.weightSemiBold
             font.underline: trustMouse.containsMouse || trustLink.activeFocus
-            color: "#ff9a8a"
+            color: UI.Style.danger
             activeFocusOnTab: true
             Accessible.role: Accessible.Button
             Accessible.name: text

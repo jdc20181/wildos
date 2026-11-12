@@ -47,7 +47,7 @@ Rectangle {
             UI.Label {
                 text: MailEngine.folderTitle
                 size: 16
-                font.weight: Font.DemiBold
+                font.weight: UI.Style.weightSemiBold
                 elide: Text.ElideRight
                 Layout.maximumWidth: pane.width - 120
             }
@@ -139,7 +139,7 @@ Rectangle {
                     anchors.bottomMargin: 4
                     text: parent.section
                     size: 12
-                    font.weight: Font.DemiBold
+                    font.weight: UI.Style.weightSemiBold
                     color: UI.Style.inkMuted
                 }
             }
@@ -202,7 +202,7 @@ Rectangle {
             Layout.alignment: Qt.AlignHCenter
             text: pane.inSearch ? qsTr("Nothing found") : MailEngine.messages.filter !== "all" ? qsTr("Nothing here") : MailEngine.folderRole === "inbox" ? qsTr("You're all caught up") : qsTr("This folder is empty")
             size: 15
-            font.weight: Font.DemiBold
+            font.weight: UI.Style.weightSemiBold
         }
         UI.Label {
             Layout.fillWidth: true

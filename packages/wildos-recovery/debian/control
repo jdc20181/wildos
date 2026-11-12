@@ -1,0 +1,50 @@
+Source: wildos-recovery
+Section: admin
+Priority: optional
+Maintainer: Wild OS Developers <dev@wildos.io>
+Build-Depends:
+ debhelper-compat (= 13),
+ cmake,
+ qt6-base-dev,
+ qt6-declarative-dev,
+Standards-Version: 4.7.0
+Rules-Requires-Root: no
+
+Package: wildos-recovery
+Architecture: any
+Depends:
+ ${shlibs:Depends},
+ ${misc:Depends},
+ python3,
+ rsync,
+ btrfs-progs,
+ e2fsprogs,
+ dosfstools,
+ cryptsetup-bin,
+ dracut,
+ grub-common,
+ sqv | gpgv,
+ pkexec,
+ systemd,
+ qml6-module-qtquick,
+ qml6-module-qtquick-controls,
+ qml6-module-qtquick-templates,
+ qml6-module-qtquick-layouts,
+ qml6-module-qtquick-shapes,
+ qml6-module-qtquick-window,
+ qml6-module-qtqml-workerscript,
+Description: Wild OS restore points and start-up recovery
+ Restore points before every update and driver install, going back to one
+ from Settings or at start-up, start-up recovery after two failed starts or
+ with Shift held, and Reset Wild OS from a signed copy of the release kept
+ on the PC.
+ .
+ On a Btrfs system a restore point is a read-only snapshot of the system
+ subvolume; on ext4 it is a file copy hard-linked to the one before. Each
+ keeps its own kernel and start-up files, so going back never meets a
+ kernel from a newer system. Personal files, Wi-Fi, accounts and Windows
+ mode stay as they are.
+ .
+ Start-up recovery runs from the reset copy inside the encrypted disk,
+ independent of the installed system. Everything stays on the PC; nothing
+ is sent anywhere.

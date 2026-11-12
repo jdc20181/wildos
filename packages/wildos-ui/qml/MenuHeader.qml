@@ -24,7 +24,7 @@ T.MenuSeparator {
             anchors.verticalCenter: parent.verticalCenter
             text: control.text
             size: 11
-            font.weight: Font.DemiBold
+            font.weight: Style.weightSemiBold
             font.capitalization: Font.AllUppercase
             font.letterSpacing: Style.px(11) * 0.04
             color: Style.inkPlaceholder

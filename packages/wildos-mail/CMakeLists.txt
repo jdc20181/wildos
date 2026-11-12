@@ -12,6 +12,8 @@ find_package(PkgConfig REQUIRED)
 pkg_check_modules(CAMEL REQUIRED IMPORTED_TARGET camel-1.2)
 pkg_check_modules(EDS REQUIRED IMPORTED_TARGET libedataserver-1.2)
 pkg_check_modules(ECAL REQUIRED IMPORTED_TARGET libecal-2.0)
+pkg_check_modules(EBOOK REQUIRED IMPORTED_TARGET libebook-1.2)
+pkg_check_modules(SQLITE REQUIRED IMPORTED_TARGET sqlite3)
 
 qt_standard_project_setup(REQUIRES 6.8)
 
@@ -43,6 +45,8 @@ qt_add_qml_module(wildos-mail
         src/googlesignin.cpp src/googlesignin.h
         src/calendarengine.cpp src/calendarengine.h
         src/reminders.cpp src/reminders.h
+        src/peopleengine.cpp src/peopleengine.h
+        src/tasksengine.cpp src/tasksengine.h
         src/apps.h
         src/formats.h
 )
@@ -56,6 +60,8 @@ target_link_libraries(wildos-mail PRIVATE Qt6::Widgets
     PkgConfig::CAMEL
     PkgConfig::EDS
     PkgConfig::ECAL
+    PkgConfig::EBOOK
+    PkgConfig::SQLITE
 )
 
 install(TARGETS wildos-mail RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})

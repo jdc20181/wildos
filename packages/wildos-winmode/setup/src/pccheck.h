@@ -21,6 +21,14 @@ struct Virtualisation {
 // read, as Kicksecure can hide it.
 Virtualisation virtualisation();
 
+// The processor's cores, counted once each however many threads they run,
+// as board 9.1 says "8 cores". Wild OS runs one thread per core unless
+// someone turns hyper-threading on, and a second thread is not a second
+// core for Windows' sake. 0 when it can't be read.
+int processorCores();
+// Windows mode runs 64-bit Windows 11, which wants 4 cores at least.
+constexpr int neededCores = 4;
+
 qint64 memoryBytes();
 // What the PC was sold with, "16 GB", from the slightly smaller total the
 // kernel reports.

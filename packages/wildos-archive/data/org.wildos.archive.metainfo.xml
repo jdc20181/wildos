@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>org.wildos.archive</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0-or-later</project_license>
+  <name>Archive</name>
+  <summary>Open, extract and make ZIP and 7z archives</summary>
+  <description>
+    <p>
+      Archive opens ZIP, 7z, RAR and TAR archives and GZ, XZ and BZ2 files.
+      Browse the folders inside with thumbnails of the pictures, extract
+      everything or just what you pick, and test that every file is intact.
+    </p>
+    <p>
+      It makes new ZIP and 7z archives too. An archive you open is never
+      changed: adding files makes a new archive. Extracting never writes
+      outside the folder you chose. Nothing is sent anywhere.
+    </p>
+  </description>
+  <launchable type="desktop-id">org.wildos.archive.desktop</launchable>
+  <icon type="stock">wildos-archive</icon>
+  <categories>
+    <category>Utility</category>
+    <category>Archiving</category>
+  </categories>
+  <provides>
+    <binary>wildos-archive</binary>
+    <mediatype>application/zip</mediatype>
+    <mediatype>application/x-7z-compressed</mediatype>
+    <mediatype>application/vnd.rar</mediatype>
+    <mediatype>application/x-tar</mediatype>
+    <mediatype>application/x-compressed-tar</mediatype>
+    <mediatype>application/gzip</mediatype>
+  </provides>
+  <pkgname>wildos-archive</pkgname>
+  <url type="homepage">https://wildos.io</url>
+  <developer id="io.wildos">
+    <name>Wild OS</name>
+  </developer>
+  <content_rating type="oars-1.1"/>
+  <releases>
+    <release version="0.1.0" date="2026-11-12"/>
+  </releases>
+</component>

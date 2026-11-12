@@ -2,7 +2,7 @@ import QtQuick
 import QtQuick.Dialogs
 import QtQuick.Layouts
 import WildOS.UI as UI
-import WildOS.WinMode.Backend
+import WildOS.WinMode.Setup
 
 // 9.5, Setting up (WinModeSetup.dc). Everything here is the daemon's own
 // progress; closing the window leaves setup running.
@@ -54,7 +54,7 @@ Page {
                     Layout.fillWidth: true
                     text: page.paused ? "Paused" : page.waitingForWindows ? "Waiting for Windows" : page.active ? page.activeLabel(page.active.id) : "Getting ready"
                     size: 13
-                    font.weight: Font.DemiBold
+                    font.weight: UI.Style.weightSemiBold
                 }
 
                 UI.Label {
@@ -83,7 +83,7 @@ Page {
 
     function activeLabel(id) {
         switch (id) {
-        case "media": return "Downloading";
+        case "media": return page.status.ownIso ? "Preparing" : "Downloading";
         case "install": return "Installing Windows";
         case "activate": return "Activating";
         case "tune": return "Tuning";
@@ -136,8 +136,18 @@ Page {
         }
     }
 
+    // Setup putting a problem right by itself (setup.py, recover): nothing
+    // to press, so it says what happened and that it is handling it.
     Banner {
-        visible: !page.waitingForWindows
+        visible: !!page.status.notice && !page.waitingForWindows
+        tone: "warning"
+        iconName: "restart"
+        title: "Trying again"
+        text: page.status.notice || ""
+    }
+
+    Banner {
+        visible: !page.waitingForWindows && !page.status.notice
         iconName: "monitor"
         title: "Carry on while it works"
         text: "Close this window and Wild OS tells you when it's ready. Setup only uses spare capacity."
@@ -153,7 +163,8 @@ Page {
     UI.Dialog {
         id: startOverDialog
         title: "Start setting up again?"
-        text: "Windows mode stops this setup and removes what it has made so far. The Windows download is kept, so starting again doesn't fetch it twice."
+        text: page.status.ownIso ? "Windows mode stops this setup and removes what it has made so far, including its copy of your Windows 11 file. Your own file stays as it is."
+            : "Windows mode stops this setup and removes what it has made so far. The Windows download is kept, so starting again doesn't fetch it twice."
         buttons: [
             UI.Button {
                 kind: "primary"

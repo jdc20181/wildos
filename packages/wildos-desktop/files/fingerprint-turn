@@ -1,0 +1,58 @@
+#!/bin/sh
+# Decides whether a sign-in goes to the fingerprint reader instead of the
+# password, through pam_exec.
+#
+# In common-auth (the wildos-fingerprint PAM profile) an empty password
+# means "use my finger"; anything typed is a password and goes on to the
+# usual checks untouched, so a broken reader never locks anyone out.
+# Debian's own fprintd profile asks for the finger first and holds the
+# password back until the reader gives up, ten seconds or more on every
+# password sign-in. Waiting for an empty password instead costs nothing.
+#
+# On the lock screen (/etc/pam.d/kde-fingerprint, beside the password) it
+# only says whether the finger is wanted at all.
+#
+# /etc/wildos/fingerprint.conf holds Settings > Accounts > Sign-in options'
+# two switches: signin= for the sign-in screen and the lock screen, admin=
+# for sudo and administrator prompts. Each is on unless it says off, so a
+# missing file keeps fingerprints working as they did before the switches.
+# The file is world-readable on purpose: the permission prompt reads admin=
+# to decide whether to listen for a finger. It holds no biometric data.
+#
+# Exits 0 only when the switch for the service is on and, in common-auth,
+# for an empty password from an account with a finger enrolled whose
+# password is not locked. Anything else carries on to the password.
+PATH=/usr/sbin:/usr/bin:/sbin:/bin
+CONF=/etc/wildos/fingerprint.conf
+
+wanted() {
+    value=$(sed -n "s/^[[:space:]]*$1[[:space:]]*=[[:space:]]*//p" "$CONF" 2>/dev/null | tail -n 1)
+    [ "$value" != off ]
+}
+
+case "$PAM_SERVICE" in
+    sddm|kde-fingerprint) wanted signin || exit 1 ;;
+    sudo|sudo-i|polkit-1) wanted admin || exit 1 ;;
+    *) exit 1 ;;
+esac
+case "$PAM_USER" in
+    ''|.|..|*/*) exit 1 ;;
+esac
+
+# The lock screen runs this as the signed-in person, who can read neither
+# the prints nor the password's state; pam_fprintd after it checks for an
+# enrolled finger itself, and the account is already signed in.
+[ "$PAM_SERVICE" = kde-fingerprint ] && exit 0
+
+# pam_exec writes the password and a NUL. Only the first byte is read, so
+# a real password never reaches a variable here.
+first=$(head -c 1 | od -An -tx1 | tr -d ' \n')
+[ -z "$first" ] || [ "$first" = 00 ] || exit 1
+
+# A locked password (passwd -l) locks the account, and Kicksecure checks
+# that after the password; a finger must not get round it.
+case "$(getent shadow "$PAM_USER" | cut -d: -f2)" in
+    '!'*|'*'*) exit 1 ;;
+esac
+
+[ -n "$(find "/var/lib/fprint/$PAM_USER" -type f 2>/dev/null | head -n 1)" ]

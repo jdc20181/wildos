@@ -3,9 +3,9 @@ import QtQuick.Shapes
 import QtQuick.Window
 
 // The app loading splash shared by Mail, Write, Tables and Remote (board
-// 12.5, LoSplash.dc): the app's icon, colour and name, what it is opening,
-// two short notes and a bar gliding in the app's colour. finish() fades it
-// out into the window that takes over.
+// 12.5, LoSplash.dc and SplashDaily.dc): the app's icon and name, what it
+// is opening, two short notes and a bar gliding in the app's colour.
+// finish() fades it out into the window that takes over.
 //
 // Opening a document it waits a third of a second first, so a quick open
 // never flashes. Launching an app it shows at once and stays long enough to
@@ -91,6 +91,10 @@ Window {
         id: card
         anchors.fill: parent
 
+        // The card is the same neutral surface as every window; the app's
+        // colour shows only as a glow from two corners and in the bar. The
+        // board's glows are ellipses, so fillTransform squashes each
+        // circular gradient vertically.
         Shape {
             anchors.fill: parent
             preferredRendererType: Shape.CurveRenderer
@@ -98,38 +102,47 @@ Window {
             ShapePath {
                 strokeWidth: -1
                 fillGradient: LinearGradient {
-                    x1: 0; y1: 0; x2: 120; y2: 320
-                    GradientStop { position: 0; color: "#161c40" }
-                    GradientStop { position: 0.55; color: "#0f1432" }
-                    GradientStop { position: 1; color: "#0b1026" }
+                    // The board's linear-gradient(160deg) across 600 by 320.
+                    x1: 213.5; y1: -77.8; x2: 386.5; y2: 397.8
+                    GradientStop { position: 0; color: Style.dark ? "#202127" : "#fbfbfb" }
+                    GradientStop { position: 0.6; color: Style.dark ? "#17181c" : "#f4f4f4" }
+                    GradientStop { position: 1; color: Style.dark ? "#121317" : "#ededed" }
                 }
-                PathRectangle { width: 600; height: 320; radius: 18 }
+                PathRectangle { width: 600; height: 320; radius: 16 }
             }
             ShapePath {
                 strokeWidth: -1
+                fillTransform: Qt.matrix4x4(1, 0, 0, 0,
+                                            0, 260 / 420, 0, 0,
+                                            0, 0, 1, 0,
+                                            0, 0, 0, 1)
+                fillGradient: RadialGradient {
+                    centerX: 0; centerY: 0; centerRadius: 420
+                    focalX: 0; focalY: 0
+                    GradientStop { position: 0; color: Qt.alpha(splash.accent, 0.16) }
+                    GradientStop { position: 0.72; color: Qt.alpha(splash.accent, 0) }
+                }
+                PathRectangle { width: 600; height: 320; radius: 16 }
+            }
+            ShapePath {
+                strokeWidth: -1
+                fillTransform: Qt.matrix4x4(1, 0, 0, 600,
+                                            0, 220 / 360, 0, 320,
+                                            0, 0, 1, 0,
+                                            0, 0, 0, 1)
                 fillGradient: RadialGradient {
                     centerX: 0; centerY: 0; centerRadius: 360
                     focalX: 0; focalY: 0
-                    GradientStop { position: 0; color: Qt.alpha(splash.accent, 0.26) }
-                    GradientStop { position: 0.7; color: Qt.alpha(splash.accent, 0) }
+                    GradientStop { position: 0; color: Qt.alpha(splash.accent, 0.06) }
+                    GradientStop { position: 0.72; color: Qt.alpha(splash.accent, 0) }
                 }
-                PathRectangle { width: 600; height: 320; radius: 18 }
+                PathRectangle { width: 600; height: 320; radius: 16 }
             }
             ShapePath {
-                strokeWidth: -1
-                fillGradient: RadialGradient {
-                    centerX: 600; centerY: 320; centerRadius: 300
-                    focalX: 600; focalY: 320
-                    GradientStop { position: 0; color: Qt.alpha(splash.accent, 0.10) }
-                    GradientStop { position: 0.7; color: Qt.alpha(splash.accent, 0) }
-                }
-                PathRectangle { width: 600; height: 320; radius: 18 }
-            }
-            ShapePath {
-                strokeColor: Qt.rgba(1, 1, 1, 0.10)
+                strokeColor: Style.dark ? Qt.rgba(1, 1, 1, 0.09) : Qt.rgba(0, 0, 0, 0.08)
                 strokeWidth: 1
                 fillColor: "transparent"
-                PathRectangle { x: 0.5; y: 0.5; width: 599; height: 319; radius: 17.5 }
+                PathRectangle { x: 0.5; y: 0.5; width: 599; height: 319; radius: 15.5 }
             }
         }
 
@@ -162,9 +175,10 @@ Window {
                 anchors.verticalCenter: parent.verticalCenter
                 text: "Wild OS"
                 font.family: Style.fontFamily
+                font.letterSpacing: Style.tracking(13)
                 font.pixelSize: 13
-                font.weight: Font.DemiBold
-                color: Qt.rgba(238 / 255, 241 / 255, 248 / 255, 0.82)
+                font.weight: Style.weightSemiBold
+                color: Style.inkMuted
             }
         }
 
@@ -177,17 +191,18 @@ Window {
                 text: splash.appName
                 font.family: Style.fontFamily
                 font.pixelSize: 36
-                font.weight: Font.DemiBold
+                font.weight: Style.weightSemiBold
                 font.letterSpacing: -0.72
-                color: "#eef1f8"
+                color: Style.ink
             }
             Text {
                 width: 520
                 elide: Text.ElideMiddle
                 text: splash.status
                 font.family: Style.fontFamily
+                font.letterSpacing: Style.tracking(14)
                 font.pixelSize: 14
-                color: Qt.rgba(232 / 255, 236 / 255, 248 / 255, 0.70)
+                color: Style.inkMuted
             }
         }
 
@@ -200,15 +215,17 @@ Window {
             Text {
                 text: splash.noteStart
                 font.family: Style.fontFamily
+                font.letterSpacing: Style.tracking(12)
                 font.pixelSize: 12
-                color: Qt.rgba(232 / 255, 236 / 255, 248 / 255, 0.55)
+                color: Style.inkSubtle
             }
             Text {
                 anchors.right: parent.right
                 text: splash.noteEnd
                 font.family: Style.fontFamily
+                font.letterSpacing: Style.tracking(12)
                 font.pixelSize: 12
-                color: Qt.rgba(232 / 255, 236 / 255, 248 / 255, 0.55)
+                color: Style.inkSubtle
             }
         }
 
@@ -218,7 +235,7 @@ Window {
             width: 520
             height: 4
             radius: 2
-            color: Qt.rgba(1, 1, 1, 0.10)
+            color: Style.dark ? Qt.rgba(1, 1, 1, 0.10) : Qt.rgba(0, 0, 0, 0.08)
             clip: true
 
             Rectangle {

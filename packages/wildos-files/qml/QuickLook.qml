@@ -160,7 +160,7 @@ UI.AppWindow {
                     anchors.verticalCenter: parent.verticalCenter
                     width: parent.width - 26
                     text: info.name
-                    font.weight: Font.Medium
+                    font.weight: UI.Style.weightMedium
                     color: ql.active ? UI.Style.ink : UI.Style.inkMuted
                 }
             }
@@ -423,7 +423,7 @@ UI.AppWindow {
                     Layout.fillWidth: true
                     text: info.name
                     font.pixelSize: UI.Style.px(15)
-                    font.weight: Font.DemiBold
+                    font.weight: UI.Style.weightSemiBold
                     horizontalAlignment: Text.AlignHCenter
                 }
                 MediaBar {
@@ -469,7 +469,7 @@ UI.AppWindow {
                     font.family: "JetBrains Mono"
                     font.pixelSize: UI.Style.px(12)
                     color: UI.Style.ink
-                    selectionColor: UI.Style.accentSelected
+                    selectionColor: UI.Style.textSelection
                     selectedTextColor: UI.Style.ink
                 }
             }
@@ -511,7 +511,7 @@ UI.AppWindow {
                     Layout.fillWidth: true
                     text: info.name
                     font.pixelSize: UI.Style.px(17)
-                    font.weight: Font.DemiBold
+                    font.weight: UI.Style.weightSemiBold
                     horizontalAlignment: Text.AlignHCenter
                     wrapMode: Text.Wrap
                     maximumLineCount: 3

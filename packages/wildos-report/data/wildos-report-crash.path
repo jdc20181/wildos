@@ -1,0 +1,12 @@
+[Unit]
+Description=Offer Report a problem after an app crashes
+
+[Path]
+# report-crash-note leaves a note here for each crash of this account's
+# programs.
+DirectoryNotEmpty=%t/wildos-report/crashes
+MakeDirectory=yes
+DirectoryMode=0700
+
+[Install]
+WantedBy=default.target

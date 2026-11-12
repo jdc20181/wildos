@@ -1,0 +1,13 @@
+[Unit]
+Description=Daily backup to the backup drive
+
+[Timer]
+# Backup's Schedule page sets the time and days in a drop-in
+# (~/.config/systemd/user/wildos-backup.timer.d/schedule.conf).
+OnCalendar=*-*-* 09:00:00
+# A time missed while the PC was off or asleep runs at the next start.
+Persistent=true
+Unit=wildos-backup@scheduled.service
+
+[Install]
+WantedBy=timers.target

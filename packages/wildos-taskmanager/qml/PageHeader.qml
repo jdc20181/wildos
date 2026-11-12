@@ -17,7 +17,7 @@ Item {
         height: 54
         text: header.title
         size: 18
-        font.weight: Font.DemiBold
+        font.weight: UI.Style.weightSemiBold
     }
 
     Row {

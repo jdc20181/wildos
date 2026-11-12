@@ -63,7 +63,7 @@ QQC.ScrollView {
                             Layout.fillWidth: true
                             text: group.modelData.name
                             size: 13
-                            font.weight: Font.DemiBold
+                            font.weight: UI.Style.weightSemiBold
                             elide: Text.ElideRight
                         }
                     }
@@ -106,7 +106,8 @@ QQC.ScrollView {
                                     name: "check"
                                     size: 12
                                     strokeWidth: 2.4
-                                    color: "#10152a"
+                                    // Dark on every calendar colour, which are light in both modes.
+                                    color: Qt.rgba(0, 0, 0, 0.8)
                                 }
                             }
                             UI.Label {

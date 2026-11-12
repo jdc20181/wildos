@@ -44,6 +44,32 @@ void wheel(Client *client, QPoint angleDelta, QPoint at, int &pendingX, int &pen
     send(pendingX, PTR_FLAGS_HWHEEL);
 }
 
+void pinch(Client *client, Qt::NativeGestureType type, qreal value, QPoint at, int &pending)
+{
+    constexpr quint32 leftCtrl = 0x1D;
+    switch (type) {
+    case Qt::BeginNativeGesture:
+        pending = 0;
+        client->sendKey(true, false, leftCtrl);
+        break;
+    case Qt::ZoomNativeGesture: {
+        pending += qRound(value * 1200);
+        int ignored = 0;
+        // Whole notches only, so the app sees the same steps a mouse
+        // wheel would give it.
+        const int notches = pending / 120 * 120;
+        pending -= notches;
+        wheel(client, QPoint(0, notches), at, ignored, ignored);
+        break;
+    }
+    case Qt::EndNativeGesture:
+        client->sendKey(false, false, leftCtrl);
+        break;
+    default:
+        break;
+    }
+}
+
 void key(Client *client, const QKeyEvent *event, bool press, QList<quint32> &down)
 {
     const quint32 native = event->nativeScanCode();

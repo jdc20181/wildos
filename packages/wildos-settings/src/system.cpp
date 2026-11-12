@@ -80,6 +80,41 @@ QString largestImage(const QString &package)
     return best;
 }
 
+// The wallpaper plugin to draw `path` with, when it is not Plasma's plain
+// image one. A theme can name a plugin for its own wallpaper with
+// "wallpaperPlugin", as Overclock does for Warp's live W; the same picture
+// chosen under another theme stays a still image.
+QString wallpaperPluginFor(const QString &path)
+{
+    KSharedConfigPtr wildos = KSharedConfig::openConfig(QStringLiteral("wildosrc"));
+    wildos->reparseConfiguration();
+    const QString id = wildos->group(QStringLiteral("Theme")).readEntry("Id");
+    if (id.isEmpty()) {
+        return {};
+    }
+    QFile file(QStandardPaths::locate(QStandardPaths::GenericDataLocation, QStringLiteral("wildos/themes/%1.json").arg(id)));
+    if (!file.open(QIODevice::ReadOnly)) {
+        return {};
+    }
+    const QJsonObject theme = QJsonDocument::fromJson(file.readAll()).object();
+    const QString plugin = theme.value(QStringLiteral("wallpaperPlugin")).toString();
+    if (plugin.isEmpty() || localPath(theme.value(QStringLiteral("wallpaper")).toString()) != path) {
+        return {};
+    }
+    // A missing plugin would leave the desktop black; the plain image is
+    // the safe way to show the picture.
+    if (QStandardPaths::locate(QStandardPaths::GenericDataLocation, QStringLiteral("plasma/wallpapers/%1/metadata.json").arg(plugin)).isEmpty()) {
+        return {};
+    }
+    return plugin;
+}
+
+// For a single-quoted string in a Plasma script.
+QString scriptString(QString text)
+{
+    return text.replace(QLatin1Char('\\'), QStringLiteral("\\\\")).replace(QLatin1Char('\''), QStringLiteral("\\'"));
+}
+
 QString thumbnailFor(const QString &path)
 {
     if (QFileInfo(path).isFile()) {
@@ -549,8 +584,36 @@ QString System::wallpaperName() const
 
 void System::setWallpaper(const QString &path)
 {
-    QProcess::startDetached(QStringLiteral("plasma-apply-wallpaperimage"), {path});
-    m_wallpaper = localPath(path);
+    const QString local = localPath(path);
+    const QString plugin = wallpaperPluginFor(local);
+    const QString url = scriptString(QUrl::fromLocalFile(local).toString());
+    if (plugin.isEmpty()) {
+        // Written here rather than through plasma-apply-wallpaperimage,
+        // which takes only a plain path, so a photo picked in the file
+        // dialog (a file:// address) or named with an apostrophe never
+        // reached the desktop.
+        evaluatePlasmaScript(QStringLiteral("desktops().forEach(function (d) {"
+                                            "d.wallpaperPlugin = 'org.kde.image';"
+                                            "d.currentConfigGroup = ['Wallpaper', 'org.kde.image', 'General'];"
+                                            "d.writeConfig('Image', '%1');"
+                                            "d.reloadConfig(); });")
+                                 .arg(url));
+    } else {
+        // The image plugin's Image is written too: Settings, Welcome and the
+        // plain image plugin's fallback all read the wallpaper from there.
+        evaluatePlasmaScript(QStringLiteral("desktops().forEach(function (d) {"
+                                            "d.currentConfigGroup = ['Wallpaper', 'org.kde.image', 'General'];"
+                                            "d.writeConfig('Image', '%1');"
+                                            "d.wallpaperPlugin = '%2';"
+                                            "d.currentConfigGroup = ['Wallpaper', '%2', 'General'];"
+                                            "d.writeConfig('Image', '%1');"
+                                            "d.reloadConfig(); });")
+                                 .arg(url, scriptString(plugin)));
+    }
+    // A picture of its own ends a slideshow, as both scripts above do.
+    m_wallpaper = local;
+    m_slideshow = false;
+    m_slideshowFolder.clear();
     Q_EMIT wallpaperChanged();
 }
 
@@ -852,93 +915,59 @@ void System::setAltTabAllDesktops(bool on)
 
 namespace
 {
-// KWin's corner numbers and the names its [ElectricBorders] group uses.
-const QList<std::pair<int, QString>> corners = {
-    {1, QStringLiteral("TopRight")},
-    {3, QStringLiteral("BottomRight")},
-    {5, QStringLiteral("BottomLeft")},
-    {7, QStringLiteral("TopLeft")},
+// The defaults for new accounts, which /etc/skel/.config/wildosrc also
+// holds: the bottom corners sit beside Start and the show desktop end of the
+// taskbar, so they do nothing until chosen.
+const QVariantMap hotCornerDefaults = {
+    {QStringLiteral("TopLeft"), QStringLiteral("taskview")},
+    {QStringLiteral("TopRight"), QStringLiteral("notifications")},
+    {QStringLiteral("BottomLeft"), QStringLiteral("none")},
+    {QStringLiteral("BottomRight"), QStringLiteral("none")},
+    {QStringLiteral("TopLeftKey"), QStringLiteral("none")},
+    {QStringLiteral("TopRightKey"), QStringLiteral("none")},
+    {QStringLiteral("BottomLeftKey"), QStringLiteral("none")},
+    {QStringLiteral("BottomRightKey"), QStringLiteral("none")},
+    {QStringLiteral("Delay"), 150},
+    {QStringLiteral("SkipFullScreen"), true},
 };
-// KWin's "no corner", which a list needs to stay empty: an empty list would
-// read back as the default.
-constexpr int noCorner = 9;
-// Task view is KWin's Overview, which takes the top left corner unless told
-// otherwise.
-const QList<int> overviewDefault = {7};
 }
 
-QVariantMap System::screenCorners() const
+QVariantMap System::hotCorners() const
 {
-    KSharedConfigPtr config = KSharedConfig::openConfig(QStringLiteral("kwinrc"));
+    KSharedConfigPtr config = KSharedConfig::openConfig(QStringLiteral("wildosrc"));
     config->reparseConfiguration();
-    const QList<int> overview = config->group(QStringLiteral("Effect-overview")).readEntry("BorderActivate", overviewDefault);
-    const KConfigGroup borders = config->group(QStringLiteral("ElectricBorders"));
+    const KConfigGroup group = config->group(QStringLiteral("HotCorners"));
     QVariantMap result;
-    for (const auto &[corner, name] : corners) {
-        const QString action = borders.readEntry(name, QStringLiteral("None")).toLower();
-        QString value = QStringLiteral("none");
-        if (overview.contains(corner)) {
-            value = QStringLiteral("taskview");
-        } else if (action == QLatin1String("showdesktop")) {
-            value = QStringLiteral("desktop");
-        } else if (action == QLatin1String("lockscreen")) {
-            value = QStringLiteral("lock");
-        }
-        result.insert(QString::number(corner), value);
+    for (auto it = hotCornerDefaults.cbegin(); it != hotCornerDefaults.cend(); ++it) {
+        result.insert(it.key(), group.readEntry(it.key(), it.value()));
     }
+    // KConfig hands numbers and switches back as text.
+    result[QStringLiteral("Delay")] = group.readEntry("Delay", 150);
+    result[QStringLiteral("SkipFullScreen")] = group.readEntry("SkipFullScreen", true);
     return result;
 }
 
-void System::setScreenCorner(int corner, const QString &action)
+// KWin watches the group and applies a change at once.
+void System::setHotCorner(const QString &key, const QVariant &value)
 {
-    QString name;
-    for (const auto &[number, key] : corners) {
-        if (number == corner) {
-            name = key;
-        }
-    }
-    if (name.isEmpty()) {
+    if (!hotCornerDefaults.contains(key)) {
         return;
     }
-    KSharedConfigPtr config = KSharedConfig::openConfig(QStringLiteral("kwinrc"));
-    config->reparseConfiguration();
-
-    KConfigGroup overviewGroup = config->group(QStringLiteral("Effect-overview"));
-    QList<int> overview = overviewGroup.readEntry("BorderActivate", overviewDefault);
-    overview.removeAll(corner);
-    overview.removeAll(noCorner);
-    if (action == QLatin1String("taskview")) {
-        overview.append(corner);
-    }
-    overviewGroup.writeEntry("BorderActivate", overview.isEmpty() ? QList<int>{noCorner} : overview);
-
-    // A corner given to KWin's window view by hand would still fire beside
-    // the new choice.
-    KConfigGroup windowView = config->group(QStringLiteral("Effect-windowview"));
-    for (const char *key : {"BorderActivate", "BorderActivateAll", "BorderActivateClass"}) {
-        if (windowView.hasKey(key)) {
-            QList<int> list = windowView.readEntry(key, QList<int>());
-            if (list.removeAll(corner) > 0) {
-                windowView.writeEntry(key, list.isEmpty() ? QList<int>{noCorner} : list);
-            }
-        }
-    }
-
-    const QString built = action == QLatin1String("desktop") ? QStringLiteral("ShowDesktop")
-        : action == QLatin1String("lock")                    ? QStringLiteral("LockScreen")
-                                                             : QStringLiteral("None");
-    config->group(QStringLiteral("ElectricBorders")).writeEntry(name, built);
+    KSharedConfigPtr config = KSharedConfig::openConfig(QStringLiteral("wildosrc"));
+    config->group(QStringLiteral("HotCorners")).writeEntry(key, value, KConfig::Notify);
     config->sync();
-    // KWin's reconfigure only reaches the corners' own actions. Overview and
-    // window view read which corners they hold when told to by name, so
-    // without this Task view stayed where it was until the next sign-in.
-    for (const QString &effect : {QStringLiteral("overview"), QStringLiteral("windowview")}) {
-        auto message = QDBusMessage::createMethodCall(QStringLiteral("org.kde.KWin"), QStringLiteral("/Effects"), QStringLiteral("org.kde.kwin.Effects"),
-                                                      QStringLiteral("reconfigureEffect"));
-        message << effect;
-        QDBusConnection::sessionBus().asyncCall(message);
+    Q_EMIT hotCornersChanged();
+}
+
+void System::resetHotCorners()
+{
+    KSharedConfigPtr config = KSharedConfig::openConfig(QStringLiteral("wildosrc"));
+    KConfigGroup group = config->group(QStringLiteral("HotCorners"));
+    for (auto it = hotCornerDefaults.cbegin(); it != hotCornerDefaults.cend(); ++it) {
+        group.writeEntry(it.key(), it.value(), KConfig::Notify);
     }
-    reconfigureKWin();
+    config->sync();
+    Q_EMIT hotCornersChanged();
 }
 
 bool System::taskbarShowDesktop() const
@@ -1134,7 +1163,8 @@ void System::setSlideshow(bool on, const QString &folder)
                       "d.writeConfig('SlideInterval', 1800);")
                       .arg(quoted);
     } else {
-        script += QStringLiteral("d.wallpaperPlugin = 'org.kde.image';");
+        const QString plugin = wallpaperPluginFor(m_wallpaper);
+        script += QStringLiteral("d.wallpaperPlugin = '%1';").arg(plugin.isEmpty() ? QStringLiteral("org.kde.image") : scriptString(plugin));
     }
     script += QStringLiteral("d.reloadConfig(); });");
     evaluatePlasmaScript(script);
@@ -1178,12 +1208,12 @@ struct FontKey {
     double base;
 };
 const FontKey fontKeys[] = {
-    {"General", "font", "Inter,10,-1,5,50,0,0,0,0,0", 10},
-    {"General", "menuFont", "Inter,10,-1,5,50,0,0,0,0,0", 10},
-    {"General", "toolBarFont", "Inter,10,-1,5,50,0,0,0,0,0", 10},
-    {"General", "smallestReadableFont", "Inter,9,-1,5,50,0,0,0,0,0", 9},
+    {"General", "font", "Albert Sans,10,-1,5,50,0,0,0,0,0", 10},
+    {"General", "menuFont", "Albert Sans,10,-1,5,50,0,0,0,0,0", 10},
+    {"General", "toolBarFont", "Albert Sans,10,-1,5,50,0,0,0,0,0", 10},
+    {"General", "smallestReadableFont", "Albert Sans,9,-1,5,50,0,0,0,0,0", 9},
     {"General", "fixed", "Hack,10,-1,5,50,0,0,0,0,0", 10},
-    {"WM", "activeFont", "Inter,10,-1,5,63,0,0,0,0,0", 10},
+    {"WM", "activeFont", "Albert Sans,10,-1,5,550,0,0,0,0,0,0,0,0,0,0,1", 10},
 };
 }
 
@@ -1197,7 +1227,8 @@ void System::readTextScale()
 }
 
 // Every font size the desktop uses, scaled together. The sizes are written
-// in the ten-field form the defaults use, which Qt 5 apps can still read.
+// in the form the defaults use: ten fields, which Qt 5 apps can still read,
+// and the Qt 6 form for the window title font, which keeps its 550 weight.
 void System::setTextScale(int percent)
 {
     KSharedConfigPtr config = KSharedConfig::openConfig(QStringLiteral("kdeglobals"));

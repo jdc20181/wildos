@@ -1,5 +1,7 @@
 #include "updates.h"
 
+#include <algorithm>
+
 #include <KService>
 
 #include <PackageKit/Daemon>
@@ -25,6 +27,7 @@
 #include <QSaveFile>
 #include <QSet>
 #include <QStandardPaths>
+#include <QTimer>
 #include <QUrl>
 
 using PackageKit::Daemon;
@@ -32,6 +35,12 @@ using PackageKit::Transaction;
 
 namespace
 {
+// How long a check or install waits for another install to let go of the
+// package system, and how often it tries again meanwhile. Automatic
+// updates of a big batch can take a quarter of an hour.
+constexpr qint64 lockPatienceMs = 30 * 60 * 1000;
+constexpr int lockRetryMs = 15 * 1000;
+
 // Where Settings remembers, until the PC restarts, that an update asked for
 // a restart: the runtime folder is emptied at every boot.
 QString restartMarker()
@@ -130,6 +139,82 @@ bool needsRestart(const QStringList &packageIds)
     }
     return false;
 }
+
+// The servers Wild OS's own updates come from. Any other source was added
+// by the person or by an app's installer (Steam, Chrome, VS Code).
+QStringList ownHosts()
+{
+    QStringList hosts{QStringLiteral("deb.wildos.io")};
+    QFile sources(QStringLiteral("/etc/apt/sources.list.d/wildos.sources"));
+    if (sources.open(QIODevice::ReadOnly)) {
+        static const QRegularExpression uri(QStringLiteral("https?://([^/\\s]+)"));
+        auto it = uri.globalMatch(QString::fromUtf8(sources.readAll()));
+        while (it.hasNext()) {
+            const QString host = it.next().captured(1).toLower();
+            if (!hosts.contains(host)) {
+                hosts << host;
+            }
+        }
+    }
+    return hosts;
+}
+
+// The sources a refresh could not use, read from apt's messages, which
+// PackageKit passes on as the error's details: each host, and whether it
+// failed on its signature rather than on the connection. apt checks every
+// other source all the same.
+QList<QPair<QString, bool>> failedSources(const QString &details)
+{
+    static const QRegularExpression address(QStringLiteral("(?:tor\\+)?https?://([^/\\s'\"]+)"));
+    static const QStringList signing = {
+        QStringLiteral("signature"), QStringLiteral("not signed"), QStringLiteral("NO_PUBKEY"),
+        QStringLiteral("EXPKEYSIG"), QStringLiteral("Signing key"), QStringLiteral("OpenPGP"),
+    };
+    QList<QPair<QString, bool>> failed;
+    const QStringList lines = details.split(QLatin1Char('\n'), Qt::SkipEmptyParts);
+    for (const QString &line : lines) {
+        // apt's notices name sources that are fine, such as one without
+        // 32-bit packages on a PC with 32-bit support turned on.
+        if (line.contains(QLatin1String("Skipping acquire")) || line.contains(QLatin1String("support architecture"))) {
+            continue;
+        }
+        const auto match = address.match(line);
+        if (!match.hasMatch()) {
+            continue;
+        }
+        const QString host = match.captured(1).toLower();
+        const bool key = std::any_of(signing.cbegin(), signing.cend(), [&line](const QString &word) {
+            return line.contains(word, Qt::CaseInsensitive);
+        });
+        auto existing = std::find_if(failed.begin(), failed.end(), [&host](const auto &entry) {
+            return entry.first == host;
+        });
+        if (existing == failed.end()) {
+            failed.append({host, key});
+        } else if (key) {
+            existing->second = true;
+        }
+    }
+    return failed;
+}
+
+QString skippedText(const QList<QPair<QString, bool>> &failed)
+{
+    const auto why = [](bool key) {
+        return key ? QStringLiteral("its signing key was not accepted") : QStringLiteral("it could not be reached");
+    };
+    if (failed.size() == 1) {
+        return QStringLiteral("Everything else was checked, but not %1: %2. It was added by other software, so its updates wait until that is fixed or the source is removed.")
+            .arg(failed.first().first, why(failed.first().second));
+    }
+    QStringList parts;
+    for (const auto &entry : failed) {
+        parts << QStringLiteral("%1 (%2)").arg(entry.first, why(entry.second));
+    }
+    const QString last = parts.takeLast();
+    return QStringLiteral("Everything else was checked, but not %1 or %2. They were added by other software, so their updates wait until that is fixed or the sources are removed.")
+        .arg(parts.join(QStringLiteral(", ")), last);
+}
 }
 
 
@@ -211,6 +296,9 @@ void Updates::watchProgress(Transaction *transaction)
         m_progress = pct > 100 ? 0 : int(pct);
         Q_EMIT progressChanged();
     });
+    connect(transaction, &Transaction::statusChanged, this, [this, transaction] {
+        setWaiting(transaction->status() == Transaction::StatusWaitingForLock);
+    });
     connect(transaction, &Transaction::itemProgress, this, [this](const QString &itemID, Transaction::Status, uint) {
         m_detail = Transaction::packageName(itemID);
         Q_EMIT progressChanged();
@@ -224,20 +312,112 @@ void Updates::watchProgress(Transaction *transaction)
 }
 
 
+void Updates::setWaiting(bool waiting)
+{
+    if (m_waiting == waiting) {
+        return;
+    }
+    m_waiting = waiting;
+    if (waiting) {
+        // What the last attempt reached means nothing while waiting.
+        m_progress = 0;
+        m_detail.clear();
+    }
+    Q_EMIT progressChanged();
+}
+
+// apt's lock is held for minutes at a time by the automatic security
+// updates (unattended-upgrades) and apt's daily refresh, often in the first
+// minutes after start-up, and PackageKit gives up on it after ten seconds.
+// So a lock error is waited out here, as the person would otherwise have to
+// by hand, until lockPatienceMs has passed.
+bool Updates::lockHeld(Transaction::Error error)
+{
+    if (error != Transaction::ErrorCannotGetLock && error != Transaction::ErrorLockRequired) {
+        return false;
+    }
+    if (!m_lockWait.isValid()) {
+        m_lockWait.start();
+    }
+    if (m_lockWait.elapsed() > lockPatienceMs) {
+        return false;
+    }
+    m_lockBlocked = true;
+    return true;
+}
+
+void Updates::retryAfterLock(const std::function<void()> &retry)
+{
+    m_lockBlocked = false;
+    setWaiting(true);
+    QTimer::singleShot(lockRetryMs, this, retry);
+}
+
 void Updates::check()
 {
     if (m_state == QLatin1String("checking") || m_state == QLatin1String("installing")) {
         return;
     }
+    m_lockWait.invalidate();
     setState(QStringLiteral("checking"));
+    refreshForCheck();
+}
+
+// A source someone else added (Steam's, with a signing key Debian no
+// longer accepts) fails the whole refresh in PackageKit, though apt
+// refreshed every other source. That is no reason to say Wild OS could not
+// check: the check counts, and the page names what was skipped. Only Wild
+// OS's own server failing is an error.
+bool Updates::onlyOthersFailed(const QString &details)
+{
+    const auto failed = failedSources(details);
+    if (failed.isEmpty()) {
+        return false;
+    }
+    const QStringList own = ownHosts();
+    for (const auto &entry : failed) {
+        if (own.contains(entry.first)) {
+            return false;
+        }
+    }
+    m_skipped = skippedText(failed);
+    return true;
+}
+
+void Updates::refreshForCheck()
+{
     // Someone asked to check: fetch the lists again even if they are recent.
+    m_skipped.clear();
+    m_partialRefresh = false;
     Transaction *refresh = Daemon::refreshCache(true);
     watchProgress(refresh);
-    connect(refresh, &Transaction::errorCode, this, [this](Transaction::Error error, const QString &) {
+    connect(refresh, &Transaction::errorCode, this, [this](Transaction::Error error, const QString &details) {
+        if (lockHeld(error)) {
+            return;
+        }
+        if (onlyOthersFailed(details)) {
+            m_partialRefresh = true;
+            return;
+        }
         setState(QStringLiteral("error"), errorText(error, false));
     });
     connect(refresh, &Transaction::finished, this, [this](Transaction::Exit status, uint) {
-        readLastChecked();
+        if (m_lockBlocked) {
+            retryAfterLock([this] {
+                refreshForCheck();
+            });
+            return;
+        }
+        setWaiting(false);
+        // PackageKit records only a refresh with no failures, so a partial
+        // one is timed here.
+        if (m_partialRefresh && m_state != QLatin1String("error")) {
+            m_lastChecked = QDateTime::currentDateTime();
+            Q_EMIT lastCheckedChanged();
+            status = Transaction::ExitSuccess;
+        } else {
+            readLastChecked();
+        }
         if (status == Transaction::ExitSuccess) {
             listUpdates();
             fetchNotes();
@@ -250,9 +430,17 @@ void Updates::check()
 
 void Updates::listUpdates()
 {
+    readUpdates(false);
+}
+
+// quiet: only the list changes, so an error on show stays, unless nothing
+// is left to install.
+void Updates::readUpdates(bool quiet)
+{
     auto collected = std::make_shared<QVariantList>();
     auto ids = std::make_shared<QStringList>();
-    if (m_state != QLatin1String("checking")) {
+    // An install that runs again after a wait keeps showing as installing.
+    if (!quiet && m_state != QLatin1String("checking") && m_state != QLatin1String("installing")) {
         setState(QStringLiteral("checking"));
     }
     Transaction *list = Daemon::getUpdates();
@@ -269,10 +457,15 @@ void Updates::listUpdates()
             {QStringLiteral("security"), info == Transaction::InfoSecurity || info == Transaction::InfoImportant},
         });
     });
-    connect(list, &Transaction::errorCode, this, [this](Transaction::Error error, const QString &) {
-        setState(QStringLiteral("error"), errorText(error, false));
+    connect(list, &Transaction::errorCode, this, [this, quiet](Transaction::Error error, const QString &) {
+        if (!quiet) {
+            setState(QStringLiteral("error"), errorText(error, false));
+        }
     });
-    connect(list, &Transaction::finished, this, [this, collected, ids](Transaction::Exit status, uint) {
+    connect(list, &Transaction::finished, this, [this, collected, ids, quiet](Transaction::Exit status, uint) {
+        if (quiet && status != Transaction::ExitSuccess) {
+            return;
+        }
         if (status != Transaction::ExitSuccess) {
             m_installAfterList = false;
             if (m_state != QLatin1String("error")) {
@@ -300,13 +493,20 @@ void Updates::listUpdates()
             }
         }
         Q_EMIT updatesChanged();
-        setState(m_updates.isEmpty() ? QStringLiteral("uptodate") : QStringLiteral("available"));
+        if (quiet) {
+            if (m_updates.isEmpty() && m_state == QLatin1String("error")) {
+                setState(QStringLiteral("uptodate"));
+            }
+            return;
+        }
         if (m_installAfterList) {
             m_installAfterList = false;
             if (!m_pending.isEmpty()) {
                 startInstall();
+                return;
             }
         }
+        setState(m_updates.isEmpty() ? QStringLiteral("uptodate") : QStringLiteral("available"));
     });
 }
 
@@ -316,6 +516,7 @@ void Updates::install()
         return;
     }
     m_staleRetried = false;
+    m_lockWait.invalidate();
     startInstall();
 }
 
@@ -326,6 +527,9 @@ void Updates::startInstall()
     Transaction *update = Daemon::updatePackages(m_pending, Transaction::TransactionFlagOnlyTrusted);
     watchProgress(update);
     connect(update, &Transaction::errorCode, this, [this](Transaction::Error error, const QString &) {
+        if (lockHeld(error)) {
+            return;
+        }
         // The list being installed came from the last check, and the update
         // server may have moved on since (a newer build replaces the files
         // it named). Checking again fixes that, so it happens once here
@@ -340,6 +544,16 @@ void Updates::startInstall()
     });
     connect(update, &Transaction::finished, this, [this](Transaction::Exit status, uint) {
         loadHistory();
+        if (m_lockBlocked) {
+            // Whatever held the lock may have installed some of these
+            // itself, so the list is read again before trying.
+            retryAfterLock([this] {
+                m_installAfterList = true;
+                listUpdates();
+            });
+            return;
+        }
+        setWaiting(false);
         if (status != Transaction::ExitSuccess && m_staleRetrying) {
             m_staleRetrying = false;
             m_staleRetried = true;
@@ -374,22 +588,35 @@ void Updates::startInstall()
                 Q_EMIT restartNeededChanged();
             }
             setState(QStringLiteral("installed"));
-        } else if (m_state != QLatin1String("error")) {
-            setState(QStringLiteral("error"), status == Transaction::ExitCancelled ? QStringLiteral("Installing was cancelled.")
-                                                                                    : QStringLiteral("The updates could not be installed."));
+        } else {
+            if (m_state != QLatin1String("error")) {
+                setState(QStringLiteral("error"), status == Transaction::ExitCancelled ? QStringLiteral("Installing was cancelled.")
+                                                                                        : QStringLiteral("The updates could not be installed."));
+            }
+            // Part of the list may have gone in before the failure; what
+            // did should not still be listed as waiting.
+            readUpdates(true);
         }
     });
 }
 
 void Updates::refreshThenInstall()
 {
+    m_partialRefresh = false;
     Transaction *refresh = Daemon::refreshCache(true);
     watchProgress(refresh);
-    connect(refresh, &Transaction::errorCode, this, [this](Transaction::Error error, const QString &) {
+    connect(refresh, &Transaction::errorCode, this, [this](Transaction::Error error, const QString &details) {
+        if (onlyOthersFailed(details)) {
+            m_partialRefresh = true;
+            return;
+        }
         setState(QStringLiteral("error"), errorText(error, true));
     });
     connect(refresh, &Transaction::finished, this, [this](Transaction::Exit status, uint) {
         readLastChecked();
+        if (m_partialRefresh && m_state != QLatin1String("error")) {
+            status = Transaction::ExitSuccess;
+        }
         if (status == Transaction::ExitSuccess) {
             m_installAfterList = true;
             listUpdates();

@@ -35,7 +35,7 @@ CardButton {
         horizontalAlignment: Text.AlignHCenter
         text: action.text
         size: 12
-        font.weight: action.primary ? Font.DemiBold : Font.Medium
+        font.weight: action.primary ? UI.Style.weightSemiBold : UI.Style.weightMedium
         color: action.primary ? UI.Style.textOnAccent : UI.Style.ink
     }
 }

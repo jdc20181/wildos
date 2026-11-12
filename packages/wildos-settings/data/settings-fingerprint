@@ -1,0 +1,55 @@
+#!/bin/sh
+# Turns fingerprint sign-in on or off for Settings > Accounts > Sign-in
+# options. Runs as root through pkexec (org.wildos.settings.fingerprint in
+# org.wildos.settings.policy). Writes only /etc/wildos/fingerprint.conf,
+# which wildos-desktop's fingerprint-turn reads for each PAM service; the
+# PAM files themselves never change. The password keeps working whatever
+# this says. Every failure ends with one plain sentence on stderr, which
+# Settings shows as it is.
+#
+#   signin on|off    the sign-in screen and the lock screen
+#   admin on|off     sudo and administrator prompts
+
+set -eu
+
+CONF=/etc/wildos/fingerprint.conf
+
+fail() {
+    echo "$1" >&2
+    exit "${2:-1}"
+}
+
+[ -n "${PKEXEC_UID:-}" ] || fail "Settings must ask for this." 2
+case "${1:-}" in
+    signin|admin) ;;
+    *) fail "usage: settings-fingerprint signin|admin on|off" 2 ;;
+esac
+case "${2:-}" in
+    on|off) ;;
+    *) fail "usage: settings-fingerprint signin|admin on|off" 2 ;;
+esac
+
+current() {
+    value=$(sed -n "s/^[[:space:]]*$1[[:space:]]*=[[:space:]]*//p" "$CONF" 2>/dev/null | tail -n 1)
+    [ "$value" = off ] && echo off || echo on
+}
+
+signin=$(current signin)
+admin=$(current admin)
+case "$1" in
+    signin) signin=$2 ;;
+    admin) admin=$2 ;;
+esac
+
+mkdir -p /etc/wildos
+tmp=$(mktemp /etc/wildos/.fingerprint.conf.XXXXXX) || fail "Wild OS could not save the change."
+cat > "$tmp" <<CONF
+# Where a fingerprint can be used instead of the password, set in Settings >
+# Accounts > Sign-in options. The password always works as well, and the
+# encrypted disk always needs it. Read by /usr/libexec/wildos/fingerprint-turn
+# and the permission prompt.
+signin=$signin
+admin=$admin
+CONF
+chmod 0644 "$tmp"
+mv -f "$tmp" "$CONF" || { rm -f "$tmp"; fail "Wild OS could not save the change."; }

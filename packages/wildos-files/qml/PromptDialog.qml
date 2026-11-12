@@ -9,7 +9,10 @@ UI.Dialog {
     id: prompt
 
     required property bool mine
-    readonly property var p: FileOps.prompt
+    // Keeps the question it opened with while the dialog fades out. Answering
+    // clears FileOps.prompt at once, and a live binding emptied the title and
+    // text and turned Cancel into Stop during the fade (#23).
+    property var p: ({})
     readonly property string kind: p.kind ?? ""
     property bool all: false
     property bool answered: false
@@ -17,27 +20,47 @@ UI.Dialog {
     title: p.title ?? ""
     text: p.text ?? ""
 
-    // Reads p itself: kind is a binding on p and may not have caught up when
-    // this handler runs, which left every question unasked and the queue
-    // behind it stuck (Empty Recycle Bin did nothing).
-    onPChanged: {
-        all = false;
-        answered = false;
-        if ((p.kind ?? "").length > 0 && mine) {
-            open();
-        } else {
-            close();
+    // Reads FileOps.prompt itself: a binding on it may not have caught up
+    // when this handler runs, which once left every question unasked and the
+    // queue behind it stuck (Empty Recycle Bin did nothing).
+    Connections {
+        target: FileOps
+        function onPromptChanged() {
+            const next = FileOps.prompt;
+            prompt.all = false;
+            prompt.answered = false;
+            if ((next.kind ?? "").length > 0) {
+                prompt.p = next;
+                if (prompt.mine) {
+                    prompt.open();
+                }
+            } else {
+                prompt.close();
+            }
         }
     }
-    onMineChanged: if (mine && kind.length > 0) open()
+    onMineChanged: if (mine && (FileOps.prompt.kind ?? "").length > 0) {
+        p = FileOps.prompt;
+        open();
+    }
+
+    // A question where going ahead could do harm (running a program nothing
+    // has checked) puts the keyboard on Cancel, so Enter does nothing risky.
+    readonly property bool cancelDefault: p.cancelDefault === true
+    onOpened: if (cancelDefault) cancelButton.forceActiveFocus(Qt.TabFocusReason)
 
     // Escape, or the job ending under it, counts as Cancel.
-    onAboutToHide: if (!answered && kind.length > 0) {
+    onAboutToHide: if (!answered && (FileOps.prompt.kind ?? "").length > 0) {
         answered = true;
         FileOps.answer("cancel", false);
     }
 
     function reply(choice) {
+        // The buttons stay clickable while the dialog fades out, and a click
+        // then would answer the next question in the queue.
+        if (answered || (FileOps.prompt.kind ?? "").length === 0) {
+            return;
+        }
         answered = true;
         close();
         FileOps.answer(choice, all);
@@ -65,6 +88,7 @@ UI.Dialog {
     // The main choice sits at the right, as in DialogCopy.dc.html.
     buttons: [
         UI.Button {
+            id: cancelButton
             visible: prompt.p.informational !== true
             text: prompt.kind === "confirm" ? "Cancel" : "Stop"
             onClicked: prompt.reply("cancel")
@@ -97,7 +121,8 @@ UI.Dialog {
         },
         UI.Button {
             visible: prompt.kind === "confirm"
-            kind: "primary"
+            kind: prompt.cancelDefault ? "secondary" : "primary"
+            danger: prompt.cancelDefault
             text: prompt.p.primary ?? "Continue"
             onClicked: prompt.reply("primary")
         }

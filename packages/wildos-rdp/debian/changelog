@@ -1,3 +1,57 @@
+wildos-rdp (0.1.15) trixie; urgency=medium
+
+  * A RemoteApp connection rides out Windows being paused: FreeRDP's TCP
+    acknowledgement timeout goes from 9 s to an hour, so a pause no
+    longer drops the connection and the next app no longer waits for it
+    to reconnect.
+
+ -- Wild OS Developers <dev@wildos.io>  Thu, 12 Nov 2026 11:15:00 +0000
+
+wildos-rdp (0.1.14) trixie; urgency=medium
+
+  * Windows has a monitor for every screen, each at its own size in pixels
+    and its own scale, laid out beside the same neighbours as here. Before,
+    Windows had one monitor the size of the primary screen, so an app
+    maximised on a bigger or differently scaled screen filled the wrong
+    area, and every app was drawn at the primary screen's scale wherever
+    it was.
+  * A window moved to another screen moves to that screen's monitor in
+    Windows, which redraws it at that screen's scale; its size here stays
+    the same. If the app comes back at another size it is asked once more.
+  * The scale of each screen comes from KWin (kde-output-device-v2), which
+    has fractional scales exactly; without it every screen gets the one
+    scale, as before. WILDOS_RDP_MONITORS=uniform forces that.
+  * Maximising sets the work area of the right monitor, not the primary's.
+  * Menus and popups are placed and sized by the scale of their own window.
+  * The pointer is drawn at the scale of the monitor it is over in Windows.
+  * Plugging in or taking away a screen while apps are open gives Windows
+    the new layout over the display control channel, without
+    reconnecting; Windows moves windows off a monitor that went, and each
+    window then goes to the monitor of the screen it is on here.
+  * monitors-test checks the layouts: side by side, primary on the right,
+    stacked, three in a row, gaps, and fractional scales.
+  * A screen unplugged or switched off while Windows apps are on it: they
+    come back on the screens left at their own size and drawn for that
+    screen. Each window now waits for Windows to have the new layout before
+    it moves, so it is no longer left drawn for the screen that went, cut
+    off at the edge.
+
+ -- Wild OS Developers <dev@wildos.io>  Thu, 12 Nov 2026 01:04:47 +0000
+
+wildos-rdp (0.1.13) trixie; urgency=medium
+
+  * A two-finger pinch on the touchpad reaches Windows apps as Ctrl and the
+    wheel, the way Windows' own touchpad driver passes it on.
+
+ -- Wild OS Developers <dev@wildos.io>  Thu, 12 Nov 2026 00:33:25 +0000
+
+wildos-rdp (0.1.12) trixie; urgency=medium
+
+  * No navy left: surfaces, glass, shadows and the logo tile use the
+    same neutral greys as the rest of Wild OS.
+
+ -- Wild OS Developers <dev@wildos.io>  Wed, 11 Nov 2026 22:40:26 +0000
+
 wildos-rdp (0.1.11) trixie; urgency=medium
 
   * The engine is a library Remote shares, with a whole-desktop session

@@ -37,7 +37,7 @@ T.Button {
         horizontalAlignment: Text.AlignHCenter
         text: control.text
         size: control.big ? 14 : 13
-        font.weight: Font.Bold
+        font.weight: UI.Style.weightBold
         color: !control.enabled ? Metrics.inkDim : control.filled ? UI.Style.textOnAccent : UI.Style.accent
     }
 }

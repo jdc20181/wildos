@@ -79,7 +79,7 @@ FocusScope {
                 UI.Label {
                     Layout.fillWidth: true
                     text: row.title
-                    font.weight: Font.DemiBold
+                    font.weight: UI.Style.weightSemiBold
                 }
 
                 UI.Label {

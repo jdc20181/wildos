@@ -1,0 +1,10 @@
+{
+    "KPlugin": {
+        "Category": "Window Management",
+        "Description": "Touchpad gestures with three or four fingers: Task view, show the desktop, switch desktops, Start and notifications",
+        "EnabledByDefault": true,
+        "License": "GPL",
+        "Name": "Touchpad gestures"
+    },
+    "X-KWin-Internal": true
+}

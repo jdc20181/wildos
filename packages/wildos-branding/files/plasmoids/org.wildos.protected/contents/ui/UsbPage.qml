@@ -70,7 +70,7 @@ FocusScope {
                 anchors.verticalCenter: parent.verticalCenter
                 text: "Blocked USB devices"
                 size: 14
-                font.weight: Font.DemiBold
+                font.weight: UI.Style.weightSemiBold
                 Accessible.role: Accessible.Heading
             }
         }
@@ -129,7 +129,7 @@ FocusScope {
                             UI.Label {
                                 Layout.fillWidth: true
                                 text: card.modelData.name.length > 0 ? card.modelData.name : "Unnamed USB device"
-                                font.weight: Font.DemiBold
+                                font.weight: UI.Style.weightSemiBold
                             }
 
                             UI.Label {

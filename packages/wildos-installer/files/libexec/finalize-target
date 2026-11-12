@@ -44,7 +44,9 @@ fi
 
 # The sign-in and lock screens show "Encrypted and locked" only when this
 # marker exists, so it is written only when the root really is on dm-crypt.
-root_dev=$(findmnt -no SOURCE "$root")
+# --nofsroot: on Btrfs the source is otherwise "/dev/mapper/luks-...[/@]",
+# which lsblk cannot read, and the marker was never written.
+root_dev=$(findmnt -nvo SOURCE "$root")
 if lsblk -nso TYPE "$root_dev" 2>/dev/null | grep -qx crypt; then
     install -d "$root/etc/wildos"
     : > "$root/etc/wildos/encrypted"

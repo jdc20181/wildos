@@ -77,13 +77,24 @@ entry() {
 
 args="$GRUB_CMDLINE_LINUX $GRUB_CMDLINE_LINUX_DEFAULT"
 
+# A Btrfs root is the @ subvolume (restore points are its snapshots), as
+# Debian's own 10_linux passes it.
+if [ "$(stat -f -c %T /)" = btrfs ]; then
+    subvol=$(make_system_path_relative_to_its_root / | sed 's,^/*,,')
+    if [ -n "$subvol" ]; then
+        args="rootflags=subvol=$subvol $args"
+    fi
+fi
+
 use_kernel "$(echo "$kernels" | sed -n 1p)"
 # The id Debian gives its default entry, so a saved default or grub-reboot
 # from before Wild OS took over the menu still finds it.
 entry "Wild OS" wildos "gnulinux-simple-$device_id" "$args"
 # The USB stick's "safe graphics" fix: the firmware's framebuffer instead of
 # the graphics driver, for screens that stay black or garbled.
-entry "Wild OS (safe graphics)" wildos-safe-graphics "wildos-safe-graphics-$device_id" "$args nomodeset"
+# Start-up recovery's Safe mode starts this entry with wildos_safe set
+# (wildos-recovery's 15_wildos_recovery): no NVIDIA modules, no startup apps.
+entry "Wild OS (safe graphics)" wildos-safe-graphics "wildos-safe-graphics-$device_id" "$args nomodeset \${wildos_safe}"
 
 previous=$(echo "$kernels" | sed -n 2p)
 if [ -n "$previous" ]; then

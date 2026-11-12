@@ -1,0 +1,408 @@
+Description: Wild OS style gallery cards
+ The style gallery (.uno:StylesPreview) shows each style as a card, as in
+ the Wild OS design boards and Word's gallery: "Aa" in the style's font,
+ colour, weight and slant over the style's name, on paper white, the
+ current style's card outlined in the accent colour. The view keeps no
+ selection of its own, so the outline always follows the style at the
+ cursor. Writer's gallery shows Body Text, Title, Heading 1, Heading 2 and
+ Quotations, the document's own styles staying in the Styles deck.
+ LibreOffice Online keeps the previews it had.
+Author: Wild OS Developers <dev@wildos.io>
+Forwarded: not-needed
+
+--- a/svx/source/inc/StylesPreviewWindow.hxx
++++ b/svx/source/inc/StylesPreviewWindow.hxx
+@@ -66,6 +66,13 @@
+ 
+     void Paint(vcl::RenderContext& rRenderContext);
+ 
++    // Wild OS: the style as a card, "Aa" in the style over its name, as in
++    // Word's gallery; the current style's card has an accent outline.
++    static constexpr tools::Long CARD_WIDTH = 86;
++    static constexpr tools::Long CARD_HEIGHT = 58;
++    static constexpr tools::Long CARD_GAP = 6;
++    void PaintCard(vcl::RenderContext& rRenderContext, bool bCurrent);
++
+ private:
+     void DrawEntry(vcl::RenderContext& rRenderContext);
+     void DrawText(vcl::RenderContext& rRenderContext);
+@@ -107,6 +114,11 @@
+ 
+     std::vector<std::pair<OUString, OUString>> m_aDefaultStyles;
+     std::vector<std::pair<OUString, OUString>> m_aAllStyles;
++    // Wild OS: whether the gallery shows cards (everywhere but in
++    // LibreOffice Online), and which card is drawn as the current one.
++    bool m_bCards;
++    int m_nCurrentCard = -1;
++    DECL_LINK(CardTooltip, const weld::TreeIter&, OUString);
+ 
+     OUString m_sSelectedStyle;
+ 
+@@ -124,6 +136,7 @@
+     void Select(const OUString& rStyleName);
+     void RequestStylesListUpdate();
+     static VclPtr<VirtualDevice> GetCachedPreview(const std::pair<OUString, OUString>& rStyle);
++    static VclPtr<VirtualDevice> GetCard(const std::pair<OUString, OUString>& rStyle, bool bCurrent);
+     static OString GetCachedPreviewJson(const std::pair<OUString, OUString>& rStyle);
+ 
+ private:
+@@ -143,6 +156,10 @@
+     void dispose();
+ 
+     void SetOptimalSize();
++    virtual void DataChanged(const DataChangedEvent& rDCEvt) override;
++
++private:
++    void ApplyCardsBackground();
+ };
+ 
+ #endif
+--- a/svx/source/tbxctrls/StylesPreviewWindow.cxx
++++ b/svx/source/tbxctrls/StylesPreviewWindow.cxx
+@@ -24,6 +24,10 @@
+ #include <comphelper/propertyvalue.hxx>
+ #include <utility>
+ #include <vcl/svapp.hxx>
++#include <o3tl/safeint.hxx>
++#include <algorithm>
++#include <vcl/layout.hxx>
++#include <vcl/settings.hxx>
+ #include <sfx2/objsh.hxx>
+ #include <svl/itemset.hxx>
+ #include <sfx2/tbxctrl.hxx>
+@@ -449,9 +453,17 @@
+     , m_xStylesView(xBuilder.weld_icon_view(u"stylesview"_ustr))
+     , m_aUpdateTask(*this)
+     , m_aDefaultStyles(std::move(aDefaultStyles))
++    , m_bCards(!comphelper::LibreOfficeKit::isActive())
+ {
+     StylePreviewCache::RegisterClient();
+ 
++    if (m_bCards)
++    {
++        m_xStylesView->set_item_width(StyleItemController::CARD_WIDTH
++                                      + StyleItemController::CARD_GAP);
++        m_xStylesView->connect_query_tooltip(LINK(this, StylesPreviewWindow_Base, CardTooltip));
++    }
++
+     m_xStylesView->connect_selection_changed(LINK(this, StylesPreviewWindow_Base, Selected));
+     m_xStylesView->connect_item_activated(LINK(this, StylesPreviewWindow_Base, DoubleClick));
+     m_xStylesView->connect_command(LINK(this, StylesPreviewWindow_Base, DoCommand));
+@@ -469,6 +481,21 @@
+ IMPL_LINK(StylesPreviewWindow_Base, Selected, weld::IconView&, rIconView, void)
+ {
+     OUString sStyleName = rIconView.get_selected_text();
++    if (m_bCards)
++    {
++        const OUString sId(rIconView.get_selected_id());
++        sStyleName.clear();
++        for (size_t i = 0; i < m_aAllStyles.size(); ++i)
++        {
++            if (m_aAllStyles[i].first != sId)
++                continue;
++            sStyleName = m_aAllStyles[i].second;
++            rIconView.unselect(i);
++            break;
++        }
++        if (sStyleName.isEmpty())
++            return;
++    }
+ 
+     css::uno::Sequence<css::beans::PropertyValue> aArgs{
+         comphelper::makePropertyValue(u"Template"_ustr, sStyleName),
+@@ -482,6 +509,19 @@
+ IMPL_LINK(StylesPreviewWindow_Base, DoubleClick, weld::IconView&, rIconView, bool)
+ {
+     OUString sStyleName = rIconView.get_selected_text();
++    if (m_bCards)
++    {
++        std::unique_ptr<weld::TreeIter> xIter(rIconView.make_iterator());
++        if (!rIconView.get_cursor(xIter.get()))
++            return false;
++        const OUString sId(rIconView.get_id(*xIter));
++        sStyleName.clear();
++        for (const auto& rStyle : m_aAllStyles)
++            if (rStyle.first == sId)
++                sStyleName = rStyle.second;
++        if (sStyleName.isEmpty())
++            return false;
++    }
+ 
+     css::uno::Sequence<css::beans::PropertyValue> aArgs{
+         comphelper::makePropertyValue(u"Param"_ustr, sStyleName),
+@@ -518,6 +558,131 @@
+     m_xStatusListener = nullptr;
+ }
+ 
++// In English the cards use the boards' names, in sentence case and short;
++// other languages keep LibreOffice's translated style names.
++static OUString lcl_cardLabel(const std::pair<OUString, OUString>& rStyle)
++{
++    if (Application::GetSettings().GetUILanguageTag().getLanguage() == "en")
++    {
++        if (rStyle.first == "Text body")
++            return u"Body text"_ustr;
++        if (rStyle.first == "Quotations")
++            return u"Quote"_ustr;
++    }
++    return rStyle.second;
++}
++
++void StyleItemController::PaintCard(vcl::RenderContext& rRenderContext, bool bCurrent)
++{
++    SfxObjectShell* pShell = SfxObjectShell::Current();
++    SfxStyleSheetBasePool* pPool = pShell ? pShell->GetStyleSheetPool() : nullptr;
++    SfxStyleSheetBase* pStyle = pPool ? pPool->First(m_eStyleFamily) : nullptr;
++    while (pStyle && pStyle->GetName() != m_aStyleName.first
++           && pStyle->GetName() != m_aStyleName.second)
++        pStyle = pPool->Next();
++
++    // The card is paper: white with dark ink in light and dark mode alike.
++    const Color aPaper(COL_WHITE);
++    const Color aInk(0x1f, 0x26, 0x33);
++    const Color aQuiet(0x5a, 0x62, 0x74);
++    const StyleSettings& rSettings = Application::GetSettings().GetStyleSettings();
++
++    rRenderContext.Push(vcl::PushFlags::LINECOLOR | vcl::PushFlags::FILLCOLOR
++                        | vcl::PushFlags::FONT | vcl::PushFlags::TEXTCOLOR);
++    rRenderContext.SetAntialiasing(rRenderContext.GetAntialiasing() | AntialiasingFlags::Enable);
++    const tools::Rectangle aCard(Point(0, 0), Size(CARD_WIDTH, CARD_HEIGHT));
++    rRenderContext.SetLineColor();
++    if (bCurrent)
++    {
++        rRenderContext.SetFillColor(rSettings.GetAccentColor());
++        rRenderContext.DrawRect(aCard, 5, 5);
++        rRenderContext.SetFillColor(aPaper);
++        rRenderContext.DrawRect(tools::Rectangle(Point(2, 2), Size(CARD_WIDTH - 4, CARD_HEIGHT - 4)), 3, 3);
++    }
++    else
++    {
++        Color aEdge(aPaper);
++        aEdge.Merge(COL_BLACK, 230);
++        rRenderContext.SetFillColor(aEdge);
++        rRenderContext.DrawRect(aCard, 5, 5);
++        rRenderContext.SetFillColor(aPaper);
++        rRenderContext.DrawRect(tools::Rectangle(Point(1, 1), Size(CARD_WIDTH - 2, CARD_HEIGHT - 2)), 4, 4);
++    }
++
++    // "Aa" in the style's font, colour, weight and slant, its size kept
++    // between 12 and 18 px so every card reads at a glance.
++    std::optional<SfxItemSet> const pItemSet(pStyle ? pStyle->GetItemSetForPreview()
++                                                    : std::optional<SfxItemSet>());
++    SvxFont aSample(rRenderContext.GetFont());
++    Color aSampleColor = aInk;
++    if (pItemSet)
++    {
++        const SvxFontItem* pFontItem = pItemSet->GetItem<SvxFontItem>(SID_ATTR_CHAR_FONT);
++        const SvxFontHeightItem* pHeightItem
++            = pItemSet->GetItem<SvxFontHeightItem>(SID_ATTR_CHAR_FONTHEIGHT);
++        if (pFontItem && pHeightItem)
++        {
++            Size aPixel(rRenderContext.LogicToPixel(Size(0, pHeightItem->GetHeight()),
++                                                    MapMode(pShell->GetMapUnit())));
++            aPixel.setHeight(std::clamp<tools::Long>(aPixel.Height(), 12, 18));
++            aSample = GetFontFromItems(pFontItem, aPixel, pItemSet);
++            aSample.SetUnderline(LINESTYLE_NONE);
++            aSample.SetStrikeout(STRIKEOUT_NONE);
++            aSample.SetCaseMap(SvxCaseMap::NotMapped);
++        }
++        const Color aStyleColor = GetTextColorFromItemSet(pItemSet);
++        if (aStyleColor != COL_AUTO)
++            aSampleColor = aStyleColor;
++    }
++    aSample.SetAlignment(ALIGN_TOP);
++    aSample.SetTransparent(true);
++    rRenderContext.SetFont(aSample);
++    rRenderContext.SetTextColor(aSampleColor);
++    rRenderContext.DrawText(Point(8, 6), u"Aa"_ustr);
++
++    vcl::Font aLabel(rSettings.GetAppFont());
++    aLabel.SetFontSize(Size(0, 11));
++    aLabel.SetWeight(WEIGHT_NORMAL);
++    aLabel.SetItalic(ITALIC_NONE);
++    aLabel.SetAlignment(ALIGN_TOP);
++    aLabel.SetTransparent(true);
++    rRenderContext.SetFont(aLabel);
++    rRenderContext.SetTextColor(aQuiet);
++    rRenderContext.DrawText(
++        tools::Rectangle(Point(8, CARD_HEIGHT - 6 - rRenderContext.GetTextHeight()),
++                         Size(CARD_WIDTH - 14, rRenderContext.GetTextHeight())),
++        lcl_cardLabel(m_aStyleName), DrawTextFlags::Left | DrawTextFlags::EndEllipsis);
++    rRenderContext.Pop();
++}
++
++VclPtr<VirtualDevice> StylesPreviewWindow_Base::GetCard(const std::pair<OUString, OUString>& rStyle,
++                                                        bool bCurrent)
++{
++    // Kept apart from the plain previews of the same style in the cache.
++    const OUString aKey = rStyle.second + (bCurrent ? u"#wildos-current-card"_ustr : u"#wildos-card"_ustr);
++    auto aFound = StylePreviewCache::Get().find(aKey);
++    if (aFound != StylePreviewCache::Get().end())
++        return aFound->second;
++
++    VclPtr<VirtualDevice> pImg = VclPtr<VirtualDevice>::Create(DeviceFormat::WITH_ALPHA);
++    pImg->SetOutputSizePixel(Size(StyleItemController::CARD_WIDTH, StyleItemController::CARD_HEIGHT));
++    pImg->SetBackground(Wallpaper(COL_TRANSPARENT));
++    pImg->Erase();
++    StyleItemController aStyleController(rStyle);
++    aStyleController.PaintCard(*pImg, bCurrent);
++    StylePreviewCache::Get()[aKey] = pImg;
++    return pImg;
++}
++
++IMPL_LINK(StylesPreviewWindow_Base, CardTooltip, const weld::TreeIter&, rIter, OUString)
++{
++    const OUString sId(m_xStylesView->get_id(rIter));
++    for (const auto& rStyle : m_aAllStyles)
++        if (rStyle.first == sId)
++            return lcl_cardLabel(rStyle);
++    return OUString();
++}
++
+ void StylesPreviewWindow_Base::Select(const OUString& rStyleName)
+ {
+     m_sSelectedStyle = rStyleName;
+@@ -527,6 +692,28 @@
+ 
+ void StylesPreviewWindow_Base::UpdateSelection()
+ {
++    if (m_bCards)
++    {
++        int nCurrent = -1;
++        for (size_t i = 0; i < m_aAllStyles.size(); ++i)
++        {
++            if (m_aAllStyles[i].first == m_sSelectedStyle
++                || m_aAllStyles[i].second == m_sSelectedStyle)
++            {
++                nCurrent = i;
++                break;
++            }
++        }
++        if (nCurrent == m_nCurrentCard)
++            return;
++        if (m_nCurrentCard >= 0 && o3tl::make_unsigned(m_nCurrentCard) < m_aAllStyles.size())
++            m_xStylesView->set_image(m_nCurrentCard, GetCard(m_aAllStyles[m_nCurrentCard], false));
++        if (nCurrent >= 0)
++            m_xStylesView->set_image(nCurrent, GetCard(m_aAllStyles[nCurrent], true));
++        m_nCurrentCard = nCurrent;
++        return;
++    }
++
+     for (std::vector<std::pair<OUString, OUString>>::size_type i = 0; i < m_aAllStyles.size(); ++i)
+     {
+         if (m_aAllStyles[i].first == m_sSelectedStyle || m_aAllStyles[i].second == m_sSelectedStyle)
+@@ -625,7 +812,7 @@
+     if (pDocShell)
+         pStyleSheetPool = pDocShell->GetStyleSheetPool();
+ 
+-    if (pStyleSheetPool)
++    if (pStyleSheetPool && !m_bCards)
+     {
+         auto xIter = pStyleSheetPool->CreateIterator(SfxStyleFamily::Para,
+                                                      SfxStyleSearchBits::UserDefined);
+@@ -645,14 +832,34 @@
+     // for online we can skip inserting the preview into the IconView and rely
+     // on DoJsonProperty to provide the image to clients
+     const bool bNeedInsertPreview = !comphelper::LibreOfficeKit::isActive();
++    m_nCurrentCard = -1;
+     for (const auto& rStyle : m_aAllStyles)
+     {
++        if (m_bCards)
++        {
++            // The card carries the name, so no label under it.
++            m_xStylesView->insert(-1, nullptr, &rStyle.first, GetCard(rStyle, false), nullptr);
++            continue;
++        }
+         VclPtr<VirtualDevice> pImg = bNeedInsertPreview ? GetCachedPreview(rStyle) : nullptr;
+         m_xStylesView->append(rStyle.first, rStyle.second, pImg);
+     }
+     m_xStylesView->thaw();
+ }
+ 
++static vcl::Window* lcl_findTreeListBox(vcl::Window* pParent)
++{
++    for (vcl::Window* pChild = pParent->GetWindow(GetWindowType::FirstChild); pChild;
++         pChild = pChild->GetWindow(GetWindowType::Next))
++    {
++        if (pChild->GetType() == WindowType::TREELISTBOX)
++            return pChild;
++        if (vcl::Window* pFound = lcl_findTreeListBox(pChild))
++            return pFound;
++    }
++    return nullptr;
++}
++
+ StylesPreviewWindow_Impl::StylesPreviewWindow_Impl(
+     vcl::Window* pParent, std::vector<std::pair<OUString, OUString>>&& aDefaultStyles,
+     const css::uno::Reference<css::frame::XFrame>& xFrame)
+@@ -660,9 +867,53 @@
+                         reinterpret_cast<sal_uInt64>(SfxViewShell::Current()))
+     , StylesPreviewWindow_Base(*m_xBuilder, std::move(aDefaultStyles), xFrame)
+ {
++    if (m_bCards)
++    {
++        if (vcl::Window* pView = lcl_findTreeListBox(this))
++        {
++            const tools::Long nCount = std::max<tools::Long>(m_aDefaultStyles.size(), 1);
++            pView->SetBorderStyle(WindowBorderStyle::NOBORDER);
++            pView->SetStyle(pView->GetStyle()
++                            & ~(WB_BORDER | WB_VSCROLL | WB_AUTOVSCROLL | WB_HSCROLL | WB_AUTOHSCROLL));
++            for (vcl::Window* pChild = pView->GetWindow(GetWindowType::FirstChild); pChild;
++                 pChild = pChild->GetWindow(GetWindowType::Next))
++            {
++                if (pChild->GetType() == WindowType::SCROLLBAR
++                    || pChild->GetType() == WindowType::SCROLLBARBOX)
++                    pChild->Hide();
++            }
++            pView->set_width_request(nCount * (StyleItemController::CARD_WIDTH
++                                               + StyleItemController::CARD_GAP)
++                                     + StyleItemController::CARD_GAP);
++            pView->set_height_request(StyleItemController::CARD_HEIGHT + 10);
++            ApplyCardsBackground();
++        }
++    }
+     SetOptimalSize();
+ }
+ 
++// A tree list box always paints the field colour; the cards sit on the
++// ribbon's own colour instead.
++void StylesPreviewWindow_Impl::ApplyCardsBackground()
++{
++    vcl::Window* pView = m_bCards ? lcl_findTreeListBox(this) : nullptr;
++    if (!pView)
++        return;
++    AllSettings aSettings(pView->GetSettings());
++    StyleSettings aStyle(aSettings.GetStyleSettings());
++    aStyle.SetFieldColor(GetSettings().GetStyleSettings().GetDialogColor());
++    aSettings.SetStyleSettings(aStyle);
++    pView->SetSettings(aSettings);
++}
++
++void StylesPreviewWindow_Impl::DataChanged(const DataChangedEvent& rDCEvt)
++{
++    InterimItemWindow::DataChanged(rDCEvt);
++    if (rDCEvt.GetType() == DataChangedEventType::SETTINGS
++        && (rDCEvt.GetFlags() & AllSettingsFlags::STYLE))
++        ApplyCardsBackground();
++}
++
+ StylesPreviewWindow_Impl::~StylesPreviewWindow_Impl() { disposeOnce(); }
+ 
+ void StylesPreviewWindow_Impl::dispose()
+--- a/svx/source/tbxctrls/StylesPreviewToolBoxControl.cxx
++++ b/svx/source/tbxctrls/StylesPreviewToolBoxControl.cxx
+@@ -62,11 +62,9 @@
+         {
+             css::uno::Reference<css::container::XNameAccess> xParaStyles;
+             xStylesSupplier->getStyleFamilies()->getByName(u"ParagraphStyles"_ustr) >>= xParaStyles;
+-            static constexpr OUString aWriterStyles[]{
+-                u"Standard"_ustr,   u"Text body"_ustr,        u"Heading 1"_ustr, u"Heading 2"_ustr,
+-                u"Heading 3"_ustr,  u"Heading 4"_ustr,        u"Title"_ustr,     u"Subtitle"_ustr,
+-                u"Quotations"_ustr, u"Preformatted Text"_ustr
+-            };
++            static constexpr OUString aWriterStyles[]{ u"Text body"_ustr, u"Title"_ustr,
++                                                       u"Heading 1"_ustr, u"Heading 2"_ustr,
++                                                       u"Quotations"_ustr };
+             for (const OUString& aStyle : aWriterStyles)
+             {
+                 try

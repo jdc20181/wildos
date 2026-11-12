@@ -35,7 +35,7 @@ Item {
             Layout.preferredHeight: 44
             text: qsTr("Port forwarding")
             size: 26
-            font.weight: Font.Bold
+            font.weight: UI.Style.weightBold
         }
         UI.Label {
             Layout.fillWidth: true
@@ -61,16 +61,16 @@ Item {
                 width: ListView.view.width
                 height: 62
                 radius: 12
-                color: UI.Style.tone(0.045)
+                color: UI.Style.surfaceRaised
                 border.width: 1
-                border.color: UI.Style.tone(0.07)
+                border.color: UI.Style.borderSubtle
                 UI.Glyph {
                     x: 18
                     anchors.verticalCenter: parent.verticalCenter
                     width: 18
                     height: 18
                     path: RemoteIcons.forward
-                    color: UI.Style.accent
+                    color: UI.Style.iconInk
                 }
                 Column {
                     x: 50
@@ -80,7 +80,7 @@ Item {
                         text: qsTr("localhost:%1 to %2:%3").arg(row.modelData.forward.localPort).arg(row.modelData.forward.remoteHost || "localhost").arg(row.modelData.forward.remotePort)
                         size: 14
                         font.family: "JetBrains Mono"
-                        font.weight: Font.DemiBold
+                        font.weight: UI.Style.weightSemiBold
                     }
                     UI.Label {
                         text: qsTr("Through %1").arg(row.modelData.host.name)
@@ -104,7 +104,7 @@ Item {
                 horizontalAlignment: Text.AlignHCenter
                 text: qsTr("No forwards yet")
                 size: 18
-                font.weight: Font.DemiBold
+                font.weight: UI.Style.weightSemiBold
             }
         }
     }

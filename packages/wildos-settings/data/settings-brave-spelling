@@ -1,0 +1,83 @@
+#!/bin/sh
+# Sets the languages Brave checks spelling in to the ones chosen in Settings >
+# Time and language > Typing. Runs as root through pkexec
+# (org.wildos.settings.brave-spelling), started by
+# /usr/libexec/wildos/brave-spelling in the person's session.
+#
+# Brave keeps its spelling languages in each profile, so the only clean way to
+# set them from outside is a policy. SpellcheckLanguage turns these languages
+# on and still lets people add more in Brave; Brave notices the file within a
+# few seconds, even while it is open. Brave also keeps the language it started
+# with, so the other spellings of a chosen language (American English beside
+# British) go in SpellcheckLanguageBlocklist, or both would pass as correct. A policy is for the whole computer, so
+# with several accounts the one that last changed Typing (or the first to log
+# in after an update) sets it for everyone.
+#
+#   <dictionary>...   Sonnet dictionary names, such as en_GB or de_DE_frami,
+#                     the first being the main one. Languages Brave has no
+#                     dictionary for are left out; with none left, the file
+#                     goes and Brave keeps its own choice.
+
+set -eu
+
+FILE=/etc/brave/policies/managed/wildos-spelling.json
+
+# Chromium's spelling languages (components/spellcheck/common/
+# spellcheck_common.cc), with and without a region.
+REGIONAL=" de-DE en-AU en-CA en-GB en-US es-419 es-AR es-ES es-MX es-US fr-FR it-IT pt-BR pt-PT "
+BASE=" af bg ca cs cy da de el es et fa fo fr gl he hi hr hu hy id it ko lt lv nb nl pl ro ru sh sk sl sq sr sv ta tg tr uk vi "
+
+# Languages Chromium spells differently by region; the Spanish ones all use
+# one dictionary.
+FAMILIES="en-AU en-CA en-GB en-US
+pt-BR pt-PT"
+
+brave_code() {
+    lang=$(printf '%s' "$1" | sed -n 's/^\([a-z][a-z][a-z]\{0,1\}\)\([_-].*\)\{0,1\}$/\1/p')
+    region=$(printf '%s' "$1" | sed -n 's/^[a-z]\{2,3\}[_-]\([A-Z][A-Z]\)\([_-].*\)\{0,1\}$/\1/p')
+    [ -n "$lang" ] || return 1
+    case "$REGIONAL" in *" $lang-$region "*) echo "$lang-$region"; return ;; esac
+    case "$lang" in
+    # Chromium reads plain "en" and "pt" as American English and Brazilian
+    # Portuguese; English from anywhere else (South Africa, Ireland, India)
+    # and Portuguese outside Brazil spell closer to Britain and Portugal.
+    en) echo en-GB ;;
+    pt) echo pt-PT ;;
+    *)
+        case "$BASE" in *" $lang "*) echo "$lang" ;; *) return 1 ;; esac
+        ;;
+    esac
+}
+
+[ $# -gt 0 ] || { echo "usage: $0 dictionary..." >&2; exit 2; }
+
+list=""
+seen=" "
+for name in "$@"; do
+    code=$(brave_code "$name") || continue
+    case "$seen" in *" $code "*) continue ;; esac
+    seen="$seen$code "
+    list="${list:+$list, }\"$code\""
+done
+
+if [ -z "$list" ]; then
+    rm -f "$FILE"
+    exit 0
+fi
+
+blocked=""
+held=" "
+for code in $seen; do
+    for other in $(printf '%s\n' "$FAMILIES" | grep -w -- "$code" || true); do
+        case "$seen$held" in *" $other "*) continue ;; esac
+        held="$held$other "
+        blocked="${blocked:+$blocked, }\"$other\""
+    done
+done
+
+# Written beside the folder, not in it: Brave reads every file in there.
+mkdir -p "${FILE%/*}"
+tmp=$(mktemp /etc/brave/policies/.wildos-spelling.XXXXXX)
+printf '{\n  "SpellcheckLanguage": [%s],\n  "SpellcheckLanguageBlocklist": [%s]\n}\n' "$list" "$blocked" > "$tmp"
+chmod 644 "$tmp"
+mv -f "$tmp" "$FILE"

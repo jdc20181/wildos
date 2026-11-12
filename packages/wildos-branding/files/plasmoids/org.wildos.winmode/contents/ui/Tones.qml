@@ -13,15 +13,17 @@ QtObject {
     function dot(level: string): color {
         switch (level) {
         case "running":
+        case "ready":
             return dark ? "#7fe0ad" : "#1c9a62";
         case "paused":
         case "starting":
+        case "settingup":
             return dark ? "#8fb4ff" : "#3a56c4";
         case "updating":
         case "attention":
             return dark ? "#f5c27a" : "#b7791f";
         }
-        return dark ? Qt.rgba(232 / 255, 236 / 255, 248 / 255, 0.55) : Qt.rgba(20 / 255, 26 / 255, 46 / 255, 0.45);
+        return dark ? Qt.rgba(232 / 255, 236 / 255, 248 / 255, 0.55) : Qt.rgba(29 / 255, 31 / 255, 35 / 255, 0.45);
     }
 
     // The panel's state pill: a soft fill of the dot's colour with lighter
@@ -29,9 +31,11 @@ QtObject {
     function pillText(level: string): color {
         switch (level) {
         case "running":
+        case "ready":
             return UI.Style.success;
         case "paused":
         case "starting":
+        case "settingup":
             return UI.Style.accentText;
         case "updating":
         case "attention":
@@ -47,5 +51,5 @@ QtObject {
 
     // The taskbar behind the chip, for the ring that sets the dot off the
     // window mark.
-    readonly property color bar: dark ? Qt.rgba(14 / 255, 18 / 255, 34 / 255, 0.88) : Qt.rgba(246 / 255, 248 / 255, 252 / 255, 0.92)
+    readonly property color bar: dark ? Qt.rgba(20 / 255, 22 / 255, 26 / 255, 0.88) : Qt.rgba(246 / 255, 248 / 255, 252 / 255, 0.92)
 }

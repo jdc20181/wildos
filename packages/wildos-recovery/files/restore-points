@@ -1,0 +1,1313 @@
+#!/usr/bin/python3 -I
+"""Wild OS restore points.
+
+The one tool that makes, lists, prunes and applies restore points, for
+Settings, the apt hooks, the kernel hook, the initramfs and start-up
+recovery. See docs/recovery-design.md.
+
+Two backends, picked from the root filesystem:
+  btrfs  a read-only snapshot of @ in /.snapshots/<id>/snapshot
+  ext4   an rsync copy hard-linked to the previous point, in
+         /var/lib/wildos/restore-points/<id>/tree
+
+Either way each point has info.json and a copy of /boot (kernels and
+initramfs files) beside it, and an index of every point is kept
+world-readable for Settings.
+
+    restore-points list [--json]
+    restore-points create [--label TEXT] [--kind manual|update|driver|first]
+    restore-points delete ID
+    restore-points go-back ID [--hold]       Btrfs: done now; ext4: staged
+    restore-points apply-pending             ext4, from the initramfs
+    restore-points restore ID --target DIR [--top DIR] [--boot DIR]
+                                             from start-up recovery
+    restore-points prune
+    restore-points measure
+    restore-points limits COUNT GB on|off
+    restore-points boot                      once per start-up
+    restore-points expire-holds
+    restore-points apt-pre | apt-pkgs | apt-post   (apt hooks)
+    restore-points kernel-removed VERSION    (kernel postrm hook)
+"""
+
+# Everything is imported up front: apply-pending replaces the files of the
+# system it runs from, so nothing may be loaded lazily afterwards.
+import datetime
+import errno
+import fcntl
+import grp
+import json
+import os
+import pwd
+import re
+import selectors
+import shutil
+import signal
+import subprocess
+import sys
+import tempfile
+import time
+
+import _posixsubprocess  # noqa: F401  (subprocess loads it lazily)
+
+LOCK = "/run/lock/wildos-restore-points.lock"
+RUN = "/run/wildos-restore-points"
+EXT4_STORE = "/var/lib/wildos/restore-points"
+BTRFS_STORE = "/.snapshots"
+LOG = "/var/log/wildos-restore-points.log"
+HOLD_FILE = "/etc/apt/preferences.d/wildos-hold-back"
+DPKG_LOG = "/var/log/dpkg.log"
+
+DEFAULTS = {"enabled": True, "keep": 5, "max_gb": 20}
+AUTO_WINDOW = 30 * 60
+UNDO_GRACE = 60 * 60
+LABEL_MAX = 80
+
+# Never part of a restore point, and never touched when going back. On
+# Btrfs most are separate subvolumes anyway; these lists are what rsync
+# skips on ext4, relative to the root.
+NOT_SYSTEM = [
+    "/proc", "/sys", "/dev", "/run", "/tmp", "/mnt", "/media", "/lost+found",
+    "/home", "/swapfile", "/swap", "/.snapshots", "/boot/*",
+    "/var/lib/wildos/restore-points", "/var/lib/wildos/reset",
+    "/var/log", "/var/cache", "/var/tmp",
+    # Windows mode: its disk, firmware variables, TPM and saved memory, and
+    # the VM's definition. Going back never rolls Windows back.
+    "/var/lib/wildos/winmode", "/var/lib/libvirt", "/etc/libvirt",
+    "/etc/wildos/winmode.json",
+]
+
+# Part of the system, but what the go-back dialog promises stays: Wi-Fi,
+# fingerprints, Bluetooth, account pictures, the computer's name, region and
+# keyboard, and the disk layout. The current copy always wins. Accounts are
+# merged separately (merge_accounts).
+CARRY = [
+    "/etc/NetworkManager/system-connections", "/var/lib/NetworkManager",
+    "/var/lib/fprint", "/var/lib/bluetooth", "/var/lib/AccountsService",
+    "/etc/hostname", "/etc/hosts", "/etc/localtime", "/etc/timezone",
+    "/etc/default/locale", "/etc/default/keyboard", "/etc/vconsole.conf",
+    "/etc/locale.gen", "/etc/machine-id", "/var/lib/dbus/machine-id",
+    "/etc/fstab", "/etc/crypttab", "/etc/wildos/encrypted",
+    "/etc/grub.d/30_windows", "/etc/wildos/protection-level",
+    "/etc/wildos/cpu-threads", "/etc/default/grub.d/41_wildos_cpu_threads.cfg",
+    "/etc/apt/sources.list.d/wildos.sources", "/etc/apt/apt.conf.d/20auto-upgrades",
+    "/etc/apt/apt.conf.d/52wildos-restart", HOLD_FILE,
+    # First-start setup: once it is done it must never come back.
+    "/var/lib/wildos/first-boot-setup", "/var/lib/wildos/first-boot-account",
+    "/etc/sddm.conf.d/99-wildos-setup.conf", "/etc/sddm.conf.d/98-wildos-first-sign-in.conf",
+]
+ACCOUNT_FILES = ["/etc/passwd", "/etc/shadow", "/etc/group", "/etc/gshadow", "/etc/subuid", "/etc/subgid"]
+
+# /boot is copied with each point, except what belongs to the boot loader in
+# the EFI partition or to Wild OS's own boot files.
+BOOT_EXCLUDES = ["/efi/", "/grub/grubenv", "/grub/x86_64-efi/", "/grub/i386-pc/",
+                 "/grub/fonts/", "/grub/themes/", "/grub/locale/", "/wildos-restore/",
+                 "/wildos-recovery/", "/lost+found/"]
+
+HUMAN_UIDS = range(1000, 60000)
+
+RSYNC = ["rsync", "-aHAX", "--numeric-ids", "--delete", "--modify-window=-1"]
+# Size and time are not enough to tell versions apart: Wild OS packages give
+# every file the changelog's date, so two builds of one version can differ
+# in a file of the same size and time. Going back compares contents; making
+# a point compares contents only for files whose inode changed since the
+# last one (changed_since), which keeps it to seconds.
+RSYNC_EXACT = RSYNC + ["--checksum"]
+
+
+def log(msg):
+    line = time.strftime("%Y-%m-%d %H:%M:%S ") + msg
+    try:
+        with open(LOG, "a") as f:
+            f.write(line + "\n")
+    except OSError:
+        pass
+    if sys.stderr.isatty():
+        print(msg, file=sys.stderr)
+
+
+def run(cmd, check=True, **kw):
+    return subprocess.run(cmd, check=check, **kw)
+
+
+def out(cmd):
+    return subprocess.run(cmd, check=True, capture_output=True, text=True).stdout
+
+
+class Lock:
+    def __enter__(self):
+        os.makedirs(os.path.dirname(LOCK), exist_ok=True)
+        self.f = open(LOCK, "w")
+        fcntl.flock(self.f, fcntl.LOCK_EX)
+        return self
+
+    def __exit__(self, *a):
+        fcntl.flock(self.f, fcntl.LOCK_UN)
+        self.f.close()
+
+
+def now():
+    return int(time.time())
+
+
+# ---------------------------------------------------------------- backends
+
+def root_fstype(root="/"):
+    try:
+        return out(["findmnt", "-no", "FSTYPE", "--target", root]).split()[0]
+    except (subprocess.CalledProcessError, IndexError):
+        return ""
+
+
+class Store:
+    """Where the points of the system mounted at `root` live."""
+
+    def __init__(self, root="/"):
+        self.root = root.rstrip("/") or "/"
+        self.fs = root_fstype(self.root)
+        if self.fs == "btrfs":
+            self.dir = self.path(BTRFS_STORE)
+        else:
+            self.dir = self.path(EXT4_STORE)
+
+    @classmethod
+    def offline(cls, target=None, top=None):
+        """The store of a system that is mounted, not running (recovery).
+
+        Btrfs: `top` is the top level of the filesystem, the system is
+        top/@ and the restore points top/@snapshots. ext4: `target` is the
+        mounted root.
+        """
+        if top:
+            store = cls.__new__(cls)
+            store.root = os.path.join(top, "@")
+            store.fs = "btrfs"
+            store.dir = os.path.join(top, "@snapshots")
+            return store
+        return cls(target)
+
+    def path(self, p):
+        return p if self.root == "/" else self.root + p
+
+    @property
+    def supported(self):
+        if self.fs == "btrfs":
+            return os.path.isdir(self.dir) and os.path.ismount(self.dir) or self.root != "/"
+        return self.fs in ("ext4", "ext3", "xfs")
+
+    def point_dir(self, pid):
+        return os.path.join(self.dir, str(pid))
+
+    def data(self, pid):
+        """The point's copy of the root filesystem."""
+        return os.path.join(self.point_dir(pid), "snapshot" if self.fs == "btrfs" else "tree")
+
+    def boot(self, pid):
+        return os.path.join(self.point_dir(pid), "boot")
+
+    # ---- metadata
+
+    def config(self):
+        cfg = dict(DEFAULTS)
+        try:
+            with open(os.path.join(self.dir, "config.json")) as f:
+                cfg.update({k: v for k, v in json.load(f).items() if k in DEFAULTS})
+        except (OSError, ValueError):
+            pass
+        return cfg
+
+    def write_json(self, path, obj, mode=0o644):
+        tmp = path + ".new"
+        with open(tmp, "w") as f:
+            json.dump(obj, f, indent=1, sort_keys=True)
+            f.write("\n")
+        os.chmod(tmp, mode)
+        os.replace(tmp, path)
+
+    def points(self):
+        pts = []
+        try:
+            names = os.listdir(self.dir)
+        except OSError:
+            return pts
+        for n in names:
+            if not n.isdigit():
+                continue
+            try:
+                with open(os.path.join(self.dir, n, "info.json")) as f:
+                    info = json.load(f)
+            except (OSError, ValueError):
+                continue
+            if os.path.exists(self.data(int(n))):
+                pts.append(info)
+        pts.sort(key=lambda p: (p.get("time", 0), p["id"]))
+        return pts
+
+    def get(self, pid):
+        for p in self.points():
+            if p["id"] == pid:
+                return p
+        return None
+
+    def save_info(self, info):
+        self.write_json(os.path.join(self.point_dir(info["id"]), "info.json"), info, 0o600)
+
+    def next_id(self):
+        ids = [int(n) for n in os.listdir(self.dir) if n.isdigit()] if os.path.isdir(self.dir) else []
+        return max(ids, default=0) + 1
+
+    def write_index(self):
+        pts = self.points()
+        cfg = self.config()
+        public = []
+        for p in reversed(pts):
+            public.append({k: p.get(k) for k in ("id", "label", "time", "kind", "summary",
+                                                   "apps", "system", "driver", "build", "kernels",
+                                                   "bytes", "holdable")})
+        pending = None
+        try:
+            with open(os.path.join(self.dir, "pending")) as f:
+                pending = json.load(f).get("id")
+        except (OSError, ValueError):
+            pass
+        index = {
+            "backend": self.fs,
+            "enabled": cfg["enabled"],
+            "keep": cfg["keep"],
+            "max_gb": cfg["max_gb"],
+            "used_bytes": sum(p.get("bytes") or 0 for p in pts),
+            "pending": pending,
+            "points": public,
+        }
+        os.makedirs(self.dir, exist_ok=True)
+        os.chmod(self.dir, 0o711)
+        self.write_json(os.path.join(self.dir, "index.json"), index)
+        return index
+
+
+# ---------------------------------------------------------------- copying
+
+def rsync_excludes(paths):
+    args = []
+    for p in paths:
+        args += ["--exclude", p]
+    return args
+
+
+def copy_boot(store, pid, prev, boot_src):
+    """Copy /boot beside the point, hard-linked to the previous point's."""
+    dst = store.boot(pid)
+    os.makedirs(dst, exist_ok=True)
+    cmd = list(RSYNC) + rsync_excludes(BOOT_EXCLUDES)
+    if prev is not None and os.path.isdir(store.boot(prev)):
+        cmd += ["--link-dest", store.boot(prev)]
+    run(cmd + [boot_src.rstrip("/") + "/", dst + "/"])
+
+
+def kernels_in(tree):
+    try:
+        return sorted(n for n in os.listdir(os.path.join(tree, "usr/lib/modules"))
+                      if os.path.isdir(os.path.join(tree, "usr/lib/modules", n)))
+    except OSError:
+        return []
+
+
+def swap_files(root="/"):
+    """Swap files of the system at root, wherever its fstab and /proc/swaps
+    put them (/swapfile, /var/swapfile, /swap/swapfile). A swap file is
+    never part of a restore point, and never written while in use."""
+    found = {"/swapfile", "/var/swapfile", "/swap"}
+    for line in read_lines(os.path.join(root, "etc/fstab")):
+        f = line.split()
+        if len(f) >= 3 and f[2] == "swap" and f[0].startswith("/"):
+            found.add(f[0])
+    if root.rstrip("/") in ("", "/"):
+        for line in read_lines("/proc/swaps")[1:]:
+            f = line.split()
+            if f and f[0].startswith("/") and not f[0].startswith("/dev/"):
+                found.add(f[0])
+    return sorted(found)
+
+
+def system_excludes(root="/"):
+    return NOT_SYSTEM + [p for p in swap_files(root) if p not in NOT_SYSTEM]
+
+
+def changed_since(root, since):
+    """Files under root (one filesystem, system parts only) whose inode
+    changed after `since`: anything written, replaced or renamed."""
+    found = []
+    skip = tuple(p.rstrip("*").rstrip("/") for p in system_excludes(root))
+    root = root.rstrip("/") or "/"
+    for dirpath, dirnames, filenames in os.walk(root):
+        rel = dirpath[len(root):] if root != "/" else dirpath
+        rel = rel or "/"
+        dirnames[:] = [d for d in dirnames
+                       if not (rel.rstrip("/") + "/" + d).startswith(skip)
+                       and not os.path.ismount(os.path.join(dirpath, d))]
+        for name in filenames:
+            path = os.path.join(dirpath, name)
+            if (rel.rstrip("/") + "/" + name).startswith(skip):
+                continue
+            try:
+                if os.lstat(path).st_ctime > since:
+                    found.append(os.path.relpath(path, root))
+            except OSError:
+                pass
+    return found
+
+
+def free_bytes(path):
+    st = os.statvfs(path)
+    return st.f_bavail * st.f_frsize
+
+
+def make_point(store, label, kind, boot_src=None):
+    """Take a restore point of the system at store.root. Returns its info."""
+    os.makedirs(store.dir, exist_ok=True)
+    os.chmod(store.dir, 0o711)
+    pts = store.points()
+    prev = pts[-1]["id"] if pts else None
+    pid = store.next_id()
+    pdir = store.point_dir(pid)
+    os.makedirs(pdir, mode=0o700)
+    boot_src = boot_src or store.path("/boot")
+    t0 = time.time()
+    try:
+        if store.fs == "btrfs":
+            r = run(["btrfs", "subvolume", "snapshot", "-r", store.root, store.data(pid)],
+                    check=False, capture_output=True, text=True)
+            if r.returncode != 0:
+                raise RuntimeError("snapshot failed: " + (r.stderr or r.stdout).strip())
+        else:
+            used = shutil.disk_usage(store.root).used
+            need = (used if prev is None else 0) + (1 << 30)
+            if free_bytes(store.root) < need:
+                raise RuntimeError("not enough free space for a restore point")
+            tree = store.data(pid) + ".partial"
+            os.makedirs(tree, exist_ok=True)
+            cmd = list(RSYNC) + ["-x"] + rsync_excludes(system_excludes(store.root))
+            if prev is not None:
+                cmd += ["--link-dest", store.data(prev)]
+            run(cmd + [store.root.rstrip("/") + "/", tree + "/"])
+            if prev is not None:
+                changed = changed_since(store.root, pts[-1].get("started", pts[-1]["time"] - 3600))
+                if changed:
+                    listing = tree + ".changed"
+                    with open(listing, "w") as f:
+                        f.write("\n".join(changed) + "\n")
+                    run(["rsync", "-aHAX", "--numeric-ids", "--checksum", "--files-from", listing,
+                         store.root.rstrip("/") + "/", tree + "/"])
+                    os.unlink(listing)
+            for p in NOT_SYSTEM:
+                if p in ("/proc", "/sys", "/dev", "/run", "/tmp", "/home", "/var/log",
+                         "/var/cache", "/var/tmp", "/mnt", "/media"):
+                    os.makedirs(tree + p, exist_ok=True)
+            os.rename(tree, store.data(pid))
+        if os.path.isdir(boot_src):
+            copy_boot(store, pid, prev, boot_src)
+    except BaseException:
+        remove_point_files(store, pid)
+        raise
+    info = {
+        "id": pid, "label": label[:LABEL_MAX], "kind": kind, "time": now(), "started": int(t0),
+        "kernels": kernels_in(store.data(pid)), "summary": "", "apps": [],
+        "system": False, "driver": False, "build": 0, "holdable": [], "bytes": None,
+        "seconds": round(time.time() - t0, 1),
+    }
+    store.save_info(info)
+    log(f"made restore point {pid} ({kind}): {label} in {info['seconds']} s")
+    return info
+
+
+def remove_point_files(store, pid):
+    pdir = store.point_dir(pid)
+    data = store.data(pid)
+    if store.fs == "btrfs" and os.path.isdir(data):
+        run(["btrfs", "property", "set", "-ts", data, "ro", "false"], check=False,
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        run(["btrfs", "subvolume", "delete", data], check=False, stdout=subprocess.DEVNULL)
+    shutil.rmtree(pdir, ignore_errors=True)
+
+
+def delete_point(store, pid):
+    remove_point_files(store, pid)
+    log(f"deleted restore point {pid}")
+    prune_kept_kernels(store)
+
+
+# ---------------------------------------------------------------- accounts
+
+def read_lines(path):
+    try:
+        with open(path) as f:
+            return [l.rstrip("\n") for l in f if l.strip()]
+    except OSError:
+        return []
+
+
+def write_lines(path, lines, like):
+    st = os.stat(like) if os.path.exists(like) else None
+    tmp = path + ".wildos-new"
+    with open(tmp, "w") as f:
+        f.write("".join(l + "\n" for l in lines))
+    if st:
+        os.chmod(tmp, st.st_mode & 0o7777)
+        os.chown(tmp, st.st_uid, st.st_gid)
+    os.replace(tmp, path)
+
+
+def merge_accounts(base_root, current_root, out_root):
+    """System accounts from base_root, people's accounts from current_root.
+
+    base_root is the restore point (or the reset copy), whose packages need
+    their own system users. Everyone who signs in, their passwords and the
+    groups they are in come from current_root, so an account made or a
+    password changed after the restore point survives going back.
+    """
+    def table(root, name):
+        return [l.split(":") for l in read_lines(os.path.join(root, "etc", name))]
+
+    cur_pw = table(current_root, "passwd")
+    people = {f[0] for f in cur_pw if len(f) > 2 and f[2].isdigit() and int(f[2]) in HUMAN_UIDS}
+    base_pw = [f for f in table(base_root, "passwd") if not (len(f) > 2 and f[2].isdigit() and int(f[2]) in HUMAN_UIDS)]
+    base_names = {f[0] for f in base_pw}
+    passwd = base_pw + [f for f in cur_pw if f[0] in people and f[0] not in base_names]
+
+    final_users = {f[0] for f in passwd}
+
+    def by_people(name):
+        base = [f for f in table(base_root, name) if f[0] not in people and f[0] in final_users]
+        cur = [f for f in table(current_root, name) if f[0] in people]
+        return base + cur
+
+    shadow = by_people("shadow")
+    subuid = by_people("subuid")
+    subgid = by_people("subgid")
+
+    cur_groups = {f[0]: f for f in table(current_root, "group")}
+    cur_gshadow = {f[0]: f for f in table(current_root, "gshadow")}
+    users = {f[0] for f in passwd}
+
+    def human_gid(f):
+        return len(f) > 2 and f[2].isdigit() and int(f[2]) in HUMAN_UIDS
+
+    def merge_members(base_members, cur_members):
+        keep = [m for m in base_members.split(",") if m and m not in people and m in users]
+        add = [m for m in cur_members.split(",") if m in people]
+        return ",".join(keep + [m for m in add if m not in keep])
+
+    # System groups (below 1000) from base_root, every group in the people
+    # range from current_root: the live image's own "live" group never
+    # comes across, and a group this PC made in that range (Windows mode's
+    # kvmsf) is kept.
+    group = []
+    seen = set()
+    for f in table(base_root, "group"):
+        if len(f) < 4 or human_gid(f):
+            continue
+        cur = cur_groups.get(f[0])
+        f = list(f)
+        f[3] = merge_members(f[3], cur[3] if cur and len(cur) > 3 else "")
+        group.append(f)
+        seen.add(f[0])
+    for name, f in cur_groups.items():
+        if name not in seen and human_gid(f):
+            group.append(f)
+            seen.add(name)
+
+    base_gshadow = {f[0]: f for f in table(base_root, "gshadow")}
+    gshadow = []
+    for f in group:
+        name = f[0]
+        b, c = base_gshadow.get(name), cur_gshadow.get(name)
+        if b and not human_gid(f) and len(b) >= 4:
+            b = list(b)
+            b[3] = merge_members(b[3], c[3] if c and len(c) > 3 else "")
+            gshadow.append(b)
+        elif c:
+            gshadow.append(c)
+
+    for name, rows in (("passwd", passwd), ("shadow", shadow), ("group", group),
+                       ("gshadow", gshadow), ("subuid", subuid), ("subgid", subgid)):
+        target = os.path.join(out_root, "etc", name)
+        like = os.path.join(base_root, "etc", name)
+        if not os.path.exists(like):
+            like = os.path.join(current_root, "etc", name)
+        if rows or os.path.exists(target):
+            write_lines(target, [":".join(r) for r in rows], like)
+
+
+def carry_over(src_root, dst_root):
+    """Copy what stays (CARRY and NOT_SYSTEM's /etc parts) from src to dst."""
+    for p in CARRY + ["/etc/libvirt", "/etc/wildos/winmode.json"]:
+        src = src_root.rstrip("/") + p
+        dst = dst_root.rstrip("/") + p
+        if os.path.isdir(src) and not os.path.islink(src):
+            os.makedirs(dst, exist_ok=True)
+            run(list(RSYNC) + [src + "/", dst + "/"])
+        elif os.path.lexists(src):
+            os.makedirs(os.path.dirname(dst), exist_ok=True)
+            run(["cp", "-a", "--remove-destination", src, dst])
+        elif os.path.lexists(dst) and not os.path.isdir(dst):
+            # Absent now, so absent after going back too.
+            os.unlink(dst)
+
+
+# ---------------------------------------------------------------- dpkg log
+
+APP_NAMES = {}
+
+
+def app_name(pkg, root="/"):
+    """The app's own name when a package installs one, else ''."""
+    if pkg in APP_NAMES:
+        return APP_NAMES[pkg]
+    name = ""
+    try:
+        files = out(["dpkg-query", "--admindir", os.path.join(root, "var/lib/dpkg"), "-L", pkg]).split("\n")
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        files = []
+    for f in files:
+        if f.startswith("/usr/share/applications/") and f.endswith(".desktop"):
+            try:
+                with open(os.path.join(root, f.lstrip("/"))) as d:
+                    text = d.read()
+            except OSError:
+                continue
+            if re.search(r"^NoDisplay=true", text, re.M):
+                continue
+            m = re.search(r"^Name=(.+)$", text, re.M)
+            if m:
+                name = m.group(1).strip()
+                break
+    APP_NAMES[pkg] = name
+    return name
+
+
+DRIVER = re.compile(r"^(nvidia-|libnvidia-|xserver-xorg-video-nvidia|firmware-nvidia|nvidia$)")
+BUILD = re.compile(r"\+r(\d+)$")
+
+
+def dpkg_changes(since):
+    """[(action, package, old, new)] logged since the time `since`."""
+    changes = []
+    paths = [DPKG_LOG]
+    for path in paths:
+        for line in read_lines(path):
+            parts = line.split()
+            if len(parts) < 6 or parts[2] not in ("install", "upgrade", "remove", "purge"):
+                continue
+            try:
+                t = time.mktime(time.strptime(parts[0] + " " + parts[1], "%Y-%m-%d %H:%M:%S"))
+            except ValueError:
+                continue
+            if t + 1 < since:
+                continue
+            changes.append((parts[2], parts[3].split(":")[0], parts[4], parts[5]))
+    return changes
+
+
+def describe(changes):
+    pkgs = {}
+    for action, pkg, old, new in changes:
+        pkgs[pkg] = (action, new)
+    apps = []
+    driver = False
+    system = False
+    build = 0
+    holdable = []
+    for pkg, (action, new) in sorted(pkgs.items()):
+        if DRIVER.match(pkg):
+            driver = True
+            continue
+        m = BUILD.search(new or "")
+        if pkg.startswith("wildos-") and m:
+            build = max(build, int(m.group(1)))
+        if new and new != "<none>" and (pkg.startswith("wildos-") or "+wildos" in new):
+            holdable.append([pkg, new])
+        name = app_name(pkg) if action in ("install", "upgrade") else ""
+        if name and name not in apps:
+            apps.append(name)
+        else:
+            system = True
+    return {"apps": apps, "driver": driver, "system": system, "build": build,
+            "holdable": holdable, "summary": summary_text(system, driver, apps)}
+
+
+def join_words(words):
+    if len(words) <= 1:
+        return "".join(words)
+    return ", ".join(words[:-1]) + " and " + words[-1]
+
+
+def summary_text(system, driver, apps):
+    parts = []
+    if system:
+        parts.append("System files")
+    if driver:
+        parts.append("graphics driver" if parts else "Graphics driver")
+    if apps:
+        n = len(apps)
+        if not parts and n <= 3:
+            parts.append(join_words(apps))
+        else:
+            parts.append(f"{n} app" + ("" if n == 1 else "s"))
+    return join_words(parts)
+
+
+# ---------------------------------------------------------------- space
+
+def du_bytes(paths):
+    paths = [p for p in paths if os.path.exists(p)]
+    if not paths:
+        return 0
+    try:
+        o = out(["du", "-s", "-B1", "-c", "-x"] + paths)
+        return int(o.strip().split("\n")[-1].split()[0])
+    except (subprocess.CalledProcessError, ValueError, IndexError):
+        return 0
+
+
+def btrfs_exclusive(paths):
+    """{path: (exclusive, set_shared)} from btrfs filesystem du."""
+    res = {}
+    paths = [p for p in paths if os.path.exists(p)]
+    if not paths:
+        return res
+    try:
+        o = out(["btrfs", "filesystem", "du", "-s", "--raw"] + paths)
+    except subprocess.CalledProcessError:
+        return res
+    for line in o.split("\n")[1:]:
+        f = line.split(None, 3)
+        if len(f) == 4 and f[0].isdigit():
+            res[f[3]] = (int(f[1]), int(f[2]))
+    return res
+
+
+def measure(store):
+    """Record each point's cost, in bytes, and return the total."""
+    pts = store.points()
+    total = 0
+    if store.fs == "btrfs":
+        ex = btrfs_exclusive([store.data(p["id"]) for p in pts])
+        boots = {}
+        prev_boot = 0
+        for p in pts:
+            own = ex.get(store.data(p["id"]), (0, 0))[0]
+            b = du_bytes([store.boot(q["id"]) for q in pts if q["id"] <= p["id"]])
+            boots[p["id"]] = b - prev_boot
+            prev_boot = b
+            p["bytes"] = own + max(boots[p["id"]], 0)
+            total += p["bytes"]
+    else:
+        prev = 0
+        for p in pts:
+            upto = du_bytes([store.point_dir(q["id"]) for q in pts if q["id"] <= p["id"]])
+            p["bytes"] = max(upto - prev, 0)
+            prev = upto
+        total = prev
+    for p in pts:
+        store.save_info(p)
+    return total
+
+
+def prune(store, measured=True):
+    cfg = store.config()
+    pts = store.points()
+    keep = max(1, int(cfg["keep"]))
+    limit = int(cfg["max_gb"]) << 30
+    protect = {p["id"] for p in pts if p.get("kind") == "undo" and now() - p.get("time", 0) < UNDO_GRACE}
+    removed = []
+    while len(pts) > keep:
+        victim = next((p for p in pts if p["id"] not in protect), None)
+        if victim is None:
+            break
+        delete_point(store, victim["id"])
+        removed.append(victim["id"])
+        pts = store.points()
+    if measured:
+        total = measure(store)
+        while total > limit and len(pts) > 1:
+            victim = next((p for p in pts if p["id"] not in protect and p["id"] != pts[-1]["id"]), None)
+            if victim is None:
+                break
+            delete_point(store, victim["id"])
+            removed.append(victim["id"])
+            pts = store.points()
+            total = measure(store)
+    store.write_index()
+    return removed
+
+
+# ---------------------------------------------------------------- kernels
+
+KEPT = "/boot/wildos-restore"
+
+
+def prune_kept_kernels(store):
+    """Keep in /boot/wildos-restore only kernels some restore point uses."""
+    kept = store.path(KEPT)
+    if not os.path.isdir(kept):
+        return
+    used = set()
+    for p in store.points():
+        used.update(p.get("kernels") or [])
+    for v in os.listdir(kept):
+        if v not in used:
+            shutil.rmtree(os.path.join(kept, v), ignore_errors=True)
+
+
+def kernel_removed(version):
+    """apt removed a kernel: keep its files if a restore point still uses it.
+
+    Runs from /etc/kernel/postrm.d, after the package's own files are gone,
+    so the copy comes from the newest restore point's /boot copy.
+    """
+    store = Store()
+    if not store.supported:
+        return
+    for p in reversed(store.points()):
+        if version in (p.get("kernels") or []):
+            src = store.boot(p["id"])
+            dst = os.path.join(KEPT, version)
+            names = [f"vmlinuz-{version}", f"initrd.img-{version}", f"config-{version}", f"System.map-{version}"]
+            if os.path.exists(os.path.join(src, names[0])):
+                os.makedirs(dst, exist_ok=True)
+                for n in names:
+                    if os.path.exists(os.path.join(src, n)):
+                        shutil.copy2(os.path.join(src, n), dst)
+                log(f"kept kernel {version} for restore point {p['id']}")
+            break
+
+
+# ---------------------------------------------------------------- holds
+
+def write_hold(root, info, days=14):
+    pins = info.get("holdable") or []
+    if not pins:
+        return
+    until = int(time.time()) + days * 86400
+    lines = [f"# Written by Wild OS when going back to \"{info.get('label', '')}\".",
+             f"# Expires: {until}", ""]
+    for pkg, ver in pins:
+        lines += [f"Package: {pkg}", f"Pin: version {ver}", "Pin-Priority: -1", ""]
+    path = root.rstrip("/") + HOLD_FILE
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w") as f:
+        f.write("\n".join(lines))
+    os.chmod(path, 0o644)
+    log(f"holding back {len(pins)} packages until {time.ctime(until)}")
+
+
+def expire_holds(root="/"):
+    path = root.rstrip("/") + HOLD_FILE
+    for line in read_lines(path):
+        m = re.match(r"# Expires: (\d+)", line)
+        if m and int(m.group(1)) < time.time():
+            os.unlink(path)
+            log("hold back expired")
+            return
+
+
+# ---------------------------------------------------------------- going back
+
+def mount_top(dev, where):
+    os.makedirs(where, exist_ok=True)
+    run(["mount", "-o", "subvolid=5", dev, where])
+
+
+def root_device(root="/"):
+    src = out(["findmnt", "-no", "SOURCE", "--target", root]).split()[0]
+    return re.sub(r"\[.*\]$", "", src)
+
+
+def fstab_has(root, mountpoint):
+    for line in read_lines(os.path.join(root, "etc/fstab")):
+        f = line.split()
+        if len(f) >= 2 and not f[0].startswith("#") and f[1] == mountpoint:
+            return True
+    return False
+
+
+def restore_boot(src, boot_dir):
+    """Put a restore point's /boot back, leaving the boot loader alone."""
+    if not os.path.isdir(src) or not os.path.isdir(boot_dir):
+        return
+    run(list(RSYNC_EXACT) + rsync_excludes(BOOT_EXCLUDES) + [src + "/", boot_dir.rstrip("/") + "/"])
+
+
+def btrfs_go_back(store, info, top, boot_dir, current_root):
+    """Swap @ for a copy of the restore point, keeping the current @ as undo.
+
+    `top` is the Btrfs top level mounted somewhere; `current_root` is where
+    the current @ can be read (/ when running, top/@ from recovery).
+    """
+    pid = info["id"]
+    new = os.path.join(top, "@new")
+    if os.path.exists(new):
+        run(["btrfs", "subvolume", "delete", new], stdout=subprocess.DEVNULL)
+    run(["btrfs", "subvolume", "snapshot", store.data(pid), new], stdout=subprocess.DEVNULL)
+    carry_over(current_root, new)
+    merge_accounts(store.data(pid), current_root, new)
+
+    # The undo point: today's system, kept as a restore point. Both renames
+    # go through the top-level mount: /.snapshots is another mount of the
+    # same filesystem, and rename() does not cross mounts.
+    uid = store.next_id()
+    udir = store.point_dir(uid)
+    os.makedirs(udir, mode=0o700)
+    try:
+        copy_boot(store, uid, pid, boot_dir)
+        os.rename(os.path.join(top, "@"), os.path.join(top, "@snapshots", str(uid), "snapshot"))
+    except BaseException:
+        shutil.rmtree(udir, ignore_errors=True)
+        run(["btrfs", "subvolume", "delete", new], check=False, stdout=subprocess.DEVNULL)
+        raise
+    os.rename(new, os.path.join(top, "@"))
+    restore_boot(store.boot(pid), boot_dir)
+    undo = {
+        "id": uid, "label": "Before going back to an earlier version", "kind": "undo",
+        "time": now(), "kernels": kernels_in(store.data(uid)), "summary": "The version you went back from",
+        "apps": [], "system": True, "driver": False, "build": 0, "holdable": [], "bytes": None,
+        "readonly_pending": True,
+    }
+    store.save_info(undo)
+    return undo
+
+
+def ext4_restore(store, info, target, boot_dir):
+    """Copy a restore point back over the root at `target` (not running)."""
+    pid = info["id"]
+    keep = system_excludes(target) + CARRY + ACCOUNT_FILES
+    tmp_current = tempfile.mkdtemp(prefix="wildos-accounts-", dir=store.dir)
+    for f in ACCOUNT_FILES:
+        src = target.rstrip("/") + f
+        if os.path.exists(src):
+            os.makedirs(os.path.join(tmp_current, "etc"), exist_ok=True)
+            shutil.copy2(src, os.path.join(tmp_current, "etc", os.path.basename(f)))
+    run(list(RSYNC_EXACT) + ["-x"] + rsync_excludes(keep) + [store.data(pid) + "/", target.rstrip("/") + "/"])
+    merge_accounts(store.data(pid), tmp_current, target)
+    shutil.rmtree(tmp_current, ignore_errors=True)
+    restore_boot(store.boot(pid), boot_dir)
+
+
+def go_back(pid, hold):
+    store = Store()
+    info = store.get(pid)
+    if not info:
+        raise SystemExit(f"no restore point {pid}")
+    if store.fs == "btrfs":
+        top = os.path.join(RUN, "top")
+        mount_top(root_device(), top)
+        try:
+            btrfs_go_back(store, info, top, "/boot", "/")
+            if hold:
+                write_hold(os.path.join(top, "@"), info)
+            else:
+                p = os.path.join(top, "@") + HOLD_FILE
+                if os.path.exists(p):
+                    os.unlink(p)
+        finally:
+            run(["umount", top], check=False)
+        store.write_index()
+        open(os.path.join(store.dir, "refresh-menu"), "w").close()
+        log(f"went back to restore point {pid}; restart to finish")
+    else:
+        undo = make_point(store, "Before going back to an earlier version", "undo")
+        undo["summary"] = "The version you went back from"
+        undo["system"] = True
+        store.save_info(undo)
+        store.write_json(os.path.join(store.dir, "pending"), {"id": pid, "hold": bool(hold)}, 0o600)
+        store.write_index()
+        log(f"going back to restore point {pid} at the next start")
+
+
+def apply_pending():
+    """ext4: run from the initramfs, chrooted into the unlocked system."""
+    store = Store()
+    path = os.path.join(store.dir, "pending")
+    try:
+        with open(path) as f:
+            pending = json.load(f)
+    except (OSError, ValueError):
+        return 0
+    os.unlink(path)
+    info = store.get(pending["id"])
+    if not info:
+        log(f"pending restore point {pending['id']} is gone; nothing done")
+        return 0
+    running = os.uname().release
+    boot = "/boot"
+    if fstab_has("/", "/boot") and not os.path.ismount(boot):
+        # Never write the kernels under an unmounted /boot's mount point.
+        log("/boot is not mounted; its files stay as they are")
+        boot = os.path.join(store.dir, "boot-not-mounted")
+    ext4_restore(store, info, "/", boot)
+    shutil.rmtree(os.path.join(store.dir, "boot-not-mounted"), ignore_errors=True)
+    if pending.get("hold"):
+        write_hold("/", info)
+    elif os.path.exists(HOLD_FILE):
+        os.unlink(HOLD_FILE)
+    store.write_index()
+    open(os.path.join(store.dir, "refresh-menu"), "w").close()
+    log(f"went back to restore point {info['id']}")
+    # The running kernel's modules may have gone with the newer system.
+    return 0 if os.path.isdir(f"/usr/lib/modules/{running}") else 3
+
+
+def offline_restore(pid, target, top, boot_dir, hold):
+    """From start-up recovery: the system is mounted, not running."""
+    if top:
+        store = Store.offline(top=top)
+        info = store.get(pid)
+        if not info:
+            raise SystemExit(f"no restore point {pid}")
+        btrfs_go_back(store, info, top, boot_dir, os.path.join(top, "@"))
+        if hold:
+            write_hold(os.path.join(top, "@"), info)
+        store.write_index()
+    else:
+        store = Store.offline(target=target)
+        info = store.get(pid)
+        if not info:
+            raise SystemExit(f"no restore point {pid}")
+        undo = make_point(store, "Before going back to an earlier version", "undo",
+                          boot_src=boot_dir)
+        undo["summary"] = "The version you went back from"
+        undo["system"] = True
+        store.save_info(undo)
+        ext4_restore(store, info, target, boot_dir)
+        if hold:
+            write_hold(target, info)
+        store.write_index()
+    open(os.path.join(store.dir, "refresh-menu"), "w").close()
+    log(f"start-up recovery went back to restore point {pid}")
+
+
+# ---------------------------------------------------------------- start-up
+
+def at_boot():
+    """Once per start-up: finish a go-back and tidy up."""
+    store = Store()
+    if not store.supported:
+        return
+    if store.fs == "btrfs":
+        for p in store.points():
+            if p.pop("readonly_pending", False):
+                run(["btrfs", "property", "set", "-ts", store.data(p["id"]), "ro", "true"], check=False)
+                store.save_info(p)
+    expire_holds()
+    store.write_index()
+    refresh_menu()
+    drop_extra_swap(store)
+    # The first point waits until first-start setup has made an account:
+    # going back to before it would bring setup back.
+    if not store.points() and store.config()["enabled"] and not os.path.exists("/var/lib/wildos/first-boot-setup"):
+        spawn_first_point()
+
+
+def drop_extra_swap(store):
+    """A Btrfs system's swap file is /swap/swapfile; the /var/swapfile an
+    earlier start may have made sits in @ and stops every snapshot while in
+    use. Once nothing uses it, it goes."""
+    if store.fs != "btrfs" or not os.path.exists("/swap/swapfile") or not os.path.exists("/var/swapfile"):
+        return
+    if any(l.split()[0] == "/var/swapfile" for l in read_lines("/proc/swaps")[1:] if l.split()):
+        return
+    os.unlink("/var/swapfile")
+    log("removed /var/swapfile: this system's swap file is /swap/swapfile")
+
+
+def refresh_menu():
+    """Going back puts back the restore point's own start-up menu, which
+    may predate start-up recovery or list other restore points. The first
+    start afterwards writes it afresh."""
+    cfg = "/boot/grub/grub.cfg"
+    try:
+        with open(cfg) as f:
+            text = f.read()
+    except OSError:
+        return
+    stale = os.path.exists("/boot/wildos-recovery/vmlinuz") and "wildos-recovery" not in text
+    flag = os.path.join(Store().dir, "refresh-menu")
+    if stale or os.path.exists(flag):
+        run(["update-grub"], check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        if os.path.exists(flag):
+            os.unlink(flag)
+
+
+def spawn_first_point():
+    subprocess.Popen(["systemd-run", "--no-block", "--collect", "--unit", "wildos-restore-point-first",
+                      "-p", "Nice=19", "-p", "IOSchedulingClass=idle",
+                      os.path.abspath(sys.argv[0]), "create", "--kind", "first",
+                      "--label", "When restore points were turned on"],
+                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+
+# ---------------------------------------------------------------- apt hooks
+
+def hooks_apply():
+    """Only on an installed, running system: not a chroot, image or live."""
+    if not os.path.isdir("/run/systemd/system"):
+        return False
+    if os.path.exists("/run/initramfs/live") or os.path.exists("/run/rootfsbase"):
+        return False
+    if subprocess.run(["systemd-detect-virt", "--chroot", "--quiet"]).returncode == 0:
+        return False
+    return Store().supported
+
+
+def run_marker():
+    return os.path.join(RUN, "current.json")
+
+
+def apt_pre():
+    if not hooks_apply():
+        return
+    store = Store()
+    if not store.config()["enabled"]:
+        return
+    with Lock():
+        try:
+            with open(run_marker()) as f:
+                cur = json.load(f)
+            if now() - cur.get("time", 0) < AUTO_WINDOW and store.get(cur["id"]):
+                return
+        except (OSError, ValueError, KeyError):
+            pass
+        label = os.environ.get("WILDOS_RESTORE_LABEL", "").strip() or "Before changes to apps"
+        kind = "driver" if "driver" in label.lower() else "update"
+        try:
+            info = make_point(store, label, kind)
+        except (subprocess.CalledProcessError, OSError, RuntimeError) as e:
+            log(f"no restore point before this change: {e}")
+            return
+        os.makedirs(RUN, exist_ok=True)
+        store.write_json(run_marker(), {"id": info["id"], "time": info["time"],
+                                        "named": bool(os.environ.get("WILDOS_RESTORE_LABEL"))})
+        store.write_index()
+
+
+def apt_pkgs():
+    """Pre-Install-Pkgs (version 3): name the point after what is coming."""
+    data = sys.stdin.read()
+    if not hooks_apply():
+        return
+    try:
+        with open(run_marker()) as f:
+            cur = json.load(f)
+    except (OSError, ValueError):
+        return
+    if cur.get("named"):
+        return
+    store = Store()
+    info = store.get(cur.get("id"))
+    if not info:
+        return
+    build = 0
+    driver = False
+    for line in data.split("\n"):
+        f = line.split()
+        if len(f) < 6 or f[4] not in ("<", ">", "="):
+            continue
+        pkg, new = f[0], f[5]
+        m = BUILD.search(new)
+        if pkg.startswith("wildos-") and m:
+            build = max(build, int(m.group(1)))
+        if DRIVER.match(pkg):
+            driver = True
+    if build:
+        label = f"Before the build {build} update"
+    elif driver:
+        label = "Before installing the graphics driver"
+    else:
+        return
+    if label != info["label"]:
+        info["label"] = label
+        info["kind"] = "driver" if driver and not build else "update"
+        store.save_info(info)
+        store.write_index()
+
+
+def apt_post():
+    if not hooks_apply():
+        return
+    try:
+        with open(run_marker()) as f:
+            cur = json.load(f)
+    except (OSError, ValueError):
+        return
+    store = Store()
+    with Lock():
+        info = store.get(cur.get("id"))
+        if not info:
+            return
+        info.update(describe(dpkg_changes(info["time"])))
+        store.save_info(info)
+        store.write_index()
+    spawn_prune()
+
+
+def spawn_prune():
+    """Measure and prune in the background, at idle priority."""
+    if not os.path.isdir("/run/systemd/system"):
+        return
+    subprocess.Popen(["systemd-run", "--no-block", "--collect", "--unit", f"wildos-restore-points-prune-{now()}",
+                      "-p", "Nice=19", "-p", "IOSchedulingClass=idle", os.path.abspath(sys.argv[0]), "prune"],
+                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+
+# ---------------------------------------------------------------- main
+
+def main(argv):
+    if not argv:
+        print(__doc__)
+        return 2
+    cmd, args = argv[0], argv[1:]
+
+    def opt(name, default=None):
+        if name in args:
+            i = args.index(name)
+            v = args[i + 1]
+            del args[i:i + 2]
+            return v
+        return default
+
+    def flag(name):
+        if name in args:
+            args.remove(name)
+            return True
+        return False
+
+    if cmd in ("apt-pre", "apt-pkgs", "apt-post"):
+        try:
+            {"apt-pre": apt_pre, "apt-pkgs": apt_pkgs, "apt-post": apt_post}[cmd]()
+        except Exception as e:  # an update must never fail because of this
+            log(f"{cmd}: {e!r}")
+        return 0
+
+    if os.geteuid() != 0 and cmd != "list":
+        print("restore-points: needs root", file=sys.stderr)
+        return 1
+
+    if cmd == "list":
+        store = Store()
+        path = os.path.join(store.dir, "index.json")
+        try:
+            with open(path) as f:
+                index = json.load(f)
+        except (OSError, ValueError):
+            index = store.write_index() if os.geteuid() == 0 else {"points": []}
+        if flag("--json"):
+            print(json.dumps(index))
+        else:
+            for p in index.get("points", []):
+                print(p["id"], time.strftime("%Y-%m-%d %H:%M", time.localtime(p["time"])), p["label"], "|", p.get("summary", ""))
+        return 0
+
+    if cmd == "create":
+        label = opt("--label", "Restore point you made")
+        kind = opt("--kind", "manual")
+        target = opt("--target")
+        top = opt("--top")
+        boot = opt("--boot")
+        if target or top:
+            store = Store.offline(target, top)
+            info = make_point(store, label, kind, boot_src=boot)
+            store.write_index()
+            print(info["id"])
+            return 0
+        store = Store()
+        if not store.supported:
+            print("restore points need ext4 or Btrfs", file=sys.stderr)
+            return 1
+        with Lock():
+            info = make_point(store, label, kind)
+            info["summary"] = "Made by you" if kind == "manual" else info["summary"]
+            store.save_info(info)
+            prune(store, measured=False)
+        # Measuring walks every restore point; Settings shouldn't wait for it.
+        spawn_prune()
+        print(info["id"])
+        return 0
+
+    if cmd == "delete":
+        store = Store()
+        with Lock():
+            delete_point(store, int(args[0]))
+            store.write_index()
+        return 0
+
+    if cmd == "go-back":
+        hold = flag("--hold")
+        with Lock():
+            go_back(int(args[0]), hold)
+        return 0
+
+    if cmd == "apply-pending":
+        return apply_pending()
+
+    if cmd == "restore":
+        target = opt("--target")
+        top = opt("--top")
+        boot = opt("--boot", (target or "") + "/boot")
+        hold = flag("--hold")
+        offline_restore(int(args[0]), target, top, boot, hold)
+        return 0
+
+    if cmd == "prune":
+        measure_and_prune()
+        return 0
+
+    if cmd == "measure":
+        store = Store()
+        with Lock():
+            print(measure(store))
+            store.write_index()
+        return 0
+
+    if cmd == "limits":
+        count, gb, state = int(args[0]), int(args[1]), args[2]
+        if count not in (3, 5, 10) or gb not in (10, 20, 40) or state not in ("on", "off"):
+            print("limits: 3|5|10 10|20|40 on|off", file=sys.stderr)
+            return 2
+        store = Store()
+        os.makedirs(store.dir, exist_ok=True)
+        with Lock():
+            store.write_json(os.path.join(store.dir, "config.json"),
+                             {"keep": count, "max_gb": gb, "enabled": state == "on"}, 0o644)
+        measure_and_prune()
+        return 0
+
+    if cmd == "boot":
+        with Lock():
+            at_boot()
+        return 0
+
+    if cmd == "expire-holds":
+        expire_holds()
+        return 0
+
+    if cmd == "kernel-removed":
+        with Lock():
+            kernel_removed(args[0])
+        return 0
+
+    print(__doc__)
+    return 2
+
+
+def measure_and_prune():
+    store = Store()
+    with Lock():
+        prune(store, measured=True)
+    # The start-up menu lists each Btrfs restore point to start it from.
+    if store.fs == "btrfs" and os.path.exists("/boot/grub/grub.cfg"):
+        run(["update-grub"], check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+
+if __name__ == "__main__":
+    signal.signal(signal.SIGPIPE, signal.SIG_DFL)
+    sys.exit(main(sys.argv[1:]))

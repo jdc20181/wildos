@@ -1,0 +1,48 @@
+Source: wildos-backup
+Section: admin
+Priority: optional
+Maintainer: Wild OS Developers <dev@wildos.io>
+Build-Depends:
+ debhelper-compat (= 13),
+ cmake,
+ extra-cmake-modules,
+ pkg-config,
+ qt6-base-dev,
+ qt6-declarative-dev,
+ qtkeychain-qt6-dev,
+ libkf6dbusaddons-dev,
+ libkf6notifications-dev,
+ libkf6windowsystem-dev,
+Standards-Version: 4.7.0
+Rules-Requires-Root: no
+
+Package: wildos-backup
+Architecture: any
+Depends:
+ ${shlibs:Depends},
+ ${misc:Depends},
+ restic,
+ udisks2,
+ pkexec,
+ wildos-ui (>= 0.1.6),
+ qml6-module-qtcore,
+ qml6-module-qtquick,
+ qml6-module-qtquick-controls,
+ qml6-module-qtquick-templates,
+ qml6-module-qtquick-layouts,
+ qml6-module-qtquick-shapes,
+ qml6-module-qtquick-effects,
+ qml6-module-qtquick-window,
+ qml6-module-qtquick-dialogs,
+ qml6-module-qtqml-workerscript,
+ qt6-svg-plugins,
+Description: Wild OS Backup
+ Backup keeps encrypted copies of your files on your own external drive,
+ with restic. Every day at a time you choose it backs up your home
+ folder, Mail, Calendar, People and Tasks, and your app settings, and
+ catches up when the drive is plugged back in after a missed backup.
+ Old backups are thinned out over a year, oldest first when the drive is
+ nearly full. Browse any backup by date and put files back where they
+ were, or anywhere you like. Windows mode's disk can be backed up too,
+ while Windows is shut down. The password is made for you and kept in
+ your keyring. Nothing leaves the PC: no cloud and no network.

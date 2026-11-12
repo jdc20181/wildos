@@ -142,8 +142,9 @@ FocusScope {
             height: 26
             verticalAlignment: TextInput.AlignVCenter
             color: UI.Style.ink
-            selectionColor: UI.Style.accentSelected
+            selectionColor: UI.Style.textSelection
             font.family: UI.Style.fontFamily
+            font.letterSpacing: UI.Style.tracking(UI.Style.px(13))
             font.pixelSize: UI.Style.px(13)
             clip: true
             onTextEdited: {

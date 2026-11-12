@@ -60,7 +60,7 @@ Item {
                 anchors.verticalCenter: parent.verticalCenter
                 text: "Wild OS"
                 size: 17
-                font.weight: Font.DemiBold
+                font.weight: UI.Style.weightSemiBold
             }
         }
 
@@ -118,7 +118,7 @@ Item {
                                 visible: !row.done
                                 text: row.number
                                 size: 11
-                                font.weight: row.active ? Font.Bold : Font.Normal
+                                font.weight: row.active ? UI.Style.weightBold : UI.Style.weightRegular
                                 color: row.active ? UI.Style.textOnAccent : UI.Style.ink
                             }
                         }
@@ -130,7 +130,7 @@ Item {
                             wrapMode: Text.WordWrap
                             elide: Text.ElideNone
                             text: row.modelData
-                            font.weight: row.active ? Font.DemiBold : Font.Normal
+                            font.weight: row.active ? UI.Style.weightSemiBold : UI.Style.weightRegular
                             color: row.done ? UI.Style.inkStatus : row.active ? UI.Style.ink : UI.Style.inkMuted
                         }
                     }

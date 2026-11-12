@@ -125,7 +125,7 @@ def writer_styles(accent):
     <style:paragraph-properties fo:margin-top="0.3cm" fo:margin-bottom="0.1cm"/>
     <style:text-properties fo:font-size="11pt" fo:color="{INK}"/>
   </style:style>
-  <style:style style:name="Quotations" style:display-name="Quote" style:family="paragraph" style:parent-style-name="Standard" style:class="html">
+  <style:style style:name="Quotations" style:family="paragraph" style:parent-style-name="Standard" style:class="html">
     <style:paragraph-properties fo:margin-left="0.5cm" fo:margin-right="0.5cm" fo:padding-left="0.35cm" fo:border-left="1.5pt solid {accent}" fo:border-right="none" fo:border-top="none" fo:border-bottom="none"/>
     <style:text-properties fo:font-style="italic" fo:color="{MUTED}"/>
   </style:style>
@@ -482,7 +482,8 @@ def meeting_notes():
 
 
 def writer_default():
-    return fodt("Document", BLUE, '<text:p text:style-name="Standard"/>')
+    # New documents start in Body Text, the first card of the style gallery.
+    return fodt("Document", BLUE, '<text:p text:style-name="Text_20_body"/>')
 
 
 # Calc
@@ -718,7 +719,10 @@ def fods(title, sheets, calc, grid=True, landscape=False, fit_pages=None, valida
                 c += 1
             rows.append(f'<table:table-row table:style-name="{hname}">{"".join(cells)}</table:table-row>')
         area = f"$'{sh.name}'.$A$1:.${col_letter(sh.print_cols - 1)}${last + 1}"
-        tables.append(f'<table:table table:name="{escape(sh.name)}" table:style-name="ta1" table:print-ranges="{escape(area)}">'
+        # A blank sheet prints whatever is typed into it: a print range on
+        # it would also draw its edge across the empty grid.
+        ranges = f' table:print-ranges="{escape(area)}"' if sh.cells else ""
+        tables.append(f'<table:table table:name="{escape(sh.name)}" table:style-name="ta1"{ranges}>'
                       f'{"".join(cols)}{"".join(rows)}</table:table>')
     width, height = ("29.7cm", "21cm") if landscape else ("21cm", "29.7cm")
     scale = f'style:scale-to-pages="{fit_pages}"' if fit_pages else 'loext:scale-to-X="1" loext:scale-to-Y="0"'

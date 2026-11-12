@@ -1,0 +1,14 @@
+[Desktop Entry]
+Type=Application
+Name=Backup
+GenericName=Backup
+Comment=Back up your files to your own drive and get them back
+Exec=wildos-backup
+Icon=wildos-backup
+Terminal=false
+StartupNotify=true
+StartupWMClass=wildos-backup
+Categories=Qt;System;Archiving;
+Keywords=backup;restore;restic;time machine;file history;recover;copy;external drive;usb;
+X-DBUS-StartupType=Unique
+X-DBUS-ServiceName=org.wildos.backup

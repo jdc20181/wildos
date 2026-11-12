@@ -8,6 +8,7 @@
 #include <QDBusPendingCallWatcher>
 #include <QDBusPendingReply>
 #include <QDBusVariant>
+#include <QDateTime>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
@@ -19,6 +20,7 @@
 #include <QRegularExpression>
 #include <QStandardPaths>
 #include <QThread>
+#include <QTimeZone>
 #include <QUrl>
 
 #include <grp.h>
@@ -186,9 +188,21 @@ bool wrongWalletKey(int code)
     return code == -5 || code == -7 || code == -8 || code == -9;
 }
 
+// KWallet's own create dialog takes an empty password, and people press
+// Enter on it without thinking they chose one. Such a wallet is tried with
+// no password whenever the account's does not open it.
+int rekeyWalletOrEmpty(const QByteArray &from, const QByteArray &to, bool openAfter)
+{
+    const int code = rekeyWallet(from, to, openAfter);
+    if (!wrongWalletKey(code) || from.isEmpty()) {
+        return code;
+    }
+    return rekeyWallet(QByteArray(""), to, openAfter) == 0 ? 0 : code;
+}
+
 bool moveWallet(const QByteArray &current, const QByteArray &next)
 {
-    const int code = rekeyWallet(current, next, false);
+    const int code = rekeyWalletOrEmpty(current, next, false);
     return code == 0 || code == 1;
 }
 
@@ -271,6 +285,16 @@ void Users::reload()
         const QDBusMessage reply = QDBusConnection::systemBus().call(message, QDBus::Block, 2000);
         if (reply.type() == QDBusMessage::ReplyMessage && !reply.arguments().isEmpty()) {
             m_me.insert(QStringLiteral("hint"), reply.arguments().constFirst().value<QDBusVariant>().variant().toString());
+        }
+        // When the password last changed, for Sign-in options. The shadow
+        // file only keeps the day; 0 means it must change at next sign-in.
+        auto policy = QDBusMessage::createMethodCall(accountsServiceName, userPath(), userInterface, QStringLiteral("GetPasswordExpirationPolicy"));
+        const QDBusMessage expiry = QDBusConnection::systemBus().call(policy, QDBus::Block, 2000);
+        if (expiry.type() == QDBusMessage::ReplyMessage && expiry.arguments().size() >= 2) {
+            const qint64 changed = expiry.arguments().at(1).toLongLong();
+            if (changed > 0) {
+                m_me.insert(QStringLiteral("passwordChanged"), QDateTime::fromSecsSinceEpoch(changed, QTimeZone::UTC).date().toString(Qt::ISODate));
+            }
         }
     }
     Q_EMIT changed();
@@ -429,7 +453,7 @@ void Users::openWallet(const QString &password, const QString &walletPassword)
             error = checked.errorName().endsWith(QLatin1String("WrongPassword")) ? QStringLiteral("That password isn't right.")
                                                                                   : QStringLiteral("Wild OS could not check your password.");
         } else {
-            const int code = rekeyWallet(walletPassword.isEmpty() ? password : walletPassword, password, true);
+            const int code = walletPassword.isEmpty() ? rekeyWalletOrEmpty(password, password, true) : rekeyWallet(walletPassword, password, true);
             if (wrongWalletKey(code)) {
                 what = QStringLiteral("wallet-other");
                 error = walletPassword.isEmpty()
@@ -447,8 +471,9 @@ void Users::openWallet(const QString &password, const QString &walletPassword)
             if (!error.isEmpty()) {
                 Q_EMIT self->failed(what, error);
             } else {
-                Q_EMIT self->done(QStringLiteral("wallet"), automatic ? QStringLiteral("Your saved passwords are open, and open by themselves from now on.")
-                                                                      : QStringLiteral("Your saved passwords are open, and open when you sign in."));
+                Q_EMIT self->done(QStringLiteral("wallet"),
+                                  automatic ? QStringLiteral("Your saved passwords are open, and open by themselves from now on.")
+                                            : QStringLiteral("Your saved passwords are open, and open by themselves when you sign in with your password."));
             }
         });
     });

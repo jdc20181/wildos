@@ -58,7 +58,7 @@ T.AbstractButton {
             anchors.verticalCenter: parent.verticalCenter
             text: item.text
             size: 14
-            font.weight: item.current ? Font.DemiBold : Font.Medium
+            font.weight: item.current ? UI.Style.weightSemiBold : UI.Style.weightMedium
         }
 
         Rectangle {
@@ -77,7 +77,7 @@ T.AbstractButton {
                 anchors.centerIn: parent
                 text: item.badge > 99 ? "99+" : item.badge
                 size: 11.5
-                font.weight: Font.Bold
+                font.weight: UI.Style.weightBold
                 color: UI.Style.textOnAccent
             }
         }

@@ -44,7 +44,7 @@ PageScroll {
             UI.Label {
                 text: Format.time(page.now)
                 size: 40
-                font.weight: Font.Light
+                font.weight: UI.Style.weightLight
             }
 
             ColumnLayout {
@@ -55,7 +55,7 @@ PageScroll {
                     Layout.fillWidth: true
                     text: Format.longDate(page.now) + " " + page.now.getFullYear()
                     size: 15
-                    font.weight: Font.DemiBold
+                    font.weight: UI.Style.weightSemiBold
                 }
 
                 UI.Label {
@@ -129,16 +129,61 @@ PageScroll {
         }
     }
 
+    // Its own card because it is a display choice, kept in wildosrc
+    // [Clock] Hours, which works without timedated. WildOS.UI's TimeFormat
+    // reads it for the taskbar, the lock screen and Wild OS's apps.
+    UI.Card {
+        Layout.fillWidth: true
+
+        Column {
+            width: parent.width
+
+            UI.SettingRow {
+                iconName: "clock"
+                title: "Clock"
+                description: "Show times on the 12-hour or 24-hour clock, whatever your regional format"
+
+                UI.ComboBox {
+                    anchors.verticalCenter: parent.verticalCenter
+                    Accessible.name: "Clock"
+                    model: [
+                        { value: 0, text: "Same as regional format" },
+                        { value: 12, text: "12-hour (1:30 PM)" },
+                        { value: 24, text: "24-hour (13:30)" }
+                    ]
+                    readonly property int choice: UI.TimeFormat.hours
+                    currentIndex: Math.max(0, model.findIndex(o => o.value === choice))
+                    onActivated: index => System.setConfig("wildosrc", "Clock", "Hours", model[index].value)
+                }
+            }
+        }
+    }
+
     UI.Dialog {
         id: changeDialog
 
         readonly property var dateParts: /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(dateField.text.trim())
-        readonly property var timeParts: /^(\d{1,2}):(\d{2})$/.exec(timeField.text.trim())
-        readonly property bool valid: dateParts !== null && timeParts !== null
-            && +timeParts[1] < 24 && +timeParts[2] < 60 && +dateParts[2] >= 1 && +dateParts[2] <= 12 && +dateParts[1] >= 1 && +dateParts[1] <= 31
+        // "13:30", "1:30 PM", "1.30pm" or "1:30 p.m.", whichever clock is chosen.
+        readonly property var timeParts: /^(\d{1,2})[:.](\d{2})(?:\s*([ap])\.?\s*m\.?)?$/i.exec(timeField.text.trim())
+        readonly property int hour: {
+            if (timeParts === null) {
+                return -1;
+            }
+            const h = +timeParts[1];
+            if (timeParts[3] === undefined) {
+                return h < 24 ? h : -1;
+            }
+            if (h < 1 || h > 12) {
+                return -1;
+            }
+            return h % 12 + (timeParts[3].toLowerCase() === "p" ? 12 : 0);
+        }
+        readonly property bool valid: dateParts !== null && hour >= 0 && +timeParts[2] < 60
+            && +dateParts[2] >= 1 && +dateParts[2] <= 12 && +dateParts[1] >= 1 && +dateParts[1] <= 31
 
         title: "Change the date and time"
-        text: "Type the date as day, month and year, and the time on the 24-hour clock."
+        text: Format.twelveHour() ? "Type the date as day, month and year, and the time with AM or PM."
+            : "Type the date as day, month and year, and the time on the 24-hour clock."
         onOpened: {
             const d = new Date();
             dateField.text = Format.shortDate(d);
@@ -162,7 +207,7 @@ PageScroll {
                 id: timeField
                 Layout.preferredWidth: 110
                 placeholderText: "Time"
-                error: text.length > 0 && changeDialog.timeParts === null
+                error: text.length > 0 && changeDialog.hour < 0
                 onAccepted: if (changeDialog.valid) changeButton.clicked()
             }
         }
@@ -176,7 +221,7 @@ PageScroll {
                 onClicked: {
                     const d = changeDialog.dateParts;
                     const t = changeDialog.timeParts;
-                    Clock.setDateTime(+d[1], +d[2], +d[3], +t[1], +t[2]);
+                    Clock.setDateTime(+d[1], +d[2], +d[3], changeDialog.hour, +t[2]);
                     changeDialog.close();
                 }
             },

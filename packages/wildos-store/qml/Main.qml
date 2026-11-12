@@ -301,7 +301,7 @@ UI.AppWindow {
                 anchors.verticalCenter: parent.verticalCenter
                 text: "Store"
                 size: 14
-                font.weight: Font.DemiBold
+                font.weight: UI.Style.weightSemiBold
                 color: root.active ? UI.Style.ink : UI.Style.inkMuted
             }
 
@@ -483,7 +483,7 @@ UI.AppWindow {
                     UI.Label {
                         width: parent.width
                         text: "No account needed"
-                        font.weight: Font.DemiBold
+                        font.weight: UI.Style.weightSemiBold
                     }
 
                     UI.Label {

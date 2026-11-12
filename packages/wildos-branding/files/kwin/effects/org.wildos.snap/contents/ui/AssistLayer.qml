@@ -96,7 +96,7 @@ Item {
                 ? "Fill the " + layer.layout.labels[layer.zone].toLowerCase()
                 : ""
             size: 12
-            font.weight: Font.DemiBold
+            font.weight: UI.Style.weightSemiBold
             color: UI.Style.inkStatus
         }
 

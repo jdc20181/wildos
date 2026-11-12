@@ -1,0 +1,10 @@
+[Unit]
+Description=Catch up on a missed backup when the backup drive is plugged in
+
+[Service]
+ExecStart=/usr/bin/wildos-backup --watch
+Restart=on-failure
+RestartSec=30
+
+[Install]
+WantedBy=default.target

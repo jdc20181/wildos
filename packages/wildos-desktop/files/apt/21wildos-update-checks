@@ -1,0 +1,9 @@
+// Refresh the list of updates once a day. Without it, apt's daily timer runs
+// and does nothing, and a new install, which has no list at all, cannot tell
+// whether security updates are waiting until someone checks by hand.
+//
+// Sorts after 20auto-upgrades, which Settings writes and unattended-upgrades
+// may install with this set to 0. Turning the daily check off is done by
+// disabling apt's timers (Welcome's privacy step, Settings), not here, and
+// whether updates install by themselves stays with 20auto-upgrades.
+APT::Periodic::Update-Package-Lists "1";

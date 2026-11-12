@@ -34,7 +34,7 @@ Depends:
  udisks2,
  util-linux,
  pkexec,
- fonts-inter,
+ wildos-fonts,
  libqt6sql6-sqlite,
  libpwquality1,
  cracklib-runtime,
@@ -43,12 +43,13 @@ Recommends:
  ntfs-3g,
  flatpak,
  brave-browser,
+ wildos-winmode,
 Description: Wild OS first run
  The seven first run steps. In the first boot setup session (wildos-setup)
  it sets the region and language, joins Wi-Fi and makes the account, then
  plans the rest for that account: taskbar layout and accent colour, copying
  documents, photos, music and bookmarks from a Windows drive on the same
- computer, the privacy choices, and the Windows programs found there, with
- their Store replacements or fresh installers and Windows mode's licence
- check. An account made later sees the last four steps at its first
- sign-in.
+ computer, the privacy choices, and, when Windows is on the computer,
+ whether to set up Windows mode, which then sets itself up in the
+ background after the first sign-in. An account made later sees the last
+ four steps at its first sign-in.

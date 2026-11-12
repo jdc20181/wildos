@@ -2,10 +2,11 @@ import QtQuick
 import WildOS.Mail
 import WildOS.UI as UI
 
-// The rail down the left of Mail and Calendar (MailMicrosoft.dc,
-// CalendarMicrosoft.dc): each is a tab of the same window, and
-// right-clicking one opens it in a window of its own. People and Tasks
-// join it when they are built.
+// The rail down the left of Mail, Calendar, People and Tasks
+// (MailMicrosoft.dc, CalendarMicrosoft.dc, MailPeople.dc, MailTasks.dc):
+// each is a tab of the same window, and right-clicking Calendar opens it in
+// a window of its own. The one open has the neutral selected fill and an
+// accent bar, as WinUI's navigation does.
 Rectangle {
     id: rail
 
@@ -26,7 +27,9 @@ Rectangle {
         Repeater {
             model: [
                 { id: "mail", name: qsTr("Mail"), icon: "mail" },
-                { id: "calendar", name: qsTr("Calendar"), icon: "calendar" }
+                { id: "calendar", name: qsTr("Calendar"), icon: "calendar" },
+                { id: "people", name: qsTr("People"), icon: "people" },
+                { id: "tasks", name: qsTr("Tasks"), icon: "tasks" }
             ]
             delegate: Rectangle {
                 id: item
@@ -35,7 +38,7 @@ Rectangle {
                 width: 52
                 height: 52
                 radius: 8
-                color: active ? UI.Style.accentSelected : mouse.containsMouse ? UI.Style.surfaceHover : "transparent"
+                color: active ? UI.Style.surfaceSelected : mouse.containsMouse ? UI.Style.surfaceHover : "transparent"
                 Accessible.role: Accessible.Button
                 Accessible.name: modelData.name
 
@@ -55,14 +58,14 @@ Rectangle {
                         anchors.horizontalCenter: parent.horizontalCenter
                         name: item.modelData.icon
                         size: 19
-                        color: item.active ? UI.Style.accent : UI.Style.iconMuted
+                        color: item.active ? UI.Style.iconInk : UI.Style.iconMuted
                     }
                     UI.Label {
                         anchors.horizontalCenter: parent.horizontalCenter
                         text: item.modelData.name
                         size: 10
-                        font.weight: item.active ? Font.DemiBold : Font.Normal
-                        color: item.active ? UI.Style.accent : UI.Style.inkMuted
+                        font.weight: item.active ? UI.Style.weightSemiBold : UI.Style.weightRegular
+                        color: item.active ? UI.Style.ink : UI.Style.inkMuted
                     }
                 }
                 MouseArea {

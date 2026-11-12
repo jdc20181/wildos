@@ -4,11 +4,13 @@
 #include "pccheck.h"
 
 #include <QDBusConnection>
+#include <QDBusMessage>
 #include <QDBusPendingCallWatcher>
 #include <QDBusPendingReply>
 #include <QDBusReply>
 #include <QDesktopServices>
 #include <QFile>
+#include <QFileInfo>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -27,9 +29,8 @@ const QString agentName = QStringLiteral("org.wildos.WindowsMode1");
 const QString agentPath = QStringLiteral("/org/wildos/WindowsMode1");
 }
 
-SetupApp::SetupApp(const QString &preview, QObject *parent)
+SetupApp::SetupApp(QObject *parent)
     : QObject(parent)
-    , m_preview(preview)
 {
     const Options saved = Options::load();
     m_office = saved.office;
@@ -38,15 +39,38 @@ SetupApp::SetupApp(const QString &preview, QObject *parent)
     m_whenIdle = saved.whenIdle;
     m_memoryGb = saved.memoryGb;
     m_folders = saved.folders;
+}
 
-    if (preview.isEmpty()) {
+void SetupApp::begin(const QString &use, const QString &board)
+{
+    if (use == QLatin1String("preview")) {
+        m_preview = board.isEmpty() ? QStringLiteral("check") : board;
+        loadPreview();
+        chooseDefaults();
+        Q_EMIT checksChanged();
+        Q_EMIT statusChanged();
+        return;
+    }
+    // For a test PC that isn't the boards' PC: their made-up checks, with
+    // setup itself as real as ever.
+    const QString canned = qEnvironmentVariable("WILDOS_WINMODE_PREVIEW");
+    if (!canned.isEmpty()) {
+        m_preview = canned;
+        loadPreview();
+        m_preview.clear();
+        m_status.clear();
+        m_canned = true;
+        chooseDefaults();
+        Q_EMIT checksChanged();
+    }
+    if (use == QLatin1String("setup")) {
         m_daemon = new QDBusInterface(agentName, agentPath, agentName, QDBusConnection::sessionBus(), this);
         QDBusConnection::sessionBus().connect(agentName, agentPath,
                                               QStringLiteral("org.wildos.WindowsMode1"), QStringLiteral("Changed"), this, SLOT(refreshStatus()));
         refreshStatus();
+    }
+    if (!m_canned) {
         recheck();
-    } else {
-        loadPreview();
     }
 }
 
@@ -55,6 +79,8 @@ void SetupApp::loadPreview()
     // Made-up values for design reviews (--preview), as on the boards.
     m_virt = QStringLiteral("ok");
     m_technology = QStringLiteral("Intel VT-x");
+    m_cores = 8;
+    m_windowsFound = true;
     m_memory = qint64(16) * 1024 * 1024 * 1024;
     m_memoryLabel = QStringLiteral("16 GB");
     m_free = qint64(412) * 1000 * 1000 * 1000;
@@ -136,7 +162,30 @@ void SetupApp::finishOne()
     if (m_pending > 0) {
         --m_pending;
     }
+    if (m_pending == 0) {
+        chooseDefaults();
+    }
     Q_EMIT checksChanged();
+}
+
+// What 9.4 starts on once the PC is known: the built-in licence when it can
+// activate Windows mode, else activate later rather than a key field that
+// holds everything up; and the most memory this PC can spare, unless a size
+// chosen before still fits.
+void SetupApp::chooseDefaults()
+{
+    if (m_licenceChoice != QLatin1String("key")) {
+        m_licenceChoice = firmwareUsable() ? QStringLiteral("firmware") : QStringLiteral("none");
+    }
+    const QVariantList choices = memoryChoices();
+    bool fits = false;
+    for (const QVariant &c : choices) {
+        fits = fits || c.toMap().value(QStringLiteral("value")).toInt() == m_memoryGb;
+    }
+    if (!fits || !QFile::exists(Paths::configFile())) {
+        m_memoryGb = choices.isEmpty() ? 4 : choices.last().toMap().value(QStringLiteral("value")).toInt();
+    }
+    Q_EMIT optionsChanged();
 }
 
 void SetupApp::recheck()
@@ -148,13 +197,11 @@ void SetupApp::recheck()
     const PcCheck::Virtualisation v = PcCheck::virtualisation();
     m_virt = v.state;
     m_technology = v.technology;
+    m_cores = PcCheck::processorCores();
     m_memory = PcCheck::memoryBytes();
     m_memoryLabel = PcCheck::memoryLabel(m_memory);
     const double gb = double(m_memory) / (1024.0 * 1024 * 1024);
     m_memoryState = gb >= 7.2 ? QStringLiteral("ok") : gb >= 5.4 ? QStringLiteral("low") : QStringLiteral("short");
-    if (m_memoryGb * 1024.0 * 1024 * 1024 > m_memory * 0.75) {
-        m_memoryGb = 4;
-    }
     QDBusInterface login(QStringLiteral("org.freedesktop.login1"), QStringLiteral("/org/freedesktop/login1"), QStringLiteral("org.freedesktop.login1.Manager"),
                          QDBusConnection::systemBus());
     const QDBusReply<QString> can = login.call(QStringLiteral("CanRebootToFirmwareSetup"));
@@ -238,6 +285,7 @@ void SetupApp::checkLicence()
             m_licence = QStringLiteral("error");
         } else {
             m_edition = Licence::editionFrom(fw.value(QStringLiteral("edition")).toString(), fw.value(QStringLiteral("description")).toString());
+            m_windowsFound = fw.value(QStringLiteral("windows")).toBool();
             // One licence covers one copy of Windows; with Windows still on
             // this PC the built-in one is taken.
             m_licence = !fw.value(QStringLiteral("msdm")).toBool() ? QStringLiteral("none")
@@ -252,9 +300,18 @@ void SetupApp::checkLicence()
         return;
     }
     // The system service reads the firmware's licence table and looks for
-    // Windows on the disks, which can take a little while.
-    m_daemon->setTimeout(120000);
-    auto *watcher = new QDBusPendingCallWatcher(m_daemon->asyncCall(QStringLiteral("Firmware")), this);
+    // Windows on the disks, which can take a little while. First run asks
+    // it directly (anyone may ask this one thing); the setup window through
+    // the agent, like everything else it asks.
+    if (m_daemon) {
+        m_daemon->setTimeout(120000);
+    }
+    const QDBusPendingCall call = m_daemon ? m_daemon->asyncCall(QStringLiteral("Firmware"))
+                                           : QDBusConnection::systemBus().asyncCall(
+                                                 QDBusMessage::createMethodCall(agentName, agentPath, QStringLiteral("org.wildos.WindowsMode1.Host"),
+                                                                                QStringLiteral("Firmware")),
+                                                 120000);
+    auto *watcher = new QDBusPendingCallWatcher(call, this);
     connect(watcher, &QDBusPendingCallWatcher::finished, this, [watcher, apply] {
         watcher->deleteLater();
         const QDBusPendingReply<QString> reply = *watcher;
@@ -272,11 +329,42 @@ bool SetupApp::spaceOk() const
     return m_free < 0 || m_free >= PcCheck::neededBytes(m_office);
 }
 
+int SetupApp::setupMinutes() const
+{
+    // media 15, install 25, activate 1, tune 10, office 15
+    return 15 + 25 + 1 + 10 + (m_office ? 15 : 0);
+}
+
+bool SetupApp::coresOk() const
+{
+    return m_cores >= PcCheck::neededCores;
+}
+
+bool SetupApp::requirementsMet() const
+{
+    return !checking() && m_virt == QLatin1String("ok") && coresOk() && m_memoryState == QLatin1String("ok") && spaceOk()
+        && m_internet != QLatin1String("offline");
+}
+
+bool SetupApp::firmwareUsable() const
+{
+    return (m_licence == QLatin1String("firmware") || m_licence == QLatin1String("inuse")) && m_edition != QLatin1String("home");
+}
+
+bool SetupApp::canStart() const
+{
+    return m_termsAccepted && spaceOk() && (m_licenceChoice != QLatin1String("key") || Licence::keyShapeValid(Licence::normaliseKey(m_productKey)));
+}
+
+// The sizes this PC can spare: up to two fifths of the memory fitted, so
+// Wild OS and its apps keep the rest (6 GB of a 16 GB PC). 4 GB, the least
+// Windows 11 runs in, is always offered.
 QVariantList SetupApp::memoryChoices() const
 {
+    const double fitted = PcCheck::memoryLabel(m_memory).section(QLatin1Char(' '), 0, 0).toDouble();
     QVariantList choices;
     for (int gb : {4, 6, 8, 12, 16, 24, 32}) {
-        if (gb == 4 || gb * 1024.0 * 1024 * 1024 <= m_memory * 0.75) {
+        if (gb == 4 || gb <= fitted * 0.4) {
             choices << QVariantMap{{QStringLiteral("value"), gb}, {QStringLiteral("text"), QStringLiteral("Up to %1 GB").arg(gb)}};
         }
     }
@@ -337,6 +425,10 @@ QByteArray readSmt(const char *name)
 // not at Strict or Maximum protection, which keep it off.
 bool SetupApp::hyperThreadingAvailable() const
 {
+    // The boards' made-up PC has the row.
+    if (preview() || m_canned) {
+        return true;
+    }
     const QByteArray control = readSmt("control");
     QFile levelFile(QStringLiteral("/etc/wildos/protection-level"));
     const QByteArray level = levelFile.open(QIODevice::ReadOnly) ? levelFile.readAll().trimmed() : QByteArray();
@@ -349,7 +441,38 @@ bool SetupApp::hyperThreadingNeedsRestart() const
     return QFile::exists(QStringLiteral("/etc/wildos/cpu-threads")) && readSmt("active") != "1";
 }
 
-QString SetupApp::startSetup(const QString &licence, const QString &key, const QString &homeChoice)
+QString SetupApp::setupRequest(bool background) const
+{
+    Options o = Options::load();
+    o.office = m_office;
+    o.officePlan = m_officePlan;
+    o.openFiles = m_openFiles;
+    o.whenIdle = m_whenIdle;
+    o.memoryGb = m_memoryGb;
+    // The firmware's key stays with the system service, which reads it
+    // itself; only a key typed here travels with the request.
+    QJsonObject lic{{QStringLiteral("source"), m_licenceChoice}, {QStringLiteral("edition"), m_edition}};
+    if (m_licenceChoice == QLatin1String("key")) {
+        lic.insert(QStringLiteral("key"), Licence::normaliseKey(m_productKey));
+        lic.insert(QStringLiteral("edition"), QString());
+    }
+    QJsonObject options = o.toJson();
+    options.insert(QStringLiteral("hyperThreading"), m_hyperThreading && hyperThreadingAvailable());
+    QJsonObject request{{QStringLiteral("licence"), lic},
+                        {QStringLiteral("options"), options},
+                        // Windows' own licence screen is skipped, so the
+                        // acceptance here goes with the setup it was for.
+                        {QStringLiteral("terms"), QJsonObject{{QStringLiteral("windows"), m_termsAccepted},
+                                                              {QStringLiteral("office"), m_termsAccepted && m_office}}},
+                        {QStringLiteral("background"), background}};
+    // The service checks the file again itself, as this account, and copies it.
+    if (m_isoState == QLatin1String("ok")) {
+        request.insert(QStringLiteral("iso"), m_isoPath);
+    }
+    return QString::fromUtf8(QJsonDocument(request).toJson(QJsonDocument::Compact));
+}
+
+QString SetupApp::startSetup(bool background)
 {
     if (preview()) {
         return {};
@@ -363,24 +486,11 @@ QString SetupApp::startSetup(const QString &licence, const QString &key, const Q
         });
         process->start(QStringLiteral("pkexec"), {cpuThreadsHelper, QStringLiteral("on")});
     }
-    Options o = Options::load();
-    o.office = m_office;
-    o.officePlan = m_officePlan;
-    o.openFiles = m_openFiles;
-    o.whenIdle = m_whenIdle;
-    o.memoryGb = m_memoryGb;
-    // The firmware's key stays with the system service, which reads it
-    // itself; only a key typed here travels with the request.
-    QJsonObject lic{{QStringLiteral("source"), licence}, {QStringLiteral("edition"), m_edition}};
-    if (licence == QLatin1String("key")) {
-        lic.insert(QStringLiteral("key"), Licence::normaliseKey(key));
-        lic.insert(QStringLiteral("edition"), QString());
-    } else {
-        lic.insert(QStringLiteral("edition"), m_edition);
+    if (!m_daemon) {
+        m_daemon = new QDBusInterface(agentName, agentPath, agentName, QDBusConnection::sessionBus(), this);
     }
-    const QJsonObject request{{QStringLiteral("licence"), lic}, {QStringLiteral("homeChoice"), homeChoice}, {QStringLiteral("options"), o.toJson()}};
     m_daemon->setTimeout(120000);
-    const QDBusReply<QString> reply = m_daemon->call(QStringLiteral("StartSetup"), QString::fromUtf8(QJsonDocument(request).toJson(QJsonDocument::Compact)));
+    const QDBusReply<QString> reply = m_daemon->call(QStringLiteral("StartSetup"), setupRequest(background));
     if (!reply.isValid()) {
         return QStringLiteral("Windows mode's background service didn't start. Restart the PC, then try again.");
     }
@@ -423,6 +533,73 @@ QString SetupApp::chooseIso(const QString &url)
     }
     const QDBusReply<QString> reply = m_daemon->call(QStringLiteral("ChooseIso"), QUrl(url).toLocalFile());
     return reply.isValid() ? reply.value() : QStringLiteral("Windows mode's background service didn't answer.");
+}
+
+QString SetupApp::isoFile() const
+{
+    return QFileInfo(m_isoPath).fileName();
+}
+
+QUrl SetupApp::downloadsFolder() const
+{
+    return QUrl::fromLocalFile(QStandardPaths::writableLocation(QStandardPaths::DownloadLocation));
+}
+
+void SetupApp::checkIso(const QString &url)
+{
+    const QString path = QUrl(url).isLocalFile() ? QUrl(url).toLocalFile() : url;
+    forgetIso();
+    m_isoPath = path;
+    m_isoState = QStringLiteral("checking");
+    Q_EMIT isoChanged();
+    if (preview()) {
+        m_isoState = QStringLiteral("ok");
+        Q_EMIT isoChanged();
+        return;
+    }
+    // The same check the service runs again before copying the file, so the
+    // two can't disagree about it.
+    auto *process = new QProcess(this);
+    m_isoCheck = process;
+    const auto answer = [this, process](const QJsonObject &result) {
+        process->deleteLater();
+        // A check that was replaced or called off says nothing.
+        if (m_isoCheck != process) {
+            return;
+        }
+        m_isoCheck = nullptr;
+        if (result.value(QStringLiteral("ok")).toBool()) {
+            m_isoState = QStringLiteral("ok");
+            Q_EMIT isoChanged();
+            return;
+        }
+        const QString why = result.value(QStringLiteral("text")).toString();
+        m_isoPath.clear();
+        m_isoState.clear();
+        Q_EMIT isoChanged();
+        Q_EMIT isoRefused(why.isEmpty() ? QStringLiteral("This file couldn't be checked. Try again.") : why);
+    };
+    connect(process, &QProcess::finished, this, [process, answer](int code, QProcess::ExitStatus status) {
+        const bool clean = status == QProcess::NormalExit && code == 0;
+        answer(clean ? QJsonDocument::fromJson(process->readAllStandardOutput()).object() : QJsonObject());
+    });
+    connect(process, &QProcess::errorOccurred, this, [answer](QProcess::ProcessError error) {
+        if (error == QProcess::FailedToStart) {
+            answer(QJsonObject());
+        }
+    });
+    process->start(QStringLiteral("wildos-winmode"), {QStringLiteral("check-iso"), path});
+}
+
+void SetupApp::forgetIso()
+{
+    if (QProcess *running = m_isoCheck) {
+        m_isoCheck = nullptr;
+        running->kill();
+    }
+    m_isoPath.clear();
+    m_isoState.clear();
+    Q_EMIT isoChanged();
 }
 
 void SetupApp::openApp(const QString &id)

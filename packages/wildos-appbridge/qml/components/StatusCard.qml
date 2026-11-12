@@ -49,7 +49,7 @@ UI.Card {
             UI.Label {
                 Layout.fillWidth: true
                 text: card.title
-                font.weight: Font.DemiBold
+                font.weight: UI.Style.weightSemiBold
             }
 
             UI.Label {

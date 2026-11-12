@@ -1,14 +1,17 @@
 #include "windowsmode.h"
 
+#include <QClipboard>
 #include <QDBusConnection>
 #include <QDBusInterface>
 #include <QDBusPendingCallWatcher>
 #include <QDBusPendingReply>
 #include <QDBusReply>
 #include <QFile>
+#include <QGuiApplication>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QLocale>
+#include <QMimeData>
 #include <QProcess>
 #include <QRegularExpression>
 #include <QStandardPaths>
@@ -113,6 +116,27 @@ void WindowsMode::setProductKey(const QString &key)
     });
 }
 
+void WindowsMode::power(const QString &action)
+{
+    if (!m_service || !m_powerAction.isEmpty()) {
+        return;
+    }
+    m_powerAction = action;
+    Q_EMIT powerActionChanged();
+    // Shutting down waits for Windows, and for the person's answer when an
+    // app has unsaved work, so the call may run for a long time.
+    m_service->setTimeout(1800000);
+    auto *watcher = new QDBusPendingCallWatcher(m_service->asyncCall(QStringLiteral("Power"), action), this);
+    connect(watcher, &QDBusPendingCallWatcher::finished, this, [this, watcher] {
+        watcher->deleteLater();
+        const QDBusPendingReply<QString> reply = *watcher;
+        m_powerAction.clear();
+        Q_EMIT powerActionChanged();
+        Q_EMIT powerDone(reply.isError() ? QStringLiteral("Windows mode didn't answer. Restart the PC, then try again.") : reply.value());
+        refresh();
+    });
+}
+
 bool WindowsMode::keyShapeValid(const QString &key) const
 {
     static const QRegularExpression shape(QStringLiteral("^([BCDFGHJKMNPQRTVWXY2346789]{5}-?){4}[BCDFGHJKMNPQRTVWXY2346789]{5}$"));
@@ -134,9 +158,55 @@ QString WindowsMode::repair()
     return call(QStringLiteral("Repair"), {}, 180000);
 }
 
-QString WindowsMode::remove()
+// Windows mode's agent keeps the password it set in the keyring under these
+// attributes (wildos-winmode, agent.py SECRET_ATTRS). Without a keyring it
+// only holds it in memory, and there is nothing to show.
+QString WindowsMode::windowsPassword(const QString &account) const
 {
-    return call(QStringLiteral("Remove"), {}, 180000);
+    const QString tool = QStandardPaths::findExecutable(QStringLiteral("secret-tool"));
+    if (tool.isEmpty() || account.isEmpty()) {
+        return QString();
+    }
+    QProcess p;
+    p.start(tool, {QStringLiteral("lookup"), QStringLiteral("service"), QStringLiteral("org.wildos.WindowsMode1"),
+                   QStringLiteral("account"), account});
+    if (!p.waitForFinished(10000) || p.exitCode() != 0) {
+        return QString();
+    }
+    return QString::fromUtf8(p.readAllStandardOutput()).trimmed();
+}
+
+void WindowsMode::copySecret(const QString &text) const
+{
+    auto *mime = new QMimeData;
+    mime->setText(text);
+    mime->setData(QStringLiteral("x-kde-passwordManagerHint"), QByteArrayLiteral("secret"));
+    QGuiApplication::clipboard()->setMimeData(mime);
+}
+
+void WindowsMode::remove()
+{
+    if (!m_service) {
+        Q_EMIT removeDone(QStringLiteral("Windows mode isn't installed on this PC."));
+        return;
+    }
+    if (m_removing) {
+        return;
+    }
+    m_removing = true;
+    Q_EMIT removingChanged();
+    // The administrator's password is asked for first, so the call waits
+    // on the person as well as on Windows being deleted.
+    m_service->setTimeout(1800000);
+    auto *watcher = new QDBusPendingCallWatcher(m_service->asyncCall(QStringLiteral("Remove")), this);
+    connect(watcher, &QDBusPendingCallWatcher::finished, this, [this, watcher] {
+        watcher->deleteLater();
+        const QDBusPendingReply<QString> reply = *watcher;
+        m_removing = false;
+        Q_EMIT removingChanged();
+        Q_EMIT removeDone(reply.isError() ? QStringLiteral("Windows mode didn't answer. Restart the PC, then try again.") : reply.value());
+        refresh();
+    });
 }
 
 void WindowsMode::openSetup()

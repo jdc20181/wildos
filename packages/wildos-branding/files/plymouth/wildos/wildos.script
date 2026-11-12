@@ -24,8 +24,8 @@
 # from the centre of the screen, and must stay in step with that script and
 # with BootHandoff.qml.
 
-INTRO_BG_R = 0.0196; INTRO_BG_G = 0.0275; INTRO_BG_B = 0.0510;
-UNLOCK_BG_R = 0.0431; UNLOCK_BG_G = 0.0588; UNLOCK_BG_B = 0.1176;
+INTRO_BG_R = 0; INTRO_BG_G = 0; INTRO_BG_B = 0;
+UNLOCK_BG_R = 0; UNLOCK_BG_G = 0; UNLOCK_BG_B = 0;
 Window.SetBackgroundTopColor(INTRO_BG_R, INTRO_BG_G, INTRO_BG_B);
 Window.SetBackgroundBottomColor(INTRO_BG_R, INTRO_BG_G, INTRO_BG_B);
 
@@ -384,8 +384,9 @@ fun draw_unlock(alpha) {
     set_background(alpha);
 }
 
-# The unlock screen and everything after it sit on the slightly lighter navy
-# of Boot.dc.html.
+# The unlock screen and everything after it sit on the background of
+# Boot.dc.html, black like the start-up animation since the boards changed;
+# the fade stays so the two can differ again.
 fun set_background(alpha) {
     if (alpha != global.unlock_bg) {
         r = INTRO_BG_R + (UNLOCK_BG_R - INTRO_BG_R) * alpha;
@@ -541,8 +542,8 @@ fun clear_question() {
 # use Plymouth's own text rendering in the prompt's place.
 fun question_callback(prompt_text, entry) {
     global.want_unlock = 0;
-    q = Image.Text(prompt_text, 0.91, 0.925, 0.973, 0.85, "Inter " + Math.Int(14 * s));
-    a = Image.Text(entry + " ", 1, 1, 1, 1, "Inter " + Math.Int(14 * s));
+    q = Image.Text(prompt_text, 1, 1, 1, 0.85, "Albert Sans " + Math.Int(14 * s));
+    a = Image.Text(entry + " ", 1, 1, 1, 1, "Albert Sans " + Math.Int(14 * s));
     if (!global.question_sprite) {
         global.question_sprite = Sprite();
         global.answer_sprite = Sprite();

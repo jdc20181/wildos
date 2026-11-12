@@ -61,13 +61,13 @@ Panel {
             Layout.preferredWidth: 56
             Layout.preferredHeight: 56
             radius: 14
-            color: UI.Style.tone(0.08)
+            color: UI.Style.warningSoft
             UI.Icon {
                 anchors.centerIn: parent
                 name: "shield"
                 size: 26
                 strokeWidth: 1.8
-                color: "#ffc46a"
+                color: UI.Style.warning
             }
         }
         UI.Label {
@@ -75,7 +75,7 @@ Panel {
             horizontalAlignment: Text.AlignHCenter
             text: dialog.kind === "ssh" ? qsTr("Is this the right server?") : qsTr("Is this the right computer?")
             size: 20
-            font.weight: Font.Bold
+            font.weight: UI.Style.weightBold
         }
         UI.Label {
             Layout.fillWidth: true

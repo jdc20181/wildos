@@ -1,3 +1,224 @@
+wildos-branding (0.1.32) trixie; urgency=medium
+
+  * The licence notice for the Settings icon is installed where it is
+    kept, in /usr/share/wildos-branding/licences.
+
+ -- Wild OS Developers <dev@wildos.io>  Thu, 12 Nov 2026 09:15:16 +0000
+
+wildos-branding (0.1.31) trixie; urgency=medium
+
+  * New Store and Settings icons: a white shopping bag with the Wild OS
+    mark, and a grey cog.
+
+ -- Wild OS Developers <dev@wildos.io>  Thu, 12 Nov 2026 09:07:51 +0000
+
+wildos-branding (0.1.30) trixie; urgency=medium
+
+  * Plugged in, the computer no longer goes to sleep when you step away.
+    The screen still turns off, and on battery it still sleeps.
+
+ -- Wild OS Developers <dev@wildos.io>  Thu, 12 Nov 2026 08:56:21 +0000
+
+wildos-branding (0.1.29) trixie; urgency=medium
+
+  * The Updates icon on the taskbar no longer warns that Wild OS couldn't
+    check for updates when only a source added by other software failed.
+
+ -- Wild OS Developers <dev@wildos.io>  Thu, 12 Nov 2026 08:26:26 +0000
+
+wildos-branding (0.1.28) trixie; urgency=medium
+
+  * Comments name the KWin effect that now owns Win+D.
+
+ -- Wild OS Developers <dev@wildos.io>  Thu, 12 Nov 2026 00:33:25 +0000
+
+wildos-branding (0.1.27) trixie; urgency=medium
+
+  * The Report a problem icon, amber like a warning, in the Wild OS icon
+    theme.
+
+ -- Wild OS Developers <dev@wildos.io>  Thu, 12 Nov 2026 00:10:00 +0000
+
+wildos-branding (0.1.26) trixie; urgency=medium
+
+  * The Windows mode status on the taskbar shows "Setting up" with a ring
+    that fills as Windows mode sets itself up, opens a panel with the
+    steps, and says "Ready" once it's done. Start shows Word, Excel,
+    PowerPoint and Outlook as "Getting ready" meanwhile.
+
+ -- Wild OS Developers <dev@wildos.io>  Thu, 12 Nov 2026 00:30:00 +0000
+
+wildos-branding (0.1.25) trixie; urgency=medium
+
+  * Start opens at All apps, and the clock at the notifications, when a
+    hot corner asks; the cup in the taskbar corner shows while a hot corner
+    keeps the computer awake. New accounts get Task view in the top left
+    corner and the notifications in the top right.
+
+ -- Wild OS Developers <dev@wildos.io>  Wed, 11 Nov 2026 23:47:01 +0000
+
+wildos-branding (0.1.24) trixie; urgency=medium
+
+  * Alt+F4 belongs to the Wild OS close window shortcut, which also opens
+    the shut down screen from the desktop. Accounts made before this are
+    moved over once when they sign in.
+
+ -- Wild OS Developers <dev@wildos.io>  Wed, 11 Nov 2026 23:40:00 +0000
+
+wildos-branding (0.1.23) trixie; urgency=medium
+
+  * Archives open in Archive: ZIP, 7z, RAR, TAR, tar.gz and the other
+    compressed tars, and lone GZ, XZ, BZ2 and ZST files.
+
+ -- Wild OS Developers <dev@wildos.io>  Wed, 11 Nov 2026 23:02:55 +0000
+
+wildos-branding (0.1.22) trixie; urgency=medium
+
+  * The start-up screen can draw text: it was missing its text plugin and
+    font, so any message it showed came out as boxes.
+
+ -- Wild OS Developers <dev@wildos.io>  Wed, 11 Nov 2026 22:34:13 +0000
+
+wildos-branding (0.1.21) trixie; urgency=medium
+
+  * No navy left: surfaces, glass, shadows and the logo tile use the
+    same neutral greys as the rest of Wild OS.
+
+ -- Wild OS Developers <dev@wildos.io>  Wed, 11 Nov 2026 22:40:26 +0000
+
+wildos-branding (0.1.20) trixie; urgency=medium
+
+  * Videos open in Videos: MP4, MKV, WebM, MOV, AVI and the other video
+    files.
+  * Videos is pinned in Start on new accounts, after Music. Accounts made
+    before keep their pins as they are.
+
+ -- Wild OS Developers <dev@wildos.io>  Wed, 11 Nov 2026 23:00:00 +0000
+
+wildos-branding (0.1.19) trixie; urgency=medium
+
+  * Icons from other apps in the taskbar corner sit on the same line as
+    the shield, Wi-Fi, volume and battery icons.
+
+ -- Wild OS Developers <dev@wildos.io>  Wed, 11 Nov 2026 22:05:06 +0000
+
+wildos-branding (0.1.18) trixie; urgency=medium
+
+  * App icons match the Wild OS icon set: Terminal and Calculator get the
+    new drawings, Archive, Music and Videos players use them too, and
+    every app icon has its soft shadow again.
+
+ -- Wild OS Developers <dev@wildos.io>  Wed, 11 Nov 2026 20:43:52 +0000
+
+wildos-branding (0.1.17) trixie; urgency=medium
+
+  * Songs open in Music: MP3, FLAC, Ogg, Opus, AAC, WAV and the other
+    audio files, and .m3u playlists.
+  * Music is pinned in Start on new accounts, after Notes. Accounts made
+    before keep their pins as they are.
+
+ -- Wild OS Developers <dev@wildos.io>  Wed, 11 Nov 2026 22:00:00 +0000
+
+wildos-branding (0.1.16) trixie; urgency=medium
+
+  * Store and Settings icons are plain tiles, as on the icon page.
+
+ -- Wild OS Developers <dev@wildos.io>  Wed, 11 Nov 2026 20:05:41 +0000
+
+wildos-branding (0.1.15) trixie; urgency=medium
+
+  * Win+N opens a quick note from anywhere, even when Notes is closed.
+  * Notes takes the Text editor's place in Start's default pins; accounts
+    that still have the Text editor pinned get Notes in its place once.
+
+ -- Wild OS Developers <dev@wildos.io>  Wed, 11 Nov 2026 20:00:00 +0000
+
+wildos-branding (0.1.14) trixie; urgency=medium
+
+  * New icons for Files, Settings, Store, Terminal, Calculator, Calendar,
+    Pictures, the text editor and the web browser, from the system app
+    icons board, so they sit with Mail, Write, Tables and Remote.
+
+ -- Wild OS Developers <dev@wildos.io>  Wed, 11 Nov 2026 19:00:00 +0000
+
+wildos-branding (0.1.13) trixie; urgency=medium
+
+  * The lock screen says "Or touch the fingerprint reader" when a finger
+    is enrolled, and the sign-in screen says to press Enter and touch it
+    on a PC with a reader.
+
+ -- Wild OS Developers <dev@wildos.io>  Wed, 11 Nov 2026 18:30:00 +0000
+
+wildos-branding (0.1.12) trixie; urgency=medium
+
+  * The Warp wallpaper ships 10% larger than a 5K screen, so it stays
+    sharp while it breathes.
+
+ -- Wild OS Developers <dev@wildos.io>  Wed, 11 Nov 2026 17:50:00 +0000
+
+wildos-branding (0.1.11) trixie; urgency=medium
+
+  * Folders, This computer and the Recycle Bin come from the Fluent icon
+    theme with yellow folders. New icons for Store, Terminal and
+    Calculator, and a dark icon theme that follows dark mode.
+
+ -- Wild OS Developers <dev@wildos.io>  Wed, 11 Nov 2026 17:40:00 +0000
+
+wildos-branding (0.1.10) trixie; urgency=medium
+
+  * Write and Tables dialogs: fields are 32 px tall with one solid fill,
+    and tabs are underlined.
+
+ -- Wild OS Developers <dev@wildos.io>  Wed, 11 Nov 2026 17:30:00 +0000
+
+wildos-branding (0.1.9) trixie; urgency=medium
+
+  * security-status reports whether the firewall is loaded.
+  * Battery saver: below 20% the power mode switches to power saver.
+
+ -- Wild OS Developers <dev@wildos.io>  Wed, 11 Nov 2026 17:10:00 +0000
+
+wildos-branding (0.1.8) trixie; urgency=medium
+
+  * PDF files open in the new PDF app.
+
+ -- Wild OS Developers <dev@wildos.io>  Wed, 11 Nov 2026 17:03:18 +0000
+
+wildos-branding (0.1.7) trixie; urgency=medium
+
+  * The close button's hover is square on maximised windows, as on
+    Windows 11: both title bar themes gain close-maximized.svg, the square
+    fills wildos-shell draws under the close button of a maximised window.
+
+ -- Wild OS Developers <dev@wildos.io>  Wed, 11 Nov 2026 15:54:41 +0000
+
+wildos-branding (0.1.6) trixie; urgency=medium
+
+  * The taskbar clock, its calendar and notifications, the lock screen,
+    Protection, Updates and Keep awake show times on the 12-hour or
+    24-hour clock chosen in Settings > Date and time. The sign-in screen
+    keeps the regional format's own clock, as it cannot read a person's
+    settings.
+
+ -- Wild OS Developers <dev@wildos.io>  Wed, 11 Nov 2026 14:31:15 +0000
+
+wildos-branding (0.1.5) trixie; urgency=medium
+
+  * The colour schemes, window title bars and the Kvantum styles for KDE
+    apps and Write and Tables move from navy to the neutral greys of the
+    Wild OS windows, in dark and light.
+
+ -- Wild OS Developers <dev@wildos.io>  Wed, 11 Nov 2026 15:30:00 +0000
+
+wildos-branding (0.1.4) trixie; urgency=medium
+
+  * An Updates icon beside Protection on the taskbar shows when updates
+    are ready, turns while they are checked or installed, and has a
+    flyout with Check now, Install and the time of the last check.
+    Taskbars made before this update get it once.
+
+ -- Wild OS Developers <dev@wildos.io>  Wed, 11 Nov 2026 11:39:31 +0000
+
 wildos-branding (0.1.3) trixie; urgency=medium
 
   * Windows mode's taskbar panel (board WinModeStatusPanel): Pause, Save

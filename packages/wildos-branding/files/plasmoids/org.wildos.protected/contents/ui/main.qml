@@ -4,6 +4,7 @@ import QtQuick
 import org.kde.plasma.plasmoid
 import org.kde.plasma.core as PlasmaCore
 import org.kde.plasma.plasma5support as P5Support
+import WildOS.UI as UI
 
 // The "Protected" chip on the taskbar and its flyout, in the manner of Windows
 // Security: a plain answer to "is my computer safe?", then the few things
@@ -43,10 +44,19 @@ PlasmoidItem {
     readonly property var pendingDevices: blockedDevices.filter(d => !dismissed[deviceKey(d)])
     readonly property var areas: buildAreas(status, pendingDevices.length)
     readonly property var warnings: areas.filter(a => a.tone === "warn")
-    // "checking", "protected" or "attention". Not "state": Item has one.
-    readonly property string level: !checked ? "checking" : warnings.length > 0 ? "attention" : "protected"
+    // Until the list of updates has been refreshed, nobody can say whether a
+    // security update is waiting, so the computer is not called protected.
+    // A new install has no list until its first check.
+    readonly property bool updatesUnchecked: checked && status.updates === "unknown"
+    readonly property bool updatesNeverChecked: updatesUnchecked && number(status.updates_checked) === 0
+    // "checking", "unchecked", "protected" or "attention". Not "state": Item
+    // has one.
+    readonly property string level: !checked ? "checking" : warnings.length > 0 ? "attention"
+        : updatesUnchecked ? "unchecked" : "protected"
     readonly property string chipText: level === "attention" ? "Action needed"
-        : level === "checking" ? "Checking" : "Protected"
+        : level === "checking" ? "Checking"
+        : level === "unchecked" ? "Check updates" : "Protected"
+    readonly property string uncheckedTitle: updatesNeverChecked ? "Updates not checked yet" : "Updates not checked lately"
 
     function number(value: var): int {
         const n = parseInt(value, 10);
@@ -152,7 +162,7 @@ PlasmoidItem {
         if (minutes < 60) {
             return "Checked " + minutes + " min ago";
         }
-        return "Checked at " + new Date(lastChecked).toLocaleTimeString(Qt.locale(), Locale.ShortFormat);
+        return "Checked at " + Qt.locale().toString(new Date(lastChecked), UI.TimeFormat.shortFormat);
     }
 
     P5Support.DataSource {
@@ -429,7 +439,8 @@ PlasmoidItem {
     Plasmoid.icon: "security-high"
     Plasmoid.title: "Security"
     Plasmoid.status: level === "attention" ? PlasmaCore.Types.NeedsAttentionStatus : PlasmaCore.Types.PassiveStatus
-    toolTipMainText: level === "attention" ? "Action needed" : level === "checking" ? "Checking your protection" : "Your computer is protected"
+    toolTipMainText: level === "attention" ? "Action needed" : level === "checking" ? "Checking your protection"
+        : level === "unchecked" ? uncheckedTitle : "Your computer is protected"
     toolTipSubText: level === "attention" ? warnings.map(a => a.status).join("\n") : "Click for details"
 
     preferredRepresentation: compactRepresentation

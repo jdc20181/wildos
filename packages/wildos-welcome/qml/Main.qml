@@ -5,7 +5,7 @@ import WildOS.Welcome
 import WildOS.UI as UI
 
 // The first run: a glass sheet over the wallpaper, dimmed, as drawn in the
-// First run artboards (3.3 to 3.9). It covers the whole screen so nothing
+// First run artboards (3.3 to 3.10). It covers the whole screen so nothing
 // else competes for attention until setup is done.
 //
 // With setupMode it is the first boot setup session (wildos-setup), all
@@ -21,8 +21,18 @@ Window {
     property int startStep: 1
     property int step: Math.min(startStep, stepNames.length)
 
+    // Step 7 is Windows mode (3.9 and 3.10), only when Windows is on this
+    // PC and Windows mode is installed.
+    readonly property bool windowsStep: windowsMode.item !== null && windowsMode.item.windowsFound
+    // Its two pages: 1 asks (3.9), 2 has the options (3.10).
+    property int windowsPage: 1
+    // Set up Windows mode was chosen on page 1.
+    property bool windowsChosen: false
+    property string windowsError
+
     readonly property var stepNames: (setupMode ? ["Region and language", "Wi-Fi", "Your account"] : [])
-        .concat(["Make it feel like home", "Bring your files across", "Your privacy", "Your Windows programs"])
+        .concat(["Make it feel like home", "Bring your files across", "Your privacy"])
+        .concat(windowsStep ? ["Your Windows programs"] : [])
 
     width: 1440
     height: 900
@@ -46,10 +56,18 @@ Window {
     function next() {
         if (step < stepNames.length) {
             step += setupMode && step === 1 && skipWifi ? 2 : 1;
+            windowsPage = 1;
+        } else {
+            finish();
         }
     }
 
+    // Finish goes to the desktop (board 9.11). Windows mode, if chosen,
+    // starts setting up in the background: straight away for an account
+    // that already exists, or at the new account's first sign-in, which
+    // sends the request saved with its plan.
     function finish() {
+        const windows = windowsStep && windowsChosen && windowsMode.item ? windowsMode.item.request() : "";
         if (setupMode) {
             try {
                 WindowsImport.release();
@@ -57,23 +75,42 @@ Window {
                     home: Setup.plan(),
                     privacy: Privacy.plan(),
                     copy: WindowsImport.plan(),
-                    programs: WindowsPrograms.plan()
+                    windowsMode: windows
                 });
             } catch (error) {
                 console.warn("Finishing setup failed:", error);
                 FirstBoot.fail("Wild OS could not finish setting up. Restart the computer to try again.");
             }
         } else {
-            WindowsPrograms.start();
+            if (windows.length > 0) {
+                // Straight to the desktop (9.11), while the request is
+                // passed on; back only to say why it couldn't start.
+                root.visible = false;
+                windowsError = windowsMode.item.start();
+                if (windowsError.length > 0) {
+                    root.visible = true;
+                    return;
+                }
+            }
             Setup.finish();
             Setup.quit();
         }
     }
 
     function back() {
-        if (step > 1) {
+        if (stepNames[step - 1] === "Your Windows programs" && windowsPage === 2) {
+            windowsPage = 1;
+        } else if (step > 1) {
             step -= setupMode && step === 3 && skipWifi ? 2 : 1;
+            windowsPage = 1;
         }
+    }
+
+    // Windows mode's checks start with the welcome, so they are done (and
+    // step 7 is known to be there or not) by the time it comes.
+    Loader {
+        id: windowsMode
+        source: "steps/WindowsModeProbe.qml"
     }
 
     // The photo and the dim over it, drawn once and blurred again for the
@@ -202,7 +239,7 @@ Window {
                 dx: UI.Style.travelMedium
             }
             sourceComponent: (root.setupMode ? [regionStep, wifiStep, accountStep] : [])
-                .concat([homeStep, filesStep, privacyStep, programsStep])[root.step - 1]
+                .concat([homeStep, filesStep, privacyStep, root.windowsPage === 1 ? windowsAskStep : windowsOptionsStep])[root.step - 1]
         }
     }
 
@@ -249,16 +286,52 @@ Window {
     Component {
         id: privacyStep
         PrivacyStep {
+            // The last step when step 7 isn't there; its checks are still
+            // running if this is reached quickly, and Continue waits for them.
+            last: !root.windowsStep && !(windowsMode.item && windowsMode.item.checking)
+            waiting: windowsMode.item !== null && windowsMode.item.checking
             onNext: root.next()
             onBack: root.back()
         }
     }
 
+    // Step 7's pages import Windows mode's module, so they load by URL: a
+    // missing module then costs the step, never the welcome.
     Component {
-        id: programsStep
-        ProgramsStep {
-            onBack: root.back()
-            onFinished: root.finish()
+        id: windowsAskStep
+        Loader {
+            id: askLoader
+            source: "steps/WindowsAskStep.qml"
+            focus: true
+
+            Connections {
+                target: askLoader.item
+                function onBack() { root.back(); }
+                function onNext() {
+                    root.windowsChosen = true;
+                    root.windowsPage = 2;
+                }
+                function onFinished() {
+                    root.windowsChosen = false;
+                    root.finish();
+                }
+            }
+        }
+    }
+
+    Component {
+        id: windowsOptionsStep
+        Loader {
+            id: optionsLoader
+            source: "steps/WindowsOptionsStep.qml"
+            focus: true
+            onLoaded: item.error = Qt.binding(() => root.windowsError)
+
+            Connections {
+                target: optionsLoader.item
+                function onBack() { root.back(); }
+                function onFinished() { root.finish(); }
+            }
         }
     }
 }

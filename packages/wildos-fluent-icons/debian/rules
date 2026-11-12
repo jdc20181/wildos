@@ -1,0 +1,39 @@
+#!/usr/bin/make -f
+
+COMMIT := c8a244f571ef8fb47812bdc9dbce76546cedce69
+TARBALL := Fluent-icon-theme-$(COMMIT).tar.gz
+SHA256 := 07b6b593ab557e07f0a7cdb232cda99214af13fb74ad6ce1e77d666057647767
+ICONS := debian/wildos-fluent-icons/usr/share/icons
+
+%:
+	dh $@
+
+# Upstream's own install.sh lays the theme out (the shared bases, the colour
+# and brightness variants and their links), so the result is what the
+# project ships. The tarball is GitHub's archive of the pinned commit,
+# checked before it is used.
+override_dh_auto_build:
+	echo "$(SHA256)  $(TARBALL)" | sha256sum -c -
+	rm -rf build && mkdir build
+	tar -xzf $(TARBALL) -C build
+
+override_dh_auto_install:
+	mkdir -p $(ICONS)
+	bash build/Fluent-icon-theme-$(COMMIT)/install.sh --dest $(CURDIR)/$(ICONS) yellow
+	# Brave keeps its own logo: Fluent redraws it (and its web-app
+	# shortcuts), and Wild OS never shipped that look.
+	find $(ICONS) -name 'brave*' -delete
+	# Names that pointed at them (com.brave.Browser and so on) would be
+	# broken links.
+	find $(ICONS) -xtype l -delete
+	# install.sh builds a cache per theme; dh_icons rebuilds them on the
+	# installed system instead.
+	rm -f $(ICONS)/*/icon-theme.cache
+	# GPL-3.0 travels with the icons. Package documentation is left out of
+	# Wild OS images, so the licence sits beside the themes, where Settings
+	# > About links to it.
+	install -m644 build/Fluent-icon-theme-$(COMMIT)/COPYING $(ICONS)/Fluent-yellow/COPYING
+	install -m644 build/Fluent-icon-theme-$(COMMIT)/AUTHORS $(ICONS)/Fluent-yellow/AUTHORS
+
+override_dh_auto_clean:
+	rm -rf build

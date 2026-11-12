@@ -1,7 +1,10 @@
 #include "app.h"
 
+#include <algorithm>
+
 #include <KWindowSystem>
 #include <QDir>
+#include <QFileInfo>
 #include <QQmlApplicationEngine>
 #include <QQmlComponent>
 #include <QQuickWindow>
@@ -21,6 +24,74 @@ QList<QUrl> toUrls(const QStringList &list)
         }
     }
     return urls;
+}
+
+bool hasControlCharacter(const QString &text)
+{
+    return std::any_of(text.cbegin(), text.cend(), [](QChar c) {
+        return c.category() == QChar::Other_Control;
+    });
+}
+
+// Any app can call FileManager1, so its requests are held to what "Show in
+// folder" needs: existing local paths. Another scheme would let a caller make
+// Files contact a host (smb://, sftp://, webdav://), and control characters,
+// raw or percent-encoded, only serve to disguise a path. Unlike Open, which
+// the user's own launches go through, nothing is guessed from plain text, and
+// the caller's fragment is dropped because ShowItems sets its own.
+QStringList localPaths(const QStringList &uriList)
+{
+    QStringList paths;
+    for (const QString &text : uriList) {
+        if (hasControlCharacter(text)) {
+            continue;
+        }
+        // Tolerant, because KDE apps (Pictures, Dolphin's callers) send
+        // addresses with spaces left as they are, which strict parsing
+        // refused, so "Open containing folder" did nothing for a photo
+        // with a space in its name.
+        const QUrl url(text, QUrl::TolerantMode);
+        if (!url.isValid() || !url.isLocalFile() || url.hasQuery()) {
+            continue;
+        }
+        const QString path = url.toLocalFile();
+        if (!QDir::isAbsolutePath(path) || hasControlCharacter(path)) {
+            continue;
+        }
+        if (QFileInfo::exists(path)) {
+            paths.append(QDir::cleanPath(path));
+        }
+    }
+    return paths;
+}
+
+QStringList toUris(const QStringList &paths, bool select)
+{
+    QStringList uris;
+    for (const QString &path : paths) {
+        QUrl url = QUrl::fromLocalFile(path);
+        if (select) {
+            url.setFragment(QStringLiteral("wildos-select"));
+        }
+        uris.append(url.toString());
+    }
+    return uris;
+}
+
+// Requests left with nothing valid are dropped: an empty list would open a
+// window on Home. The caller's activation token is what lets the window
+// come to the front on Wayland; without it KWin keeps Files behind the app
+// that asked, as it would any window that opens uninvited.
+void showPaths(const QStringList &uriList, bool select, const QString &startUpId)
+{
+    const QStringList paths = localPaths(uriList);
+    if (paths.isEmpty()) {
+        return;
+    }
+    if (KWindowSystem::isPlatformWayland() && !startUpId.isEmpty()) {
+        KWindowSystem::setCurrentXdgActivationToken(startUpId);
+    }
+    App::instance()->Open(toUris(paths, select));
 }
 }
 
@@ -84,24 +155,22 @@ FileManager1::FileManager1(QObject *parent)
 {
 }
 
-void FileManager1::ShowFolders(const QStringList &uriList, const QString &)
+// None of these opens a file: a file is shown selected in its folder
+// (FolderModel::openUrl), so a caller cannot use them to run or open
+// anything. That is the guarantee security-misc's fm-shim gives, and the
+// reason Files can stand in for it.
+void FileManager1::ShowFolders(const QStringList &uriList, const QString &startUpId)
 {
-    App::instance()->Open(uriList);
+    showPaths(uriList, false, startUpId);
 }
 
-void FileManager1::ShowItems(const QStringList &uriList, const QString &)
+void FileManager1::ShowItems(const QStringList &uriList, const QString &startUpId)
 {
     // Each item is shown selected in its folder, folders included.
-    QStringList marked;
-    for (const QString &uri : uriList) {
-        QUrl url(uri);
-        url.setFragment(QStringLiteral("wildos-select"));
-        marked.append(url.toString());
-    }
-    App::instance()->Open(marked);
+    showPaths(uriList, true, startUpId);
 }
 
-void FileManager1::ShowItemProperties(const QStringList &uriList, const QString &)
+void FileManager1::ShowItemProperties(const QStringList &uriList, const QString &startUpId)
 {
-    App::instance()->Open(uriList);
+    showPaths(uriList, true, startUpId);
 }

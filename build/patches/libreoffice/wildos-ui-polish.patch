@@ -1,0 +1,269 @@
+Description: Write and Tables closer to the design boards
+ Follows the ribbon, style cards and Tables chrome patches.
+ The ribbon's group labels are quiet again: the pages are filled after the
+ tab control first shows, so the labels are styled whenever the ribbon
+ paints. File and Find a command use the tab row's own font, which is in
+ pixels (the style's tab font is in points and drew them small). In dark
+ mode the tab row is the window colour, so it runs on from the title bar
+ rather than making a darker stripe under it.
+ Colour buttons in a toolbox with wildos-no-arrows show their icon as
+ drawn, the red A and the amber marker on the boards, without the bar of
+ the current colour.
+ The style gallery keeps its cards 6 px apart. An icon view widens its
+ entries to each new image plus 5 px either side, which spread the cards
+ 10 px apart and pushed the last one past the gallery's edge.
+ Font sizes read as plain points ("11"); "11 pt" typed in still works.
+ The sidebar's strip holds only its decks, without the settings button,
+ and split window edges are a hairline with a quiet arrow for the fade
+ button instead of a grey rule and a white block.
+Author: Wild OS Developers <dev@wildos.io>
+Forwarded: not-needed
+--- a/sfx2/source/sidebar/TabBar.cxx
++++ b/sfx2/source/sidebar/TabBar.cxx
+@@ -69,6 +69,8 @@
+     // transferred to its final home (where the old parent is a GtkWindow to
+     // support loading the accelerators in the menu for Gtk3)
+     mxMenuButton = mxAuxBuilder->weld_menu_button(u"menubutton"_ustr);
++    // Wild OS: the decks' strip holds only the decks, as on the boards.
++    mxMenuButton->hide();
+     mxMainMenu = mxAuxBuilder->weld_menu(u"mainmenu"_ustr);
+     mxSubMenu = mxAuxBuilder->weld_menu(u"submenu"_ustr);
+     aPopupMenuSignalConnectFunction(*mxMainMenu, *mxSubMenu);
+--- a/svtools/source/control/ctrlbox.cxx
++++ b/svtools/source/control/ctrlbox.cxx
+@@ -1348,10 +1348,15 @@
+         const SvtSysLocale aSysLocale;
+         const LocaleDataWrapper& rLocaleData = aSysLocale.GetLocaleData();
+         sRet = rLocaleData.getNum(nValue, nDecimalDigits, true, false);
+-        if (eUnit != FieldUnit::NONE && eUnit != FieldUnit::DEGREE)
+-            sRet += " ";
+-        assert(eUnit != FieldUnit::PERCENT);
+-        sRet += weld::MetricSpinButton::MetricToString(eUnit);
++        // Wild OS: font sizes read as plain points ("11"), as on the boards
++        // and in Word; a typed "11 pt" is still understood.
++        if (eUnit != FieldUnit::POINT)
++        {
++            if (eUnit != FieldUnit::NONE && eUnit != FieldUnit::DEGREE)
++                sRet += " ";
++            assert(eUnit != FieldUnit::PERCENT);
++            sRet += weld::MetricSpinButton::MetricToString(eUnit);
++        }
+     }
+ 
+     if (bRelativeMode && bPtRelative && (0 <= nValue) && !sRet.isEmpty())
+--- a/svx/inc/tbxcolorupdate.hxx
++++ b/svx/inc/tbxcolorupdate.hxx
+@@ -32,6 +32,9 @@
+ #include <com/sun/star/frame/XFrame.hpp>
+ 
+ class ToolBox;
++
++// Wild OS: defined in vcl's toolbox2.cxx.
++namespace vcl::wildos { VCL_DLLPUBLIC bool ToolBoxHasNoArrows(const ToolBox& rToolBox); }
+ class VirtualDevice;
+ 
+ namespace weld
+@@ -91,6 +94,8 @@
+         virtual bool RecordVirtualDevice() const = 0;
+         virtual vcl::ImageType GetImageSize() const = 0;
+         virtual Size GetItemSize(const Size& rImageSize) const = 0;
++        // Wild OS: the icon alone, without the current colour's bar.
++        virtual bool IsPlainIcon() const { return false; }
+     };
+ 
+     class VclToolboxButtonColorUpdater final : public ToolboxButtonColorUpdaterBase
+@@ -115,6 +120,7 @@
+         }
+         virtual vcl::ImageType GetImageSize() const override;
+         virtual Size GetItemSize(const Size& rImageSize) const override;
++        virtual bool IsPlainIcon() const override;
+     };
+ 
+     class ToolboxButtonColorUpdater final : public ToolboxButtonColorUpdaterBase
+--- a/svx/source/inc/StylesPreviewWindow.hxx
++++ b/svx/source/inc/StylesPreviewWindow.hxx
+@@ -141,6 +141,7 @@
+ 
+ private:
+     void UpdateStylesList();
++    void SetCardsWidth();
+     void UpdateSelection();
+     bool Command(const CommandEvent& rEvent);
+ };
+--- a/svx/source/tbxctrls/StylesPreviewWindow.cxx
++++ b/svx/source/tbxctrls/StylesPreviewWindow.cxx
+@@ -478,6 +478,15 @@
+     RequestStylesListUpdate();
+ }
+ 
++// An icon view widens its entries to the image and 5 px either side on
++// every new image, which left 10 px between the cards and pushed the last
++// one past the gallery's edge; the boards have 6 px.
++void StylesPreviewWindow_Base::SetCardsWidth()
++{
++    m_xStylesView->set_item_width(StyleItemController::CARD_WIDTH
++                                  + StyleItemController::CARD_GAP);
++}
++
+ IMPL_LINK(StylesPreviewWindow_Base, Selected, weld::IconView&, rIconView, void)
+ {
+     OUString sStyleName = rIconView.get_selected_text();
+@@ -710,6 +719,7 @@
+             m_xStylesView->set_image(m_nCurrentCard, GetCard(m_aAllStyles[m_nCurrentCard], false));
+         if (nCurrent >= 0)
+             m_xStylesView->set_image(nCurrent, GetCard(m_aAllStyles[nCurrent], true));
++            SetCardsWidth();
+         m_nCurrentCard = nCurrent;
+         return;
+     }
+@@ -844,6 +854,8 @@
+         VclPtr<VirtualDevice> pImg = bNeedInsertPreview ? GetCachedPreview(rStyle) : nullptr;
+         m_xStylesView->append(rStyle.first, rStyle.second, pImg);
+     }
++    if (m_bCards)
++        SetCardsWidth();
+     m_xStylesView->thaw();
+ }
+ 
+--- a/svx/source/tbxctrls/tbxcolorupdate.cxx
++++ b/svx/source/tbxctrls/tbxcolorupdate.cxx
+@@ -264,6 +264,15 @@
+             pVirDev->EnableOutput(false);
+         }
+ 
++        if (IsPlainIcon())
++        {
++            pVirDev->DrawImage(Point(0, 0), aImage);
++            maCurColor = aColor;
++            mbWasHiContrastMode = Application::GetSettings().GetStyleSettings().GetHighContrastMode();
++            SetImage(pVirDev.get());
++            return;
++        }
++
+         if (maBmpSize.Width() == maBmpSize.Height())
+             // tdf#84985 align color bar with icon bottom edge; integer arithmetic e.g. 26 - 26/4 <> 26 * 3/4
+             maUpdRect = tools::Rectangle(Point( 0, maBmpSize.Height() - maBmpSize.Height() / 4), Size(maBmpSize.Width(), maBmpSize.Height() / 4));
+@@ -310,6 +319,11 @@
+         SetImage(pVirDev.get());
+     }
+ 
++    bool VclToolboxButtonColorUpdater::IsPlainIcon() const
++    {
++        return mpTbx && vcl::wildos::ToolBoxHasNoArrows(*mpTbx);
++    }
++
+     OUString ToolboxButtonColorUpdaterBase::GetCurrentColorName() const
+     {
+         OUString sColorName = GetQuickHelpText();
+--- a/vcl/source/control/tabctrl.cxx
++++ b/vcl/source/control/tabctrl.cxx
+@@ -2348,12 +2348,14 @@
+     return aColor;
+ }
+ 
+-// The tab row sits a shade below the band in dark mode and a shade into
+-// the ink in light mode.
++// In dark mode the tab row is the window colour, so it runs on from the
++// title bar, which the window decoration draws in that colour, instead of
++// a darker stripe between the title and the band. In light mode it sits a
++// shade into the ink.
+ Color lcl_wildosRowColor(const StyleSettings& rStyle)
+ {
+     const Color& rWindow = rStyle.GetDialogColor();
+-    return rWindow.IsDark() ? lcl_mix(rWindow, COL_BLACK, 0.2)
++    return rWindow.IsDark() ? rWindow
+                             : lcl_mix(rWindow, rStyle.GetDialogTextColor(), 0.035);
+ }
+ 
+@@ -2394,7 +2396,7 @@
+     vcl::Font LabelFont(double fScale, FontWeight eWeight) const
+     {
+         // The tab labels' font, so File reads at the size of the tabs.
+-        vcl::Font aFont(GetSettings().GetStyleSettings().GetTabFont());
++        vcl::Font aFont(GetParent()->GetFont());
+         aFont.SetFontHeight(aFont.GetFontHeight() * fScale);
+         aFont.SetWeight(eWeight);
+         aFont.SetTransparent(true);
+@@ -2505,7 +2507,7 @@
+         aHandle.append(basegfx::B2DPoint(fX + 6.5, fY + 6.5));
+         rRenderContext.DrawPolyLine(aHandle, 1.4);
+ 
+-        rRenderContext.SetFont(LabelFont(0.94, WEIGHT_NORMAL));
++        rRenderContext.SetFont(LabelFont(0.96, WEIGHT_NORMAL));
+         rRenderContext.SetTextColor(aQuiet);
+         rRenderContext.DrawText(
+             tools::Rectangle(Point(31, 0), Size(aSize.Width() - 41, aSize.Height())), GetText(),
+@@ -2571,8 +2573,11 @@
+     {
+         if (pChild->GetType() == WindowType::FIXEDTEXT)
+         {
+-            pChild->SetControlForeground(rColor);
+-            pChild->Invalidate();
++            if (!pChild->IsControlForeground() || pChild->GetControlForeground() != rColor)
++            {
++                pChild->SetControlForeground(rColor);
++                pChild->Invalidate();
++            }
+         }
+         else
+             lcl_wildosStyleLabels(pChild, rColor);
+@@ -2788,6 +2793,7 @@
+     HideFocus();
+     // Lays the tabs out first if they need it.
+     ImplGetTabRect(TAB_PAGERECT);
++    ImplWildOSStyleLabels();
+ 
+     const StyleSettings& rStyle = rRenderContext.GetSettings().GetStyleSettings();
+     const Color& rWindow = rStyle.GetDialogColor();
+--- a/vcl/source/window/splitwin.cxx
++++ b/vcl/source/window/splitwin.cxx
+@@ -185,10 +185,14 @@
+     case WindowAlign::Left:
+         break;
+     default:
+-        rRenderContext.SetLineColor(rStyleSettings.GetShadowColor());
++    {
++        Color aHairline(rStyleSettings.GetFaceColor());
++        aHairline.Merge(rStyleSettings.GetWindowTextColor(), 235);
++        rRenderContext.SetLineColor(aHairline);
+         rRenderContext.DrawLine(Point(0, 0), Point( 0, nDY));
+         rRenderContext.DrawLine(Point(0, nDY), Point(nDX, nDY));
+     }
++    }
+ }
+ 
+ void SplitWindow::ImplDrawBorderLine(vcl::RenderContext& rRenderContext)
+@@ -1473,12 +1477,8 @@
+     }
+     else
+     {
+-        rRenderContext.SetLineColor(rStyleSettings.GetDarkShadowColor());
+-        rRenderContext.SetFillColor(rStyleSettings.GetDarkShadowColor());
+-
+-        rRenderContext.DrawRect(rRect);
+-
+         aColor = rStyleSettings.GetFaceColor();
++        aColor.Merge(rStyleSettings.GetWindowTextColor(), 140);
+     }
+ 
+     AntialiasingFlags nAA = rRenderContext.GetAntialiasing();
+--- a/vcl/source/window/toolbox2.cxx
++++ b/vcl/source/window/toolbox2.cxx
+@@ -874,6 +874,17 @@
+     return bRet;
+ }
+ 
++// Wild OS: whether the .ui set wildos-no-arrows on this toolbox (declared
++// in svx's tbxcolorupdate.hxx, its only user).
++namespace vcl::wildos
++{
++VCL_DLLPUBLIC bool ToolBoxHasNoArrows(const ToolBox& rToolBox)
++{
++    const ImplToolBoxPrivateData* pData = rToolBox.ImplGetToolBoxPrivateData();
++    return pData && pData->mbWildOSNoArrows;
++}
++}
++
+ void ToolBox::SetItemBits( ToolBoxItemId nItemId, ToolBoxItemBits nBits )
+ {
+     ImplToolItems::size_type nPos = GetItemPos( nItemId );

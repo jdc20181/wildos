@@ -4,8 +4,11 @@
 #include <QLocale>
 #include <QRegularExpression>
 
+#include "clockformat.h"
+
 // Dates and times in the regional format chosen in Settings (LC_TIME, which
-// QLocale::system() follows), with day and month names in English as the
+// QLocale::system() follows) on the clock chosen in Settings > Date and
+// time, with day and month names in English as the
 // rest of Wild OS is. qml/Formats.js does the same for the QML side.
 namespace Formats
 {
@@ -16,7 +19,7 @@ inline QLocale names()
 
 inline QString time(const QDateTime &when)
 {
-    return QLocale::system().toString(when.time(), QLocale::ShortFormat);
+    return ClockFormat::time(when.time());
 }
 
 inline QString shortDate(const QDate &day)

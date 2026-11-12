@@ -1,0 +1,25 @@
+<!doctype html>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Warp generator</title>
+<body style="margin:0;background:#000"><canvas id="c"></canvas><script src="common.js"></script><script>
+const q=new URLSearchParams(location.search),OW=+(q.get('w')||2880),OH=+(q.get('h')||1800),S=OW/2880;const c=document.getElementById('c');c.width=OW;c.height=OH;const x=c.getContext('2d');x.scale(S,S);const W=2880,H=OH/S,cx=W/2,cy=H/2,r=rng(7);
+x.fillStyle='#020205';x.fillRect(0,0,W,H);
+// faint dust
+for(let i=0;i<2600;i++){const a=r()*Math.PI*2,d=Math.pow(r(),0.7)*1900;x.fillStyle=hue((a*180/Math.PI+200)%360,90,70,0.10+r()*0.25);x.fillRect(cx+Math.cos(a)*d,cy+Math.sin(a)*d,2,2);}
+x.globalCompositeOperation='lighter';
+// streaks: hue follows angle; a few bold glowing beams over many fine ones
+function beam(a,d0,len,w,glow,alpha){
+  const h=((a*180/Math.PI)+250)%360;
+  const x0=cx+Math.cos(a)*d0,y0=cy+Math.sin(a)*d0,x1=cx+Math.cos(a)*(d0+len),y1=cy+Math.sin(a)*(d0+len);
+  const g=x.createLinearGradient(x0,y0,x1,y1);g.addColorStop(0,hue(h,100,58,0));g.addColorStop(0.45,hue(h,100,60,alpha*0.8));g.addColorStop(1,hue(h,100,72,alpha));
+  x.strokeStyle=g;x.lineWidth=w;x.lineCap='round';x.shadowColor=hue(h,100,58,1);x.shadowBlur=glow;
+  x.beginPath();x.moveTo(x0,y0);x.lineTo(x1,y1);x.stroke();
+  if(w>5){x.shadowBlur=0;x.strokeStyle=hue(h,100,92,alpha*0.9);x.lineWidth=w*0.28;x.beginPath();x.moveTo(x0+(x1-x0)*0.3,y0+(y1-y0)*0.3);x.lineTo(x1,y1);x.stroke();}
+}
+for(let i=0;i<520;i++){const a=r()*Math.PI*2,d0=220+Math.pow(r(),1.4)*1300;beam(a,d0,40+r()*260*(d0/900),0.8+r()*1.6,0,0.55);}
+for(let i=0;i<150;i++){const a=r()*Math.PI*2,d0=300+r()*900;beam(a,d0,200+r()*700,3+r()*5,18,0.85);}
+for(let i=0;i<46;i++){const a=r()*Math.PI*2,d0=420+r()*700;beam(a,d0,500+r()*1200,9+r()*12,40,1);}
+x.shadowBlur=0;x.globalCompositeOperation='source-over';
+// dark core so the mark reads
+let g=x.createRadialGradient(cx,cy,0,cx,cy,520);g.addColorStop(0,'rgba(0,0,0,0.92)');g.addColorStop(0.55,'rgba(0,0,0,0.6)');g.addColorStop(1,'rgba(0,0,0,0)');x.fillStyle=g;x.fillRect(0,0,W,H);
+
+window.done=true;</script></body></html>

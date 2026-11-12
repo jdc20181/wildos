@@ -1,0 +1,22 @@
+[Desktop Entry]
+Type=Application
+Name=Notes
+GenericName=Notes
+Comment=Notes, checklists and ideas, kept as files on this PC
+Exec=wildos-notes
+Icon=wildos-notes
+Terminal=false
+StartupNotify=true
+StartupWMClass=wildos-notes
+Categories=Qt;Office;Utility;
+Keywords=notes;notepad;sticky notes;onenote;keep;checklist;to-do;todo;list;markdown;journal;
+Actions=QuickNote;
+X-DBUS-StartupType=Unique
+X-DBUS-ServiceName=org.wildos.notes
+
+# Win+N, from anywhere, even while Notes is closed: the shortcut service
+# starts this action.
+[Desktop Action QuickNote]
+Name=Quick note
+Exec=wildos-notes --quick
+X-KDE-Shortcuts=Meta+N

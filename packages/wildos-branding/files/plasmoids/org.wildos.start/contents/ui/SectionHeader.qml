@@ -20,7 +20,7 @@ Item {
         anchors.verticalCenter: parent.verticalCenter
         width: Math.min(implicitWidth, button.x - 12)
         size: 14
-        font.weight: Font.DemiBold
+        font.weight: UI.Style.weightSemiBold
         text: header.title
         Accessible.role: Accessible.Heading
     }

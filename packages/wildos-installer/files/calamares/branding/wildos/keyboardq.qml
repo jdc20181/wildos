@@ -183,6 +183,7 @@ WPage {
             text: qsTr("No layout matches \"%1\"").arg(search.text)
             color: UI.Style.inkMuted
             font.family: UI.Style.fontFamily
+            font.letterSpacing: UI.Style.tracking(13)
             font.pixelSize: 13
         }
 
@@ -221,7 +222,7 @@ WPage {
                         Layout.preferredWidth: 18
                         Layout.preferredHeight: 18
                         radius: 9
-                        color: row.picked ? UI.Style.textOnAccent : "transparent"
+                        color: row.picked ? UI.Style.accentDot : "transparent"
                         border.width: row.picked ? 5.5 : 1.5
                         border.color: row.picked ? UI.Style.accent : UI.Style.radioRing
                     }
@@ -235,14 +236,16 @@ WPage {
                             elide: Text.ElideRight
                             color: UI.Style.ink
                             font.family: UI.Style.fontFamily
+                            font.letterSpacing: UI.Style.tracking(14)
                             font.pixelSize: 14
-                            font.weight: row.picked ? Font.DemiBold : Font.Normal
+                            font.weight: row.picked ? UI.Style.weightSemiBold : UI.Style.weightRegular
                         }
                         Text {
                             visible: text !== ""
                             text: row.modelData.note
                             color: UI.Style.inkMuted
                             font.family: UI.Style.fontFamily
+                            font.letterSpacing: UI.Style.tracking(12)
                             font.pixelSize: 12
                         }
                     }

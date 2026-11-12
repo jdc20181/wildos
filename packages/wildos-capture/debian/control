@@ -1,0 +1,54 @@
+Source: wildos-capture
+Section: graphics
+Priority: optional
+Maintainer: Wild OS Developers <dev@wildos.io>
+Build-Depends:
+ debhelper-compat (= 13),
+ cmake,
+ extra-cmake-modules,
+ qt6-base-dev,
+ qt6-declarative-dev,
+ qt6-wayland-dev,
+ qt6-wayland-dev-tools,
+ libwayland-dev,
+ plasma-wayland-protocols,
+ libkf6windowsystem-dev,
+ libkf6guiaddons-dev,
+ libkf6notifications-dev,
+ libkf6dbusaddons-dev,
+ libkf6config-dev,
+ libkf6purpose-dev,
+ libkpipewire-dev,
+Standards-Version: 4.7.0
+Rules-Requires-Root: no
+
+Package: wildos-capture
+Architecture: any
+Depends:
+ ${shlibs:Depends},
+ ${misc:Depends},
+ wildos-ui (>= 0.1.3),
+ wildos-overlays (>= 0.1.1),
+ kwin-wayland,
+ layer-shell-qt,
+ qml6-module-qtquick,
+ qml6-module-qtquick-controls,
+ qml6-module-qtquick-effects,
+ qml6-module-qtquick-layouts,
+ qml6-module-qtquick-shapes,
+ qml6-module-qtquick-templates,
+ qml6-module-qtquick-window,
+ qml6-module-qtqml-workerscript,
+ libkf6purpose-bin,
+Breaks: wildos-overlays (<< 0.1.1)
+Replaces: wildos-overlays (<< 0.1.1)
+Description: Wild OS Capture: screenshots and screen recording
+ Print Screen and Win+Shift+S bring up the Capture toolbar over a frozen
+ screen: take a screenshot or record, of an area, a window, the full
+ screen or a freeform shape, now or after a delay. Win+Shift+R starts it
+ ready to record.
+ .
+ Every screenshot goes to the clipboard and opens in the editor, with a
+ pen, highlighter, arrow, box, text, blur and crop in five colours. It
+ saves to Pictures/Screenshots; recordings go to Videos/Screen recordings.
+ KWin takes the pictures and PipeWire carries the recordings.

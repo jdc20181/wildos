@@ -43,7 +43,7 @@ Rectangle {
         const list = [];
         for (let h = 0; h < 24; h += 0.5) {
             const whole = Math.floor(h);
-            list.push({ value: h, text: (whole < 10 ? "0" : "") + whole + (h % 1 ? ":30" : ":00") });
+            list.push({ value: h, text: Formats.time(new Date(2000, 0, 1, whole, h % 1 ? 30 : 0)) });
         }
         return list;
     }
@@ -70,7 +70,7 @@ Rectangle {
                 UI.Label {
                     text: qsTr("Settings")
                     size: 16
-                    font.weight: Font.DemiBold
+                    font.weight: UI.Style.weightSemiBold
                 }
             }
 
@@ -82,7 +82,7 @@ Rectangle {
                     Layout.fillWidth: true
                     implicitHeight: 34
                     radius: 6
-                    color: page.section === modelData.id ? UI.Style.accentSelected : navMouse.containsMouse ? UI.Style.surfaceHover : "transparent"
+                    color: page.section === modelData.id ? UI.Style.surfaceSelected : navMouse.containsMouse ? UI.Style.surfaceHover : "transparent"
                     MouseArea {
                         id: navMouse
                         anchors.fill: parent
@@ -97,13 +97,13 @@ Rectangle {
                         MailIcon {
                             name: nav.modelData.icon
                             size: 16
-                            color: page.section === nav.modelData.id ? UI.Style.accent : UI.Style.iconInk
+                            color: page.section === nav.modelData.id ? UI.Style.iconInk : UI.Style.iconMuted
                         }
                         UI.Label {
                             Layout.fillWidth: true
                             text: nav.modelData.name
                             size: 13
-                            font.weight: page.section === nav.modelData.id ? Font.DemiBold : Font.Normal
+                            font.weight: page.section === nav.modelData.id ? UI.Style.weightSemiBold : UI.Style.weightRegular
                         }
                     }
                 }
@@ -136,7 +136,7 @@ Rectangle {
                 UI.Label {
                     text: page.sections.find(s => s.id === page.section).name
                     size: 22
-                    font.weight: Font.DemiBold
+                    font.weight: UI.Style.weightSemiBold
                 }
                 UI.Label {
                     text: page.sections.find(s => s.id === page.section).blurb
@@ -184,7 +184,7 @@ Rectangle {
                     Layout.topMargin: 4
                     text: qsTr("Your week")
                     size: 13
-                    font.weight: Font.DemiBold
+                    font.weight: UI.Style.weightSemiBold
                 }
                 UI.Card {
                     visible: page.section === "calendar"
@@ -232,7 +232,7 @@ Rectangle {
                                             anchors.centerIn: parent
                                             text: Formats.names().dayName(dayBox.day, Locale.ShortFormat).charAt(0).toUpperCase()
                                             size: 12
-                                            font.weight: dayBox.on ? Font.DemiBold : Font.Normal
+                                            font.weight: dayBox.on ? UI.Style.weightSemiBold : UI.Style.weightRegular
                                             color: dayBox.on ? UI.Style.ink : UI.Style.inkMuted
                                         }
                                         MouseArea {
@@ -264,7 +264,7 @@ Rectangle {
                             RowLayout {
                                 spacing: 8
                                 UI.ComboBox {
-                                    implicitWidth: 96
+                                    implicitWidth: Formats.twelveHour() ? 116 : 96
                                     model: page.hours
                                     currentIndex: Math.max(0, page.hours.findIndex(h => h.value === prefs.workStart))
                                     onActivated: function (i) {
@@ -277,7 +277,7 @@ Rectangle {
                                     color: UI.Style.inkMuted
                                 }
                                 UI.ComboBox {
-                                    implicitWidth: 96
+                                    implicitWidth: Formats.twelveHour() ? 116 : 96
                                     model: page.hours
                                     currentIndex: Math.max(0, page.hours.findIndex(h => h.value === prefs.workEnd))
                                     onActivated: function (i) {
@@ -304,7 +304,7 @@ Rectangle {
                     Layout.topMargin: 4
                     text: qsTr("Events")
                     size: 13
-                    font.weight: Font.DemiBold
+                    font.weight: UI.Style.weightSemiBold
                 }
                 UI.Card {
                     visible: page.section === "calendar"
@@ -356,7 +356,7 @@ Rectangle {
                     Layout.topMargin: 4
                     text: qsTr("Extra calendars")
                     size: 13
-                    font.weight: Font.DemiBold
+                    font.weight: UI.Style.weightSemiBold
                 }
                 UI.Card {
                     visible: page.section === "calendar"

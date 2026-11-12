@@ -46,7 +46,7 @@ public:
     Q_INVOKABLE void insertLink(const QString &url, const QString &text);
     Q_INVOKABLE void insertText(const QString &text);
     // The words as HTML for sending, without Qt's document boilerplate
-    // and with Inter as the font.
+    // and with Albert Sans as the font.
     Q_INVOKABLE QString html() const;
     Q_INVOKABLE QString plainText() const;
 

@@ -125,7 +125,7 @@ Rectangle {
                         anchors.centerIn: parent
                         text: card.isCancel ? qsTr("Cancelled") : qsTr("Invitation")
                         size: 11.5
-                        font.weight: Font.DemiBold
+                        font.weight: UI.Style.weightSemiBold
                         color: card.isCancel ? UI.Style.danger : UI.Style.warning
                     }
                 }
@@ -263,7 +263,7 @@ Rectangle {
                 y: 10
                 text: Formats.weekdayAndDay(dayBox.start)
                 size: 13
-                font.weight: Font.DemiBold
+                font.weight: UI.Style.weightSemiBold
             }
             Rectangle {
                 x: 12
@@ -309,7 +309,7 @@ Rectangle {
                         height: dayBox.hour
                         UI.Label {
                             y: -6
-                            text: ((dayBox.firstHour + index) % 24 < 10 ? "0" : "") + (dayBox.firstHour + index) % 24 + ":00"
+                            text: Formats.hour((dayBox.firstHour + index) % 24)
                             size: 11
                             color: UI.Style.inkSubtle
                         }
@@ -342,7 +342,7 @@ Rectangle {
                             width: parent.width - 12
                             text: modelData.title
                             size: 11.5
-                            font.weight: Font.DemiBold
+                            font.weight: UI.Style.weightSemiBold
                             elide: Text.ElideRight
                         }
                     }
@@ -363,7 +363,7 @@ Rectangle {
                         width: parent.width - 12
                         text: card.invite.title || ""
                         size: 11.5
-                        font.weight: Font.DemiBold
+                        font.weight: UI.Style.weightSemiBold
                         elide: Text.ElideRight
                     }
                 }

@@ -3,10 +3,9 @@ import QtQuick.Layouts
 import WildOS.Settings
 import WildOS.UI as UI
 
-// Privacy and security, laid out as Settings.dc.html: the protection status
-// from security-status, a tile per protection, the protection level, what
-// apps can reach, searching files and activity history, then USB protection
-// and usage data.
+// Privacy and security, laid out as Settings.dc.html: the Security card
+// (security-status, one row per protection), the protection level, what
+// apps can reach, searching files and activity history, then USB protection.
 PageScroll {
     id: page
 
@@ -19,15 +18,6 @@ PageScroll {
             return "No apps can use your " + what;
         }
         return Format.plural(n, "app", "apps") + " can use your " + what;
-    }
-
-    // Keeps "Last checked 10 minutes ago" true while the page is open.
-    property date now: new Date()
-    Timer {
-        interval: 30000
-        running: true
-        repeat: true
-        onTriggered: page.now = new Date()
     }
 
     Connections {
@@ -44,57 +34,9 @@ PageScroll {
         }
     }
 
-    StatusCard {
-        descriptionLineHeight: 19.5
-        iconName: Protection.busy ? "update" : Protection.allOn ? "shield-check" : "shield-alert"
-        spinning: Protection.busy
-        warning: !Protection.busy && Protection.checked && !Protection.allOn
-        title: Protection.busy ? "Checking your protection" : Protection.headline
-        description: {
-            page.now;
-            if (Protection.busy) {
-                return Protection.checkStep + ".";
-            }
-            const note = Protection.checkNote.length > 0 ? " " + Protection.checkNote : "";
-            return Protection.description(System.securityChecked) + note;
-        }
-
-        UI.Button {
-            visible: Protection.updatesWaiting && !Protection.busy
-            text: "Install updates"
-            kind: "primary"
-            onClicked: Navigator.open("update")
-        }
-
-        UI.Button {
-            text: Protection.busy ? "Checking" : "Check now"
-            busy: Protection.busy
-            onClicked: Protection.checkNow()
-        }
-    }
-
-    GridLayout {
-        Layout.fillWidth: true
-        visible: Protection.tiles.length > 0
-        columns: 3
-        columnSpacing: 10
-        rowSpacing: 10
-
-        Repeater {
-            model: Protection.tiles
-
-            Tile {
-                required property var modelData
-                Layout.fillWidth: true
-                Layout.preferredWidth: 1
-                iconName: modelData.icon
-                title: modelData.title
-                value: Protection.value(modelData)
-                warning: !Protection.good(modelData)
-                interactive: true
-                onClicked: protectionDialog.show(modelData)
-            }
-        }
+    SecurityCard {
+        compact: false
+        Layout.fillHeight: false
     }
 
     // Standard is what Wild OS ships, firewall included. Strict also holds
@@ -273,22 +215,6 @@ PageScroll {
             width: parent.width
 
             UI.SettingRow {
-                minHeight: 64
-                title: "Share usage data with Wild OS"
-                description: "Wild OS does not collect any. Nothing about how you use this computer is sent anywhere."
-                status: "Off"
-
-                // There is nothing to send, so the switch stays off and says why.
-                UI.Toggle {
-                    anchors.verticalCenter: parent.verticalCenter
-                    checked: false
-                    locked: true
-                    lockedReason: "Wild OS has no usage data to share"
-                    Accessible.name: "Share usage data with Wild OS"
-                }
-            }
-
-            UI.SettingRow {
                 visible: Protection.status.devices !== undefined
                 minHeight: 64
                 title: "Block new USB devices"
@@ -306,9 +232,5 @@ PageScroll {
                 }
             }
         }
-    }
-
-    ProtectionDialog {
-        id: protectionDialog
     }
 }

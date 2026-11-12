@@ -16,7 +16,9 @@
 // and the asking app) belongs to an installed package, is unchanged since
 // it was installed (dpkg's checksums), and its installed version either
 // shipped in the image (/usr/share/wildos/image-packages) or comes, by
-// apt, from Debian, Debian security, Kicksecure or the Wild OS repository.
+// apt, from Debian, Debian security, Kicksecure or the Wild OS repository,
+// now or when it was installed (/var/lib/wildos/package-sources, kept by
+// record-package-sources, since apt forgets once a newer version is out).
 // Anything else is unverified: a script in a home folder, a Flatpak, a
 // package from another vendor or installed by hand. So is any install of a
 // package file through PackageKit, whoever asks for it.

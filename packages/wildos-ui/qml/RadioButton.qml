@@ -28,7 +28,7 @@ T.RadioButton {
         width: 16
         height: 16
         radius: 8
-        color: control.checked ? Style.textOnAccent : control.lit ? Style.surfaceHover : "transparent"
+        color: control.checked ? Style.accentDot : control.lit ? Style.surfaceHover : "transparent"
         border.width: control.checked ? (control.down ? 6 : 5) : 1.5
         border.color: control.checked ? (control.lit ? Style.accentHover : Style.accent) : Style.radioRing
         Behavior on border.width {

@@ -1,0 +1,81 @@
+#!/bin/sh
+# The start-up side of recovery, in GRUB's environment block on /boot.
+#
+#   recovery-boot next [REASON]   start in start-up recovery once (REASON:
+#                                 menu, reset-keep, reset-everything)
+#   recovery-boot good            this start counts as good: clear the count
+#   recovery-boot watch           wait for a person's desktop, then "good";
+#                                 a clean shutdown from the sign-in screen
+#                                 counts as good too (wildos-boot-ok)
+#   recovery-boot stop            wildos-boot-ok stopping at shutdown
+#   recovery-boot refresh         recovery's kernel to /boot, and the menu
+
+set -eu
+ENV=/boot/grub/grubenv
+SEEN=/run/wildos-boot-ok
+
+editenv() {
+    [ -d /boot/grub ] || return 0
+    grub-editenv "$ENV" "$@"
+}
+
+graphical_session() {
+    # $1: the session class to look for (user or greeter).
+    loginctl list-sessions --no-legend 2>/dev/null | while read -r id _; do
+        [ -n "$id" ] || continue
+        class=$(loginctl show-session "$id" -p Class --value 2>/dev/null || true)
+        type=$(loginctl show-session "$id" -p Type --value 2>/dev/null || true)
+        state=$(loginctl show-session "$id" -p State --value 2>/dev/null || true)
+        if [ "$class" = "$1" ] && { [ "$type" = wayland ] || [ "$type" = x11 ]; } \
+            && { [ "$state" = active ] || [ "$1" = greeter ]; }; then
+            echo "$id"
+            return 0
+        fi
+    done
+}
+
+case "${1:-}" in
+next)
+    reason=${2:-menu}
+    case "$reason" in
+        menu | reset-keep | reset-everything) ;;
+        *) echo "unknown reason: $reason" >&2; exit 2 ;;
+    esac
+    editenv set "wildos_why=$reason"
+    ;;
+good)
+    editenv unset wildos_tries
+    ;;
+watch)
+    mkdir -p "$SEEN"
+    while :; do
+        if [ -n "$(graphical_session greeter)" ]; then
+            : > "$SEEN/greeter"
+        fi
+        id=$(graphical_session user)
+        if [ -n "$id" ]; then
+            sleep 20
+            if [ "$(loginctl show-session "$id" -p State --value 2>/dev/null)" = active ]; then
+                editenv unset wildos_tries
+                : > "$SEEN/good"
+                exit 0
+            fi
+        fi
+        sleep 5
+    done
+    ;;
+stop)
+    # Shutting down cleanly from the sign-in screen: the system started.
+    if [ -e "$SEEN/greeter" ] && [ ! -e "$SEEN/good" ]; then
+        editenv unset wildos_tries
+    fi
+    ;;
+refresh)
+    if /usr/libexec/wildos/reset-copy boot-files; then :; fi
+    update-grub >/dev/null 2>&1 || true
+    ;;
+*)
+    echo "usage: recovery-boot next [REASON] | good | watch | stop | refresh" >&2
+    exit 2
+    ;;
+esac

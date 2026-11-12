@@ -35,7 +35,7 @@ Item {
                 backdrop: media.backdrop
                 tint: UI.Style.glassOnWallpaperField
                 radius: 18
-                blurRadius: 30
+                blurRadius: 64
             }
 
             Image {
@@ -64,7 +64,7 @@ Item {
                     width: parent.width
                     text: player.model.track.length > 0 ? player.model.track
                         : player.model.playbackStatus > Mpris.PlaybackStatus.Stopped ? "Untitled" : "Nothing playing"
-                    font.weight: Font.DemiBold
+                    font.weight: UI.Style.weightSemiBold
                     color: UI.Style.inkOnWallpaper
                 }
                 UI.Label {

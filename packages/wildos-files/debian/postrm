@@ -8,4 +8,16 @@ if [ "$1" = "remove" ] || [ "$1" = "purge" ] || [ "$1" = "abort-install" ]; then
         --divert "$DOLPHIN.dolphin" "$DOLPHIN" >/dev/null || true
 fi
 
+# Without Files, security-misc's fm-shim answers "Show in folder" again.
+# Running sessions get it back now rather than at their next sign-in.
+if [ "$1" = "remove" ] && [ -d /run/systemd/system ]; then
+    for dir in /run/user/*; do
+        uid=${dir##*/}
+        user=$(getent passwd "$uid" | cut -d: -f1) || continue
+        [ -n "$user" ] || continue
+        systemctl --user --machine="$user@.host" daemon-reload >/dev/null 2>&1 || true
+        systemctl --user --machine="$user@.host" start --no-block fm-shim.service >/dev/null 2>&1 || true
+    done
+fi
+
 #DEBHELPER#

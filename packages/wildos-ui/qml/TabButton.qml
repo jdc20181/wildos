@@ -80,7 +80,7 @@ T.TabButton {
             width: (close.visible ? close.x - 4 : parent.width - 8) - x
             anchors.verticalCenter: parent.verticalCenter
             text: control.text
-            font.weight: control.checked ? Font.Medium : Font.Normal
+            font.weight: control.checked ? Style.weightMedium : Style.weightRegular
             color: control.checked ? Style.ink : Style.inkMuted
         }
 

@@ -19,7 +19,18 @@ PromptCard {
 
     width: 440
     title: cold ? "Starting Windows" : "Waking up Windows"
-    text: (appName.length > 0 ? appName : "Your app") + " opens " + when() + "."
+    // A start from off is the slow one, and rare now that Windows is saved
+    // as the PC shuts down: said plainly, so the wait is expected.
+    text: (appName.length > 0 ? appName : "Your app") + " opens " + (cold ? coldWhen() : when()) + "."
+          + (cold ? " Windows only starts up from off now and then. After this, its apps open in seconds." : "")
+
+    function coldWhen() {
+        if (seconds < 90)
+            return "once Windows has started up, in about a minute";
+        if (seconds < 150)
+            return "once Windows has started up, in a minute or two";
+        return "once Windows has started up, in about " + Math.round(seconds / 60) + " minutes";
+    }
 
     function when() {
         if (seconds <= 5)

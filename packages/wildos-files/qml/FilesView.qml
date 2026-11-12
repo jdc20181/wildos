@@ -360,6 +360,8 @@ Item {
         entries.push({ text: "Open new window", icon: "new-window", shortcut: "Ctrl+N", run: () => App.openWindow([root.folder.url]) });
         entries.push({ separator: true });
         entries.push({ text: "Properties", icon: "info", shortcut: "Alt+Enter", enabled: folder.kind !== "computer" || folder.selectedCount > 0, run: () => root.properties() });
+        entries.push({ separator: true });
+        entries.push({ text: "Report a problem", icon: "warning", run: () => Qt.openUrlExternally("wildos-report:files") });
         openMenu(entries, anchorItem, true, 0, 0, 252);
     }
 
@@ -408,7 +410,8 @@ Item {
         }
 
         // DialogFileMenu.dc.html: the everyday actions as icons along the
-        // top, as in Windows 11, then Open, Open with, Compress to ZIP file,
+        // top, as in Windows 11, then Open, Open with, Extract here (for
+        // archives), Compress to ZIP file and Compress...,
         // Send to, Copy as path, Pin to Start and Properties.
         const local = urls.length > 0 && urls.every(u => u.toString().startsWith("file:"));
         const quick = [
@@ -437,8 +440,14 @@ Item {
             apps.push({ text: "Choose another app…", run: () => root.chooseApp(urls) });
             entries.push({ text: "Open with", icon: "open-with", submenu: apps });
         }
+        if (local && FileOps.areArchives(urls)) {
+            entries.push({ text: "Extract here", icon: "zip", enabled: FileOps.canWriteIn(f.url), run: () => FileOps.extractHere(urls) });
+        }
         if (local) {
             entries.push({ text: "Compress to ZIP file", icon: "zip", enabled: FileOps.canWriteIn(f.url), run: () => FileOps.compress(urls) });
+            if (FileOps.canUseArchive()) {
+                entries.push({ text: "Compress…", icon: "zip", run: () => FileOps.compressWith(urls) });
+            }
             const targets = FileOps.sendTargets(urls).map(t => ({
                 text: t.text,
                 icon: t.icon ?? "",
@@ -1019,7 +1028,7 @@ Item {
                     UI.Label {
                         anchors.verticalCenter: parent.verticalCenter
                         text: scopeCard.title
-                        font.weight: Font.DemiBold
+                        font.weight: UI.Style.weightSemiBold
                     }
                 }
                 UI.Label {

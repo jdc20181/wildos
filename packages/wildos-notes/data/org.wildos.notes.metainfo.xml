@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>org.wildos.notes</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0-or-later</project_license>
+  <name>Notes</name>
+  <summary>Notes, checklists and ideas, kept as files on this PC</summary>
+  <description>
+    <p>
+      Notes keeps notes in notebooks, with checklists, headings, links,
+      pictures and tables. Pin the ones you need most, and tag notes with
+      a # word to find them together. Search looks through every title and
+      every word.
+    </p>
+    <p>
+      Every note is a Markdown file in the Notes folder in your home
+      folder, one folder per notebook, so any text editor can read them.
+      Notes saves as you type. Super+N opens a quick note from anywhere,
+      even when Notes is closed. Nothing is sent anywhere: no accounts, no
+      sync and no tracking.
+    </p>
+  </description>
+  <launchable type="desktop-id">org.wildos.notes.desktop</launchable>
+  <icon type="stock">wildos-notes</icon>
+  <categories>
+    <category>Office</category>
+    <category>Utility</category>
+  </categories>
+  <provides>
+    <binary>wildos-notes</binary>
+  </provides>
+  <pkgname>wildos-notes</pkgname>
+  <url type="homepage">https://wildos.io</url>
+  <developer id="io.wildos">
+    <name>Wild OS</name>
+  </developer>
+  <content_rating type="oars-1.1"/>
+  <releases>
+    <release version="0.1.0" date="2026-11-11"/>
+  </releases>
+</component>

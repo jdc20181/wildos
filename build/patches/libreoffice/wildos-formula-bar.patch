@@ -1,0 +1,213 @@
+Description: Wild OS formula bar
+ Tables' formula bar as on the design boards: the name box, then the
+ function wizard and AutoSum (no separator, no = button, no menu on the
+ sum), then the formula in a rounded field a shade into the ink, with a
+ 1 px edge that turns to the accent colour while the formula is edited.
+ The button that expands the field to several lines is not shown (the
+ bar's lower edge still drags it taller, and an expanded field still has
+ its button to collapse). LibreOffice Online is unchanged.
+Author: Wild OS Developers <dev@wildos.io>
+Forwarded: not-needed
+
+--- a/sc/source/ui/inc/inputwin.hxx
++++ b/sc/source/ui/inc/inputwin.hxx
+@@ -255,6 +255,8 @@
+     Point                   GetCursorScreenPixelPos(bool bBelowLine);
+     virtual void            Resize() override;
+     virtual void            DataChanged(const DataChangedEvent& rDCEvt) override;
++    virtual void            Paint(vcl::RenderContext& rRenderContext, const tools::Rectangle& rRect) override;
++    virtual bool            EventNotify(NotifyEvent& rNEvt) override;
+     virtual const OUString& GetTextString() const override;
+     virtual void            StopEditEngine(bool bAll) override;
+     virtual void            TextGrabFocus() override;
+--- a/sc/source/ui/app/inputwin.cxx
++++ b/sc/source/ui/app/inputwin.cxx
+@@ -158,6 +158,20 @@
+     return VclPtr<ScInputBarGroup>::Create( pParent, pViewSh );
+ }
+ 
++// Wild OS: the formula bar is drawn on the window colour of the docking
++// area it sits in, the formula in a rounded field a shade into the ink.
++static Color ScWildOSBarColor(const StyleSettings& rStyle)
++{
++    return rStyle.GetDialogColor();
++}
++
++static Color ScWildOSFieldColor(const StyleSettings& rStyle)
++{
++    Color aColor(ScWildOSBarColor(rStyle));
++    aColor.Merge(rStyle.GetDialogTextColor(), 242);
++    return aColor;
++}
++
+ ScInputWindow::ScInputWindow( vcl::Window* pParent, const SfxBindings* pBind ) :
+         // With WB_CLIPCHILDREN otherwise we get flickering
+         ToolBox         ( pParent, WinBits(WB_CLIPCHILDREN | WB_BORDER | WB_NOSHADOW) ),
+@@ -188,8 +202,7 @@
+     if (!comphelper::LibreOfficeKit::isActive())
+     {
+         InsertWindow    (ToolBoxItemId(1), aWndPos.get(), ToolBoxItemBits::NONE, 0);
+-        InsertSeparator (1);
+-        InsertItem      (SID_INPUT_FUNCTION, Image(StockImage::Yes, RID_BMP_INPUT_FUNCTION), ToolBoxItemBits::NONE, 2);
++        InsertItem      (SID_INPUT_FUNCTION, Image(StockImage::Yes, RID_BMP_INPUT_FUNCTION), ToolBoxItemBits::NONE, 1);
+     }
+ 
+     const bool bIsLOKMobilePhone = mpViewShell && mpViewShell->isLOKMobilePhone();
+@@ -197,13 +210,12 @@
+     // sigma and equal buttons
+     if (!bIsLOKMobilePhone)
+     {
+-        InsertItem      (SID_INPUT_SUM,      Image(StockImage::Yes, RID_BMP_INPUT_SUM), ToolBoxItemBits::DROPDOWN, 3);
+-        InsertItem      (SID_INPUT_EQUAL,    Image(StockImage::Yes, RID_BMP_INPUT_EQUAL), ToolBoxItemBits::NONE, 4);
+-        InsertItem      (SID_INPUT_CANCEL,   Image(StockImage::Yes, RID_BMP_INPUT_CANCEL), ToolBoxItemBits::NONE, 5);
+-        InsertItem      (SID_INPUT_OK,       Image(StockImage::Yes, RID_BMP_INPUT_OK), ToolBoxItemBits::NONE, 6);
++        InsertItem      (SID_INPUT_SUM,      Image(StockImage::Yes, RID_BMP_INPUT_SUM), ToolBoxItemBits::NONE, 2);
++        InsertItem      (SID_INPUT_CANCEL,   Image(StockImage::Yes, RID_BMP_INPUT_CANCEL), ToolBoxItemBits::NONE, 3);
++        InsertItem      (SID_INPUT_OK,       Image(StockImage::Yes, RID_BMP_INPUT_OK), ToolBoxItemBits::NONE, 4);
+     }
+ 
+-    InsertWindow    (ToolBoxItemId(7), mxTextWindow.get(), ToolBoxItemBits::NONE, 7);
++    InsertWindow    (ToolBoxItemId(7), mxTextWindow.get(), ToolBoxItemBits::NONE, 5);
+     SetDropdownClickHdl( LINK( this, ScInputWindow, DropdownClickHdl ));
+ 
+     if (!comphelper::LibreOfficeKit::isActive())
+@@ -880,10 +892,33 @@
+     mxButtonUp->set_size_request(-1, nHeight);
+     mxButtonDown->set_size_request(-1, nHeight);
+ 
+-    // disable the multiline toggle on the mobile phones
+-    const SfxViewShell* pViewShell = SfxViewShell::Current();
+-    if (!comphelper::LibreOfficeKit::isActive() || !(pViewShell && pViewShell->isLOKMobilePhone()))
+-        mxButtonDown->show();
++    // disable the multiline toggle on the mobile phones; Wild OS has none
++    // either, as on its boards
++    if (comphelper::LibreOfficeKit::isActive())
++    {
++        const SfxViewShell* pViewShell = SfxViewShell::Current();
++        if (!(pViewShell && pViewShell->isLOKMobilePhone()))
++            mxButtonDown->show();
++    }
++    else
++    {
++        mxBackground->set_margin_start(6);
++        mxBackground->set_margin_end(6);
++        mxBackground->set_margin_top(3);
++        mxBackground->set_margin_bottom(3);
++        // The scrolled window has its own one pixel frame; the rounded edge
++        // drawn in Paint takes its place.
++        for (vcl::Window* pChild = GetWindow(GetWindowType::FirstChild); pChild;
++             pChild = pChild->GetWindow(GetWindowType::FirstChild))
++        {
++            for (vcl::Window* pSibling = pChild; pSibling;
++                 pSibling = pSibling->GetWindow(GetWindowType::Next))
++            {
++                if (pSibling->GetType() == WindowType::SCROLLWINDOW)
++                    pSibling->set_property(u"shadow-type"_ustr, u"none"_ustr);
++            }
++        }
++    }
+ 
+     // tdf#154042 Use an initial height of one row so the Toolbar positions
+     // this in the same place regardless of how many rows it eventually shows
+@@ -894,10 +929,44 @@
+ void ScInputBarGroup::SetBackgrounds()
+ {
+     const StyleSettings& rStyleSettings = Application::GetSettings().GetStyleSettings();
+-    SetBackground(rStyleSettings.GetFaceColor());
++    SetBackground(ScWildOSBarColor(rStyleSettings));
+     // match to bg used in ScTextWnd::SetDrawingArea to the margin area is drawn with the
+     // same desired bg
+-    mxBackground->set_background(rStyleSettings.GetFieldColor());
++    mxBackground->set_background(ScWildOSFieldColor(rStyleSettings));
++}
++
++void ScInputBarGroup::Paint(vcl::RenderContext& rRenderContext, const tools::Rectangle& rRect)
++{
++    InterimItemWindow::Paint(rRenderContext, rRect);
++    int x, y, width, height;
++    if (comphelper::LibreOfficeKit::isActive()
++        || !mxBackground->get_extents_relative_to(*m_xContainer, x, y, width, height))
++        return;
++
++    // The formula's field: 5 px corners, its edge in the accent while the
++    // formula is being edited.
++    const StyleSettings& rStyleSettings = rRenderContext.GetSettings().GetStyleSettings();
++    Color aEdge(ScWildOSBarColor(rStyleSettings));
++    aEdge.Merge(rStyleSettings.GetDialogTextColor(), 235);
++    if (HasChildPathFocus())
++        aEdge = rStyleSettings.GetAccentColor();
++    tools::Rectangle aField(Point(x - 5, y - 2), Size(width + 10, height + 4));
++    rRenderContext.Push(vcl::PushFlags::LINECOLOR | vcl::PushFlags::FILLCOLOR);
++    rRenderContext.SetAntialiasing(rRenderContext.GetAntialiasing() | AntialiasingFlags::Enable);
++    rRenderContext.SetLineColor();
++    rRenderContext.SetFillColor(aEdge);
++    rRenderContext.DrawRect(aField, 5, 5);
++    aField.shrink(1);
++    rRenderContext.SetFillColor(ScWildOSFieldColor(rStyleSettings));
++    rRenderContext.DrawRect(aField, 4, 4);
++    rRenderContext.Pop();
++}
++
++bool ScInputBarGroup::EventNotify(NotifyEvent& rNEvt)
++{
++    if (rNEvt.GetType() == NotifyEventType::GETFOCUS || rNEvt.GetType() == NotifyEventType::LOSEFOCUS)
++        Invalidate(InvalidateFlags::NoChildren);
++    return InterimItemWindow::EventNotify(rNEvt);
+ }
+ 
+ void ScInputBarGroup::DataChanged(const DataChangedEvent& rDCEvt)
+@@ -1097,7 +1166,8 @@
+     else
+     {
+         mxButtonUp->hide();
+-        mxButtonDown->show();
++        if (comphelper::LibreOfficeKit::isActive())
++            mxButtonDown->show();
+     }
+     TriggerToolboxLayout();
+ 
+@@ -1311,7 +1381,7 @@
+ void ScTextWnd::Paint( vcl::RenderContext& rRenderContext, const tools::Rectangle& rRect )
+ {
+     const StyleSettings& rStyleSettings = Application::GetSettings().GetStyleSettings();
+-    Color aBgColor = rStyleSettings.GetFieldColor();
++    Color aBgColor = ScWildOSFieldColor(rStyleSettings);
+     rRenderContext.SetBackground(aBgColor);
+ 
+     // tdf#137713 we rely on GetEditView creating it if it doesn't already exist so
+@@ -1590,7 +1660,7 @@
+     m_xEditView->SetInsertMode(bIsInsertMode);
+ 
+     const StyleSettings& rStyleSettings = Application::GetSettings().GetStyleSettings();
+-    Color aBgColor = rStyleSettings.GetFieldColor();
++    Color aBgColor = ScWildOSFieldColor(rStyleSettings);
+     m_xEditView->SetBackgroundColor(aBgColor);
+ 
+     if (pAcc)
+@@ -2131,7 +2201,7 @@
+     m_xEditView->setEditViewCallbacks(this);
+ 
+     const StyleSettings& rStyleSettings = Application::GetSettings().GetStyleSettings();
+-    Color aBgColor = rStyleSettings.GetFieldColor();
++    Color aBgColor = ScWildOSFieldColor(rStyleSettings);
+     m_xEditView->SetBackgroundColor(aBgColor);
+ 
+     if (pAcc)
+@@ -2160,7 +2230,7 @@
+ 
+     const StyleSettings& rStyleSettings = Application::GetSettings().GetStyleSettings();
+ 
+-    Color aBgColor= rStyleSettings.GetFieldColor();
++    Color aBgColor= ScWildOSFieldColor(rStyleSettings);
+     Color aTxtColor= rStyleSettings.GetWindowTextColor();
+ 
+     aTextFont.SetFillColor   ( aBgColor );
+@@ -2200,7 +2270,7 @@
+ 
+     const StyleSettings& rStyleSettings = Application::GetSettings().GetStyleSettings();
+ 
+-    Color aBgColor = rStyleSettings.GetFieldColor();
++    Color aBgColor = ScWildOSFieldColor(rStyleSettings);
+     Color aTxtColor = rStyleSettings.GetWindowTextColor();
+ 
+     aTextFont.SetTransparent(true);

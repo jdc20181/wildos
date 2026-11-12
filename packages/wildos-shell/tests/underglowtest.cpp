@@ -106,11 +106,33 @@ private Q_SLOTS:
             QVERIFY(rows[i] <= rows[i + 1] + 1e-9);
         }
         // A row on the line, 0.5px off its centre, sees the 6px spread box
-        // through a 7px sigma blur: about a third of full strength.
-        QVERIFY(qAbs(rows[reach] - std::erf(2.5 / (7 * std::sqrt(2.0))) / 2 - std::erf(3.5 / (7 * std::sqrt(2.0))) / 2) < 1e-9);
-        // At the band's edges the glow is under one 8-bit step even at the
-        // 0.55 alpha the board uses, so the band is wide enough.
-        QVERIFY(rows.first() * 0.55 * 255 < 1.0);
+        // through a 3px sigma blur.
+        QVERIFY(qAbs(rows[reach] - std::erf(2.5 / (3 * std::sqrt(2.0))) / 2 - std::erf(3.5 / (3 * std::sqrt(2.0))) / 2) < 1e-9);
+        // At the band's edges the glow is under one 8-bit step at the 0.45
+        // alpha the board uses, so the band is wide enough.
+        QVERIFY(rows.first() * 0.45 * 255 < 1.0);
+    }
+
+    void spectrumCopyMatchesCss()
+    {
+        const int reach = 20;
+        const QList<qreal> rows = spectrumCopyRows(reach);
+        QCOMPARE(rows.size(), reach * 2 + 2);
+        for (int i = 0; i < rows.size() / 2; ++i) {
+            QVERIFY(qAbs(rows[i] - rows[rows.size() - 1 - i]) < 1e-9);
+            QVERIFY(rows[i] <= rows[i + 1] + 1e-9);
+        }
+        // The 6px band through a 4px sigma blur, seen 0.5px off its centre.
+        QVERIFY(qAbs(rows[reach] - std::erf(2.5 / (4 * std::sqrt(2.0))) / 2 - std::erf(3.5 / (4 * std::sqrt(2.0))) / 2) < 1e-9);
+        QVERIFY(rows.first() * 0.5 * 255 < 1.0);
+    }
+
+    void flowPhaseFollowsTheClock()
+    {
+        QCOMPARE(flowPhase(0), 0.0);
+        QCOMPARE(flowPhase(1500), 0.25);
+        QCOMPARE(flowPhase(6000), 0.0);
+        QCOMPARE(flowPhase(1731318000000 + 4500), flowPhase(4500));
     }
 };
 

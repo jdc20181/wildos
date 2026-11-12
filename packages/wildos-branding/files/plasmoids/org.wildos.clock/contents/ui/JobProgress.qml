@@ -206,7 +206,7 @@ ColumnLayout {
         UI.Label {
             Layout.fillWidth: true
             text: job.heading
-            font.weight: Font.Medium
+            font.weight: UI.Style.weightMedium
         }
 
         UI.IconButton {
@@ -224,7 +224,7 @@ ColumnLayout {
         Layout.fillWidth: true
         visible: !job.toast
         text: job.heading
-        font.weight: Font.DemiBold
+        font.weight: UI.Style.weightSemiBold
     }
 
     UI.Label {
@@ -246,7 +246,7 @@ ColumnLayout {
         UI.Label {
             text: job.suspended ? "Paused at " + Math.round(job.percent) + "%" : Math.round(job.percent) + "% complete"
             size: job.toast ? 22 : 18
-            font.weight: Font.DemiBold
+            font.weight: UI.Style.weightSemiBold
         }
 
         Item {

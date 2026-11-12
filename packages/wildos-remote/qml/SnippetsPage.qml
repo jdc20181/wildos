@@ -26,7 +26,7 @@ Item {
                 UI.Label {
                     text: qsTr("Snippets")
                     size: 26
-                    font.weight: Font.Bold
+                    font.weight: UI.Style.weightBold
                 }
             }
             UI.Button {
@@ -59,9 +59,9 @@ Item {
                 width: ListView.view.width
                 height: 66
                 radius: 12
-                color: rowMouse.containsMouse ? UI.Style.tone(0.07) : UI.Style.tone(0.045)
+                color: rowMouse.containsMouse ? UI.Style.surfaceHover : UI.Style.surfaceRaised
                 border.width: 1
-                border.color: UI.Style.tone(0.07)
+                border.color: UI.Style.borderSubtle
                 Column {
                     x: 18
                     anchors.verticalCenter: parent.verticalCenter
@@ -72,7 +72,7 @@ Item {
                         UI.Label {
                             text: row.modelData.title
                             size: 15
-                            font.weight: Font.DemiBold
+                            font.weight: UI.Style.weightSemiBold
                         }
                         UI.Label {
                             visible: (row.modelData.note || "").length > 0
@@ -114,7 +114,7 @@ Item {
                     anchors.horizontalCenter: parent.horizontalCenter
                     text: qsTr("No snippets yet")
                     size: 18
-                    font.weight: Font.DemiBold
+                    font.weight: UI.Style.weightSemiBold
                 }
             }
         }

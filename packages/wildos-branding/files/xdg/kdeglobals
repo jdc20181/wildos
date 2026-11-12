@@ -5,11 +5,12 @@
 ColorScheme=WildOS
 AccentColor=143,180,255
 # Fonts use the older ten-field form because Qt 5 apps cannot parse the Qt 6
-# form and fall back to a stock font; Qt 6 reads both.
-font=Inter,10,-1,5,50,0,0,0,0,0
-menuFont=Inter,10,-1,5,50,0,0,0,0,0
-toolBarFont=Inter,10,-1,5,50,0,0,0,0,0
-smallestReadableFont=Inter,9,-1,5,50,0,0,0,0,0
+# form and fall back to a stock font; Qt 6 reads both. Their weight is
+# Regular, which the older form holds exactly.
+font=Albert Sans,10,-1,5,50,0,0,0,0,0
+menuFont=Albert Sans,10,-1,5,50,0,0,0,0,0
+toolBarFont=Albert Sans,10,-1,5,50,0,0,0,0,0
+smallestReadableFont=Albert Sans,9,-1,5,50,0,0,0,0,0
 fixed=Hack,10,-1,5,50,0,0,0,0,0
 # Qt 5 apps have no Plasma integration on Debian trixie; Qt's own KDE theme
 # looks for the widget style here rather than under [KDE].
@@ -19,10 +20,15 @@ TerminalApplication=wildos-terminal
 TerminalService=org.wildos.terminal.desktop
 
 [WM]
-activeFont=Inter,10,-1,5,63,0,0,0,0,0
+# Window titles are drawn by KWin alone, a Qt 6 program, so this one uses the
+# Qt 6 form: the older one has no weight between Medium and DemiBold, and
+# titles are SemiBold one notch lighter (550), as Style.weightSemiBold.
+activeFont=Albert Sans,10,-1,5,550,0,0,0,0,0,0,0,0,0,0,1
 
 [Icons]
-Theme=WildOS
+# The default scheme is dark; wildos-auto-theme swaps in WildOS with the
+# light one.
+Theme=WildOS-dark
 
 [KDE]
 LookAndFeelPackage=org.wildos.desktop

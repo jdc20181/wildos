@@ -216,7 +216,7 @@ FocusScope {
             };
         case "awake": {
             const until = quick.keepAwakeUntil > 0
-                ? "Until " + Qt.formatTime(new Date(quick.keepAwakeUntil), Qt.locale().timeFormat(Locale.ShortFormat)) : "";
+                ? "Until " + Qt.locale().toString(new Date(quick.keepAwakeUntil), UI.TimeFormat.shortFormat) : "";
             return {
                 label: "Keep awake",
                 status: quick.keepingAwake ? until : "",
@@ -623,7 +623,7 @@ FocusScope {
 
             UI.Label {
                 text: (flyout.power ? flyout.power.percent : 0) + "%"
-                font.weight: Font.Medium
+                font.weight: UI.Style.weightMedium
                 Accessible.name: "Battery " + text
             }
 
@@ -683,7 +683,7 @@ FocusScope {
 
                     UI.Label {
                         text: "Power mode"
-                        font.weight: Font.Medium
+                        font.weight: UI.Style.weightMedium
                     }
 
                     UI.Label {

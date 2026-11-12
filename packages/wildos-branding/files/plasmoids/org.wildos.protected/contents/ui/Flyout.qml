@@ -154,9 +154,10 @@ FocusScope {
                         Layout.fillWidth: true
                         text: flyout.security.level === "attention" ? "Action needed"
                             : flyout.security.level === "checking" ? "Checking your protection"
+                            : flyout.security.level === "unchecked" ? flyout.security.uncheckedTitle
                             : "Your computer is protected"
                         size: 18
-                        font.weight: Font.DemiBold
+                        font.weight: UI.Style.weightSemiBold
                         Accessible.role: Accessible.Heading
                     }
 
@@ -166,6 +167,11 @@ FocusScope {
                             const s = flyout.security;
                             if (s.level === "checking") {
                                 return "This only takes a moment.";
+                            }
+                            // "Checked just now" would read as an update check
+                            // that never happened.
+                            if (s.level === "unchecked") {
+                                return "Check now to see whether any security updates are waiting.";
                             }
                             const count = s.warnings.length;
                             const lead = count === 0 ? "Nothing needs your attention."

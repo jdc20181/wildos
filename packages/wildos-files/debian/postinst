@@ -1,0 +1,18 @@
+#!/bin/sh
+set -e
+
+# Sessions already running started security-misc's fm-shim before Files
+# stood it aside, and it keeps org.freedesktop.FileManager1 until sign-out.
+# Stopping it lets the next "Show in folder" start Files at once. An explicit
+# stop is not restarted, and the drop-in keeps it from starting again.
+if [ "$1" = "configure" ] && [ -d /run/systemd/system ]; then
+    for dir in /run/user/*; do
+        uid=${dir##*/}
+        user=$(getent passwd "$uid" | cut -d: -f1) || continue
+        [ -n "$user" ] || continue
+        systemctl --user --machine="$user@.host" daemon-reload >/dev/null 2>&1 || true
+        systemctl --user --machine="$user@.host" stop fm-shim.service >/dev/null 2>&1 || true
+    done
+fi
+
+#DEBHELPER#

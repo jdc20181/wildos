@@ -36,7 +36,8 @@ Rectangle {
         text: badge.initials
         color: "#ffffff"
         font.family: UI.Style.fontFamily
+        font.letterSpacing: UI.Style.tracking(Math.round(badge.size * 0.375))
         font.pixelSize: Math.round(badge.size * 0.375)
-        font.weight: Font.DemiBold
+        font.weight: UI.Style.weightSemiBold
     }
 }

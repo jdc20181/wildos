@@ -31,6 +31,28 @@ Item {
     // failure that follows does not claim the password was wrong.
     property bool blocked: false
 
+    // kscreenlocker runs the fingerprint (/etc/pam.d/kde-fingerprint) beside
+    // the password and lists it in authenticatorTypes (Fingerprint is bit
+    // 1) while pam_fprintd waits for a finger. fprintd turns it down at
+    // once when there is no reader or no finger enrolled, so the hint waits
+    // a second rather than flash on every lock.
+    readonly property bool fingerprintOffered: (authenticator.authenticatorTypes & 1) !== 0
+    property bool fingerprintReady: false
+    onFingerprintOfferedChanged: {
+        if (fingerprintOffered) {
+            fingerprintTimer.restart();
+        } else {
+            fingerprintTimer.stop();
+            fingerprintReady = false;
+        }
+    }
+
+    Timer {
+        id: fingerprintTimer
+        interval: 1000
+        onTriggered: lockScreenUi.fingerprintReady = lockScreenUi.fingerprintOffered
+    }
+
     function showMessage(msg) {
         if (!msg)
             return;
@@ -54,8 +76,9 @@ Item {
         target: authenticator
 
         function onFailed(kind) {
-            // Fingerprint and smartcard authenticators are not part of Wild OS;
-            // their failures are noise and never reach the screen.
+            // A finger that doesn't match is retried by pam_fprintd itself,
+            // and smartcards are not part of Wild OS, so only the password's
+            // failures reach the screen.
             if (kind != 0)
                 return;
             lockScreenUi.showMessage(lockScreenUi.blocked ? Messages.unavailable : Messages.wrongPassword);
@@ -256,6 +279,7 @@ Item {
                 userName: kscreenlocker_userName
                 userImage: lockScreenUi.userImageUrl
                 capsLockOn: capsLockState.locked
+                fingerprintReady: lockScreenUi.fingerprintReady
                 notificationMessage: lockRoot.notification
                 canSwitchUser: sessionManagement.canSwitchUser
                 layoutSwitcher: keyboardLayoutSwitcher
@@ -340,7 +364,7 @@ Item {
                     anchors.fill: parent
                     backdrop: lockScreenUi.backdrop
                     tint: UI.Style.glassOnWallpaper
-                    blurRadius: 24
+                    blurRadius: 64
                 }
 
                 Row {

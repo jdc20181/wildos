@@ -12,6 +12,8 @@ Item {
     property string view: "hosts"
     property string search
     property string filter: "all"
+    // The favourite star, deepened on light glass as the board has it.
+    readonly property color starColour: UI.Style.dark ? "#ffc46a" : "#9e7941"
 
     signal connectHost(string id)
     signal hostMenu(string id, Item item, real x, real y)
@@ -86,7 +88,7 @@ Item {
         const then = new Date(d.getFullYear(), d.getMonth(), d.getDate());
         const days = Math.round((day - then) / 86400000);
         if (days === 0) {
-            return qsTr("Last used Today, %1").arg(d.toLocaleTimeString(Qt.locale(), Locale.ShortFormat));
+            return qsTr("Last used Today, %1").arg(Qt.locale().toString(d, UI.TimeFormat.shortFormat));
         }
         if (days === 1) {
             return qsTr("Last used Yesterday");
@@ -135,7 +137,7 @@ Item {
                     anchors.verticalCenter: parent.verticalCenter
                     text: page.title
                     size: 26
-                    font.weight: Font.Bold
+                    font.weight: UI.Style.weightBold
                 }
                 Row {
                     anchors.right: parent.right
@@ -168,7 +170,7 @@ Item {
                         anchors.verticalCenter: parent.verticalCenter
                         text: qsTr("Recent")
                         size: 18
-                        font.weight: Font.Bold
+                        font.weight: UI.Style.weightBold
                     }
                     UI.Label {
                         anchors.right: parent.right
@@ -207,7 +209,7 @@ Item {
                         UI.Label {
                             text: section.modelData.name
                             size: 18
-                            font.weight: Font.Bold
+                            font.weight: UI.Style.weightBold
                         }
                         UI.Label {
                             anchors.baseline: parent.children[0].baseline
@@ -242,7 +244,7 @@ Item {
                     anchors.horizontalCenter: parent.horizontalCenter
                     text: Hosts.hosts.length === 0 ? qsTr("Connect to another computer") : qsTr("Nothing here matches")
                     size: 20
-                    font.weight: Font.DemiBold
+                    font.weight: UI.Style.weightSemiBold
                 }
                 UI.Label {
                     anchors.horizontalCenter: parent.horizontalCenter
@@ -293,7 +295,7 @@ Item {
             anchors.centerIn: parent
             text: pill.text
             size: 13
-            font.weight: Font.DemiBold
+            font.weight: UI.Style.weightSemiBold
             color: pill.checked ? UI.Style.textOnAccent : UI.Style.ink
         }
         MouseArea {
@@ -310,12 +312,15 @@ Item {
         property var host
         readonly property bool desktop: host.kind === "desktop"
         readonly property color tint: desktop ? "#8fb4ff" : (host.ssh.colour || "#5fd39a")
+        // The host's colour is pale for dark glass; on light glass the
+        // board takes it to 62% so the glyph keeps its contrast.
+        readonly property color glyphColour: desktop ? UI.Style.iconInk : UI.Style.dark ? tint : Qt.rgba(tint.r * 0.62, tint.g * 0.62, tint.b * 0.62, 1)
 
         height: 74
         radius: 12
-        color: cardMouse.containsMouse ? UI.Style.tone(0.07) : UI.Style.tone(0.045)
+        color: cardMouse.containsMouse ? UI.Style.surfaceHover : UI.Style.surfaceRaised
         border.width: 1
-        border.color: UI.Style.tone(0.07)
+        border.color: UI.Style.borderSubtle
         Accessible.role: Accessible.Button
         Accessible.name: host.name
 
@@ -331,7 +336,7 @@ Item {
                 name: card.desktop ? "monitor" : "terminal"
                 size: 19
                 strokeWidth: 1.8
-                color: card.tint
+                color: card.glyphColour
             }
         }
         Column {
@@ -345,7 +350,7 @@ Item {
                 UI.Label {
                     text: card.host.name
                     size: 15
-                    font.weight: Font.DemiBold
+                    font.weight: UI.Style.weightSemiBold
                     width: Math.min(implicitWidth, parent.width - 20)
                 }
                 UI.Icon {
@@ -353,7 +358,7 @@ Item {
                     anchors.verticalCenter: parent.verticalCenter
                     name: "star"
                     size: 13
-                    color: "#ffc46a"
+                    color: page.starColour
                 }
             }
             UI.Label {
@@ -380,7 +385,7 @@ Item {
                     anchors.centerIn: parent
                     text: card.desktop ? qsTr("Desktop") : qsTr("Terminal")
                     size: 11
-                    font.weight: Font.DemiBold
+                    font.weight: UI.Style.weightSemiBold
                     color: UI.Style.inkMuted
                 }
             }
@@ -409,9 +414,9 @@ Item {
 
         height: 282
         radius: 14
-        color: UI.Style.tone(0.045)
+        color: UI.Style.surfaceRaised
         border.width: 1
-        border.color: UI.Style.tone(0.08)
+        border.color: UI.Style.borderSubtle
         clip: true
 
         Rectangle {
@@ -420,7 +425,7 @@ Item {
             height: 194
             topLeftRadius: 14
             topRightRadius: 14
-            color: Qt.rgba(13 / 255, 21 / 255, 48 / 255, 1)
+            color: UI.Style.surfaceTile
             clip: true
             Image {
                 anchors.fill: parent
@@ -444,7 +449,7 @@ Item {
                 width: reachRow.implicitWidth + 16
                 height: 24
                 radius: 12
-                color: Qt.rgba(8 / 255, 12 / 255, 28 / 255, 0.72)
+                color: Qt.rgba(0, 0, 0, 0.6)
                 Row {
                     id: reachRow
                     anchors.centerIn: parent
@@ -459,8 +464,8 @@ Item {
                     UI.Label {
                         text: recentCard.reach === "online" ? qsTr("Online") : qsTr("Offline")
                         size: 12
-                        font.weight: Font.DemiBold
-                        color: "#eef1f8"
+                        font.weight: UI.Style.weightSemiBold
+                        color: UI.Style.inkOnWallpaper
                     }
                 }
             }
@@ -475,14 +480,14 @@ Item {
                 UI.Label {
                     text: recentCard.host.name
                     size: 16
-                    font.weight: Font.DemiBold
+                    font.weight: UI.Style.weightSemiBold
                 }
                 UI.Icon {
                     visible: recentCard.host.favourite === true
                     anchors.verticalCenter: parent.verticalCenter
                     name: "star"
                     size: 13
-                    color: "#ffc46a"
+                    color: page.starColour
                 }
             }
             UI.Label {

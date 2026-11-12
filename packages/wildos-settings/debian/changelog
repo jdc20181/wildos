@@ -1,3 +1,204 @@
+wildos-settings (0.1.26) trixie; urgency=medium
+
+  * Reset Wild OS is on: keep your files, or remove everything.
+  * Remove everything says when the PC has too little memory for it.
+  * Start-up options' Restart now is on once the copy of Wild OS is on
+    the PC. It stayed greyed out because Settings can't look inside /boot.
+
+ -- Wild OS Developers <dev@wildos.io>  Thu, 12 Nov 2026 12:00:00 +0000
+
+wildos-settings (0.1.25) trixie; urgency=medium
+
+  * System > Recovery: restore points with Go back, Create a restore
+    point, how many are kept and how much space they use, Reset Wild OS,
+    Start-up options and Back up your files.
+  * Going back says what goes back and what stays as it is, can hold the
+    update back for two weeks, and restarts once. Today's version is
+    saved as a restore point too.
+  * Updates has Go back beside What's new on the latest Wild OS build.
+  * Reset Wild OS is shown and arrives in an update.
+  * Back up your files opens Backup and says when it last ran.
+  * The graphics driver's restore point is named after the driver.
+
+ -- Wild OS Developers <dev@wildos.io>  Thu, 12 Nov 2026 10:00:00 +0000
+
+wildos-settings (0.1.24) trixie; urgency=medium
+
+  * Touchpad > Gestures has a tab for two, three and four fingers, each
+    with its own swipes, and no thumb pinches. Multitasking links to it
+    under Related settings (Looking for gestures?).
+
+ -- Wild OS Developers <dev@wildos.io>  Thu, 12 Nov 2026 09:33:32 +0000
+
+wildos-settings (0.1.23) trixie; urgency=medium
+
+  * Windows apps > Windows mode > Troubleshooting has Remove Windows mode,
+    which deletes Windows and its programs to free the space or to set
+    Windows mode up again from the start. It asks for an administrator's
+    password, and Settings carries on while Windows is deleted.
+
+ -- Wild OS Developers <dev@wildos.io>  Thu, 12 Nov 2026 09:00:00 +0000
+
+wildos-settings (0.1.22) trixie; urgency=medium
+
+  * Background: a photo chosen with Choose a photo becomes the background.
+    It showed in the list but never reached the desktop.
+  * Updates: a software source added by other software, such as Steam's,
+    no longer stops the check. Everything else is checked and the page
+    names the source that could not be.
+
+ -- Wild OS Developers <dev@wildos.io>  Thu, 12 Nov 2026 08:26:26 +0000
+
+wildos-settings (0.1.21) trixie; urgency=medium
+
+  * Windows apps > Windows mode has a USB devices section: each device
+    plugged in, by name, with a Use in Windows switch, why a device has
+    to stay with Wild OS, and Allow once for a device USB protection
+    blocked.
+
+ -- Wild OS Developers <dev@wildos.io>  Thu, 12 Nov 2026 00:44:12 +0000
+
+wildos-settings (0.1.20) trixie; urgency=medium
+
+  * Bluetooth and devices > Touchpad > Gestures: three or four fingers,
+    an action for each gesture with a moving preview, three-finger drag
+    and a link to the help article.
+
+ -- Wild OS Developers <dev@wildos.io>  Thu, 12 Nov 2026 00:33:25 +0000
+
+wildos-settings (0.1.19) trixie; urgency=medium
+
+  * Multitasking > Hot corners shows the screen with the taskbar and a
+    choice in each corner, its actions in groups, a key to hold under
+    each, full screen apps and games left alone, a delay and Reset to
+    defaults, with Learn more opening the help article.
+
+ -- Wild OS Developers <dev@wildos.io>  Wed, 11 Nov 2026 23:52:30 +0000
+
+wildos-settings (0.1.18) trixie; urgency=medium
+
+  * Windows mode: Automatic now reads "kept in memory for 15 minutes, then
+    saved to disk, at once on battery", and Save to disk says "after a
+    minute", which is when it happens.
+
+ -- Wild OS Developers <dev@wildos.io>  Wed, 11 Nov 2026 23:45:00 +0000
+
+wildos-settings (0.1.17) trixie; urgency=medium
+
+  * Updates shows a flat status icon, as Backup and Recovery do: a green
+    tick when you're up to date, the accent while it checks or installs,
+    and amber when a restart is needed or something went wrong. The card
+    around it has a quiet edge instead of the accent.
+
+ -- Wild OS Developers <dev@wildos.io>  Wed, 11 Nov 2026 23:30:00 +0000
+
+wildos-settings (0.1.16) trixie; urgency=medium
+
+  * No navy left: surfaces, glass, shadows and the logo tile use the
+    same neutral greys as the rest of Wild OS.
+
+ -- Wild OS Developers <dev@wildos.io>  Wed, 11 Nov 2026 22:40:26 +0000
+
+wildos-settings (0.1.15) trixie; urgency=medium
+
+  * Accounts > Sign-in options is laid out as the design has it: Ways to
+    sign in (Fingerprint, Password with when it last changed, Security
+    key), then "Use your fingerprint for", with switches for signing in
+    and unlocking and for admin prompts, and the disk at start-up on the
+    password only. With no reader the fingerprint parts are left out, and
+    they appear when a reader is plugged in.
+  * Setting up a fingerprint is one dialog in four steps: your password,
+    touches in the middle of the finger, then the edges, then done. A
+    ring and the print fill as the reader takes each touch, and a touch
+    that doesn't count says why without losing your place. Add another
+    finger straight after, or manage and remove them later.
+  * Security key is listed, but Wild OS can't sign in with one yet, and
+    says so.
+  * About lists Fluent UI System Icons, whose fingerprint the setup uses.
+
+ -- Wild OS Developers <dev@wildos.io>  Wed, 11 Nov 2026 23:00:00 +0000
+
+wildos-settings (0.1.14) trixie; urgency=medium
+
+  * Fingerprint says plainly when the reader still holds a key from
+    Windows Hello, which Wild OS will not change, and what to do about it.
+
+ -- Wild OS Developers <dev@wildos.io>  Wed, 11 Nov 2026 20:47:16 +0000
+
+wildos-settings (0.1.13) trixie; urgency=medium
+
+  * Accounts > Sign-in options has Fingerprint on PCs with a reader: set
+    up a finger with a few touches, add more and remove them. It says
+    plainly that fingerprints stay on this PC, can't unlock the encrypted
+    disk and don't open saved passwords. A reader Wild OS can't drive yet
+    is named as such instead of the row going missing.
+
+ -- Wild OS Developers <dev@wildos.io>  Wed, 11 Nov 2026 18:30:00 +0000
+
+wildos-settings (0.1.12) trixie; urgency=medium
+
+  * The icons switch between light and dark with the theme. About lists
+    the Fluent icon theme in its credits.
+
+ -- Wild OS Developers <dev@wildos.io>  Wed, 11 Nov 2026 17:40:00 +0000
+
+wildos-settings (0.1.11) trixie; urgency=medium
+
+  * Home fits on one screen: six cards in two columns, each the same
+    height as the card beside it. Security replaces the protected banner
+    and its chips, Bluetooth lists connected devices, Windows mode has
+    Save to disk and Shut down, and Battery (Power on a desktop) has the
+    power mode and Battery saver.
+  * Privacy and security opens with the same plain Security card, with a
+    row each for the firewall, disk encryption and security updates. The
+    usage data switch is gone: Wild OS collects nothing.
+  * The firewall leaves a mark in /run once it has loaded, so Security
+    can say it is on.
+
+ -- Wild OS Developers <dev@wildos.io>  Wed, 11 Nov 2026 17:10:00 +0000
+
+wildos-settings (0.1.10) trixie; urgency=medium
+
+  * Date and time has a Clock choice: the regional format's own clock,
+    12-hour (1:30 PM) or 24-hour (13:30). Settings' own times, the
+    Night light and quiet hours choices follow it, and the time to set by
+    hand can be typed with AM or PM.
+
+ -- Wild OS Developers <dev@wildos.io>  Wed, 11 Nov 2026 14:31:15 +0000
+
+wildos-settings (0.1.9) trixie; urgency=medium
+
+  * Windows mode's Troubleshooting has Windows password, which shows and
+    copies the password Windows mode signs in with, for when Windows asks
+    for it. The copy is marked as a secret, so clipboard history skips it.
+
+ -- Wild OS Developers <dev@wildos.io>  Wed, 11 Nov 2026 13:08:56 +0000
+
+wildos-settings (0.1.8) trixie; urgency=medium
+
+  * Brave checks spelling in the languages chosen in Typing, and no longer
+    passes the other spellings of them (American beside British English),
+    through a policy written by a new helper, settings-brave-spelling. It
+    follows each change in Typing and is brought in step once a session.
+
+ -- Wild OS Developers <dev@wildos.io>  Wed, 11 Nov 2026 11:55:29 +0000
+
+wildos-settings (0.1.7) trixie; urgency=medium
+
+  * Install on the taskbar's Updates icon opens Updates and installs
+    what is waiting, asking for the password as usual.
+
+ -- Wild OS Developers <dev@wildos.io>  Wed, 11 Nov 2026 11:39:31 +0000
+
+wildos-settings (0.1.6) trixie; urgency=medium
+
+  * Accessibility has Outline maximised windows, to leave windows that fill
+    the screen without an edge.
+  * Opening a Settings page from the desktop menu or anywhere else while
+    Settings is minimised brings the window back on that page.
+
+ -- Wild OS Developers <dev@wildos.io>  Tue, 10 Nov 2026 22:47:59 +0000
+
 wildos-settings (0.1.5) trixie; urgency=medium
 
   * Changing your password and creating an account show how strong the new

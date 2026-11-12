@@ -62,7 +62,7 @@ Rectangle {
                     horizontalAlignment: Text.AlignHCenter
                     text: option.modelData
                     size: 12
-                    font.weight: option.chosen ? Font.DemiBold : Font.Normal
+                    font.weight: option.chosen ? UI.Style.weightSemiBold : UI.Style.weightRegular
                     color: option.chosen ? UI.Style.ink : UI.Style.inkAlpha(0.75, 0.70)
                 }
             }

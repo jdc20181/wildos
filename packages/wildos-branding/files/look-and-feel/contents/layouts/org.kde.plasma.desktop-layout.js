@@ -1,7 +1,7 @@
 // The Wild OS desktop: the taskbar docked along the bottom, Windows mode's
 // status at the left end (it takes no room until Windows mode is set up),
-// Start and the apps centred on the screen, and the security chip, a
-// divider, quick settings and the clock at the right end. Sizes follow the Taskbar artboard
+// Start and the apps centred on the screen, and the security chip, the
+// Updates icon, a divider, quick settings and the clock at the right end. Sizes follow the Taskbar artboard
 // in the design. Settings > Personalisation can switch it to floating glass
 // pills instead.
 //
@@ -75,6 +75,7 @@ rightSpacer.currentConfigGroup = ["General"];
 rightSpacer.writeConfig("expanding", "true");
 
 bar.addWidget("org.wildos.protected");
+bar.addWidget("org.wildos.updates");
 
 // The design leaves 2 px between items in the status pill against the
 // panel's 4, so this divider takes the difference out of its own margins.

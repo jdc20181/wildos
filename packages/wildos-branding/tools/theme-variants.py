@@ -26,15 +26,15 @@ import shutil
 import sys
 from pathlib import Path
 
-DARK_REFERENCE = ((18, 22, 40), 0.86)
-LIGHT_REFERENCE = ((250, 251, 254), 0.82)
+DARK_REFERENCE = ((24, 26, 34), 0.95)
+LIGHT_REFERENCE = ((243, 243, 243), 0.96)
 
 # The fills the frames are painted with (see glass-svg.py and
 # desktoptheme-dialogs.py).
-PANEL = (16, 20, 38)      # Start, flyouts, tooltips: glass-panel, 0.76
-BAR = (12, 16, 32)        # the floating taskbar: glass-bar, 0.55
-SHADOW = (4, 8, 24)       # the flyout shadow, at many alphas
-WHITE = (255, 255, 255)   # the 0.12 edge and the 0.10 highlight
+PANEL = (35, 37, 41)      # Start, flyouts, tooltips: glass-panel, Mica 0.96
+BAR = (24, 26, 34)        # the floating taskbar: glass-bar, Mica 0.92
+SHADOW = (10, 12, 16)       # the flyout shadow, at many alphas
+WHITE = (255, 255, 255)   # the panels' 0.093 edge and the taskbar's 0.12 edge
 
 # Style.solid in WildOS.UI: the glass goes this far towards opaque.
 SOLID = 0.8
@@ -63,7 +63,7 @@ def fmt(rgb, alpha):
     return 'fill="rgb(%d,%d,%d)" fill-opacity="%s"' % (rgb + (a,))
 
 
-def recolour(svg, light, glass, taskbar, solid=False):
+def recolour(svg, light, glass, taskbar, panel=None, solid=False):
     reference = LIGHT_REFERENCE if light else DARK_REFERENCE
 
     def glass_fill(rgb, alpha):
@@ -75,28 +75,35 @@ def recolour(svg, light, glass, taskbar, solid=False):
         rgb = tuple(int(match.group(i)) for i in (1, 2, 3))
         alpha = float(match.group(4))
         if rgb == PANEL:
+            # As Style.glassPanel: a theme's own panel glass as it is given,
+            # otherwise Dawn's tinted by the theme's window glass.
+            if panel:
+                return glass_fill(*panel)
             if light:
-                rgb, alpha = (250, 251, 254), 0.86
+                rgb, alpha = (240, 240, 240), 0.96
             return glass_fill(*tint(rgb, alpha, glass, reference))
         if rgb == BAR:
             if taskbar:
                 # As Style.taskbarFloating: the theme's taskbar glass, as
                 # much lighter as the stock pills are than the docked bar.
-                return glass_fill(taskbar[0], max(0.0, taskbar[1] - (0.23 if light else 0.33)))
+                return glass_fill(taskbar[0], max(0.0, taskbar[1] - (0.04 if light else 0.02)))
             if light:
-                rgb, alpha = (250, 251, 254), 0.67
+                rgb, alpha = (243, 243, 243), 0.94
             return glass_fill(*tint(rgb, alpha, glass, reference))
         if rgb == SHADOW:
             if light:
                 # Shadows keep their shape at about 40% strength in light
                 # mode (Style.shadowFlyout).
-                return fmt((20, 30, 60), alpha * 0.4)
+                return fmt((36, 38, 42), alpha * 0.4)
             return fmt(*tint(rgb, alpha, glass, reference, shift_alpha=False))
         if rgb == WHITE and light:
-            # The edge becomes the navy hairline (Style.tone), the top
+            # The edge becomes the dark hairline (Style.tone), the top
             # highlight stays white and grows to show on pale glass.
             if abs(alpha - 0.12) < 1e-6:
-                return fmt((30, 40, 70), 0.09)
+                return fmt((46, 48, 52), 0.09)
+            # The panels' Mica edge is black at 7.3% (Style.borderGlass).
+            if abs(alpha - 0.093) < 1e-6:
+                return fmt((0, 0, 0), 0.073)
             if abs(alpha - 0.1) < 1e-6:
                 return fmt(WHITE, 0.7)
         return match.group(0)
@@ -104,7 +111,7 @@ def recolour(svg, light, glass, taskbar, solid=False):
     return FILL.sub(swap, svg)
 
 
-def build(source, dest, name, title, light, glass, taskbar, solid=False):
+def build(source, dest, name, title, light, glass, taskbar, panel=None, solid=False):
     target = dest / name
     if target.exists():
         shutil.rmtree(target)
@@ -114,7 +121,7 @@ def build(source, dest, name, title, light, glass, taskbar, solid=False):
         # show; they keep their colours.
         if svg.name == "tasks.svg":
             continue
-        svg.write_text(recolour(svg.read_text(), light, glass, taskbar, solid))
+        svg.write_text(recolour(svg.read_text(), light, glass, taskbar, panel, solid))
     metadata = json.loads((source / "metadata.json").read_text())
     metadata["KPlugin"]["Id"] = name
     metadata["KPlugin"]["Name"] = title
@@ -127,8 +134,8 @@ def main():
     source, themes, dest = (Path(p) for p in sys.argv[1:4])
     dest.mkdir(parents=True, exist_ok=True)
     styles = [
-        ("wildos", "Wild OS", False, DARK_REFERENCE, None),
-        ("wildos-light", "Wild OS Light", True, LIGHT_REFERENCE, None),
+        ("wildos", "Wild OS", False, DARK_REFERENCE, None, None),
+        ("wildos-light", "Wild OS Light", True, LIGHT_REFERENCE, None, None),
     ]
     named = {"wildos", "wildos-light"}
     for path in sorted(themes.glob("*.json")):
@@ -139,14 +146,15 @@ def main():
         light = theme["mode"] == "light"
         glass = hex_colour(theme["glass"])
         taskbar = hex_colour(theme["taskbarGlass"]) if "taskbarGlass" in theme else None
-        styles.append((name, "Wild OS " + theme["name"], light, glass, taskbar))
+        panel = hex_colour(theme["panelGlass"]) if "panelGlass" in theme else None
+        styles.append((name, "Wild OS " + theme["name"], light, glass, taskbar, panel))
         named.add(name)
 
-    for name, title, light, glass, taskbar in styles:
+    for name, title, light, glass, taskbar, panel in styles:
         # The plain dark style is the source itself, installed as it is.
         if name != "wildos":
-            build(source, dest, name, title, light, glass, taskbar)
-        build(source, dest, name + "-solid", title + " Solid", light, glass, taskbar, solid=True)
+            build(source, dest, name, title, light, glass, taskbar, panel)
+        build(source, dest, name + "-solid", title + " Solid", light, glass, taskbar, panel, solid=True)
 
 
 if __name__ == "__main__":

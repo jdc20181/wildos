@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>org.wildos.backup</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0-or-later</project_license>
+  <name>Backup</name>
+  <summary>Back up your files to your own drive and get them back</summary>
+  <description>
+    <p>
+      Backup keeps encrypted copies of your files on an external drive of
+      your own. Every day it backs up your home folder, Mail, Calendar,
+      People and Tasks, and your app settings, and it catches up when you
+      plug the drive back in after a missed backup.
+    </p>
+    <p>
+      Pick any backup by date to browse it, search it, and put files back
+      where they were or in a folder you choose. Old backups are thinned
+      out over a year, oldest first when the drive is nearly full. The
+      password is made for you and kept in your keyring. Nothing leaves
+      the PC: no cloud and no network.
+    </p>
+  </description>
+  <launchable type="desktop-id">org.wildos.backup.desktop</launchable>
+  <icon type="stock">wildos-backup</icon>
+  <categories>
+    <category>System</category>
+    <category>Archiving</category>
+  </categories>
+  <provides>
+    <binary>wildos-backup</binary>
+  </provides>
+  <pkgname>wildos-backup</pkgname>
+  <url type="homepage">https://wildos.io</url>
+  <developer id="io.wildos">
+    <name>Wild OS</name>
+  </developer>
+  <content_rating type="oars-1.1"/>
+  <releases>
+    <release version="0.1.0" date="2026-11-12"/>
+  </releases>
+</component>

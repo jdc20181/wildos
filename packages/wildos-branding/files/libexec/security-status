@@ -29,6 +29,11 @@
 #   secureboot=on|off|unsupported
 #                            "unsupported" on BIOS machines and UEFI firmware
 #                            without Secure Boot, where it cannot be turned on.
+#   firewall=on|off          The firewall Wild OS loads at start-up
+#                            (wildos-protection.service, settings-protection)
+#                            is in place: it turns away connections nothing
+#                            on this computer asked for. Printed only where
+#                            Settings, which ships it, is installed.
 #   network=on|off           Nothing accepts connections from other computers:
 #                            no service listens beyond this machine.
 #   network_services=N       Sockets that do accept them.
@@ -210,8 +215,18 @@ else
     echo "secureboot=off"
 fi
 
-# Kicksecure ships no firewall on the desktop, so the honest test is whether
-# anything is listening beyond this machine. DHCP clients bind ports 68 and
+# Listing the firewall's rules needs root, so its loader leaves a mark in
+# /run once nft has accepted them; a failed load or a fresh start leaves none.
+if [ -x /usr/libexec/wildos/settings-protection ]; then
+    if [ -f /run/wildos/firewall ]; then
+        echo "firewall=on"
+    else
+        echo "firewall=off"
+    fi
+fi
+
+# Behind the firewall, the honest test of what other computers could reach
+# is whether anything is listening beyond this machine. DHCP clients bind ports 68 and
 # 546 only to hear replies to their own requests, so they do not count. Nor
 # does network discovery: mDNS on 5353 (finding printers, as Windows' network
 # discovery does) and the unconnected UDP sockets on temporary ports that

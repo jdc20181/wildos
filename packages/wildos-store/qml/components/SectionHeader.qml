@@ -19,7 +19,7 @@ Item {
         id: heading
         text: header.title
         size: 21
-        font.weight: Font.Bold
+        font.weight: UI.Style.weightBold
         font.letterSpacing: -0.21
         width: parent.width - (link.visible ? link.width + 16 : 0)
         Accessible.role: Accessible.Heading

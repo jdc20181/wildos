@@ -1,0 +1,10 @@
+#!/bin/sh
+set -e
+# LibreOffice's Print dialog layout moves aside for the Wild OS one, which
+# this package installs in its place (see CMakeLists.txt).
+UI=/usr/lib/libreoffice/share/config/soffice.cfg/vcl/ui/printdialog.ui
+if [ "$1" = install ] || [ "$1" = upgrade ]; then
+    dpkg-divert --package wildos-office --rename --divert "$UI.libreoffice" --add "$UI"
+fi
+#DEBHELPER#
+exit 0
