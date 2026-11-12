@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.25)
-project(wildos-system-dialogs VERSION 0.1.0 LANGUAGES CXX)
+project(wildos-system-dialogs VERSION 0.1.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -43,8 +43,15 @@ target_link_libraries(wildos-dialogs PRIVATE
     PolkitQt6-1::Agent PolkitQt6-1::Core
 )
 
+# Runs inside whatever started a 32-bit program, sandboxes included, so it
+# carries its own C library (see the file).
+add_executable(32bit-blocked src/32bit-blocked.c)
+target_link_options(32bit-blocked PRIVATE -static)
+
 set(LIBEXEC ${CMAKE_INSTALL_PREFIX}/libexec/wildos)
-install(TARGETS wildos-dialogs RUNTIME DESTINATION ${LIBEXEC})
+install(TARGETS wildos-dialogs 32bit-blocked RUNTIME DESTINATION ${LIBEXEC})
+install(PROGRAMS data/32bit-prompt-setup DESTINATION ${LIBEXEC})
+install(FILES data/wildos-32bit-prompt.service DESTINATION ${CMAKE_INSTALL_PREFIX}/lib/systemd/system)
 install(PROGRAMS data/record-package-sources DESTINATION ${LIBEXEC})
 install(FILES data/80wildos-package-sources DESTINATION ${CMAKE_INSTALL_FULL_SYSCONFDIR}/apt/apt.conf.d)
 install(FILES data/org.wildos.security.desktop DESTINATION ${CMAKE_INSTALL_DATADIR}/applications)

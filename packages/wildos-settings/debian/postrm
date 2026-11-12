@@ -6,6 +6,13 @@ if [ "$1" = "remove" ] || [ "$1" = "purge" ] || [ "$1" = "abort-install" ]; then
         dpkg-divert --package wildos-settings --remove --rename \
             --divert "/usr/bin/$bin.kde" "/usr/bin/$bin" >/dev/null || true
     done
+    for rule in 60-steam-input.rules 60-steam-vr.rules; do
+        if [ -L "/etc/udev/rules.d/$rule" ]; then
+            rm -f "/etc/udev/rules.d/$rule"
+        fi
+        dpkg-divert --package wildos-settings --remove --rename \
+            --divert "/usr/share/wildos/steam-devices/$rule" "/usr/lib/udev/rules.d/$rule" >/dev/null || true
+    done
     # The kill switch's rules outlive its service on purpose (a crash must
     # not let traffic out), so they go with the package.
     nft delete table inet wildos_kill_switch 2>/dev/null || true

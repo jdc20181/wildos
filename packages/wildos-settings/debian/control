@@ -58,6 +58,7 @@ Depends:
  plasma-desktop,
  libkscreen-bin,
  wildos-branding,
+ steam-devices,
  wildos-ui (>= 0.1.3),
  kio6,
  packagekit,

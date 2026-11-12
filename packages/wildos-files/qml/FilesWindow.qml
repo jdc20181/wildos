@@ -10,6 +10,7 @@ UI.AppWindow {
     id: window
 
     property var startUrls: []
+    property string formatUdi: ""
 
     width: Settings.windowSize().width
     height: Settings.windowSize().height
@@ -29,6 +30,7 @@ UI.AppWindow {
         anchors.fill: parent
         anchors.margins: window.maximised ? 0 : 1
         startUrls: window.startUrls
+        formatUdi: window.formatUdi
         frame: window.frame
         onCloseWindow: window.close()
     }

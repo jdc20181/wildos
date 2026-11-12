@@ -120,10 +120,14 @@ case "${1:-}" in
         usb "$1"
         bluetooth "$1" "$previous"
         camera "$1"
-        # Strict and Maximum keep every CPU flaw protection on, so hyper-threading
-        # goes off from the next start-up. Standard leaves the person's choice.
+        # Strict and Maximum keep every CPU flaw protection on and the kernel's
+        # 32-bit layer out, so hyper-threading and 32-bit apps go off from the
+        # next start-up. Standard leaves the person's choices.
         if [ "$1" != standard ] && [ -x /usr/libexec/wildos/settings-cpu-threads ]; then
             /usr/libexec/wildos/settings-cpu-threads off || true
+        fi
+        if [ "$1" != standard ] && [ -x /usr/libexec/wildos/settings-32bit ]; then
+            /usr/libexec/wildos/settings-32bit off || true
         fi
         if [ "$1" = standard ]; then
             rm -f "$LEVEL_FILE"

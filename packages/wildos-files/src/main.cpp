@@ -40,6 +40,8 @@ int main(int argc, char *argv[])
     parser.addPositionalArgument(QStringLiteral("locations"), QStringLiteral("Folders to open, each in its own tab. A file opens its folder with it selected."), QStringLiteral("[locations...]"));
     QCommandLineOption selectOption(QStringLiteral("select"), QStringLiteral("Show the locations selected in their folders, folders included."));
     parser.addOption(selectOption);
+    QCommandLineOption formatOption(QStringLiteral("format"), QStringLiteral("Open the Format dialog for a removable drive, such as /dev/sdb1."), QStringLiteral("device"));
+    parser.addOption(formatOption);
     // Started by D-Bus for a call such as "show this file in its folder";
     // the call itself opens the window.
     QCommandLineOption serviceOption(QStringLiteral("service"), QStringLiteral("Start without a window, waiting for D-Bus requests."));
@@ -61,9 +63,15 @@ int main(int argc, char *argv[])
     if (service && bus.isConnected() && bus.interface()->isServiceRegistered(serviceName)) {
         return 0;
     }
+    const QString formatDevice = parser.value(formatOption);
     if (!preview && bus.isConnected() && bus.interface()->isServiceRegistered(serviceName)) {
-        auto message = QDBusMessage::createMethodCall(serviceName, objectPath, serviceName, QStringLiteral("Open"));
-        message << locations;
+        auto message = formatDevice.isEmpty() ? QDBusMessage::createMethodCall(serviceName, objectPath, serviceName, QStringLiteral("Open"))
+                                              : QDBusMessage::createMethodCall(serviceName, objectPath, serviceName, QStringLiteral("Format"));
+        if (formatDevice.isEmpty()) {
+            message << locations;
+        } else {
+            message << formatDevice;
+        }
         bus.call(message, QDBus::Block, 5000);
         return 0;
     }
@@ -96,7 +104,9 @@ int main(int argc, char *argv[])
         bus.registerService(QStringLiteral("org.freedesktop.FileManager1"));
     }
 
-    if (!service) {
+    if (!formatDevice.isEmpty()) {
+        files->Format(formatDevice);
+    } else if (!service) {
         files->Open(locations);
     } else {
         QTimer::singleShot(60000, &app, [] {

@@ -51,6 +51,7 @@ qt_add_qml_module(wildos-settings
         src/windowsmode.cpp src/windowsmode.h
         src/windowsusb.cpp src/windowsusb.h
         src/processor.cpp src/processor.h
+        src/compat32.cpp src/compat32.h
         src/graphics.cpp src/graphics.h
         src/inputdevices.cpp src/inputdevices.h
         src/defaultapps.cpp src/defaultapps.h
@@ -113,7 +114,7 @@ install(TARGETS wildos-settings RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 install(FILES data/org.wildos.settings.desktop DESTINATION ${CMAKE_INSTALL_DATADIR}/applications)
 # The helpers are looked up by these exact paths (polkit pins the update
 # helper to it), so they do not follow the distribution's libexec layout.
-install(PROGRAMS data/settings-update-policy data/settings-users data/settings-locale data/settings-protection data/settings-network data/settings-cpu-threads data/settings-graphics-driver data/settings-brave-spelling data/settings-fingerprint DESTINATION ${CMAKE_INSTALL_PREFIX}/libexec/wildos)
+install(PROGRAMS data/settings-update-policy data/settings-users data/settings-locale data/settings-protection data/settings-network data/settings-cpu-threads data/settings-32bit data/settings-game-overlay data/settings-graphics-driver data/settings-brave-spelling data/settings-fingerprint DESTINATION ${CMAKE_INSTALL_PREFIX}/libexec/wildos)
 install(FILES data/org.wildos.settings.policy DESTINATION ${CMAKE_INSTALL_DATADIR}/polkit-1/actions)
 # Opened from About > Credits. Not under /usr/share/doc, which the ISO
 # leaves out.

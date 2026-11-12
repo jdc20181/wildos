@@ -21,9 +21,15 @@
 #include <QLocale>
 #include <QProcess>
 #include <QRegularExpression>
+#include <QSocketNotifier>
 #include <QStandardPaths>
 
 #include <csignal>
+#include <cstddef>
+#include <cstring>
+#include <sys/socket.h>
+#include <sys/un.h>
+#include <unistd.h>
 
 namespace
 {
@@ -40,6 +46,11 @@ constexpr int warningSeconds = 60;
 // A restart picked for a time the computer slept through is not made
 // later without asking again.
 constexpr int lateMinutes = 30;
+// After the 32-bit prompt closes, further requests are dropped for this
+// long, so a launcher that retries in a loop raises it once.
+constexpr int compat32QuietMinutes = 5;
+const QString compat32Helper = QStringLiteral("/usr/libexec/wildos/settings-32bit");
+const QString compat32Choice = QStringLiteral("/etc/wildos/32bit");
 
 // UPower's states: 2 discharging, 6 pending discharge.
 bool discharging(uint state)
@@ -153,6 +164,9 @@ void Prompts::dismiss()
         notNow();
         return;
     }
+    if (m_showing == QLatin1String("compat32")) {
+        m_compat32QuietUntil = QDateTime::currentDateTime().addSecs(compat32QuietMinutes * 60);
+    }
     m_showing.clear();
     Q_EMIT showingChanged();
     if (m_oneShot) {
@@ -176,6 +190,145 @@ void Prompts::watch()
     m_restartCheck.setInterval(30 * 1000);
     connect(&m_restartCheck, &QTimer::timeout, this, &Prompts::checkRestart);
     m_restartCheck.start();
+    listen32bit();
+}
+
+// One datagram per attempt from 32bit-blocked: "program\napp id". The
+// socket's name carries this user's uid, and the kernel's record of who
+// sent each message is checked as well, so another account cannot raise a
+// prompt here.
+void Prompts::listen32bit()
+{
+    const int fd = ::socket(AF_UNIX, SOCK_DGRAM | SOCK_CLOEXEC | SOCK_NONBLOCK, 0);
+    if (fd < 0) {
+        return;
+    }
+    const int on = 1;
+    ::setsockopt(fd, SOL_SOCKET, SO_PASSCRED, &on, sizeof on);
+    sockaddr_un addr{};
+    addr.sun_family = AF_UNIX;
+    const QByteArray name = "wildos-32bit-" + QByteArray::number(::getuid());
+    memcpy(addr.sun_path + 1, name.constData(), size_t(name.size()));
+    if (::bind(fd, reinterpret_cast<sockaddr *>(&addr), socklen_t(offsetof(sockaddr_un, sun_path) + 1 + name.size())) != 0) {
+        ::close(fd);
+        return;
+    }
+    m_compat32Socket = fd;
+    auto *notifier = new QSocketNotifier(fd, QSocketNotifier::Read, this);
+    connect(notifier, &QSocketNotifier::activated, this, &Prompts::read32bit);
+}
+
+void Prompts::read32bit()
+{
+    for (;;) {
+        char buffer[1024];
+        alignas(cmsghdr) char control[CMSG_SPACE(sizeof(ucred))];
+        iovec iov{buffer, sizeof buffer};
+        msghdr msg{};
+        msg.msg_iov = &iov;
+        msg.msg_iovlen = 1;
+        msg.msg_control = control;
+        msg.msg_controllen = sizeof control;
+        const ssize_t n = ::recvmsg(m_compat32Socket, &msg, MSG_DONTWAIT | MSG_CMSG_CLOEXEC);
+        if (n < 0) {
+            return;
+        }
+        bool mine = false;
+        for (cmsghdr *c = CMSG_FIRSTHDR(&msg); c; c = CMSG_NXTHDR(&msg, c)) {
+            if (c->cmsg_level == SOL_SOCKET && c->cmsg_type == SCM_CREDENTIALS) {
+                ucred cred;
+                memcpy(&cred, CMSG_DATA(c), sizeof cred);
+                mine = cred.uid == ::getuid();
+            }
+        }
+        if (!mine) {
+            continue;
+        }
+        const QString text = QString::fromUtf8(buffer, int(n));
+        ask32bit(text.section(QLatin1Char('\n'), 0, 0), text.section(QLatin1Char('\n'), 1, 1));
+    }
+}
+
+QString Prompts::state32bit() const
+{
+    QFile level(QStringLiteral("/etc/wildos/protection-level"));
+    const QByteArray value = level.open(QIODevice::ReadOnly) ? level.readAll().trimmed() : QByteArray();
+    if (value == "strict" || value == "maximum") {
+        return QStringLiteral("locked");
+    }
+    return QFileInfo::exists(compat32Choice) ? QStringLiteral("pending") : QStringLiteral("off");
+}
+
+void Prompts::ask32bit(const QString &program, const QString &appId)
+{
+    // Another prompt already on screen matters more, and one 32-bit prompt
+    // is enough for a while.
+    if (!m_showing.isEmpty() || (m_compat32QuietUntil.isValid() && QDateTime::currentDateTime() < m_compat32QuietUntil)) {
+        return;
+    }
+    // Inside a Flatpak the program is one of the app's files; the app's own
+    // name is the one people know.
+    QString name = QFileInfo(program).fileName();
+    QString icon;
+    if (!appId.isEmpty()) {
+        if (const KService::Ptr service = KService::serviceByDesktopName(appId)) {
+            name = service->name();
+            icon = service->icon();
+        }
+    }
+    m_info = {
+        {QStringLiteral("appName"), name.left(80)},
+        {QStringLiteral("iconName"), icon},
+        {QStringLiteral("mode"), state32bit()},
+    };
+    show(QStringLiteral("compat32"));
+}
+
+void Prompts::turnOn32bit()
+{
+    const QString mode = m_info.value(QStringLiteral("mode")).toString();
+    if (m_demo) {
+        dismiss();
+        return;
+    }
+    if (mode == QLatin1String("locked")) {
+        QProcess::startDetached(QStringLiteral("wildos-settings"), {QStringLiteral("--page"), QStringLiteral("privacy")});
+        dismiss();
+        return;
+    }
+    if (mode == QLatin1String("pending")) {
+        m_compat32QuietUntil = QDateTime::currentDateTime().addSecs(compat32QuietMinutes * 60);
+        restartNow();
+        return;
+    }
+    if (m_info.value(QStringLiteral("busy")).toBool()) {
+        return;
+    }
+    m_info.insert(QStringLiteral("busy"), true);
+    m_info.remove(QStringLiteral("error"));
+    Q_EMIT infoChanged();
+    auto *process = new QProcess(this);
+    connect(process, &QProcess::finished, this, [this, process](int code) {
+        process->deleteLater();
+        if (m_showing != QLatin1String("compat32")) {
+            return;
+        }
+        m_info.insert(QStringLiteral("busy"), false);
+        if (code == 0) {
+            m_compat32QuietUntil = QDateTime::currentDateTime().addSecs(compat32QuietMinutes * 60);
+            restartNow();
+            return;
+        }
+        // A cancelled password changes nothing; the card stays so it can be
+        // tried again or put away. Code 3: the protection level was raised
+        // meanwhile, which the card now says.
+        m_info.insert(QStringLiteral("mode"), state32bit());
+        if (code != 3 && code != 126 && code != 127) {
+            m_info.insert(QStringLiteral("error"), QStringLiteral("32-bit apps could not be turned on."));
+        }
+        Q_EMIT infoChanged();
+    });
+    process->start(QStringLiteral("pkexec"), {compat32Helper, QStringLiteral("on")});
 }
 
 void Prompts::readBattery()
@@ -669,5 +822,11 @@ void Prompts::demo(const QString &kind)
                           QDBusMessage());
     } else if (kind == QLatin1String("windowsstarting")) {
         windowsStarting(QStringLiteral("Word"), QString(), 60, true);
+    } else if (kind.startsWith(QLatin1String("compat32"))) {
+        // compat32, compat32-locked or compat32-pending
+        const QString mode = kind.section(QLatin1Char('-'), 1);
+        m_info = {{QStringLiteral("appName"), QStringLiteral("Steam")}, {QStringLiteral("iconName"), QStringLiteral("steam")},
+                  {QStringLiteral("mode"), mode.isEmpty() ? QStringLiteral("off") : mode}};
+        show(QStringLiteral("compat32"));
     }
 }

@@ -49,4 +49,6 @@ Description: Wild OS system dialogs
   * "not responding", in place of KWin's own;
   * low battery with battery saver, restart to finish updating with a
     time of the person's choosing, and the App Bridge's Windows mode
-    prompt.
+    prompt;
+  * "32-bit apps are turned off", in place of a bare "Exec format error"
+    when a 32-bit program such as Steam is opened while they are off.

@@ -419,7 +419,18 @@ UI.AppWindow {
                     visible: window.ready && archive.lockedFormat
                     warning: true
                     iconName: "lock"
-                    text: qsTr("This %1 archive is protected with a password. Archive can't open protected 7z and RAR files yet.").arg(archive.formatName)
+                    text: qsTr("This RAR is protected with the older RAR 4 encryption, which Archive can't unlock. You can see what's in it, but not extract it.")
+                }
+                Banner {
+                    Layout.fillWidth: true
+                    Layout.leftMargin: 16
+                    Layout.rightMargin: 16
+                    Layout.bottomMargin: 8
+                    visible: window.ready && archive.namesHidden
+                    iconName: "lock"
+                    text: qsTr("This archive is protected with a password, and even the names of its files are hidden until you enter it.")
+                    action: qsTr("Enter password")
+                    onActivated: archive.askPassword()
                 }
                 Banner {
                     Layout.fillWidth: true
@@ -800,6 +811,7 @@ UI.AppWindow {
             onAccepted: {
                 if (text.length > 0) {
                     archive.setPassword(text);
+                    text = "";
                     passwordDialog.close();
                 }
             }
@@ -810,6 +822,7 @@ UI.AppWindow {
                 text: qsTr("Cancel")
                 onClicked: {
                     archive.forgetPending();
+                    passwordField.text = "";
                     passwordDialog.close();
                 }
             },
@@ -819,6 +832,7 @@ UI.AppWindow {
                 enabled: passwordField.text.length > 0
                 onClicked: {
                     archive.setPassword(passwordField.text);
+                    passwordField.text = "";
                     passwordDialog.close();
                 }
             }

@@ -1,3 +1,23 @@
+wildos-settings (0.1.28) trixie; urgency=medium
+
+  * Steam and 32-bit apps also turns on Steam's controller support: game
+    controllers, Steam Input and Remote Play work, and turning it off takes
+    it away again.
+  * Show a performance overlay in games, under Steam and 32-bit apps: frame
+    rate, frame time, and processor and graphics load and temperature in
+    Steam's Vulkan and Proton games. Off to start with.
+
+ -- Wild OS Developers <dev@wildos.io>  Thu, 12 Nov 2026 16:11:45 +0000
+
+wildos-settings (0.1.27) trixie; urgency=medium
+
+  * Steam and 32-bit apps, in Privacy and security: off to start with.
+    Turning it on asks for the password and offers a restart, and the
+    Security card says 32-bit apps are on. Strict and Maximum keep it off
+    and turn it off again.
+
+ -- Wild OS Developers <dev@wildos.io>  Thu, 12 Nov 2026 14:00:00 +0000
+
 wildos-settings (0.1.26) trixie; urgency=medium
 
   * Reset Wild OS is on: keep your files, or remove everything.

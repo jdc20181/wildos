@@ -90,6 +90,8 @@ CARRY = [
     "/etc/fstab", "/etc/crypttab", "/etc/wildos/encrypted",
     "/etc/grub.d/30_windows", "/etc/wildos/protection-level",
     "/etc/wildos/cpu-threads", "/etc/default/grub.d/41_wildos_cpu_threads.cfg",
+    "/etc/wildos/32bit", "/etc/default/grub.d/41_wildos_32bit.cfg", "/etc/sysctl.d/991-wildos-32bit.conf",
+    "/etc/udev/rules.d/60-steam-input.rules", "/etc/udev/rules.d/60-steam-vr.rules",
     "/etc/apt/sources.list.d/wildos.sources", "/etc/apt/apt.conf.d/20auto-upgrades",
     "/etc/apt/apt.conf.d/52wildos-restart", HOLD_FILE,
     # First-start setup: once it is done it must never come back.

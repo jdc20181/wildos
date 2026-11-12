@@ -8,6 +8,13 @@ if [ "$1" = "install" ] || [ "$1" = "upgrade" ]; then
         dpkg-divert --package wildos-settings --add --rename \
             --divert "/usr/bin/$bin.kde" "/usr/bin/$bin" >/dev/null
     done
+    # Steam's controller rules are kept out of udev's folders and linked in
+    # only while Steam and 32-bit apps are on (settings-32bit).
+    mkdir -p /usr/share/wildos/steam-devices
+    for rule in 60-steam-input.rules 60-steam-vr.rules; do
+        dpkg-divert --package wildos-settings --add --rename \
+            --divert "/usr/share/wildos/steam-devices/$rule" "/usr/lib/udev/rules.d/$rule" >/dev/null
+    done
 fi
 
 #DEBHELPER#

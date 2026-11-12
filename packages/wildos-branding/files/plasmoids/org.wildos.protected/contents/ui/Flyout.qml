@@ -174,7 +174,10 @@ FocusScope {
                                 return "Check now to see whether any security updates are waiting.";
                             }
                             const count = s.warnings.length;
-                            const lead = count === 0 ? "Nothing needs your attention."
+                            // 32-bit apps on is a choice, not a problem, but
+                            // the summary should not read as if it weren't there.
+                            const lead = count === 0 && s.status.compat32 === "on" ? "32-bit apps are on, by your choice."
+                                : count === 0 ? "Nothing needs your attention."
                                 : count === 1 ? "1 thing needs your attention."
                                 : count + " things need your attention.";
                             // On its own line, so "just now" never wraps alone.

@@ -126,6 +126,11 @@ PlasmoidItem {
             row("network", "globe", "Network protection", "Other computers can't connect to this one", "ok", "", "privacy");
         }
 
+        // A choice made in Settings, so it is listed but never a warning.
+        if (s.compat32 === "on") {
+            row("compat32", "chip", "32-bit apps", "On, for Steam and older apps", "quiet", "", "privacy");
+        }
+
         // Only worth a row when it could be on and is not; on a BIOS machine
         // there is nothing anyone can do about it.
         if (s.secureboot === "off") {

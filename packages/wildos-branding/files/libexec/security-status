@@ -41,6 +41,9 @@
 #                            people; for diagnostics and Settings.
 #   kernel=on|off            Kicksecure's kernel hardening is in force. Not
 #                            shown to people; for diagnostics and Settings.
+#   compat32=on|off          32-bit programs can run: "Steam and 32-bit apps"
+#                            is on in Settings and the computer has restarted
+#                            since. Off is how Wild OS ships.
 #   ignored=a,b              Warnings this person chose to ignore (see below).
 #
 # Some warnings describe a choice a person can reasonably make and live with:
@@ -255,6 +258,17 @@ if [ "$(cat /proc/sys/kernel/kptr_restrict 2>/dev/null)" = "2" ]; then
 else
     echo "kernel=off"
 fi
+
+# Kicksecure starts the kernel with ia32_emulation=0, which leaves out its
+# 32-bit compatibility layer; the kernel takes the last value it is given.
+compat32=on
+for word in $(cat /proc/cmdline 2>/dev/null); do
+    case "$word" in
+    ia32_emulation=0 | ia32_emulation=n | ia32_emulation=N | ia32_emulation=no | ia32_emulation=off | ia32_emulation=false) compat32=off ;;
+    ia32_emulation=*) compat32=on ;;
+    esac
+done
+echo "compat32=$compat32"
 
 # Only known keys, so a hand-edited file can't hide anything else.
 echo "ignored=$(grep -xE 'encryption|apps|devices|secureboot' "$ignored_file" 2>/dev/null | sort -u | paste -sd, -)"

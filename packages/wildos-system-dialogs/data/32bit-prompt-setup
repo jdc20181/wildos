@@ -1,0 +1,33 @@
+#!/bin/sh
+# Hands 32-bit programs to the prompt that offers to turn them on, but only
+# while the running kernel refuses them: the binfmt_misc entry is written to
+# /run/binfmt.d each start-up, before systemd-binfmt reads it, and only when
+# the kernel was started with ia32_emulation off. After "Steam and 32-bit
+# apps" is turned on and the computer restarted, nothing is written, so the
+# entry can never stand in for a program that would have run. Run by
+# wildos-32bit-prompt.service.
+
+set -eu
+
+ENTRY=/run/binfmt.d/wildos-32bit.conf
+
+# The kernel takes the last ia32_emulation= it is given.
+setting=
+for word in $(cat /proc/cmdline); do
+    case "$word" in
+    ia32_emulation=*) setting=${word#ia32_emulation=} ;;
+    esac
+done
+
+case "$setting" in
+0 | n | N | no | off | false)
+    mkdir -p /run/binfmt.d
+    # A 32-bit x86 ELF program or position-independent program (type 2 or 3,
+    # machine 3), whatever its OS/ABI byte says. F: the kernel opens the
+    # helper now, so it also runs inside sandboxes that have no /usr of ours.
+    printf '%s\n' ':wildos-32bit:M::\x7fELF\x01\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x02\x00\x03\x00:\xff\xff\xff\xff\xff\xfe\xfe\x00\xff\xff\xff\xff\xff\xff\xff\xff\xfe\xff\xff\xff:/usr/libexec/wildos/32bit-blocked:F' > "$ENTRY"
+    ;;
+*)
+    rm -f "$ENTRY"
+    ;;
+esac

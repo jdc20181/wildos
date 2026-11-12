@@ -1,0 +1,64 @@
+#!/bin/sh
+# "Show a performance overlay in games", under Steam and 32-bit apps in
+# Settings > Privacy and security. Runs as the signed-in user, not root:
+# Steam comes from Flathub and the Store puts it in the user's own Flatpak
+# installation, so the overlay goes there too.
+#
+# The overlay is MangoHud's Vulkan layer as a Flatpak extension, on the
+# branch of Steam's own runtime (a layer on another branch is never loaded).
+# It is installed only while the overlay is on, and MANGOHUD=1 in Steam's
+# Flatpak overrides puts it in every Vulkan game Steam starts, including
+# Windows games through Proton. Native OpenGL games don't show it.
+#
+#   on | off   install or remove the layer and set Steam's override
+#   status     prints on or off
+
+set -u
+
+APP=com.valvesoftware.Steam
+LAYER=org.freedesktop.Platform.VulkanLayer.MangoHud
+FONT=/run/host/fonts/truetype/albert-sans/AlbertSans[wght].ttf
+
+# A few numbers in a quiet panel: frame rate, frame time, and load and
+# temperature for the processor and graphics. Labels in grey, figures in
+# white, no graph, no colour changes. Left Shift+F12 hides it in a game.
+CONFIG="legacy_layout=0,hud_compact,position=top-left,offset_x=16,offset_y=16"
+CONFIG="$CONFIG,round_corners=10,background_alpha=0.55,background_color=101114"
+CONFIG="$CONFIG,font_size=18,text_color=F2F2F4,gpu_color=9A9CA6,cpu_color=9A9CA6,engine_color=9A9CA6"
+CONFIG="$CONFIG,fps_color_change=0,fps,frametime,cpu_stats,cpu_temp,gpu_stats,gpu_temp"
+CONFIG="$CONFIG,toggle_hud=Shift_L+F12,font_file=$FONT"
+
+# Steam's installation: the user's own, or the system one if it came from
+# elsewhere (flatpak then asks for the password itself).
+scope=--user
+flatpak info --user "$APP" >/dev/null 2>&1 || scope=--system
+branch=$(flatpak info "$scope" -m "$APP" 2>/dev/null | sed -n 's|^runtime=.*/||p' | head -n 1)
+
+case "${1:-}" in
+on)
+    if [ -z "$branch" ]; then
+        echo "Steam is not installed." >&2
+        exit 3
+    fi
+    origin=$(flatpak info "$scope" --show-origin "$APP" 2>/dev/null)
+    flatpak install "$scope" -y --noninteractive "${origin:-flathub}" "$LAYER//$branch" >/dev/null || exit 4
+    flatpak override --user --env=MANGOHUD=1 "--env=MANGOHUD_CONFIG=$CONFIG" "$APP"
+    ;;
+off)
+    flatpak override --user --unset-env=MANGOHUD --unset-env=MANGOHUD_CONFIG "$APP" 2>/dev/null || true
+    for ref in $(flatpak list "$scope" --runtime --columns=ref 2>/dev/null | grep "^$LAYER/"); do
+        flatpak uninstall "$scope" -y --noninteractive "$ref" >/dev/null 2>&1 || true
+    done
+    ;;
+status)
+    if flatpak override --user --show "$APP" 2>/dev/null | grep -q '^MANGOHUD=1$'; then
+        echo on
+    else
+        echo off
+    fi
+    ;;
+*)
+    echo "usage: $0 on|off|status" >&2
+    exit 2
+    ;;
+esac

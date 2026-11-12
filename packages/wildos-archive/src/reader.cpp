@@ -1,6 +1,7 @@
 #include "reader.h"
 
 #include "format.h"
+#include "tools.h"
 
 #include <archive.h>
 #include <archive_entry.h>
@@ -11,12 +12,18 @@
 #include <QFile>
 #include <QFileInfo>
 #include <QImageReader>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QSaveFile>
+#include <QSet>
+#include <QStandardPaths>
 #include <QTemporaryFile>
 #include <QtEndian>
 
 #include <cerrno>
 #include <cstring>
+#include <memory>
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <unistd.h>
@@ -346,18 +353,117 @@ bool safePath(const QString &stored, QString *clean)
     return safe;
 }
 
-Listing list(const QString &path, Progress *progress)
+namespace
+{
+// The tree of entries, built as they come in archive order.
+struct Builder {
+    Listing &listing;
+    QHash<QString, int> dirs;
+
+    int add(Entry entry)
+    {
+        const int index = int(listing.entries.size());
+        if (entry.parent >= 0) {
+            listing.entries[entry.parent].children.append(index);
+        } else {
+            listing.roots.append(index);
+        }
+        listing.entries.append(std::move(entry));
+        return index;
+    }
+
+    int ensureDir(const QString &dirPath)
+    {
+        if (dirPath.isEmpty()) {
+            return -1;
+        }
+        const auto it = dirs.constFind(dirPath);
+        if (it != dirs.constEnd()) {
+            return it.value();
+        }
+        const int slash = int(dirPath.lastIndexOf(QLatin1Char('/')));
+        Entry dir;
+        dir.parent = ensureDir(slash < 0 ? QString() : dirPath.left(slash));
+        dir.path = dirPath;
+        dir.name = dirPath.mid(slash + 1);
+        dir.dir = true;
+        const int index = add(dir);
+        dirs.insert(dirPath, index);
+        return index;
+    }
+
+    // `entry` comes with its order, type, sizes, time and link.
+    void place(Entry entry, const QString &stored)
+    {
+        QString clean;
+        const bool safe = safePath(stored, &clean);
+        if (safe && clean.isEmpty()) {
+            listing.byOrder.append(-1);
+            return;
+        }
+        if (!safe) {
+            entry.unsafe = true;
+            entry.path = stored;
+            entry.name = stored;
+            listing.byOrder.append(add(entry));
+            return;
+        }
+        const int slash = int(clean.lastIndexOf(QLatin1Char('/')));
+        entry.path = clean;
+        entry.name = clean.mid(slash + 1);
+        if (entry.dir) {
+            const auto it = dirs.constFind(clean);
+            if (it != dirs.constEnd()) {
+                Entry &known = listing.entries[it.value()];
+                known.order = entry.order;
+                known.modified = entry.modified;
+                known.toolPath = entry.toolPath;
+                listing.byOrder.append(it.value());
+                return;
+            }
+        }
+        entry.parent = ensureDir(slash < 0 ? QString() : clean.left(slash));
+        entry.image = !entry.dir && !entry.symlink && Format::isImage(entry.name);
+        const bool isDir = entry.dir;
+        const int index = add(entry);
+        if (isDir) {
+            dirs.insert(clean, index);
+        }
+        listing.byOrder.append(index);
+    }
+};
+
+// Children always come after their folder, so one pass from the end adds
+// every file into each folder above it.
+void addUp(Listing &listing)
+{
+    for (qsizetype i = listing.entries.size() - 1; i >= 0; --i) {
+        Entry &entry = listing.entries[i];
+        if (!entry.dir) {
+            entry.fileCount = 1;
+            listing.totalSize += entry.size;
+            ++listing.fileCount;
+        }
+        if (entry.parent >= 0) {
+            Entry &parent = listing.entries[entry.parent];
+            parent.size += entry.size;
+            parent.fileCount += entry.fileCount;
+            if (entry.packed >= 0 && listing.packedPerFile) {
+                parent.packed = qMax<qint64>(parent.packed, 0) + entry.packed;
+            }
+        }
+    }
+    for (Entry &entry : listing.entries) {
+        if (entry.dir) {
+            entry.packed = -1;
+        }
+    }
+}
+
+Listing listLibarchive(const QString &path, Progress *progress)
 {
     Listing listing;
     const QFileInfo info(path);
-    if (!info.isFile()) {
-        listing.error = QStringLiteral("This file isn't there any more.");
-        return listing;
-    }
-    if (!info.isReadable()) {
-        listing.error = QStringLiteral("You don't have permission to open this file.");
-        return listing;
-    }
     listing.packedSize = info.size();
     progress->total = info.size();
 
@@ -376,38 +482,9 @@ Listing list(const QString &path, Progress *progress)
             listing.error = errorOf(h.a);
             return listing;
         }
-        QHash<QString, int> dirs;
+        Builder builder{listing, {}};
         int order = 0;
         bool retry = false;
-
-        const auto add = [&listing](Entry entry) {
-            const int index = int(listing.entries.size());
-            if (entry.parent >= 0) {
-                listing.entries[entry.parent].children.append(index);
-            } else {
-                listing.roots.append(index);
-            }
-            listing.entries.append(std::move(entry));
-            return index;
-        };
-        std::function<int(const QString &)> ensureDir = [&](const QString &dirPath) -> int {
-            if (dirPath.isEmpty()) {
-                return -1;
-            }
-            const auto it = dirs.constFind(dirPath);
-            if (it != dirs.constEnd()) {
-                return it.value();
-            }
-            const int slash = int(dirPath.lastIndexOf(QLatin1Char('/')));
-            Entry dir;
-            dir.parent = ensureDir(slash < 0 ? QString() : dirPath.left(slash));
-            dir.path = dirPath;
-            dir.name = dirPath.mid(slash + 1);
-            dir.dir = true;
-            const int index = add(dir);
-            dirs.insert(dirPath, index);
-            return index;
-        };
 
         archive_entry *e = nullptr;
         for (;;) {
@@ -446,19 +523,10 @@ Listing list(const QString &path, Progress *progress)
 
             const QString stored = raw ? Format::archiveBaseName(info.fileName()) : storedPath(e);
             const mode_t type = archive_entry_filetype(e);
-            const bool isDir = type == AE_IFDIR || stored.endsWith(QLatin1Char('/'));
-            QString clean;
-            const bool safe = safePath(stored, &clean);
-            const int thisOrder = order++;
-            if (safe && clean.isEmpty()) {
-                listing.byOrder.append(-1);
-                continue;
-            }
-
             Entry entry;
-            entry.order = thisOrder;
-            entry.dir = isDir;
-            entry.size = !isDir && archive_entry_size_is_set(e) ? archive_entry_size(e) : 0;
+            entry.order = order++;
+            entry.dir = type == AE_IFDIR || stored.endsWith(QLatin1Char('/'));
+            entry.size = !entry.dir && archive_entry_size_is_set(e) ? archive_entry_size(e) : 0;
             if (archive_entry_mtime_is_set(e)) {
                 entry.modified = QDateTime::fromSecsSinceEpoch(archive_entry_mtime(e));
             }
@@ -481,34 +549,7 @@ Listing list(const QString &path, Progress *progress)
                 progress->done = before;
                 entry.modified = info.lastModified();
             }
-
-            if (!safe) {
-                entry.unsafe = true;
-                entry.path = stored;
-                entry.name = stored;
-                listing.byOrder.append(add(entry));
-                continue;
-            }
-            const int slash = int(clean.lastIndexOf(QLatin1Char('/')));
-            entry.path = clean;
-            entry.name = clean.mid(slash + 1);
-            if (isDir) {
-                const auto it = dirs.constFind(clean);
-                if (it != dirs.constEnd()) {
-                    Entry &known = listing.entries[it.value()];
-                    known.order = thisOrder;
-                    known.modified = entry.modified;
-                    listing.byOrder.append(it.value());
-                    continue;
-                }
-            }
-            entry.parent = ensureDir(slash < 0 ? QString() : clean.left(slash));
-            entry.image = !isDir && !entry.symlink && Format::isImage(entry.name);
-            const int index = add(entry);
-            if (isDir) {
-                dirs.insert(clean, index);
-            }
-            listing.byOrder.append(index);
+            builder.place(entry, stored);
         }
         if (retry) {
             continue;
@@ -529,33 +570,7 @@ Listing list(const QString &path, Progress *progress)
             listing.entries.first().packed = listing.packedSize;
             listing.packedPerFile = true;
         }
-        if (listing.encrypted && (base == ARCHIVE_FORMAT_7ZIP || base == ARCHIVE_FORMAT_RAR || base == ARCHIVE_FORMAT_RAR_V5)) {
-            listing.lockedHeaders = true;
-        }
-
-        // Children always come after their folder, so one pass from the
-        // end adds every file into each folder above it.
-        for (qsizetype i = listing.entries.size() - 1; i >= 0; --i) {
-            Entry &entry = listing.entries[i];
-            if (!entry.dir) {
-                entry.fileCount = 1;
-                listing.totalSize += entry.size;
-                ++listing.fileCount;
-            }
-            if (entry.parent >= 0) {
-                Entry &parent = listing.entries[entry.parent];
-                parent.size += entry.size;
-                parent.fileCount += entry.fileCount;
-                if (entry.packed >= 0 && listing.packedPerFile) {
-                    parent.packed = qMax<qint64>(parent.packed, 0) + entry.packed;
-                }
-            }
-        }
-        for (Entry &entry : listing.entries) {
-            if (entry.dir) {
-                entry.packed = -1;
-            }
-        }
+        addUp(listing);
         progress->done = progress->total.load();
         return listing;
     }
@@ -563,11 +578,315 @@ Listing list(const QString &path, Progress *progress)
     return listing;
 }
 
-PasswordState checkPassword(const QString &path, const Listing &listing, const QByteArray &password)
+enum class Magic { Other, SevenZip, Rar4, Rar5 };
+
+Magic magic(const QString &path)
+{
+    QFile file(path);
+    if (!file.open(QIODevice::ReadOnly)) {
+        return Magic::Other;
+    }
+    const QByteArray head = file.read(8);
+    static const QByteArray sevenZip("7z\xbc\xaf\x27\x1c", 6);
+    static const QByteArray rar5("Rar!\x1a\x07\x01\x00", 8);
+    static const QByteArray rar4("Rar!\x1a\x07\x00", 7);
+    if (head.startsWith(sevenZip)) {
+        return Magic::SevenZip;
+    }
+    if (head.startsWith(rar5)) {
+        return Magic::Rar5;
+    }
+    return head.startsWith(rar4) ? Magic::Rar4 : Magic::Other;
+}
+
+// Whether libarchive can decompress the first file it would need to. It
+// lists every RAR but cannot unpack some of them (old methods, some RAR 5
+// features), and that is better found now than when every file fails.
+bool decompresses(const QString &path)
+{
+    Handle h(newReader({}, false));
+    if (!openFile(h.a, path)) {
+        return false;
+    }
+    archive_entry *e = nullptr;
+    while (archive_read_next_header(h.a, &e) >= ARCHIVE_WARN) {
+        if (archive_entry_is_data_encrypted(e) || archive_entry_filetype(e) != AE_IFREG || archive_entry_size(e) == 0) {
+            continue;
+        }
+        char buffer[16384];
+        return archive_read_data(h.a, buffer, sizeof buffer) >= 0;
+    }
+    return true;
+}
+
+Listing lockedListing(const QString &tool, const QString &format, qint64 size)
+{
+    Listing listing;
+    listing.tool = tool;
+    listing.format = format;
+    listing.packedSize = size;
+    listing.encrypted = true;
+    listing.lockedHeaders = true;
+    return listing;
+}
+
+Listing fromTool(const Tools::Contents &contents, const QString &tool, const QString &format, qint64 size)
+{
+    Listing listing;
+    listing.tool = tool;
+    listing.format = format;
+    listing.packedSize = size;
+    Builder builder{listing, {}};
+    bool packedPerFile = true;
+    for (int i = 0; i < contents.items.size(); ++i) {
+        const Tools::Item &item = contents.items[i];
+        if (item.path.isEmpty()) {
+            listing.byOrder.append(-1);
+            continue;
+        }
+        Entry entry;
+        entry.order = i;
+        entry.dir = item.dir;
+        entry.size = item.dir ? 0 : item.size;
+        entry.packed = item.dir ? -1 : item.packed;
+        entry.modified = item.modified;
+        entry.symlink = item.symlink && !item.dir;
+        entry.linkTarget = item.linkTarget;
+        entry.encrypted = item.encrypted;
+        entry.toolPath = item.path;
+        entry.executable = item.executable;
+        listing.encrypted = listing.encrypted || item.encrypted;
+        packedPerFile = packedPerFile && (item.dir || item.packed >= 0);
+        builder.place(entry, item.path);
+    }
+
+    // A path under a file or a link is never extracted: a tool could
+    // write it through a link it made a moment before.
+    QSet<QString> notFolders;
+    for (const Entry &e : std::as_const(listing.entries)) {
+        if (!e.dir && !e.unsafe) {
+            notFolders.insert(e.path);
+        }
+    }
+    for (Entry &e : listing.entries) {
+        for (qsizetype at = e.path.indexOf(QLatin1Char('/')); !e.unsafe && at >= 0; at = e.path.indexOf(QLatin1Char('/'), at + 1)) {
+            e.unsafe = notFolders.contains(e.path.left(at));
+        }
+    }
+
+    listing.packedPerFile = packedPerFile;
+    if (!packedPerFile) {
+        for (Entry &e : listing.entries) {
+            e.packed = -1;
+        }
+    }
+    addUp(listing);
+    return listing;
+}
+
+QString missingTool(const QString &program)
+{
+    return program == QLatin1String("7z") ? QStringLiteral("Archive needs 7-Zip (the 7zip package) for this archive, and it isn't installed.")
+                                          : QStringLiteral("Archive needs The Unarchiver (the unar package) for this archive, and it isn't installed.");
+}
+
+const QString rar4Locked = QStringLiteral(
+    "It's protected with the older RAR 4 encryption, which Archive can't unlock. Ask whoever sent it for a 7z or ZIP copy.");
+
+Listing with7z(const QString &path, const QByteArray &password, Listing fallback, const QString &format, Progress *progress)
+{
+    if (!Tools::available(QStringLiteral("7z"))) {
+        fallback.error = missingTool(QStringLiteral("7z"));
+        fallback.cantDecrypt = fallback.encrypted;
+        return fallback;
+    }
+    const Tools::Contents contents = Tools::list7z(path, password, progress);
+    if (contents.cancelled) {
+        Listing cancelled;
+        cancelled.error = QStringLiteral("cancelled");
+        return cancelled;
+    }
+    if (contents.needsPassword) {
+        return lockedListing(QStringLiteral("7z"), format, fallback.packedSize);
+    }
+    if (!contents.ok) {
+        if (fallback.error.isEmpty()) {
+            fallback.error = contents.error;
+        }
+        return fallback;
+    }
+    return fromTool(contents, QStringLiteral("7z"), format, fallback.packedSize);
+}
+
+Listing withUnar(const QString &path, const QByteArray &password, Listing fallback, Magic kind, Progress *progress)
+{
+    if (!Tools::available(QStringLiteral("unar")) || !Tools::available(QStringLiteral("lsar"))) {
+        fallback.error = missingTool(QStringLiteral("unar"));
+        fallback.cantDecrypt = fallback.encrypted;
+        return fallback;
+    }
+    const QString format = QStringLiteral("RAR");
+    Tools::Contents contents = Tools::listLsar(path, progress);
+    if (contents.needsPassword) {
+        if (kind == Magic::Rar4) {
+            Listing locked;
+            locked.format = format;
+            locked.error = rar4Locked;
+            return locked;
+        }
+        if (password.isEmpty()) {
+            return lockedListing(QStringLiteral("unar"), format, fallback.packedSize);
+        }
+        // lsar takes a password only on its command line, so the hidden
+        // names come from 7-Zip, which reads RAR headers (but cannot
+        // decompress RAR without the non-free plugin) and lists them in
+        // the same order. unar still does the unpacking.
+        if (!Tools::available(QStringLiteral("7z"))) {
+            fallback.error = missingTool(QStringLiteral("7z"));
+            return fallback;
+        }
+        contents = Tools::list7z(path, password, progress);
+        if (contents.needsPassword) {
+            return lockedListing(QStringLiteral("unar"), format, fallback.packedSize);
+        }
+    }
+    if (contents.cancelled) {
+        Listing cancelled;
+        cancelled.error = QStringLiteral("cancelled");
+        return cancelled;
+    }
+    if (!contents.ok) {
+        if (fallback.error.isEmpty()) {
+            fallback.error = contents.error;
+        }
+        fallback.cantDecrypt = fallback.encrypted;
+        return fallback;
+    }
+    Listing listing = fromTool(contents, QStringLiteral("unar"), format, fallback.packedSize);
+    // lsar says "RAR" or "RAR 5", 7-Zip "Rar" or "Rar5".
+    const bool rar4 = kind == Magic::Rar4 || contents.type.compare(QLatin1String("RAR"), Qt::CaseInsensitive) == 0;
+    listing.cantDecrypt = rar4 && listing.encrypted;
+    return listing;
+}
+
+QString privateStaging()
+{
+    const QString base = QStandardPaths::writableLocation(QStandardPaths::CacheLocation);
+    QDir().mkpath(base);
+    return Tools::makeStaging(base);
+}
+
+// Removed however the function returns, cancel included.
+struct Staging {
+    QString path;
+    explicit Staging(const QString &p)
+        : path(p)
+    {
+    }
+    ~Staging()
+    {
+        Tools::removeTree(path);
+    }
+    Staging(const Staging &) = delete;
+    Staging &operator=(const Staging &) = delete;
+    QString into() const
+    {
+        return path + QStringLiteral("/x");
+    }
+};
+
+// Unpacks the files at `orders` into staging.into(), counting progress
+// towards `total`.
+Tools::Outcome unpack(const QString &archive, const Listing &listing, const QByteArray &password, const QList<int> &orders, const Staging &staging,
+                      qint64 total, Progress *progress)
+{
+    ::mkdir(QFile::encodeName(staging.into()).constData(), 0700);
+    Tools::Job job;
+    job.password = password;
+    if (listing.tool == QLatin1String("7z")) {
+        QFile names(staging.path + QStringLiteral("/names"));
+        if (names.open(QIODevice::WriteOnly)) {
+            for (int order : orders) {
+                names.write(listing.entries[listing.byOrder[order]].toolPath.toUtf8() + '\n');
+            }
+            names.close();
+        }
+        job.program = QStringLiteral("7z");
+        job.arguments = {QStringLiteral("x"),         QStringLiteral("-y"),       QStringLiteral("-bso0"),
+                         QStringLiteral("-bse2"),     QStringLiteral("-bsp1"),    QStringLiteral("-spd"),
+                         QStringLiteral("-sccUTF-8"), QStringLiteral("-scsUTF-8"), QStringLiteral("-o") + staging.into(),
+                         archive,                     QStringLiteral("-i@") + names.fileName()};
+        job.line = [progress, total](const QByteArray &line) {
+            // " 45% 3 - name"
+            const QByteArray t = line.trimmed();
+            const qsizetype percent = t.indexOf('%');
+            bool ok = false;
+            const int value = percent > 0 ? t.left(percent).toInt(&ok) : 0;
+            if (ok) {
+                progress->done = total * qBound(0, value, 100) / 100;
+            }
+        };
+    } else {
+        job.program = QStringLiteral("unar");
+        job.terminal = true;
+        // -D: no folder of its own; -nr: not into archives inside it;
+        // -k skip: no Mac resource forks; -s: skip, never ask, if a name
+        // is there twice.
+        job.arguments = {QStringLiteral("-o"), staging.into(),       QStringLiteral("-D"), QStringLiteral("-nr"), QStringLiteral("-k"),
+                         QStringLiteral("skip"), QStringLiteral("-s"), QStringLiteral("-i"), archive};
+        auto sizes = std::make_shared<QList<qint64>>();
+        for (int order : orders) {
+            job.arguments.append(QString::number(order));
+            sizes->append(listing.entries[listing.byOrder[order]].size);
+        }
+        auto finished = std::make_shared<int>(0);
+        job.line = [progress, sizes, finished](const QByteArray &line) {
+            // unar reports each entry as "  name  (size)... OK." or
+            // "... Failed! (why)", in the order asked.
+            if ((line.endsWith("OK.") || line.contains("Failed!")) && *finished < sizes->size()) {
+                progress->done += sizes->at((*finished)++);
+            }
+        };
+    }
+    return Tools::run(job, progress);
+}
+
+// The unpacked file for `entry` in staging, when it is a whole plain file.
+QString unpacked(const Staging &staging, const Entry &entry)
+{
+    const QString file = staging.into() + QLatin1Char('/') + entry.path;
+    struct stat st;
+    if (::lstat(QFile::encodeName(file).constData(), &st) != 0 || !S_ISREG(st.st_mode) || st.st_size != entry.size) {
+        return QString();
+    }
+    return file;
+}
+
+// The text of a 7z symlink entry: 7-Zip lists links in 7z archives as
+// small files that hold where they point.
+QString linkTargetOf(const QString &archive, const Entry &entry, const QByteArray &password, Progress *progress)
+{
+    QByteArray target;
+    Tools::Job job;
+    job.program = QStringLiteral("7z");
+    job.arguments = {QStringLiteral("x"), QStringLiteral("-so"), QStringLiteral("-bsp0"), QStringLiteral("-spd"), archive, QStringLiteral("-i!") + entry.toolPath};
+    job.password = password;
+    job.data = [&target](const char *data, qsizetype size) {
+        target.append(data, size);
+        return target.size() <= 4096;
+    };
+    const Tools::Outcome outcome = Tools::run(job, progress);
+    if (outcome.exitCode != 0 || target.size() > 4096) {
+        return QString();
+    }
+    return QString::fromUtf8(target);
+}
+
+Reader::PasswordState checkLibarchive(const QString &path, const Listing &listing, const QByteArray &password)
 {
     Handle h(newReader(password, listing.raw));
     if (!openFile(h.a, path)) {
-        return PasswordState::Fine;
+        return Reader::PasswordState::Fine;
     }
     archive_entry *e = nullptr;
     while (archive_read_next_header(h.a, &e) >= ARCHIVE_WARN) {
@@ -576,11 +895,552 @@ PasswordState checkPassword(const QString &path, const Listing &listing, const Q
         }
         char buffer[16384];
         if (archive_read_data(h.a, buffer, sizeof buffer) < 0) {
-            return passwordError(h.a) ? passwordState(password) : PasswordState::Fine;
+            return passwordError(h.a) ? passwordState(password) : Reader::PasswordState::Fine;
         }
-        return PasswordState::Fine;
+        return Reader::PasswordState::Fine;
     }
-    return PasswordState::Fine;
+    return Reader::PasswordState::Fine;
+}
+}
+
+Listing list(const QString &path, const QByteArray &password, Progress *progress)
+{
+    const QFileInfo info(path);
+    if (!info.isFile()) {
+        Listing listing;
+        listing.error = QStringLiteral("This file isn't there any more.");
+        return listing;
+    }
+    if (!info.isReadable()) {
+        Listing listing;
+        listing.error = QStringLiteral("You don't have permission to open this file.");
+        return listing;
+    }
+    Listing listing = listLibarchive(path, progress);
+    if (listing.error == QLatin1String("cancelled")) {
+        return listing;
+    }
+    // libarchive stays first: the tools only take over what it cannot
+    // decrypt or read.
+    const Magic kind = magic(path);
+    const bool failed = !listing.error.isEmpty();
+    if (kind == Magic::SevenZip || listing.format == QLatin1String("7z")) {
+        return failed || listing.encrypted ? with7z(path, password, listing, QStringLiteral("7z"), progress) : listing;
+    }
+    if (kind == Magic::Rar4 || kind == Magic::Rar5 || listing.format == QLatin1String("RAR")) {
+        return failed || listing.encrypted || !decompresses(path) ? withUnar(path, password, listing, kind, progress) : listing;
+    }
+    if (listing.format == QLatin1String("ZIP") && failed && listing.entries.isEmpty() && Tools::available(QStringLiteral("7z"))) {
+        Listing other = with7z(path, password, listing, QStringLiteral("ZIP"), progress);
+        return other.error.isEmpty() || other.lockedHeaders ? other : listing;
+    }
+    return listing;
+}
+
+Unlock unlock(const QString &path, const Listing &listing, const QByteArray &password, Progress *progress)
+{
+    Unlock result;
+    if (listing.tool.isEmpty()) {
+        result.state = checkLibarchive(path, listing, password);
+        return result;
+    }
+    if (listing.lockedHeaders) {
+        Listing named = list(path, password, progress);
+        if (named.error == QLatin1String("cancelled")) {
+            result.state = PasswordState::Needed;
+            return result;
+        }
+        if (named.lockedHeaders) {
+            result.state = PasswordState::Wrong;
+            return result;
+        }
+        // 7z and RAR use the one password for the names and the files.
+        result.relisted = true;
+        result.listing = std::move(named);
+        return result;
+    }
+
+    // A small protected file, tried with the password.
+    const Entry *pick = nullptr;
+    for (const Entry &e : listing.entries) {
+        if (e.encrypted && !e.dir && !e.symlink && !e.unsafe && e.order >= 0 && e.size > 0 && (!pick || e.size < pick->size)) {
+            pick = &e;
+        }
+    }
+    if (!pick) {
+        return result;
+    }
+    if (listing.tool == QLatin1String("7z")) {
+        Tools::Job job;
+        job.program = QStringLiteral("7z");
+        job.arguments = {QStringLiteral("t"), QStringLiteral("-bso0"), QStringLiteral("-bsp0"), QStringLiteral("-spd"), path, QStringLiteral("-i!") + pick->toolPath};
+        job.password = password;
+        result.state = Tools::passwordOutcome(Tools::run(job, progress), password);
+        return result;
+    }
+    const Staging staging(privateStaging());
+    if (staging.path.isEmpty()) {
+        return result;
+    }
+    const Tools::Outcome outcome = unpack(path, listing, password, {pick->order}, staging, pick->size, progress);
+    result.state = Tools::passwordOutcome(outcome, password);
+    return result;
+}
+
+namespace
+{
+QList<int> sortedKeys(const QHash<int, QString> &targets)
+{
+    QList<int> orders = targets.keys();
+    std::sort(orders.begin(), orders.end());
+    return orders;
+}
+
+QImage scaledImage(QByteArray &data, QSize box)
+{
+    QBuffer buffer(&data);
+    buffer.open(QIODevice::ReadOnly);
+    QImageReader reader(&buffer);
+    reader.setAutoTransform(true);
+    const QSize size = reader.size();
+    if (size.isValid()) {
+        const QSize scaled = size.scaled(box, Qt::KeepAspectRatioByExpanding);
+        if (scaled.width() < size.width()) {
+            reader.setScaledSize(scaled);
+        }
+    }
+    return reader.read();
+}
+
+// The tool only ever unpacks plain files, into a private folder inside
+// the destination. Archive then checks each one and moves it into place
+// with the same rules as for what libarchive reads, and makes the folders
+// and links itself, so the tool never writes where it shouldn't, and a
+// cancel or a failure leaves no half file.
+Result extractWithTool(const ExtractOptions &options, const Listing &listing, const QHash<int, QString> &targets, const QString &root, qint64 total,
+                       Progress *progress, Result result)
+{
+    const QList<int> orders = sortedKeys(targets);
+    QList<int> files;
+    for (int order : orders) {
+        const Entry &entry = listing.entries[listing.byOrder[order]];
+        if (!entry.dir && !entry.symlink) {
+            files.append(order);
+        }
+    }
+    const Staging staging(Tools::makeStaging(root));
+    if (staging.path.isEmpty()) {
+        result.ok = false;
+        result.error = QStringLiteral("Couldn't write in %1: %2").arg(Format::folder(root), QString::fromLocal8Bit(std::strerror(errno)));
+        return result;
+    }
+    if (!files.isEmpty()) {
+        const Tools::Outcome outcome = unpack(options.archive, listing, options.password, files, staging, total, progress);
+        if (outcome.cancelled) {
+            result.cancelled = true;
+            return result;
+        }
+        if (!outcome.started) {
+            result.ok = false;
+            result.error = QString::fromUtf8(outcome.errors);
+            return result;
+        }
+        const PasswordState state = Tools::passwordOutcome(outcome, options.password);
+        if (state != PasswordState::Fine) {
+            result.ok = false;
+            result.password = state;
+            return result;
+        }
+    }
+    progress->done = progress->total.load();
+
+    for (int order : orders) {
+        if (progress->cancel) {
+            result.cancelled = true;
+            return result;
+        }
+        const Entry &entry = listing.entries[listing.byOrder[order]];
+        const QString rel = targets.value(order);
+        QStringList steps = rel.split(QLatin1Char('/'), Qt::SkipEmptyParts);
+        const QString target = root + QLatin1Char('/') + rel;
+        const QString leaf = steps.isEmpty() ? QString() : steps.takeLast();
+        if (leaf.isEmpty()) {
+            continue;
+        }
+        const Made made = makeDirs(root, entry.dir ? steps + QStringList{leaf} : steps);
+        if (made == Made::Link) {
+            result.unsafe.append(entry.path);
+            continue;
+        }
+        if (made == Made::Blocked) {
+            result.failed.append(QStringLiteral("%1: a file is in the way of its folder").arg(entry.path));
+            continue;
+        }
+        if (entry.dir) {
+            continue;
+        }
+        progress->setCurrent(entry.name);
+
+        const QByteArray targetName = QFile::encodeName(target);
+        struct stat st;
+        const bool exists = ::lstat(targetName.constData(), &st) == 0;
+        if (exists && S_ISDIR(st.st_mode)) {
+            result.failed.append(QStringLiteral("%1: a folder has the same name").arg(entry.path));
+            continue;
+        }
+        if (exists && !options.replace) {
+            ++result.kept;
+            continue;
+        }
+        if (exists && S_ISLNK(st.st_mode)) {
+            ::unlink(targetName.constData());
+        }
+
+        if (entry.symlink) {
+            QString linkTarget = entry.linkTarget;
+            if (linkTarget.isEmpty() && listing.tool == QLatin1String("7z")) {
+                linkTarget = linkTargetOf(options.archive, entry, options.password, progress);
+            }
+            const QString dirRel = steps.join(QLatin1Char('/'));
+            const QString resolved = QDir::cleanPath(dirRel.isEmpty() ? linkTarget : dirRel + QLatin1Char('/') + linkTarget);
+            if (linkTarget.isEmpty() || linkTarget.startsWith(QLatin1Char('/')) || resolved == QLatin1String("..")
+                || resolved.startsWith(QLatin1String("../"))) {
+                result.unsafe.append(entry.path);
+                continue;
+            }
+            if (exists) {
+                ::unlink(targetName.constData());
+            }
+            if (::symlink(QFile::encodeName(linkTarget).constData(), targetName.constData()) != 0) {
+                result.failed.append(QStringLiteral("%1: %2").arg(entry.path, QString::fromLocal8Bit(std::strerror(errno))));
+            }
+            continue;
+        }
+
+        const QString source = unpacked(staging, entry);
+        struct stat from;
+        if (source.isEmpty() || ::lstat(QFile::encodeName(source).constData(), &from) != 0) {
+            result.failed.append(QStringLiteral("%1: it couldn't be unpacked").arg(entry.path));
+            continue;
+        }
+        bool placed = false;
+        QString error;
+        if (from.st_nlink > 1) {
+            // A hard link the tool made: copied, so the new file shares
+            // nothing with any other.
+            QFile in(source);
+            QSaveFile out(target);
+            out.setDirectWriteFallback(false);
+            if (in.open(QIODevice::ReadOnly) && out.open(QIODevice::WriteOnly)) {
+                placed = out.write(in.readAll()) == from.st_size && out.commit();
+            }
+            error = out.errorString();
+        } else {
+            // On the same file system, so a rename: the file appears whole
+            // under its name, or not at all.
+            placed = ::rename(QFile::encodeName(source).constData(), targetName.constData()) == 0;
+            error = QString::fromLocal8Bit(std::strerror(errno));
+        }
+        if (!placed) {
+            result.ok = false;
+            result.error = QStringLiteral("Couldn't write %1: %2").arg(entry.name, error);
+            return result;
+        }
+        ::chmod(targetName.constData(), (from.st_mode & 0111) || entry.executable ? 0755 : 0644);
+        setTimes(target, entry.modified);
+        ++result.written;
+        if (result.firstWritten.isEmpty()) {
+            result.firstWritten = root + QLatin1Char('/') + rel.section(QLatin1Char('/'), 0, 0);
+        }
+    }
+    result.ok = result.failed.isEmpty();
+    return result;
+}
+
+QList<int> plainFiles(const Listing &listing)
+{
+    QList<int> files;
+    for (int order = 0; order < listing.byOrder.size(); ++order) {
+        const int index = listing.byOrder[order];
+        if (index < 0) {
+            continue;
+        }
+        const Entry &e = listing.entries[index];
+        if (!e.dir && !e.symlink && !e.unsafe) {
+            files.append(order);
+        }
+    }
+    return files;
+}
+
+Result testWithTool(const QString &path, const QByteArray &password, const Listing &listing, Progress *progress)
+{
+    Result result;
+    const QList<int> files = plainFiles(listing);
+    const qint64 total = qMax<qint64>(listing.totalSize, 1);
+    progress->total = total;
+    progress->done = 0;
+
+    if (listing.tool == QLatin1String("7z")) {
+        Tools::Job job;
+        job.program = QStringLiteral("7z");
+        job.arguments = {QStringLiteral("t"), QStringLiteral("-bso0"), QStringLiteral("-bse2"), QStringLiteral("-bsp1"), QStringLiteral("-spd"),
+                         QStringLiteral("-sccUTF-8"), path};
+        job.password = password;
+        job.line = [progress, total](const QByteArray &line) {
+            const QByteArray t = line.trimmed();
+            const qsizetype percent = t.indexOf('%');
+            bool ok = false;
+            const int value = percent > 0 ? t.left(percent).toInt(&ok) : 0;
+            if (ok) {
+                progress->done = total * qBound(0, value, 100) / 100;
+            }
+        };
+        const Tools::Outcome outcome = Tools::run(job, progress);
+        if (outcome.cancelled) {
+            result.cancelled = true;
+            return result;
+        }
+        if (!outcome.started) {
+            result.ok = false;
+            result.error = QString::fromUtf8(outcome.errors);
+            return result;
+        }
+        // "ERROR: Data Error in encrypted file. Wrong password? : name"
+        int wrong = 0;
+        for (const QByteArray &raw : outcome.errors.split('\n')) {
+            const QString line = QString::fromUtf8(raw).trimmed();
+            const qsizetype colon = line.lastIndexOf(QLatin1String(" : "));
+            if (!line.startsWith(QLatin1String("ERROR: ")) || colon < 0) {
+                continue;
+            }
+            const QString name = line.mid(colon + 3);
+            const QString why = line.mid(7, colon - 7);
+            if (line.mid(7).startsWith(path + QLatin1String(" : "))) {
+                continue;
+            }
+            wrong += why.contains(QLatin1String("Wrong password")) ? 1 : 0;
+            result.failed.append(QStringLiteral("%1: %2").arg(name, why));
+        }
+        // Every file failing on the password is the password; one or two
+        // among good ones is damage.
+        const PasswordState state = Tools::passwordOutcome(outcome, password);
+        if (state != PasswordState::Fine && (result.failed.isEmpty() || (wrong == result.failed.size() && wrong >= files.size()))) {
+            result.ok = false;
+            result.failed.clear();
+            result.password = state;
+            return result;
+        }
+        result.written = int(qMax<qsizetype>(0, files.size() - result.failed.size()));
+        if (outcome.exitCode != 0 && result.failed.isEmpty()) {
+            result.ok = false;
+            result.error = QString::fromUtf8(outcome.errors).trimmed();
+            return result;
+        }
+        result.ok = result.failed.isEmpty();
+        return result;
+    }
+
+    if (!listing.encrypted) {
+        // Nothing protected: lsar checks every file against its checksum
+        // and says how each went.
+        Tools::Job job;
+        job.program = QStringLiteral("lsar");
+        job.arguments = {QStringLiteral("-t"), QStringLiteral("-ja"), QStringLiteral("-nr"), path};
+        auto seen = std::make_shared<int>(0);
+        job.line = [progress, seen, &listing](const QByteArray &line) {
+            if (line.contains("\"lsarTestResult\"")) {
+                const int index = listing.byOrder.value((*seen)++, -1);
+                if (index >= 0) {
+                    progress->done += listing.entries[index].dir ? 0 : listing.entries[index].size;
+                }
+            }
+        };
+        const Tools::Outcome outcome = Tools::run(job, progress);
+        if (outcome.cancelled) {
+            result.cancelled = true;
+            return result;
+        }
+        const QJsonDocument document = QJsonDocument::fromJson(outcome.output);
+        const QJsonArray contents = document.object().value(QLatin1String("lsarContents")).toArray();
+        if (contents.isEmpty()) {
+            result.ok = false;
+            result.error = QString::fromUtf8(outcome.errors).trimmed();
+            return result;
+        }
+        for (qsizetype i = 0; i < contents.size(); ++i) {
+            const int index = listing.byOrder.value(int(i), -1);
+            if (index < 0 || listing.entries[index].dir || listing.entries[index].symlink || listing.entries[index].unsafe) {
+                continue;
+            }
+            const QString test = contents.at(i).toObject().value(QLatin1String("lsarTestResult")).toString();
+            if (test == QLatin1String("wrong_checksum")) {
+                result.failed.append(QStringLiteral("%1: its checksum is wrong").arg(listing.entries[index].path));
+            } else if (test == QLatin1String("unpacking_failed")) {
+                result.failed.append(QStringLiteral("%1: it couldn't be unpacked").arg(listing.entries[index].path));
+            } else {
+                ++result.written;
+            }
+        }
+        result.ok = result.failed.isEmpty();
+        return result;
+    }
+
+    // lsar can't take a password safely, so a protected RAR is tested by
+    // unpacking it into a private folder that goes straight after.
+    const Staging staging(privateStaging());
+    if (staging.path.isEmpty()) {
+        result.ok = false;
+        result.error = QStringLiteral("Couldn't make a private folder to test in.");
+        return result;
+    }
+    const Tools::Outcome outcome = unpack(path, listing, password, files, staging, total, progress);
+    if (outcome.cancelled) {
+        result.cancelled = true;
+        return result;
+    }
+    for (int order : files) {
+        const Entry &entry = listing.entries[listing.byOrder[order]];
+        if (unpacked(staging, entry).isEmpty()) {
+            result.failed.append(QStringLiteral("%1: it couldn't be unpacked").arg(entry.path));
+        } else {
+            ++result.written;
+        }
+    }
+    const PasswordState state = Tools::passwordOutcome(outcome, password);
+    if (state != PasswordState::Fine && result.written == 0) {
+        result.ok = false;
+        result.failed.clear();
+        result.password = state;
+        return result;
+    }
+    result.ok = result.failed.isEmpty();
+    return result;
+}
+
+Result readOneWithTool(const QString &path, const QByteArray &password, const Listing &listing, int order, const QString &target, Progress *progress)
+{
+    Result result;
+    const int index = listing.byOrder.value(order, -1);
+    if (index < 0) {
+        result.ok = false;
+        result.error = QStringLiteral("The file isn't in the archive any more.");
+        return result;
+    }
+    const Entry &entry = listing.entries[index];
+    progress->total = qMax<qint64>(entry.size, 1);
+    progress->done = 0;
+
+    if (listing.tool == QLatin1String("7z")) {
+        QSaveFile out(target);
+        if (!out.open(QIODevice::WriteOnly)) {
+            result.ok = false;
+            result.error = out.errorString();
+            return result;
+        }
+        Tools::Job job;
+        job.program = QStringLiteral("7z");
+        job.arguments = {QStringLiteral("x"), QStringLiteral("-so"), QStringLiteral("-bsp0"), QStringLiteral("-spd"), path, QStringLiteral("-i!") + entry.toolPath};
+        job.password = password;
+        bool writeFailed = false;
+        job.data = [&](const char *data, qsizetype size) {
+            if (out.write(data, size) != size) {
+                writeFailed = true;
+                return false;
+            }
+            progress->done += size;
+            return true;
+        };
+        const Tools::Outcome outcome = Tools::run(job, progress);
+        const PasswordState state = Tools::passwordOutcome(outcome, password);
+        if (outcome.cancelled || writeFailed || state != PasswordState::Fine || outcome.exitCode != 0) {
+            out.cancelWriting();
+            out.commit();
+            result.ok = false;
+            result.cancelled = outcome.cancelled;
+            result.password = state;
+            result.error = writeFailed ? out.errorString() : QString::fromUtf8(outcome.errors).trimmed();
+            return result;
+        }
+        if (!out.commit()) {
+            result.ok = false;
+            result.error = out.errorString();
+            return result;
+        }
+        ::chmod(QFile::encodeName(target).constData(), 0600);
+        return result;
+    }
+
+    const Staging staging(Tools::makeStaging(QFileInfo(target).absolutePath()));
+    if (staging.path.isEmpty()) {
+        result.ok = false;
+        result.error = QString::fromLocal8Bit(std::strerror(errno));
+        return result;
+    }
+    const Tools::Outcome outcome = unpack(path, listing, password, {order}, staging, entry.size, progress);
+    result.password = Tools::passwordOutcome(outcome, password);
+    const QString source = unpacked(staging, entry);
+    if (outcome.cancelled || result.password != PasswordState::Fine || source.isEmpty()) {
+        result.ok = false;
+        result.cancelled = outcome.cancelled;
+        result.error = QStringLiteral("It couldn't be unpacked.");
+        return result;
+    }
+    if (::rename(QFile::encodeName(source).constData(), QFile::encodeName(target).constData()) != 0) {
+        result.ok = false;
+        result.error = QString::fromLocal8Bit(std::strerror(errno));
+        return result;
+    }
+    ::chmod(QFile::encodeName(target).constData(), 0600);
+    return result;
+}
+
+// A batch of pictures at a time, unpacked into a private folder and each
+// deleted the moment it is read.
+void thumbnailsWithTool(const QString &path, const QByteArray &password, const Listing &listing, const QSet<int> &orders, QSize box,
+                        Progress *progress, const std::function<void(int, const QImage &)> &found)
+{
+    QList<int> wanted;
+    for (int order : orders) {
+        const int index = listing.byOrder.value(order, -1);
+        if (index >= 0 && (!listing.entries[index].encrypted || !password.isEmpty())) {
+            wanted.append(order);
+        }
+    }
+    std::sort(wanted.begin(), wanted.end());
+    constexpr int batchSize = 40;
+    for (qsizetype start = 0; start < wanted.size() && !progress->cancel; start += batchSize) {
+        const QList<int> batch = wanted.mid(start, batchSize);
+        const Staging staging(privateStaging());
+        if (staging.path.isEmpty()) {
+            return;
+        }
+        const Tools::Outcome outcome = unpack(path, listing, password, batch, staging, 0, progress);
+        if (outcome.cancelled || Tools::passwordOutcome(outcome, password) != PasswordState::Fine) {
+            return;
+        }
+        for (int order : batch) {
+            if (progress->cancel) {
+                return;
+            }
+            const QString file = unpacked(staging, listing.entries[listing.byOrder[order]]);
+            if (file.isEmpty()) {
+                continue;
+            }
+            QFile in(file);
+            QByteArray data;
+            if (in.open(QIODevice::ReadOnly)) {
+                data = in.readAll();
+                in.close();
+            }
+            ::unlink(QFile::encodeName(file).constData());
+            const QImage image = scaledImage(data, box);
+            if (!image.isNull()) {
+                found(order, image);
+            }
+        }
+    }
+}
 }
 
 Result extract(const ExtractOptions &options, const Listing &listing, Progress *progress)
@@ -633,6 +1493,9 @@ Result extract(const ExtractOptions &options, const Listing &listing, Progress *
     }
     progress->total = qMax<qint64>(total, 1);
     progress->done = 0;
+    if (!listing.tool.isEmpty()) {
+        return extractWithTool(options, listing, targets, root, total, progress, result);
+    }
 
     Handle h(newReader(options.password, listing.raw));
     if (!openFile(h.a, options.archive)) {
@@ -791,6 +1654,9 @@ Result extract(const ExtractOptions &options, const Listing &listing, Progress *
 
 Result test(const QString &path, const QByteArray &password, const Listing &listing, Progress *progress)
 {
+    if (!listing.tool.isEmpty()) {
+        return testWithTool(path, password, listing, progress);
+    }
     Result result;
     progress->total = qMax<qint64>(listing.totalSize, 1);
     progress->done = 0;
@@ -840,6 +1706,9 @@ Result test(const QString &path, const QByteArray &password, const Listing &list
 
 Result readOne(const QString &path, const QByteArray &password, const Listing &listing, int order, const QString &target, Progress *progress)
 {
+    if (!listing.tool.isEmpty()) {
+        return readOneWithTool(path, password, listing, order, target, progress);
+    }
     Result result;
     Handle h(newReader(password, listing.raw));
     if (!openFile(h.a, path)) {
@@ -890,6 +1759,10 @@ Result readOne(const QString &path, const QByteArray &password, const Listing &l
 void thumbnails(const QString &path, const QByteArray &password, const Listing &listing, const QSet<int> &orders, QSize box,
                 Progress *progress, const std::function<void(int, const QImage &)> &found)
 {
+    if (!listing.tool.isEmpty()) {
+        thumbnailsWithTool(path, password, listing, orders, box, progress, found);
+        return;
+    }
     Handle h(newReader(password, listing.raw));
     if (!openFile(h.a, path)) {
         return;
@@ -920,17 +1793,7 @@ void thumbnails(const QString &path, const QByteArray &password, const Listing &
             continue;
         }
         buffer.close();
-        buffer.open(QIODevice::ReadOnly);
-        QImageReader reader(&buffer);
-        reader.setAutoTransform(true);
-        const QSize size = reader.size();
-        if (size.isValid()) {
-            const QSize scaled = size.scaled(box, Qt::KeepAspectRatioByExpanding);
-            if (scaled.width() < size.width()) {
-                reader.setScaledSize(scaled);
-            }
-        }
-        const QImage image = reader.read();
+        const QImage image = scaledImage(data, box);
         if (!image.isNull()) {
             found(order, image);
         }
@@ -980,15 +1843,58 @@ Result create(const CreateOptions &options, Progress *progress)
     }
 
     Listing source;
+    // An archive only a tool can read is unpacked first, into a private
+    // folder beside the new one, and its files go in from there.
+    std::unique_ptr<Staging> unpackedSource;
     if (!options.source.isEmpty()) {
         Progress quiet;
-        source = list(options.source, &quiet);
-        if (!source.error.isEmpty()) {
+        source = list(options.source, options.sourcePassword, &quiet);
+        if (!source.error.isEmpty() || source.lockedHeaders || source.cantDecrypt) {
             result.ok = false;
-            result.error = QStringLiteral("Couldn't read %1: %2").arg(QFileInfo(options.source).fileName(), source.error);
+            result.error = QStringLiteral("Couldn't read %1: %2")
+                               .arg(QFileInfo(options.source).fileName(),
+                                    source.error.isEmpty() ? QStringLiteral("Archive can't unlock it.") : source.error);
             return result;
         }
-        total += source.totalSize;
+        if (!source.tool.isEmpty()) {
+            unpackedSource = std::make_unique<Staging>(Tools::makeStaging(targetInfo.absolutePath()));
+            ExtractOptions unpackOptions;
+            unpackOptions.archive = options.source;
+            unpackOptions.password = options.sourcePassword;
+            unpackOptions.destination = unpackedSource->into();
+            Result unpackedResult;
+            if (!unpackedSource->path.isEmpty()) {
+                unpackedResult = extract(unpackOptions, source, progress);
+            }
+            if (unpackedSource->path.isEmpty() || unpackedResult.cancelled || unpackedResult.password != PasswordState::Fine
+                || !unpackedResult.error.isEmpty()) {
+                result.ok = false;
+                result.cancelled = unpackedResult.cancelled;
+                result.password = unpackedResult.password;
+                result.error = QStringLiteral("Couldn't read %1: %2")
+                                   .arg(QFileInfo(options.source).fileName(),
+                                        unpackedResult.error.isEmpty() ? QStringLiteral("it couldn't be unpacked.") : unpackedResult.error);
+                return result;
+            }
+            result.failed += unpackedResult.failed;
+            const QDir dir(unpackedSource->into());
+            QList<Item> fromSource;
+            QDirIterator it(dir.path(), QDir::AllEntries | QDir::NoDotAndDotDot | QDir::Hidden | QDir::System, QDirIterator::Subdirectories);
+            while (it.hasNext()) {
+                const QString file = it.next();
+                const QString name = dir.relativeFilePath(file);
+                if (names.contains(name)) {
+                    continue;
+                }
+                fromSource.append({file, name});
+                if (it.fileInfo().isFile() && !it.fileInfo().isSymLink()) {
+                    total += it.fileInfo().size();
+                }
+            }
+            items = fromSource + items;
+        } else {
+            total += source.totalSize;
+        }
     }
     progress->total = qMax<qint64>(total, 1);
     progress->done = 0;
@@ -1018,7 +1924,7 @@ Result create(const CreateOptions &options, Progress *progress)
     }
     static thread_local QByteArray buffer(blockSize, Qt::Uninitialized);
 
-    if (!options.source.isEmpty()) {
+    if (!options.source.isEmpty() && source.tool.isEmpty()) {
         Handle h(newReader(options.sourcePassword, source.raw));
         if (!openFile(h.a, options.source)) {
             return fail(errorOf(h.a));

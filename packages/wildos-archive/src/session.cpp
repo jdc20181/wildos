@@ -3,6 +3,7 @@
 #include "archiveapp.h"
 #include "format.h"
 #include "thumbnails.h"
+#include "tools.h"
 
 #include <QDesktopServices>
 #include <QDir>
@@ -32,6 +33,7 @@ Archive::~Archive()
 {
     stopAll();
     Thumbnails::drop(m_key);
+    Tools::wipe(m_password);
 }
 
 void Archive::stopAll()
@@ -140,6 +142,11 @@ bool Archive::encrypted() const
 
 bool Archive::lockedFormat() const
 {
+    return m_listing && m_listing->cantDecrypt;
+}
+
+bool Archive::namesHidden() const
+{
     return m_listing && m_listing->lockedHeaders;
 }
 
@@ -167,7 +174,8 @@ void Archive::open(const QString &path)
     m_path = QFileInfo(path).absoluteFilePath();
     m_state = QStringLiteral("loading");
     m_error.clear();
-    m_password.clear();
+    // Every worker has stopped, so no copy of the password is in use.
+    Tools::wipe(m_password);
     m_pending = nullptr;
     m_listing.reset();
     m_dirs.clear();
@@ -194,22 +202,12 @@ void Archive::open(const QString &path)
                 Q_EMIT loaded();
                 return;
             }
-            m_listing = listing;
-            m_state = QStringLiteral("ready");
-            m_error = listing->lockedHeaders ? QString() : listing->error;
-            for (int i = 0; i < listing->entries.size(); ++i) {
-                if (listing->entries[i].dir) {
-                    m_dirs.insert(listing->entries[i].path, i);
-                }
-            }
-            m_model->setListing(m_listing.get(), m_key);
-            // An archive that holds only one folder opens inside it.
-            const QList<int> &roots = listing->roots;
-            const bool single = roots.size() == 1 && listing->entries[roots.first()].dir;
-            show(single ? listing->entries[roots.first()].path : QString(), false);
+            adopt(listing);
             ArchiveApp::instance()->addRecent(m_path);
             Q_EMIT loaded();
-            if (listing->encrypted && !listing->lockedHeaders) {
+            // Asked straight away, as Windows does: the names, or the
+            // files, are no use without it.
+            if ((listing->encrypted || listing->lockedHeaders) && !listing->cantDecrypt) {
                 Q_EMIT passwordNeeded(false);
             }
             startThumbnails();
@@ -217,22 +215,53 @@ void Archive::open(const QString &path)
     });
 }
 
+void Archive::adopt(const std::shared_ptr<const Listing> &listing)
+{
+    m_listing = listing;
+    m_state = QStringLiteral("ready");
+    m_error = listing->lockedHeaders ? QString() : listing->error;
+    m_dirs.clear();
+    for (int i = 0; i < listing->entries.size(); ++i) {
+        if (listing->entries[i].dir) {
+            m_dirs.insert(listing->entries[i].path, i);
+        }
+    }
+    m_model->setListing(m_listing.get(), m_key);
+    m_history.clear();
+    // An archive that holds only one folder opens inside it.
+    const QList<int> &roots = listing->roots;
+    const bool single = roots.size() == 1 && listing->entries[roots.first()].dir;
+    show(single ? listing->entries[roots.first()].path : QString(), false);
+}
+
 void Archive::setPassword(const QString &password)
 {
     if (!m_listing || password.isEmpty()) {
         return;
     }
-    const QByteArray bytes = password.toUtf8();
+    QByteArray bytes = password.toUtf8();
     const auto listing = m_listing;
     const QString file = m_path;
-    start(QStringLiteral("password"), [this, bytes, listing, file](Progress *) -> Done {
-        const Reader::PasswordState state = Reader::checkPassword(file, *listing, bytes);
-        return [this, bytes, state] {
-            if (state != Reader::PasswordState::Fine) {
-                Q_EMIT passwordNeeded(true);
+    start(QStringLiteral("password"), [this, bytes, listing, file](Progress *progress) -> Done {
+        auto unlocked = std::make_shared<Reader::Unlock>(Reader::unlock(file, *listing, bytes, progress));
+        return [this, bytes, unlocked]() mutable {
+            if (unlocked->state != Reader::PasswordState::Fine) {
+                Tools::wipe(bytes);
+                Q_EMIT passwordNeeded(unlocked->state == Reader::PasswordState::Wrong);
                 return;
             }
             m_password = bytes;
+            if (unlocked->relisted) {
+                const auto named = std::make_shared<const Listing>(std::move(unlocked->listing));
+                if (!named->error.isEmpty() && named->entries.isEmpty()) {
+                    m_state = QStringLiteral("failed");
+                    m_error = named->error;
+                    Q_EMIT loaded();
+                    return;
+                }
+                adopt(named);
+                Q_EMIT loaded();
+            }
             Q_EMIT passwordChanged();
             startThumbnails();
             if (m_pending) {
@@ -249,9 +278,16 @@ void Archive::forgetPending()
     m_pending = nullptr;
 }
 
+void Archive::askPassword()
+{
+    if (m_listing && !m_listing->cantDecrypt && m_password.isEmpty() && (m_listing->encrypted || m_listing->lockedHeaders) && m_job.isEmpty()) {
+        Q_EMIT passwordNeeded(false);
+    }
+}
+
 bool Archive::needPassword(const Done &retry)
 {
-    if (!m_listing || !m_listing->encrypted || !m_password.isEmpty() || m_listing->lockedHeaders) {
+    if (!m_listing || m_listing->cantDecrypt || !m_password.isEmpty() || (!m_listing->encrypted && !m_listing->lockedHeaders)) {
         return false;
     }
     m_pending = retry;
@@ -761,10 +797,6 @@ void Archive::runExtract(Reader::ExtractOptions options, const QString &what, bo
                                 result.unsafe);
                 return;
             }
-            if (!result.failed.isEmpty() && result.written == 0 && unreadableRar()) {
-                Q_EMIT finished(QStringLiteral("extract"), false, QStringLiteral("Archive couldn't read the files in this RAR"), rarNote(), {});
-                return;
-            }
             if (!result.failed.isEmpty()) {
                 Q_EMIT finished(QStringLiteral("extract"), false, QStringLiteral("Some files couldn't be extracted"),
                                 QStringLiteral("The rest are in %1.").arg(where), result.failed);
@@ -813,10 +845,6 @@ void Archive::test()
             if (!result.error.isEmpty()) {
                 Q_EMIT finished(QStringLiteral("test"), false, QStringLiteral("This archive is damaged"),
                                 QStringLiteral("%1 files checked out before the damage. %2").arg(result.written).arg(result.error), result.failed);
-                return;
-            }
-            if (!result.failed.isEmpty() && result.written == 0 && unreadableRar()) {
-                Q_EMIT finished(QStringLiteral("test"), false, QStringLiteral("Archive couldn't read the files in this RAR"), rarNote(), {});
                 return;
             }
             if (!result.failed.isEmpty()) {
@@ -875,19 +903,6 @@ void Archive::openEntry(int entry)
             QDesktopServices::openUrl(QUrl::fromLocalFile(target));
         };
     });
-}
-
-// libarchive does not say when a RAR's files are behind a password; they
-// just fail to decompress, every one of them.
-bool Archive::unreadableRar() const
-{
-    return formatName() == QLatin1String("RAR");
-}
-
-QString Archive::rarNote() const
-{
-    return QStringLiteral("Every file failed to decompress. That usually means the RAR is protected with a password, and Archive can't open "
-                          "protected RAR files yet. If it has no password, the archive is damaged.");
 }
 
 void Archive::cancel()

@@ -1,3 +1,22 @@
+wildos-files (0.1.10) trixie; urgency=medium
+
+  * A USB stick, SD card or external drive with nothing on it, new or
+    left blank by a format that did not finish, shows in Files as needing
+    formatting. Opening it offers to format it.
+
+ -- Wild OS Developers <dev@wildos.io>  Thu, 12 Nov 2026 13:27:58 +0000
+
+wildos-files (0.1.9) trixie; urgency=medium
+
+  * Format... is in the right-click menu of USB sticks, SD cards and
+    external drives, as in Windows: exFAT, NTFS, FAT32 or ext4, a label,
+    quick or full format, and a password to encrypt the drive if wanted.
+    The drive Wild OS runs from is never offered.
+  * Encrypted USB drives show in Files and ask for their password when
+    opened.
+
+ -- Wild OS Developers <dev@wildos.io>  Thu, 12 Nov 2026 12:48:01 +0000
+
 wildos-files (0.1.8) trixie; urgency=medium
 
   * Renaming in place works like Explorer: the arrow keys move within the

@@ -1,3 +1,17 @@
+wildos-recovery (0.1.3) trixie; urgency=medium
+
+  * Going back to a restore point keeps Steam's controller support as it
+    is now, with the Steam and 32-bit apps choice.
+
+ -- Wild OS Developers <dev@wildos.io>  Thu, 12 Nov 2026 16:11:45 +0000
+
+wildos-recovery (0.1.2) trixie; urgency=medium
+
+  * Going back to a restore point keeps the Steam and 32-bit apps choice
+    as it is now, like the hyper-threading one.
+
+ -- Wild OS Developers <dev@wildos.io>  Thu, 12 Nov 2026 14:00:00 +0000
+
 wildos-recovery (0.1.1) trixie; urgency=medium
 
   * Reset Wild OS is on. Keep my files ends at the sign-in screen with your

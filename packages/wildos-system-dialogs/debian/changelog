@@ -1,3 +1,12 @@
+wildos-system-dialogs (0.1.10) trixie; urgency=medium
+
+  * Opening a 32-bit program, such as Steam, while 32-bit apps are off
+    shows a prompt instead of failing silently: turn them on and restart,
+    or not now. It asks once in five minutes however often the program
+    retries, and only while the running system refuses 32-bit programs.
+
+ -- Wild OS Developers <dev@wildos.io>  Thu, 12 Nov 2026 14:00:00 +0000
+
 wildos-system-dialogs (0.1.9) trixie; urgency=medium
 
   * Starting Windows: when Windows starts up from off, the card says it

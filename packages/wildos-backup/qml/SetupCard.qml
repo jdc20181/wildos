@@ -10,9 +10,11 @@ Panel {
 
     property string choosing
 
-    readonly property var drives: Drives.available.filter(d => !d.known)
+    // Usable ones first; the rest greyed with their reason.
+    readonly property var drives: Drives.all.filter(d => !d.known)
+    readonly property bool anyUsable: drives.some(d => d.usable)
     readonly property bool working: Setup.state === "working"
-    readonly property int step: working ? 3 : drives.length > 0 ? 2 : 1
+    readonly property int step: working ? 3 : anyUsable ? 2 : 1
 
     implicitHeight: column.implicitHeight + padding * 2
     padding: 22
@@ -138,15 +140,25 @@ Panel {
             Accessible.role: Accessible.Heading
         }
 
+        UI.Label {
+            Layout.fillWidth: true
+            Layout.bottomMargin: 6
+            visible: card.drives.length > 0 && !card.anyUsable
+            text: qsTr("No drive here can hold backups yet.")
+            size: 13
+            color: UI.Style.inkMuted
+            wrapMode: Text.Wrap
+        }
+
         Repeater {
             model: card.drives
             delegate: DriveChoice {
                 required property var modelData
                 Layout.fillWidth: true
                 drive: modelData
-                busy: card.working && card.choosing === modelData.uuid
+                busy: card.working && card.choosing === modelData.id
                 onChosen: {
-                    card.choosing = modelData.uuid;
+                    card.choosing = modelData.id;
                     Setup.useDrive(modelData.uuid);
                 }
             }

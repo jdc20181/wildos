@@ -1,0 +1,111 @@
+#!/bin/sh
+# Turns 32-bit programs on or off from the next start-up: "Steam and 32-bit
+# apps" in Settings > Privacy and security, also offered by the prompt that
+# appears when a 32-bit program is opened while they are off. Runs as root
+# through pkexec (org.wildos.settings.32bit), and from settings-protection,
+# which turns them off at Strict and Maximum.
+#
+# Wild OS ships with them off: Kicksecure's ia32_emulation=0 removes the
+# kernel's 32-bit compatibility layer, a part of the kernel that has had
+# more than its share of security bugs. Steam's client and many older games
+# are 32-bit and cannot start without it. Turning it on drops that option,
+# and gives 32-bit programs back their vDSO (vdso32=0 and the
+# abi.vsyscall32=0 sysctl, which Kicksecure sets as a pair): without it every
+# system call they make goes the slow int 0x80 way and every clock read
+# becomes a full system call, a cost games pay many times a frame. 64-bit
+# programs are not affected either way. The kernel decides ia32_emulation at
+# boot, so it takes a restart.
+#
+# Steam's controller rules (Debian's steam-devices) come with it. They let
+# the signed-in user open game controllers directly and create virtual input
+# devices through /dev/uinput, which Steam Input and Remote Play need, and
+# which any program run by that user could also use to type or click. The
+# package moves the rules aside (debian/preinst), and they are linked back
+# into udev only while 32-bit apps are on.
+#
+#   on | off   save the choice and rebuild the boot menu
+#   devices    link or unlink the controller rules to match the saved choice
+
+set -eu
+
+CHOICE=/etc/wildos/32bit
+DROPIN=/etc/default/grub.d/41_wildos_32bit.cfg
+# Sorts after Kicksecure's 990-security-misc.conf, so this value wins.
+SYSCTL=/etc/sysctl.d/991-wildos-32bit.conf
+LEVEL_FILE=/etc/wildos/protection-level
+RULES_SRC=/usr/share/wildos/steam-devices
+RULES_DST=/etc/udev/rules.d
+RULES="60-steam-input.rules 60-steam-vr.rules"
+
+# Controllers plugged in now pick up the change straight away. uinput is
+# loaded here because udev only sees it once the module is in; at start-up
+# its static node does that job. Turning off closes /dev/uinput at once (a
+# mode of 0600 also masks the user's ACL entry); a controller already
+# plugged in keeps its access until it is unplugged or the PC restarts.
+devices() {
+    for rule in $RULES; do
+        if [ -e "$CHOICE" ] && [ -e "$RULES_SRC/$rule" ]; then
+            ln -sfn "$RULES_SRC/$rule" "$RULES_DST/$rule"
+        elif [ -L "$RULES_DST/$rule" ]; then
+            rm -f "$RULES_DST/$rule"
+        fi
+    done
+    if [ -e "$CHOICE" ]; then
+        modprobe -q uinput 2>/dev/null || true
+    elif [ -c /dev/uinput ]; then
+        chmod 0600 /dev/uinput 2>/dev/null || true
+    fi
+    if [ -d /run/udev ] && command -v udevadm >/dev/null 2>&1; then
+        udevadm control --reload >/dev/null 2>&1 || true
+        udevadm trigger --action=change --subsystem-match=misc \
+            --subsystem-match=hidraw --subsystem-match=usb >/dev/null 2>&1 || true
+    fi
+}
+
+case "${1:-}" in
+on)
+    # Strict and Maximum keep the 32-bit layer out of the kernel; Settings
+    # greys the switch out there, and this refuses in case anything else asks.
+    case "$(cat "$LEVEL_FILE" 2>/dev/null || true)" in
+    strict | maximum)
+        echo "Strict and Maximum protection keep 32-bit apps off." >&2
+        exit 3
+        ;;
+    esac
+    mkdir -p /etc/wildos
+    echo on > "$CHOICE"
+    # Sorts after 40_kernel_hardening.cfg, so it edits what that file added,
+    # whatever an update of it changes around these two options.
+    cat > "$DROPIN" <<'EOF'
+# Written by Wild OS Settings: Steam and 32-bit apps are on. Every other
+# kernel hardening option stays.
+GRUB_CMDLINE_LINUX="$(printf '%s' "$GRUB_CMDLINE_LINUX" | sed -e 's/ ia32_emulation=0//g' -e 's/ vdso32=0//g')"
+EOF
+    cat > "$SYSCTL" <<'EOF'
+# Written by Wild OS Settings: Steam and 32-bit apps are on, so they get the
+# 32-bit vDSO back.
+abi.vsyscall32 = 1
+EOF
+    devices
+    ;;
+off)
+    [ -e "$CHOICE" ] || [ -e "$DROPIN" ] || [ -e "$SYSCTL" ] || exit 0
+    rm -f "$CHOICE" "$DROPIN" "$SYSCTL"
+    sysctl -q -w abi.vsyscall32=0 2>/dev/null || true
+    devices
+    ;;
+devices)
+    devices
+    exit 0
+    ;;
+*)
+    echo "usage: $0 on|off|devices" >&2
+    exit 2
+    ;;
+esac
+
+if command -v update-grub >/dev/null 2>&1; then
+    update-grub >/dev/null 2>&1
+else
+    grub-mkconfig -o /boot/grub/grub.cfg >/dev/null 2>&1
+fi

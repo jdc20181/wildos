@@ -32,6 +32,8 @@ qt_add_qml_module(wildos-files
         src/format.cpp src/format.h
         src/settings.cpp src/settings.h
         src/drives.cpp src/drives.h
+        src/driveformat.cpp src/driveformat.h
+        src/formatsafety.cpp src/formatsafety.h
         src/foldermodel.cpp src/foldermodel.h
         src/placesmodel.cpp src/placesmodel.h
         src/fileops.cpp src/fileops.h
@@ -53,6 +55,15 @@ target_link_libraries(wildos-files PRIVATE
     KF6::CoreAddons KF6::Service KF6::WindowSystem KF6::Purpose
     KF6::Archive KF6::FileMetaData
 )
+
+if(WILDOS_FILES_TESTS)
+    find_package(Qt6 REQUIRED COMPONENTS Test)
+    enable_testing()
+    qt_add_executable(formatsafety-test tests/formatsafety_test.cpp src/formatsafety.cpp)
+    target_include_directories(formatsafety-test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+    target_link_libraries(formatsafety-test PRIVATE Qt6::Core Qt6::Test)
+    add_test(NAME formatsafety COMMAND formatsafety-test)
+endif()
 
 install(TARGETS wildos-files RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 install(FILES data/org.wildos.files.desktop DESTINATION ${CMAKE_INSTALL_DATADIR}/applications)

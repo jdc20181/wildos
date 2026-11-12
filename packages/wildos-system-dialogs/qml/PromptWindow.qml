@@ -43,6 +43,7 @@ Window {
             case "windowsshutdown": return windowsShutdown;
             case "windowsdevices": return windowsDevices;
             case "windowsstarting": return windowsStarting;
+            case "compat32": return compat32;
             default: return null;
             }
         }
@@ -131,6 +132,19 @@ Window {
             seconds: Prompts.info.seconds || 60
             cold: Prompts.info.cold === true
             onHidden: Prompts.dismiss()
+        }
+    }
+
+    Component {
+        id: compat32
+        Compat32Card {
+            appName: Prompts.info.appName || ""
+            iconName: Prompts.info.iconName || ""
+            mode: Prompts.info.mode || "off"
+            busy: Prompts.info.busy === true
+            error: Prompts.info.error || ""
+            onCancelled: Prompts.dismiss()
+            onAccepted: Prompts.turnOn32bit()
         }
     }
 

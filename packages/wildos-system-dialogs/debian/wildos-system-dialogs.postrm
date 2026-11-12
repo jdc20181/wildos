@@ -13,6 +13,12 @@ if [ "$1" = remove ] || [ "$1" = abort-install ] || [ "$1" = disappear ]; then
         --divert "$helper.kde" "$helper"
 fi
 
+# The kernel holds the 32-bit helper open while its entry is registered.
+if [ "$1" = remove ]; then
+    [ -e /proc/sys/fs/binfmt_misc/wildos-32bit ] && echo -1 > /proc/sys/fs/binfmt_misc/wildos-32bit || true
+    rm -f /run/binfmt.d/wildos-32bit.conf
+fi
+
 if [ "$1" = purge ]; then
     rm -f /var/lib/wildos/package-sources /var/lib/wildos/package-sources.new
 fi

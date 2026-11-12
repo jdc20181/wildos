@@ -58,8 +58,8 @@ UI.AppWindow {
                 window.problem(qsTr("Archive couldn't open %1").arg(fileName), errorText, []);
             } else if (state === "ready") {
                 if (lockedFormat) {
-                    window.problem(qsTr("This archive is protected"),
-                        qsTr("%1 is a %2 archive with a password. Archive can't open protected 7z and RAR files yet.").arg(fileName).arg(formatName), []);
+                    window.problem(qsTr("Archive can't unlock this RAR"),
+                        qsTr("%1 is protected with the older RAR 4 encryption, which Archive can't unlock. Ask whoever sent it for a 7z or ZIP copy.").arg(fileName), []);
                 } else {
                     // Asks for the password first when there is one, then
                     // carries on.
@@ -217,6 +217,7 @@ UI.AppWindow {
                     onAccepted: {
                         if (text.length > 0) {
                             archive.setPassword(text);
+                            text = "";
                         }
                     }
                 }
@@ -283,7 +284,10 @@ UI.AppWindow {
                     kind: "primary"
                     text: qsTr("Unlock")
                     enabled: passwordField.text.length > 0
-                    onClicked: archive.setPassword(passwordField.text)
+                    onClicked: {
+                        archive.setPassword(passwordField.text);
+                        passwordField.text = "";
+                    }
                 }
                 UI.Button {
                     kind: window.problemTitle.length > 0 && window.clash.length === 0 ? "primary" : "secondary"

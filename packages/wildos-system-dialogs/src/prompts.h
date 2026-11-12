@@ -25,6 +25,10 @@
 //   windowsmode    from the App Bridge when a Windows app is opened while
 //                  Windows app support is turned off
 //
+// Asked by 32bit-blocked, which stands in for a 32-bit program while the
+// kernel refuses them (a datagram on an abstract socket, see listen32bit):
+//   compat32       32-bit apps are off: turn them on and restart, or not now
+//
 // Asked by Windows mode over D-Bus (session.h), answered when chosen:
 //   windowsshutdown  Windows apps are open as the session ends (9.9); the
 //                    safe choice, keep, is taken after 60 seconds
@@ -71,6 +75,9 @@ public:
     Q_INVOKABLE void answerWindowsShutdown(const QString &choice);
     void askWindowsDevices(const QString &appName, const QString &devicesJson, const QDBusMessage &reply);
     Q_INVOKABLE void answerWindowsDevices(bool allow, const QString &camera, const QString &microphone);
+    // 32-bit apps: Turn on and restart, Restart now or Open Settings,
+    // whichever the card offers.
+    Q_INVOKABLE void turnOn32bit();
     // Windows is starting so an app can open; yields to any other prompt.
     void windowsStarting(const QString &appName, const QString &iconName, int seconds, bool cold);
     void windowsStartingDone();
@@ -89,6 +96,10 @@ Q_SIGNALS:
 private:
     void show(const QString &kind);
     void readBattery();
+    void listen32bit();
+    void read32bit();
+    void ask32bit(const QString &program, const QString &appId);
+    QString state32bit() const;
     void onBatteryChanged();
     void checkRestart();
     void buildTimes();
@@ -125,4 +136,7 @@ private:
     QString safeShutdownAnswer() const;
     QDBusMessage m_devicesReply;
     QTimer m_shutdownTimer;
+
+    int m_compat32Socket = -1;
+    QDateTime m_compat32QuietUntil;
 };

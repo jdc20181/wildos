@@ -1,3 +1,19 @@
+wildos-archive (0.1.2) trixie; urgency=medium
+
+  * Opens password-protected 7z and RAR archives, hidden file names
+    included: Archive asks for the password, then lists, extracts, tests
+    and shows pictures from them. 7-Zip reads protected 7z, The
+    Unarchiver protected RAR 5; libarchive still reads everything else.
+  * The password never goes on a command line or to disk.
+  * Files from 7-Zip and The Unarchiver are unpacked into a private
+    folder first and only then moved into place, with the same checks as
+    every other archive: nothing lands outside the folder you chose.
+  * RAR files protected with the older RAR 4 encryption say so plainly.
+    No free tool can unlock them yet.
+  * The icon ink in light mode is the warm grey of the rest of Wild OS.
+
+ -- Wild OS Developers <dev@wildos.io>  Thu, 12 Nov 2026 11:00:00 +0000
+
 wildos-archive (0.1.1) trixie; urgency=medium
 
   * Extract here asks before extracting into a folder that is already

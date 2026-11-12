@@ -25,10 +25,14 @@ QtObject {
         { key: "apps", title: "App protection", icon: "sandbox", sentence: "app protection" },
         { key: "devices", title: "USB protection", icon: "plug", sentence: "USB protection" },
         { key: "secureboot", title: "Secure Boot", icon: "chip", sentence: "Secure Boot" },
-        { key: "network", title: "Network protection", icon: "firewall", sentence: "network protection" }
+        { key: "network", title: "Network protection", icon: "firewall", sentence: "network protection" },
+        { key: "compat32", title: "32-bit apps", icon: "chip", sentence: "32-bit apps" }
     ]
 
-    readonly property var items: known.filter(item => status[item.key] !== undefined)
+    // 32-bit apps get a row only while they are on: off is how Wild OS
+    // ships, and not a protection anyone needs to see listed.
+    readonly property bool compat32: status.compat32 === "on"
+    readonly property var items: known.filter(item => status[item.key] !== undefined && (item.key !== "compat32" || compat32))
     readonly property bool checked: items.length > 0
 
     // Warnings the person chose to ignore from the taskbar's security chip
@@ -54,6 +58,10 @@ QtObject {
             // folder, say), so it is shown but never raised as a problem;
             // the taskbar's security chip words it the same way.
             return true;
+        case "compat32":
+            // A choice made in Settings with the trade-off spelled out, so
+            // it is shown (and lowers the headline) but never raised.
+            return true;
         default:
             return v === "on";
         }
@@ -66,6 +74,7 @@ QtObject {
     readonly property var leading: ["firewall", "encryption", "updates"]
     readonly property var tiles: leading.map(key => items.find(item => item.key === key)).filter(item => item !== undefined)
         .concat(attention.filter(item => !leading.includes(item.key)))
+        .concat(items.filter(item => item.key === "compat32"))
     readonly property bool allOn: checked && attention.length === 0
 
     function value(item) {
@@ -97,6 +106,8 @@ QtObject {
             return count("devices_blocked") > 0 ? "On, " + Format.plural(count("devices_blocked"), "device", "devices") + " held back" : "On";
         case "secureboot":
             return v === "on" ? "On" : v === "unsupported" ? "Not supported by this computer" : "Off";
+        case "compat32":
+            return "On, for Steam and older apps";
         case "network":
             if (v === "on") {
                 return "On";
@@ -190,7 +201,8 @@ QtObject {
 
     // What each protection means and what can be done about it, for the
     // dialog a tile opens. action is one of "updates", "check", "usb",
-    // "firmware", "restart" or empty when there is nothing to press.
+    // "firmware", "restart", "compat32" or empty when there is nothing to
+    // press.
     function details(item) {
         const v = status[item.key];
         switch (item.key) {
@@ -245,6 +257,8 @@ QtObject {
                 return { text: "Nothing on this computer accepts connections from other computers.", action: "" };
             }
             return { text: Format.plural(Math.max(1, count("network_services")), "service accepts", "services accept") + " connections from other computers. Wild OS does not open any by itself, so an app you installed or a sharing feature you turned on started it. Remove or turn off the app that needs it if you do not use it.", action: "" };
+        case "compat32":
+            return { text: "Steam and 32-bit apps is on, so 32-bit programs such as Steam and older games can run. To run them, the system keeps a part that Wild OS normally leaves out, and that part has had serious security flaws over the years. Apps you run can also create a virtual keyboard or game controller, which Steam needs for controllers. Turn it off when you no longer need it. It takes a restart.", action: "compat32" };
         default:
             return { text: "", action: "" };
         }
@@ -262,6 +276,7 @@ QtObject {
     }
 
     readonly property string headline: !checked ? "Wild OS could not check your protection"
+        : allOn && compat32 ? "Protected, with 32-bit apps on"
         : allOn ? "Your computer is protected"
         : attention.length === 1 && attention[0].key === "updates" && updatesWaiting ? "Security updates are waiting"
         : attention.length === 1 && attention[0].key === "updates" ? (updatesNeverChecked ? "Updates not checked yet" : "Updates not checked lately")
@@ -272,6 +287,9 @@ QtObject {
         const suffix = when.length > 0 ? " Last checked " + when + "." : "";
         if (!checked) {
             return "The protection check is not installed on this computer.";
+        }
+        if (allOn && compat32) {
+            return "32-bit apps are on, which keeps a part of the system that has had serious security flaws. Everything else Wild OS checks is in order." + suffix;
         }
         if (allOn) {
             const onNames = tiles.filter(item => status[item.key] === "on" || status[item.key] === "current")

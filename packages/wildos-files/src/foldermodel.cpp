@@ -840,7 +840,9 @@ QList<FolderModel::Entry> FolderModel::driveEntries() const
         e.col2Key = 0;
         e.sizeKey = drive.total;
         e.sizeText = drive.total > 0 ? Format::size(drive.total) : QString();
-        if (drive.free >= 0 && drive.total > 0) {
+        if (drive.blank) {
+            e.subtitle = Format::size(drive.total) + QStringLiteral(", needs formatting before it can be used");
+        } else if (drive.free >= 0 && drive.total > 0) {
             e.subtitle = Format::size(drive.free) + QStringLiteral(" free of ") + Format::size(drive.total);
             if (drive.removable) {
                 e.subtitle += QStringLiteral(", remove safely before unplugging");

@@ -30,7 +30,7 @@ QtObject {
     readonly property color checkEdge: contrast ? "#ffffff" : dark ? Qt.rgba(1, 1, 1, 0.55) : Qt.rgba(0, 0, 0, 0.429)
 
     readonly property color folderInk: contrast ? "#ffffff" : dark ? "#f2b84d" : "#96722f"
-    readonly property color iconInk: contrast ? "#ffffff" : dark ? Qt.rgba(1, 1, 1, 0.86) : "#2a3147"
+    readonly property color iconInk: contrast ? "#ffffff" : dark ? Qt.rgba(1, 1, 1, 0.86) : "#34363a"
     readonly property color fileInk: UI.Style.inkMuted
     readonly property color thumbBlank: UI.Style.surfaceTile
 

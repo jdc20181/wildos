@@ -3,8 +3,9 @@ import QtQuick.Layouts
 import WildOS.Backup
 import WildOS.UI as UI
 
-// A drive that's plugged in and could take backups: its name, kind and
-// room, and Use this drive.
+// A drive that's plugged in: its name, kind and room, and Use this drive.
+// One Backup can't use is greyed, says why, and offers Format this drive
+// when formatting would fix it.
 Item {
     id: row
 
@@ -12,9 +13,11 @@ Item {
     property bool busy: false
     property string actionText: qsTr("Use this drive")
 
+    readonly property bool usable: drive.usable !== false
+
     signal chosen()
 
-    implicitHeight: 56
+    implicitHeight: Math.max(56, details.implicitHeight + 20)
 
     Rectangle {
         width: parent.width
@@ -27,11 +30,14 @@ Item {
         spacing: 14
 
         BackupIcon {
+            Layout.alignment: row.usable ? Qt.AlignVCenter : Qt.AlignTop
+            Layout.topMargin: row.usable ? 0 : 11
             name: "drive"
             size: 18
-            color: UI.Style.inkMuted
+            color: row.usable ? UI.Style.inkMuted : UI.Style.inkSubtle
         }
         ColumnLayout {
+            id: details
             Layout.fillWidth: true
             spacing: 2
 
@@ -39,6 +45,7 @@ Item {
                 Layout.fillWidth: true
                 text: row.drive.name || ""
                 size: 13.5
+                color: row.usable ? UI.Style.ink : UI.Style.inkMuted
                 elide: Text.ElideRight
             }
             UI.Label {
@@ -53,16 +60,32 @@ Item {
                     return parts.join(" · ");
                 }
                 size: 12.5
-                color: UI.Style.inkMuted
+                color: row.usable ? UI.Style.inkMuted : UI.Style.inkSubtle
                 elide: Text.ElideRight
+            }
+            UI.Label {
+                Layout.fillWidth: true
+                visible: !row.usable
+                text: row.drive.reasonText || ""
+                size: 12.5
+                color: UI.Style.inkMuted
+                wrapMode: Text.Wrap
             }
         }
         UI.Button {
             implicitHeight: 32
+            visible: row.usable
             text: row.actionText
             busy: row.busy
             enabled: Setup.state !== "working"
             onClicked: row.chosen()
+        }
+        UI.Button {
+            implicitHeight: 32
+            visible: !row.usable && row.drive.canFormat === true
+            text: qsTr("Format this drive")
+            enabled: Setup.state !== "working"
+            onClicked: Drives.formatDrive(row.drive.device)
         }
     }
 }

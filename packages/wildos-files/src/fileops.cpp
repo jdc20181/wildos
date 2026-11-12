@@ -447,6 +447,7 @@ FileOps::FileOps(QObject *parent)
     connect(m_sharer, &Sharer::finished, this, &FileOps::notice);
     connect(m_sharer, &Sharer::failed, this, &FileOps::failed);
     connect(Drives::instance(), &Drives::failed, this, &FileOps::failed);
+    connect(Drives::instance(), &Drives::needsFormat, this, &FileOps::needsFormat);
 
     // A quiet listing of the Recycle Bin keeps its icon and Empty Bin current.
     m_bin->setAutoErrorHandlingEnabled(false);

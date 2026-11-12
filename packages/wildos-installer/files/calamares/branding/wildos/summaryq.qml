@@ -234,8 +234,9 @@ WPage {
             }
             Text {
                 Layout.fillWidth: true
-                // Started straight into the installer, there is no trial behind it.
-                text: Installer.startMode === "install"
+                // Started straight into the installer, or by Remove everything,
+                // there is no trial behind it.
+                text: Installer.startMode === "install" || Installer.startMode === "recovery"
                       ? qsTr("Takes about 10 minutes. Keep the computer plugged in.")
                       : qsTr("Takes about 10 minutes. Keep the computer plugged in; you can keep using this trial while it installs.")
                 color: Qt.rgba(232 / 255, 236 / 255, 248 / 255, 0.85)

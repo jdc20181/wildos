@@ -1,3 +1,10 @@
+wildos-report (0.1.1) trixie; urgency=medium
+
+  * Crash notices: crashes are recorded again, as which program, the signal
+    and the time only.
+
+ -- Wild OS Developers <dev@wildos.io>  Thu, 12 Nov 2026 16:09:32 +0000
+
 wildos-report (0.1.0) trixie; urgency=medium
 
   * Initial release.

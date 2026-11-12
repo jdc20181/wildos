@@ -11,11 +11,14 @@ struct Drive {
     QString lineIcon;
     QString mountPath;
     // What kind of drive it is, as a chip on its card: "Encrypted" for a
-    // Wild OS disk behind LUKS, "Windows" for NTFS, "Removable".
+    // Wild OS disk or a USB stick behind LUKS, "Windows" for NTFS,
+    // "Removable".
     QString chip;
     bool mounted = false;
     bool removable = false;
     bool system = false;
+    // Plugged in but with nothing readable on it: it can only be formatted.
+    bool blank = false;
     qint64 total = 0;
     qint64 free = -1;
 };
@@ -43,6 +46,8 @@ Q_SIGNALS:
     void changed();
     void mounted(const QString &udi, const QString &path);
     void failed(const QString &message);
+    // Opening a blank drive: Files offers to format it, as Windows does.
+    void needsFormat(const QString &udi, const QString &name);
 
 private:
     explicit Drives(QObject *parent = nullptr);

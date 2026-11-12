@@ -23,6 +23,9 @@ if [ "$1" = "configure" ]; then
     if [ -d /run/systemd/system ] && [ -x /usr/libexec/wildos/settings-protection ] && command -v nft >/dev/null; then
         /usr/libexec/wildos/settings-protection boot || true
     fi
+    # Steam's controller rules follow the 32-bit choice, including on PCs
+    # that turned it on before the rules came with it.
+    /usr/libexec/wildos/settings-32bit devices || true
 fi
 
 #DEBHELPER#

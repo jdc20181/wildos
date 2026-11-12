@@ -14,7 +14,8 @@ Item {
     property string choosing
     property string removing
 
-    readonly property var others: Drives.available.filter(d => !d.known)
+    readonly property var others: Drives.all.filter(d => !d.known)
+    readonly property bool anyUsable: others.some(d => d.usable)
 
     Flickable {
         id: flick
@@ -167,15 +168,25 @@ Item {
                         wrapMode: Text.Wrap
                     }
 
+                    UI.Label {
+                        Layout.fillWidth: true
+                        Layout.bottomMargin: 6
+                        visible: page.others.length > 0 && !page.anyUsable
+                        text: qsTr("No drive here can hold backups yet.")
+                        size: 13
+                        color: UI.Style.inkMuted
+                        wrapMode: Text.Wrap
+                    }
+
                     Repeater {
                         model: page.others
                         delegate: DriveChoice {
                             required property var modelData
                             Layout.fillWidth: true
                             drive: modelData
-                            busy: Setup.state === "working" && page.choosing === modelData.uuid
+                            busy: Setup.state === "working" && page.choosing === modelData.id
                             onChosen: {
-                                page.choosing = modelData.uuid;
+                                page.choosing = modelData.id;
                                 Setup.useDrive(modelData.uuid);
                             }
                         }

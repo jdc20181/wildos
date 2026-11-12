@@ -8,7 +8,8 @@
      settings-fingerprint (Accounts),
      settings-locale (Time and language), settings-protection (Privacy
      and security), settings-network (the VPN kill switch) and
-     settings-brave-spelling (Typing). -->
+     settings-brave-spelling (Typing). settings-cpu-threads and
+     settings-32bit change start-up options. -->
 <policyconfig>
   <vendor>Wild OS</vendor>
   <vendor_url>https://wildos.io</vendor_url>
@@ -47,6 +48,18 @@
       <allow_active>auth_admin_keep</allow_active>
     </defaults>
     <annotate key="org.freedesktop.policykit.exec.path">/usr/libexec/wildos/settings-cpu-threads</annotate>
+  </action>
+
+  <action id="org.wildos.settings.32bit">
+    <description>Turn 32-bit apps on or off</description>
+    <message>Change whether this computer runs 32-bit apps such as Steam?</message>
+    <icon_name>security-medium</icon_name>
+    <defaults>
+      <allow_any>no</allow_any>
+      <allow_inactive>no</allow_inactive>
+      <allow_active>auth_admin_keep</allow_active>
+    </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/libexec/wildos/settings-32bit</annotate>
   </action>
 
   <action id="org.wildos.settings.graphics-driver">

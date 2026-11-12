@@ -1,3 +1,14 @@
+wildos-backup (0.1.1) trixie; urgency=medium
+
+  * Drives plugged in lists every drive you plug in. One Backup can't use
+    is greyed and says why: a Wild OS installer stick, a disc image,
+    read-only, too small, a filesystem Backup can't write to, or locked.
+    Format this drive is offered where formatting would fix it.
+  * Backup no longer waits for a drive when the one plugged in can't be
+    used: it says no drive here can hold backups yet.
+
+ -- Wild OS Developers <dev@wildos.io>  Thu, 12 Nov 2026 12:49:40 +0000
+
 wildos-backup (0.1.0) trixie; urgency=medium
 
   * Initial release.

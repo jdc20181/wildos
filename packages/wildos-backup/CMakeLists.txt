@@ -33,6 +33,7 @@ qt_add_qml_module(wildos-backup
         src/keyring.cpp src/keyring.h
         src/restic.cpp src/restic.h
         src/plan.cpp src/plan.h
+        src/driveclass.cpp src/driveclass.h
         src/drives.cpp src/drives.h
         src/history.cpp src/history.h
         src/windowsmode.cpp src/windowsmode.h
@@ -69,3 +70,13 @@ install(FILES
 install(FILES data/systemd/manual.d/50-now.conf DESTINATION ${CMAKE_INSTALL_PREFIX}/lib/systemd/user/wildos-backup@manual.service.d)
 install(PROGRAMS data/windows-disk data/make-folder DESTINATION ${CMAKE_INSTALL_PREFIX}/libexec/wildos-backup)
 install(FILES data/org.wildos.backup.policy DESTINATION ${CMAKE_INSTALL_DATADIR}/polkit-1/actions)
+
+option(BUILD_TESTING "Build the tests" ON)
+if(BUILD_TESTING)
+    enable_testing()
+    find_package(Qt6 6.8 REQUIRED COMPONENTS Test)
+    qt_add_executable(driveclass-test tests/driveclass-test.cpp src/driveclass.cpp)
+    target_include_directories(driveclass-test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+    target_link_libraries(driveclass-test PRIVATE Qt6::Test Qt6::DBus)
+    add_test(NAME driveclass COMMAND driveclass-test)
+endif()

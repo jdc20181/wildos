@@ -5,7 +5,8 @@ import WildOS.UI as UI
 
 // Privacy and security, laid out as Settings.dc.html: the Security card
 // (security-status, one row per protection), the protection level, what
-// apps can reach, searching files and activity history, then USB protection.
+// apps can reach, searching files and activity history, USB protection,
+// then Steam and 32-bit apps.
 PageScroll {
     id: page
 
@@ -110,6 +111,15 @@ PageScroll {
             text: page.levelError
             size: 12
             color: UI.Style.danger
+        }
+
+        UI.Label {
+            Layout.fillWidth: true
+            visible: Compat32.enabled && !Compat32.locked
+            text: "Strict and Maximum turn Steam and 32-bit apps off again, from the next restart."
+            size: 12.5
+            color: UI.Style.inkMuted
+            wrapMode: Text.Wrap
         }
     }
 
@@ -231,6 +241,127 @@ PageScroll {
                     onToggled: System.setUsbProtection(checked)
                 }
             }
+        }
+    }
+
+    // The kernel's 32-bit layer, which Steam and older games need. A boot
+    // option (settings-32bit), so a change offers a restart; Strict and
+    // Maximum keep it off.
+    ColumnLayout {
+        Layout.fillWidth: true
+        spacing: 10
+        visible: Compat32.available
+
+        RowLayout {
+            Layout.fillWidth: true
+
+            SectionTitle {
+                Layout.fillWidth: true
+                text: "Compatibility"
+            }
+
+            UI.LinkButton {
+                text: "Learn more"
+                Accessible.name: "Learn more about Steam and 32-bit apps"
+                onClicked: Qt.openUrlExternally("https://help.wildos.io/apps/steam-and-32-bit-apps/")
+            }
+        }
+
+        UI.Card {
+            id: compatCard
+            Layout.fillWidth: true
+            readonly property bool pending: Compat32.enabled !== Compat32.active
+
+            Column {
+                width: parent.width
+
+                UI.SettingRow {
+                    iconName: "games"
+                    minHeight: 64
+                    title: "Steam and 32-bit apps"
+                    description: Compat32.locked
+                        ? "Off at Strict and Maximum protection, which keep the 32-bit part of the system out."
+                        : compatCard.pending
+                        ? "Restart to finish turning it " + (Compat32.enabled ? "on." : "off.")
+                        : Compat32.enabled
+                        ? "On. Steam, older games and game controllers work, and your protection is a little lower while it is."
+                        : "Off for security. Steam and many older games are 32-bit and need this on, and it also turns on Steam's game controller support. Turning it on lowers your protection a little and needs a restart."
+                    status: Compat32.enabled && !Compat32.locked ? "On" : "Off"
+
+                    UI.Toggle {
+                        id: compatToggle
+                        anchors.verticalCenter: parent.verticalCenter
+                        checked: Compat32.enabled && !Compat32.locked
+                        enabled: !Compat32.busy && !Compat32.locked
+                        locked: Compat32.locked
+                        lockedReason: "Strict and Maximum protection keep this off"
+                        Accessible.name: "Steam and 32-bit apps"
+                        onToggled: {
+                            compatError.text = "";
+                            Compat32.setEnabled(checked);
+                        }
+                    }
+                }
+
+                // MangoHud for Flathub Steam (settings-game-overlay), only
+                // while 32-bit apps are on.
+                UI.SettingRow {
+                    visible: Compat32.enabled && !Compat32.locked
+                    title: "Show a performance overlay in games"
+                    description: Compat32.overlayBusy
+                        ? (Compat32.overlay ? "Turning it off…" : "Downloading the overlay…")
+                        : !Compat32.steamInstalled && !Compat32.overlay
+                        ? "Frame rate, frame time, and processor and graphics load and temperature. Install Steam from the Store first."
+                        : "Frame rate, frame time, and processor and graphics load and temperature, in Vulkan and Proton games. Left Shift+F12 hides it."
+                    status: overlayToggle.checked ? "On" : "Off"
+
+                    UI.Toggle {
+                        id: overlayToggle
+                        anchors.verticalCenter: parent.verticalCenter
+                        checked: Compat32.overlay
+                        enabled: !Compat32.overlayBusy && (Compat32.steamInstalled || Compat32.overlay)
+                        Accessible.name: "Show a performance overlay in games"
+                        onToggled: {
+                            compatError.text = "";
+                            Compat32.setOverlay(checked);
+                        }
+                    }
+                }
+
+                UI.SettingRow {
+                    visible: compatCard.pending && !Compat32.locked
+                    title: "Restart to apply"
+                    description: "Open apps are asked to save first."
+
+                    UI.Button {
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: "Restart now"
+                        onClicked: Updates.restart()
+                    }
+                }
+            }
+
+            Connections {
+                target: Compat32
+                // A cancelled password leaves the choice as it was, so the switch goes back to it.
+                function onChanged() {
+                    compatToggle.checked = Compat32.enabled && !Compat32.locked;
+                    // Stays where it was flipped while the layer downloads.
+                    if (!Compat32.overlayBusy) {
+                        overlayToggle.checked = Compat32.overlay;
+                    }
+                }
+                function onFailed(message) { compatError.text = message }
+            }
+        }
+
+        UI.Label {
+            id: compatError
+            visible: text.length > 0
+            Layout.fillWidth: true
+            wrapMode: Text.WordWrap
+            size: 13
+            color: UI.Style.warning
         }
     }
 }

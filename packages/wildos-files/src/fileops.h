@@ -158,6 +158,7 @@ Q_SIGNALS:
     void activeWindowChanged();
     void failed(const QString &message);
     void notice(const QString &message);
+    void needsFormat(const QString &udi, const QString &name);
     // Items that just appeared in a folder because of the user, to select
     // (and with rename, to start renaming) once they are listed.
     void created(const QUrl &folder, const QList<QUrl> &urls, bool rename);

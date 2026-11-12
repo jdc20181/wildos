@@ -12,6 +12,8 @@ Item {
     id: root
 
     property var startUrls: []
+    // Set when another app asked Files to format a drive.
+    property string formatUdi: ""
     // The window's WindowFrame, so maximising goes through it.
     property var frame: null
     property var tabs: []
@@ -98,6 +100,18 @@ Item {
             newTab(url);
         }
         currentIndex = 0;
+        if (formatUdi.length > 0) {
+            Qt.callLater(() => root.formatDrive(root.formatUdi, ""));
+        }
+    }
+
+    function formatDrive(udi, name) {
+        if (!DriveFormat.canFormat(udi)) {
+            showError("Files only formats removable drives, such as USB sticks and SD cards, and never the drive Wild OS runs from.");
+            return;
+        }
+        // A blank drive is named for what it needs; the dialog says it.
+        formatDialog.show(udi, name.replace(" (needs formatting)", ""));
     }
 
     Connections {
@@ -113,6 +127,13 @@ Item {
         function onFailed(message) {
             if (FileOps.activeWindow === root.Window.window) {
                 root.showError(message);
+            }
+        }
+        function onNeedsFormat(udi, name) {
+            if (FileOps.activeWindow === root.Window.window) {
+                needsFormatDialog.udi = udi;
+                needsFormatDialog.kind = name.replace(" (needs formatting)", "");
+                needsFormatDialog.open();
             }
         }
         function onChooseAppRequested(urls) {
@@ -402,6 +423,10 @@ Item {
             entries.push({ text: "Open in new tab", icon: "new-tab", enabled: opened, run: () => root.newTab(driveUrl, false) });
             if (udi.length > 0 && f.isRemovableAt(at)) {
                 entries.push({ text: "Eject", icon: "eject", enabled: opened, run: () => FileOps.ejectDrive(udi) });
+                if (DriveFormat.canFormat(udi)) {
+                    const name = f.nameAt(at);
+                    entries.push({ text: "Format…", icon: "drive", run: () => root.formatDrive(udi, name) });
+                }
             }
             entries.push({ separator: true });
             entries.push({ text: "Properties", icon: "info", enabled: opened, run: () => root.properties([driveUrl]) });
@@ -545,9 +570,15 @@ Item {
             entries.push({ text: "Open in new window", icon: "menu-window", run: () => App.openWindow([place.url]) });
         }
         entries.push({ text: "Open in new tab", icon: "plus", run: () => sidebar.open(place, true) });
-        if (place.removable && hasUrl) {
+        const formattable = place.removable && place.udi.length > 0 && DriveFormat.canFormat(place.udi);
+        if ((place.removable && hasUrl) || formattable) {
             entries.push({ separator: true });
+        }
+        if (place.removable && hasUrl) {
             entries.push({ text: "Eject", icon: "eject", run: () => FileOps.ejectDrive(place.udi) });
+        }
+        if (formattable) {
+            entries.push({ text: "Format…", icon: "drive", run: () => root.formatDrive(place.udi, place.name) });
         }
         if (place.kind === "place" || (place.kind === "drive" && hasUrl)) {
             entries.push({ separator: true });
@@ -1071,6 +1102,38 @@ Item {
         QuickLook {
             view: root
         }
+    }
+
+    // Opening a blank drive, as Windows asks "You need to format the disk
+    // before you can use it".
+    UI.Dialog {
+        id: needsFormatDialog
+        property string udi
+        property string kind
+        readonly property string lower: /^(USB|SD) /.test(kind) ? kind : kind.charAt(0).toLowerCase() + kind.slice(1)
+        title: "Format this " + lower + "?"
+        text: "This " + lower + " has nothing on it Wild OS can read, so it needs formatting before it can be used. Formatting erases anything on it."
+        onClosed: root.focusContent()
+        buttons: [
+            UI.Button {
+                text: "Cancel"
+                onClicked: needsFormatDialog.close()
+            },
+            UI.Button {
+                kind: "primary"
+                text: "Format…"
+                onClicked: {
+                    needsFormatDialog.close();
+                    root.formatDrive(needsFormatDialog.udi, needsFormatDialog.kind);
+                }
+            }
+        ]
+    }
+
+    FormatDialog {
+        id: formatDialog
+        onClosed: root.focusContent()
+        onOpenDrive: path => root.folder.openUrl("file://" + path)
     }
 
     ShortcutDialog {

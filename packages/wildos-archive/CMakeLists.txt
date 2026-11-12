@@ -33,6 +33,7 @@ qt_add_qml_module(wildos-archive
         src/progress.h
         src/reader.cpp src/reader.h
         src/thumbnails.cpp src/thumbnails.h
+        src/tools.cpp src/tools.h
         src/entrymodel.cpp src/entrymodel.h
         src/session.cpp src/session.h
         src/maker.cpp src/maker.h

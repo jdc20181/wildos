@@ -1,4 +1,5 @@
 #include "drives.h"
+#include "driveformat.h"
 
 #include <QLocale>
 #include <QDir>
@@ -56,6 +57,16 @@ bool rootEncrypted()
     // /dev/mapper/luks-... is a link to /dev/dm-N, whose name /sys uses.
     const QString device = QString::fromLocal8Bit(QStorageInfo(QStringLiteral("/")).device());
     return onLuks(QFileInfo(QFileInfo(device).canonicalFilePath()).fileName());
+}
+
+bool removableDevice(const Solid::Device &device)
+{
+    for (Solid::Device parent = device.parent(); device.isValid() && parent.isValid(); parent = parent.parent()) {
+        if (auto storage = parent.as<Solid::StorageDrive>()) {
+            return storage->isRemovable() || storage->isHotpluggable();
+        }
+    }
+    return false;
 }
 
 bool isNtfs(const QString &fsType)
@@ -159,7 +170,15 @@ QList<Drive> Drives::scan() const
         if (!access || (access->isAccessible() && access->isIgnored())) {
             continue;
         }
-        if (volume && (volume->isIgnored() || volume->usage() != Solid::StorageVolume::FileSystem)) {
+        const bool removable = removableDevice(device);
+        // An encrypted USB stick shows as itself, locked or not: opening it
+        // asks for its password, and once open the file system inside is
+        // not listed a second time.
+        const bool encrypted = volume && volume->usage() == Solid::StorageVolume::Encrypted;
+        if (volume && (volume->isIgnored() || (volume->usage() != Solid::StorageVolume::FileSystem && !(encrypted && removable)))) {
+            continue;
+        }
+        if (volume && !encrypted && removableDevice(volume->encryptedContainer())) {
             continue;
         }
         if (block && block->device().startsWith(QStringLiteral("/dev/loop"))) {
@@ -179,14 +198,7 @@ QList<Drive> Drives::scan() const
         drive.mounted = access->isAccessible();
         drive.mountPath = drive.mounted ? path : QString();
 
-        bool removable = false;
         const bool optical = device.is<Solid::OpticalDisc>();
-        for (Solid::Device parent = device.parent(); parent.isValid(); parent = parent.parent()) {
-            if (auto storage = parent.as<Solid::StorageDrive>()) {
-                removable = storage->isRemovable() || storage->isHotpluggable();
-                break;
-            }
-        }
         drive.removable = removable || optical;
         // Windows keeps its recovery tools on a small NTFS partition it
         // never shows; neither does Files.
@@ -194,8 +206,17 @@ QList<Drive> Drives::scan() const
             continue;
         }
         const bool windowsSystem = ntfs && drive.mounted && QFileInfo::exists(drive.mountPath + QStringLiteral("/Windows/System32"));
-        drive.chip = drive.removable ? QStringLiteral("Removable") : ntfs ? QStringLiteral("Windows") : QString();
-        const QString label = volume ? volume->label().trimmed() : QString();
+        drive.chip = encrypted ? QStringLiteral("Encrypted") : drive.removable ? QStringLiteral("Removable") : ntfs ? QStringLiteral("Windows") : QString();
+        QString label = volume ? volume->label().trimmed() : QString();
+        if (encrypted && label.isEmpty()) {
+            for (const Solid::Device &inner : devices) {
+                auto innerVolume = inner.as<Solid::StorageVolume>();
+                if (innerVolume && innerVolume->encryptedContainer().udi() == device.udi()) {
+                    label = innerVolume->label().trimmed();
+                    break;
+                }
+            }
+        }
         drive.total = volume ? qint64(volume->size()) : 0;
         if (drive.mounted) {
             const QStorageInfo info(drive.mountPath);
@@ -219,6 +240,19 @@ QList<Drive> Drives::scan() const
             : drive.removable ? QStringLiteral("drive-removable-media-usb")
             : QStringLiteral("drive-harddisk");
         drive.lineIcon = drive.removable ? QStringLiteral("usb") : QStringLiteral("drive");
+        drives.append(drive);
+    }
+
+    for (const DriveFormat::Blank &blank : DriveFormat::blankDrives()) {
+        Drive drive;
+        drive.udi = blank.udi;
+        drive.blank = true;
+        drive.removable = true;
+        drive.total = blank.size;
+        drive.name = blank.kind.left(1).toUpper() + blank.kind.mid(1) + QStringLiteral(" (needs formatting)");
+        drive.chip = QStringLiteral("Removable");
+        drive.themeIcon = QStringLiteral("drive-removable-media-usb");
+        drive.lineIcon = QStringLiteral("usb");
         drives.append(drive);
     }
 
@@ -267,6 +301,12 @@ Drive Drives::driveFor(const QString &path) const
 
 void Drives::mount(const QString &udi)
 {
+    for (const Drive &drive : list()) {
+        if (drive.udi == udi && drive.blank) {
+            Q_EMIT needsFormat(udi, drive.name);
+            return;
+        }
+    }
     Solid::Device device(udi);
     auto access = device.as<Solid::StorageAccess>();
     if (!access) {

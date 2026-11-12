@@ -32,6 +32,8 @@ Depends:
  qml6-module-qtquick-dialogs,
  qml6-module-qtqml-workerscript,
  qt6-svg-plugins,
+ 7zip,
+ unar,
 Description: Wild OS Archive
  Archive opens ZIP, 7z, RAR and TAR archives and GZ, XZ, BZ2 and ZST
  files, on libarchive. Browse an archive's folders with picture

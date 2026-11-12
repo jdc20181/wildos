@@ -32,8 +32,10 @@ class Archive : public QObject
     Q_PROPERTY(QString formatName READ formatName NOTIFY loaded)
     Q_PROPERTY(QString summary READ summary NOTIFY loaded)
     Q_PROPERTY(bool encrypted READ encrypted NOTIFY loaded)
-    // A 7z or RAR with a password: libarchive cannot decrypt those.
+    // Protected in a way Archive cannot decrypt: RAR 4 encryption.
     Q_PROPERTY(bool lockedFormat READ lockedFormat NOTIFY loaded)
+    // The names are behind the password too, and it hasn't been given.
+    Q_PROPERTY(bool namesHidden READ namesHidden NOTIFY loaded)
     Q_PROPERTY(bool hasPassword READ hasPassword NOTIFY passwordChanged)
     Q_PROPERTY(int unsafeCount READ unsafeCount NOTIFY loaded)
     Q_PROPERTY(EntryModel *model READ model CONSTANT)
@@ -86,6 +88,7 @@ public:
     QString summary() const;
     bool encrypted() const;
     bool lockedFormat() const;
+    bool namesHidden() const;
     bool hasPassword() const
     {
         return !m_password.isEmpty();
@@ -187,6 +190,7 @@ public:
     Q_INVOKABLE void openUrl(const QUrl &url);
     Q_INVOKABLE void setPassword(const QString &password);
     Q_INVOKABLE void forgetPending();
+    Q_INVOKABLE void askPassword();
 
     Q_INVOKABLE void goTo(const QString &folder);
     Q_INVOKABLE void up();
@@ -241,9 +245,8 @@ private:
     void runExtract(Reader::ExtractOptions options, const QString &what, bool openAfter);
     void openEntry(int entry);
     bool needPassword(const Done &retry);
+    void adopt(const std::shared_ptr<const Listing> &listing);
     double rate() const;
-    bool unreadableRar() const;
-    QString rarNote() const;
 
     EntryModel *m_model;
     QString m_path;

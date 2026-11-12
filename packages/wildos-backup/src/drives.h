@@ -8,21 +8,9 @@
 
 #include <functional>
 
-// One filesystem UDisks2 knows about.
-struct DriveInfo {
-    QString uuid;
-    QString object; // the block device's UDisks2 object path
-    QString device;
-    QString name;
-    QString kind;
-    QString fsType;
-    qint64 size = 0;
-    QString mountPoint;
-    // An external drive Backup may use; internal and system disks never.
-    bool usable = false;
+#include "driveclass.h"
 
-    QVariantMap toMap() const;
-};
+class Sizes;
 
 // The drives plugged in now, over UDisks2 on the system bus, and mounting
 // one. The app watches for drives coming and going; the scheduled run asks
@@ -35,6 +23,9 @@ class Drives : public QObject
 
     // Usable drives plugged in now: [{ uuid, name, kind, size, free, mountPoint, known }]
     Q_PROPERTY(QVariantList available READ available NOTIFY changed)
+    // Every drive the person plugged in, usable or not, each with its
+    // reason and whether formatting would fix it.
+    Q_PROPERTY(QVariantList all READ all NOTIFY changed)
     // The person's own drives by filesystem UUID, plugged in or not, as
     // info() gives them; and which of them a backup would use now. Real
     // properties, so bindings follow drives coming, going and mounting.
@@ -63,6 +54,13 @@ public:
     static qint64 totalBytes(const QString &mountPoint);
 
     QVariantList available() const;
+    QVariantList all() const;
+    // About how much the parts picked in What's included hold; 0 until
+    // that is worked out.
+    qint64 needed() const;
+
+    // The one place Backup hands a drive to Files to format.
+    Q_INVOKABLE void formatDrive(const QString &device);
 
     // For the pages: is it plugged in, how full, what is it called now.
     Q_INVOKABLE QVariantMap info(const QString &uuid) const;
@@ -80,6 +78,7 @@ private Q_SLOTS:
 
 private:
     QList<DriveInfo> m_drives;
+    Sizes *m_sizes = nullptr;
     QTimer m_debounce;
     bool m_watching = false;
 };

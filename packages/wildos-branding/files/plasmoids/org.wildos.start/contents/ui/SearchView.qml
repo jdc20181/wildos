@@ -135,7 +135,7 @@ FocusScope {
         const items = [];
         const calc = filter === "all" ? Helpers.calculate(launcher.query) : null;
         if (calc) {
-            items.push({ header: false, kind: "calc", src: -1, title: calc.value, subtitle: calc.expression, detail: calc.expression + " =", plain: calc.plain });
+            items.push({ header: false, kind: "calc", src: -1, title: calc.value, subtitle: calc.expression, detail: calc.expression + " =", icon: "accessories-calculator", plain: calc.plain });
         }
         for (let i = 0; i < matches.count; i++) {
             const entry = matches.objectAt(i);
@@ -147,7 +147,12 @@ FocusScope {
                 continue;
             }
             const text = describe(entry.model, kind);
-            items.push({ header: false, kind: kind, src: i, title: text.title, subtitle: text.subtitle, detail: text.detail, plain: "" });
+            // The icon is copied now, not read from the match later: the
+            // runner model resets as results arrive, which replaces every
+            // match object, and a row still holding the old one would fall
+            // back to the generic app icon.
+            const icon = entry.model.decoration || (kind === "folders" ? "folder" : "unknown");
+            items.push({ header: false, kind: kind, src: i, title: text.title, subtitle: text.subtitle, detail: text.detail, icon: icon, plain: "" });
         }
 
         const out = [];
@@ -460,7 +465,6 @@ FocusScope {
                 readonly property bool isHeader: modelData.header
                 readonly property bool isBest: modelData.best === true
                 readonly property bool isSelected: search.selected === index
-                readonly property var match: search.modelOf(modelData)
 
                 width: ListView.view.width
                 height: isHeader ? (modelData.first ? 18 : 28) : (isBest ? 64 : 50)
@@ -499,9 +503,7 @@ FocusScope {
                     anchors.verticalCenter: parent.verticalCenter
                     width: entry.isBest ? 36 : 26
                     height: width
-                    source: entry.modelData.kind === "calc" ? "accessories-calculator"
-                          : entry.match ? (entry.match.model.decoration || (entry.modelData.kind === "folders" ? "folder" : "unknown"))
-                          : ""
+                    source: entry.modelData.icon ?? ""
                 }
 
                 Column {
@@ -578,10 +580,7 @@ FocusScope {
                     anchors.horizontalCenter: parent.horizontalCenter
                     width: 72
                     height: 72
-                    source: !search.current ? ""
-                          : search.current.kind === "calc" ? "accessories-calculator"
-                          : search.modelOf(search.current) ? (search.modelOf(search.current).model.decoration || (search.current.kind === "folders" ? "folder" : "unknown"))
-                          : ""
+                    source: search.current ? search.current.icon : ""
                 }
 
                 UI.Label {

@@ -14,7 +14,9 @@ UI.Dialog {
     property bool startedGood: false
 
     readonly property var info: item ? Protection.details(item) : ({ text: "", action: "" })
-    readonly property string action: info.action === "firmware" && !firmwareRestart ? "" : info.action
+    // 32-bit apps already turned off wait for the restart, which the switch
+    // on Privacy and security offers.
+    readonly property string action: (info.action === "firmware" && !firmwareRestart) || (info.action === "compat32" && !Compat32.enabled) ? "" : info.action
 
     function show(protection) {
         item = protection;
@@ -64,6 +66,7 @@ UI.Dialog {
                 case "usb": return "Turn on";
                 case "firmware": return "Restart to firmware settings";
                 case "restart": return "Restart now";
+                case "compat32": return "Turn off";
                 default: return "";
                 }
             }
@@ -84,6 +87,12 @@ UI.Dialog {
                     break;
                 case "restart":
                     Updates.restart();
+                    break;
+                case "compat32":
+                    // Takes effect at the next start-up; the switch on
+                    // Privacy and security offers the restart.
+                    dialog.close();
+                    Compat32.setEnabled(false);
                     break;
                 }
             }

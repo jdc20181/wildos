@@ -25,7 +25,12 @@ public:
 
 public Q_SLOTS:
     Q_SCRIPTABLE void Open(const QStringList &urls);
-    Q_INVOKABLE void openWindow(const QList<QUrl> &urls);
+    // Opens the Format dialog for a drive, for other apps (Backup offers it
+    // for a drive it can't write to): a device such as /dev/sdb1 or a
+    // UDisks2 block object path. A drive Files would not format gets a
+    // message instead.
+    Q_SCRIPTABLE void Format(const QString &device);
+    Q_INVOKABLE void openWindow(const QList<QUrl> &urls, const QString &formatUdi = QString());
     Q_INVOKABLE void newWindow() { openWindow({}); }
 
 private:

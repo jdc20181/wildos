@@ -1,4 +1,6 @@
 #include "app.h"
+#include "driveformat.h"
+#include "foldermodel.h"
 
 #include <algorithm>
 
@@ -118,7 +120,15 @@ void App::Open(const QStringList &urls)
     openWindow(toUrls(urls));
 }
 
-void App::openWindow(const QList<QUrl> &urls)
+void App::Format(const QString &device)
+{
+    const QString udi = DriveFormat::objectFor(device);
+    if (!udi.isEmpty()) {
+        openWindow({FolderModel::computerUrl()}, udi);
+    }
+}
+
+void App::openWindow(const QList<QUrl> &urls, const QString &formatUdi)
 {
     if (!m_engine) {
         return;
@@ -130,7 +140,7 @@ void App::openWindow(const QList<QUrl> &urls)
     for (const QUrl &url : urls) {
         list.append(url);
     }
-    QObject *object = m_component->createWithInitialProperties({{QStringLiteral("startUrls"), list}});
+    QObject *object = m_component->createWithInitialProperties({{QStringLiteral("startUrls"), list}, {QStringLiteral("formatUdi"), formatUdi}});
     if (!object) {
         qWarning() << m_component->errors();
         return;

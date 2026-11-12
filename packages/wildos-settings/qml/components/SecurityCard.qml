@@ -23,11 +23,14 @@ HomeCard {
 
     // On Home the three most important, needs-a-look first; on Privacy and
     // security the three the design names plus anything else needing a look.
+    // 32-bit apps, when on, come straight after anything needing a look:
+    // the card should not read as all on without saying so.
     readonly property var shown: compact
-        ? Protection.attention.concat(Protection.tiles.filter(item => !Protection.attention.includes(item))).slice(0, 3)
+        ? Protection.attention.concat(Protection.tiles.filter(item => item.key === "compat32"))
+            .concat(Protection.tiles.filter(item => !Protection.attention.includes(item) && item.key !== "compat32")).slice(0, 3)
         : Protection.tiles
     // The last line names the one people most often ask about first.
-    readonly property var order: ["devices", "apps", "secureboot", "network", "encryption", "updates"]
+    readonly property var order: ["devices", "apps", "secureboot", "network", "encryption", "updates", "compat32"]
     readonly property var hidden: Protection.items.filter(item => !shown.includes(item))
         .sort((a, b) => order.indexOf(a.key) - order.indexOf(b.key))
     readonly property var hiddenAttention: hidden.filter(item => !Protection.good(item))
@@ -36,7 +39,8 @@ HomeCard {
         if (!Protection.good(item)) {
             return "warn";
         }
-        if (Protection.ignored.includes(item.key)) {
+        // 32-bit apps on is a choice that lowers protection, never a tick.
+        if (Protection.ignored.includes(item.key) || item.key === "compat32") {
             return "quiet";
         }
         const v = Protection.status[item.key];
@@ -55,6 +59,11 @@ HomeCard {
             return "Couldn't check.";
         }
         const n = Protection.attention.length;
+        // 32-bit apps lower protection by choice, so the card says so
+        // rather than "All on".
+        if (n === 0 && Protection.compat32) {
+            return "32-bit apps allowed.";
+        }
         return n === 0 ? "All on." : n === 1 ? "1 needs a look." : n + " need a look.";
     }
 
@@ -140,7 +149,7 @@ HomeCard {
                 return rest.length + " more need a look";
             }
             const others = card.hidden.length - 1;
-            const allOn = card.hidden.every(item => Protection.status[item.key] === "on" || Protection.status[item.key] === "current");
+            const allOn = card.hidden.every(item => item.key !== "compat32" && (Protection.status[item.key] === "on" || Protection.status[item.key] === "current"));
             const head = card.hidden.length > 0 ? card.hidden[0].title : "";
             const more = others > 0 ? head + " and " + others + " more" : head;
             return more + (allOn ? (others > 0 ? ", all on" : ", on") : ", all fine");

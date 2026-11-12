@@ -63,6 +63,7 @@ install(FILES data/wildos-report.svg DESTINATION ${CMAKE_INSTALL_DATADIR}/icons/
 install(PROGRAMS data/report-logs data/report-crash-note DESTINATION ${CMAKE_INSTALL_PREFIX}/libexec/wildos)
 install(FILES data/org.wildos.report.policy DESTINATION ${CMAKE_INSTALL_DATADIR}/polkit-1/actions)
 install(FILES data/50-wildos-report.rules DESTINATION ${CMAKE_INSTALL_DATADIR}/polkit-1/rules.d)
+install(FILES data/995-wildos-crash-reports.conf DESTINATION ${CMAKE_INSTALL_PREFIX}/lib/sysctl.d)
 install(FILES data/coredump-wildos-report.conf DESTINATION ${CMAKE_INSTALL_PREFIX}/lib/systemd/system/systemd-coredump@.service.d
     RENAME wildos-report.conf)
 install(FILES data/wildos-report-crash.path data/wildos-report-crash.service DESTINATION ${CMAKE_INSTALL_PREFIX}/lib/systemd/user)

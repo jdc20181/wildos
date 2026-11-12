@@ -1,0 +1,15 @@
+[Unit]
+Description=Explain 32-bit programs while 32-bit apps are off
+Documentation=https://help.wildos.io/apps/steam-and-32-bit-apps/
+DefaultDependencies=no
+After=local-fs.target
+Before=systemd-binfmt.service sysinit.target shutdown.target
+Conflicts=shutdown.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/libexec/wildos/32bit-prompt-setup
+
+[Install]
+WantedBy=sysinit.target

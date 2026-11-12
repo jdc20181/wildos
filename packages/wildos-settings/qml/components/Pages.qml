@@ -204,7 +204,7 @@ QtObject {
             keywords: "slow keys bounce keys filter keys repeated presses double letters tremor hold key delay" },
 
         "privacy": { title: "Privacy and security", icon: "shield", component: "PrivacyPage",
-            keywords: "security privacy protection protection level encryption firewall secure boot sandbox usb block usb usage data telemetry diagnostics windows security" },
+            keywords: "security privacy protection protection level encryption firewall secure boot sandbox usb block usb usage data telemetry diagnostics windows security steam 32-bit 32 bit ia32 i386 games old apps compatibility controller controllers gamepad joystick steam input remote play performance overlay fps frame rate frametime mangohud" },
         "apppermissions": { title: "App permissions", parent: "privacy", icon: "sandbox", component: "AppPermissionsPage", fallback: "kcm_flatpak",
             description: "What apps from the Store can reach",
             keywords: "permissions sandbox app access store apps flatpak" },

@@ -73,7 +73,11 @@ Item {
             Layout.alignment: Qt.AlignHCenter
             Layout.preferredWidth: 460
             horizontalAlignment: Text.AlignHCenter
-            text: page.keptOther
+            // Remove everything starts the installer from the PC's own disk,
+            // so there is no USB stick to take out.
+            text: Installer.startMode === "recovery"
+                  ? qsTr("Restart now. Next you'll create your account and join Wi-Fi.")
+                  : page.keptOther
                   ? qsTr("Remove the USB stick, then restart. Next you'll create your account, join Wi-Fi and bring your files across.")
                   : qsTr("Remove the USB stick, then restart. Next you'll create your account and join Wi-Fi.")
             color: Qt.rgba(232 / 255, 236 / 255, 248 / 255, 0.82)

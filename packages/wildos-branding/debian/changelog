@@ -1,3 +1,17 @@
+wildos-branding (0.1.34) trixie; urgency=medium
+
+  * Start search results show each app's own icon again, not a
+    generic one, when results arrive in several bursts.
+
+ -- Wild OS Developers <dev@wildos.io>  Thu, 12 Nov 2026 13:10:50 +0000
+
+wildos-branding (0.1.33) trixie; urgency=medium
+
+  * The security status reports whether 32-bit apps can run, and the
+    taskbar shield lists it while they can.
+
+ -- Wild OS Developers <dev@wildos.io>  Thu, 12 Nov 2026 14:00:00 +0000
+
 wildos-branding (0.1.32) trixie; urgency=medium
 
   * The licence notice for the Settings icon is installed where it is

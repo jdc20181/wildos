@@ -1,5 +1,7 @@
 #include "drives.h"
+#include "backupstatus.h"
 #include "settings.h"
+#include "sizes.h"
 
 #include <QCoreApplication>
 #include <QDBusArgument>
@@ -8,11 +10,17 @@
 #include <QDBusMetaType>
 #include <QDBusObjectPath>
 #include <QDBusReply>
+#include <QDesktopServices>
+#include <QFile>
 #include <QFileInfo>
 #include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QPointer>
+#include <QProcess>
 #include <QStorageInfo>
 #include <QThread>
+#include <QUrl>
 
 using InterfaceProps = QMap<QString, QVariantMap>;
 using ManagedObjects = QMap<QDBusObjectPath, InterfaceProps>;
@@ -24,9 +32,7 @@ namespace
 Drives *s_instance = nullptr;
 
 const QString service = QStringLiteral("org.freedesktop.UDisks2");
-const QString blockIface = QStringLiteral("org.freedesktop.UDisks2.Block");
 const QString fsIface = QStringLiteral("org.freedesktop.UDisks2.Filesystem");
-const QString driveIface = QStringLiteral("org.freedesktop.UDisks2.Drive");
 
 void registerTypes()
 {
@@ -38,46 +44,23 @@ void registerTypes()
     }
 }
 
-// UDisks2 sends paths as NUL-terminated byte arrays.
-QString bytes(const QVariant &v)
+// A stand-in for UDisks2 on test rigs without it: GetManagedObjects as
+// JSON, object paths and byte strings written as plain strings.
+DriveClass::Objects testObjects(const QString &file)
 {
-    return QString::fromUtf8(v.toByteArray().constData());
-}
-
-QStringList byteArrays(const QVariant &v)
-{
-    QStringList out;
-    if (v.canConvert<QDBusArgument>()) {
-        const QDBusArgument arg = v.value<QDBusArgument>();
-        arg.beginArray();
-        while (!arg.atEnd()) {
-            QByteArray b;
-            arg >> b;
-            out << QString::fromUtf8(b.constData());
+    DriveClass::Objects out;
+    QFile f(file);
+    if (!f.open(QIODevice::ReadOnly)) {
+        return out;
+    }
+    const QJsonObject all = QJsonDocument::fromJson(f.readAll()).object();
+    for (auto it = all.begin(); it != all.end(); ++it) {
+        const QJsonObject ifaces = it.value().toObject();
+        for (auto i = ifaces.begin(); i != ifaces.end(); ++i) {
+            out[it.key()][i.key()] = i.value().toObject().toVariantMap();
         }
-        arg.endArray();
     }
     return out;
-}
-
-bool systemMount(const QString &mountPoint)
-{
-    static const QStringList system{
-        QStringLiteral("/"), QStringLiteral("/home"), QStringLiteral("/boot"), QStringLiteral("/boot/efi"),
-        QStringLiteral("/efi"), QStringLiteral("/usr"), QStringLiteral("/var"),
-    };
-    return system.contains(mountPoint);
-}
-
-// Filesystems a backup can be written to.
-bool writableType(const QString &type)
-{
-    static const QStringList ok{
-        QStringLiteral("vfat"), QStringLiteral("exfat"), QStringLiteral("ntfs"), QStringLiteral("ntfs3"),
-        QStringLiteral("ext2"), QStringLiteral("ext3"), QStringLiteral("ext4"), QStringLiteral("btrfs"),
-        QStringLiteral("xfs"), QStringLiteral("f2fs"), QStringLiteral("hfsplus"),
-    };
-    return ok.contains(type);
 }
 }
 
@@ -86,6 +69,11 @@ QVariantMap DriveInfo::toMap() const
     const qint64 free = mountPoint.isEmpty() ? -1 : Drives::freeBytes(mountPoint);
     const qint64 total = mountPoint.isEmpty() ? size : Drives::totalBytes(mountPoint);
     return {
+        {QStringLiteral("id"), id},
+        {QStringLiteral("usable"), usable},
+        {QStringLiteral("reason"), reason},
+        {QStringLiteral("reasonText"), reasonText},
+        {QStringLiteral("canFormat"), canFormat},
         {QStringLiteral("uuid"), uuid},
         {QStringLiteral("name"), name},
         {QStringLiteral("kind"), kind},
@@ -94,7 +82,7 @@ QVariantMap DriveInfo::toMap() const
         {QStringLiteral("free"), double(free)},
         {QStringLiteral("mountPoint"), mountPoint},
         {QStringLiteral("connected"), true},
-        {QStringLiteral("known"), !Settings::instance()->drive(uuid).isEmpty()},
+        {QStringLiteral("known"), !uuid.isEmpty() && !Settings::instance()->drive(uuid).isEmpty()},
     };
 }
 
@@ -121,6 +109,14 @@ Drives *Drives::create(QQmlEngine *, QJSEngine *)
 {
     Drives *drives = instance();
     QQmlEngine::setObjectOwnership(drives, QQmlEngine::CppOwnership);
+    // Only the app judges "too small" against what's included; the
+    // scheduled run and the watcher have no use for walking the home folder.
+    if (!drives->m_sizes) {
+        drives->m_sizes = BackupStatus::instance()->sizes();
+        connect(drives->m_sizes, &Sizes::changed, drives, &Drives::changed);
+        connect(Settings::instance(), &Settings::includeChanged, drives, &Drives::changed);
+        drives->m_sizes->refresh(false);
+    }
     drives->watch();
     return drives;
 }
@@ -131,7 +127,6 @@ QList<DriveInfo> Drives::scan()
     QDBusInterface manager(service, QStringLiteral("/org/freedesktop/UDisks2"), QStringLiteral("org.freedesktop.DBus.ObjectManager"),
                            QDBusConnection::systemBus());
     manager.setTimeout(10000);
-    const QDBusReply<ManagedObjects> reply = manager.call(QStringLiteral("GetManagedObjects"));
     QList<DriveInfo> out;
     // Test rigs without UDisks2 (a container, a CI job) stand a folder in
     // for a plugged-in drive.
@@ -139,71 +134,37 @@ QList<DriveInfo> Drives::scan()
     if (!testMount.isEmpty()) {
         DriveInfo d;
         d.uuid = QStringLiteral("test-drive");
+        d.id = d.uuid;
         d.object = QStringLiteral("/test");
         d.name = QStringLiteral("Test drive");
         d.kind = QCoreApplication::translate("Drives", "USB drive");
         d.mountPoint = testMount;
         d.size = totalBytes(testMount);
-        d.usable = QFileInfo(testMount).isDir();
-        if (d.usable) {
+        d.shown = true;
+        if (QFileInfo(testMount).isDir()) {
+            DriveClass::judge(d, 0);
             out.append(d);
         }
     }
-    if (!reply.isValid()) {
-        return out;
+
+    // Everything UDisks2 knows, plugged in before Backup started or since,
+    // mounted or not.
+    DriveClass::Objects objects;
+    const QString fake = qEnvironmentVariable("WILDOS_BACKUP_TEST_UDISKS");
+    if (!fake.isEmpty()) {
+        objects = testObjects(fake);
+    } else {
+        const QDBusReply<ManagedObjects> reply = manager.call(QStringLiteral("GetManagedObjects"));
+        if (!reply.isValid()) {
+            return out;
+        }
+        const ManagedObjects managed = reply.value();
+        for (auto it = managed.cbegin(); it != managed.cend(); ++it) {
+            objects.insert(it.key().path(), it.value());
+        }
     }
-    const ManagedObjects objects = reply.value();
-    for (auto it = objects.cbegin(); it != objects.cend(); ++it) {
-        const InterfaceProps &ifaces = it.value();
-        if (!ifaces.contains(fsIface) || !ifaces.contains(blockIface)) {
-            continue;
-        }
-        const QVariantMap block = ifaces.value(blockIface);
-        const QVariantMap fs = ifaces.value(fsIface);
-        if (block.value(QStringLiteral("HintIgnore")).toBool() || block.value(QStringLiteral("IdUsage")).toString() != QLatin1String("filesystem")) {
-            continue;
-        }
-        DriveInfo d;
-        d.object = it.key().path();
-        d.uuid = block.value(QStringLiteral("IdUUID")).toString();
-        d.device = bytes(block.value(QStringLiteral("Device")));
-        d.fsType = block.value(QStringLiteral("IdType")).toString();
-        d.size = block.value(QStringLiteral("Size")).toLongLong();
-        const QStringList mounts = byteArrays(fs.value(QStringLiteral("MountPoints")));
-        d.mountPoint = mounts.value(0);
-        if (d.uuid.isEmpty()) {
-            continue;
-        }
-
-        const QString drivePath = block.value(QStringLiteral("Drive")).value<QDBusObjectPath>().path();
-        const QVariantMap drive = objects.value(QDBusObjectPath(drivePath)).value(driveIface);
-        const QString bus = drive.value(QStringLiteral("ConnectionBus")).toString();
-        const bool removable = drive.value(QStringLiteral("Removable")).toBool() || drive.value(QStringLiteral("MediaRemovable")).toBool()
-            || bus == QLatin1String("usb") || bus == QLatin1String("ieee1394") || bus == QLatin1String("sdio");
-        const bool hintSystem = block.value(QStringLiteral("HintSystem")).toBool();
-        const bool loop = d.device.startsWith(QLatin1String("/dev/loop"));
-
-        bool onSystem = false;
-        for (const QString &m : mounts) {
-            onSystem = onSystem || systemMount(m);
-        }
-        d.usable = !onSystem && !block.value(QStringLiteral("ReadOnly")).toBool() && writableType(d.fsType)
-            && (removable || !hintSystem);
-
-        if (loop) {
-            d.kind = QCoreApplication::translate("Drives", "Disk image");
-        } else if (bus == QLatin1String("sdio") || drive.value(QStringLiteral("Media")).toString().startsWith(QLatin1String("flash_sd"))) {
-            d.kind = QCoreApplication::translate("Drives", "SD card");
-        } else if (bus == QLatin1String("usb")) {
-            d.kind = QCoreApplication::translate("Drives", "USB drive");
-        } else {
-            d.kind = QCoreApplication::translate("Drives", "External drive");
-        }
-        const QString label = block.value(QStringLiteral("IdLabel")).toString().trimmed();
-        const QString model = (drive.value(QStringLiteral("Vendor")).toString().trimmed() + QLatin1Char(' ')
-                               + drive.value(QStringLiteral("Model")).toString().trimmed())
-                                  .trimmed();
-        d.name = !label.isEmpty() ? label : !model.isEmpty() ? model : d.kind;
+    for (DriveInfo &d : DriveClass::classify(objects)) {
+        DriveClass::judge(d, 0);
         out.append(d);
     }
     return out;
@@ -291,12 +252,74 @@ qint64 Drives::totalBytes(const QString &mountPoint)
 QVariantList Drives::available() const
 {
     QVariantList out;
-    for (const DriveInfo &d : m_drives) {
+    const qint64 need = needed();
+    for (DriveInfo d : m_drives) {
+        DriveClass::judge(d, need);
         if (d.usable) {
             out.append(d.toMap());
         }
     }
     return out;
+}
+
+QVariantList Drives::all() const
+{
+    // Usable ones first, so the choice is at the top of the list.
+    QVariantList usable;
+    QVariantList others;
+    const qint64 need = needed();
+    for (DriveInfo d : m_drives) {
+        DriveClass::judge(d, need);
+        if (d.shown) {
+            (d.usable ? usable : others).append(d.toMap());
+        }
+    }
+    return usable + others;
+}
+
+qint64 Drives::needed() const
+{
+    if (!m_sizes) {
+        return 0;
+    }
+    Settings *settings = Settings::instance();
+    double total = 0;
+    const QList<QPair<bool, double>> parts{
+        {settings->includeHome(), m_sizes->home()},
+        {settings->includeMail(), m_sizes->mail()},
+        {settings->includeSettings(), m_sizes->settings()},
+    };
+    for (const auto &[on, bytes] : parts) {
+        if (on && bytes > 0) {
+            total += bytes;
+        }
+    }
+    return qint64(total);
+}
+
+void Drives::formatDrive(const QString &device)
+{
+    // Files gains Format on its own branch; until its --format lands, ask
+    // it whether it has one rather than guessing, since an option it
+    // doesn't know makes it stop without opening.
+    static int hasFormat = -1;
+    if (hasFormat < 0) {
+        QProcess help;
+        help.start(QStringLiteral("wildos-files"), {QStringLiteral("--help")});
+        hasFormat = help.waitForFinished(5000) && help.readAllStandardOutput().contains("--format") ? 1 : 0;
+    }
+    if (hasFormat == 1) {
+        QProcess::startDetached(QStringLiteral("wildos-files"), {QStringLiteral("--format"), device});
+        return;
+    }
+    for (const DriveInfo &d : m_drives) {
+        if (d.device == device && !d.mountPoint.isEmpty()) {
+            QDesktopServices::openUrl(QUrl::fromLocalFile(d.mountPoint));
+            return;
+        }
+    }
+    // Files lists plugged-in drives, mounted or not, beside Home.
+    QProcess::startDetached(QStringLiteral("wildos-files"), {});
 }
 
 QVariantMap Drives::mine() const
@@ -340,7 +363,7 @@ void Drives::refresh()
     }();
     m_drives = scan();
     for (const DriveInfo &d : m_drives) {
-        if (!before.contains(d.uuid)) {
+        if (!d.uuid.isEmpty() && !before.contains(d.uuid)) {
             Q_EMIT appeared(d.uuid);
         }
     }

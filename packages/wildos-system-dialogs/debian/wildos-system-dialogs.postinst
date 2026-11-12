@@ -9,3 +9,11 @@ if [ "$1" = configure ]; then
 fi
 
 #DEBHELPER#
+
+# The 32-bit prompt's entry, registered now rather than at the next start-up
+# (the service above has just written it, if this kernel refuses 32-bit
+# programs). Registering again also picks up a new copy of the helper, which
+# the kernel holds open.
+if [ "$1" = configure ] && [ -f /run/binfmt.d/wildos-32bit.conf ] && [ -x /usr/lib/systemd/systemd-binfmt ]; then
+    /usr/lib/systemd/systemd-binfmt /run/binfmt.d/wildos-32bit.conf || true
+fi

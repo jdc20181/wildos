@@ -39,6 +39,10 @@ struct Entry {
     // appears in other entries' paths.
     int order = -1;
     int fileCount = 0;
+    // Marked executable in an archive a tool reads; unar does not keep it.
+    bool executable = false;
+    // The name 7-Zip knows the entry by, to ask it for just this one.
+    QString toolPath;
 };
 
 struct Listing {
@@ -54,9 +58,14 @@ struct Listing {
     bool encrypted = false;
     bool packedPerFile = false;
     QString error;
-    // 7z and RAR can hide even the names behind a password, which
-    // libarchive cannot open.
+    // 7z and RAR can hide even the names behind a password: nothing is
+    // listed until it is given.
     bool lockedHeaders = false;
+    // Who reads the archive: empty for libarchive, "7z" for 7-Zip, "unar"
+    // for The Unarchiver. Entries' orders are then the tool's indexes.
+    QString tool;
+    // Protected in a way no free tool can decrypt: RAR 4's encryption.
+    bool cantDecrypt = false;
 };
 
 namespace Reader
@@ -67,10 +76,22 @@ enum class PasswordState { Fine, Needed, Wrong };
 // letter or a .. step. `clean` gets the path without ./ and empty steps.
 bool safePath(const QString &stored, QString *clean);
 
-Listing list(const QString &path, Progress *progress);
+// libarchive first; 7-Zip or The Unarchiver only for what libarchive
+// cannot decrypt or read. The password is for names behind one.
+Listing list(const QString &path, const QByteArray &password, Progress *progress);
+inline Listing list(const QString &path, Progress *progress)
+{
+    return list(path, QByteArray(), progress);
+}
 
-// Reads a little of the first protected file with the password.
-PasswordState checkPassword(const QString &path, const Listing &listing, const QByteArray &password);
+// Tries the password on a little of the archive. When the names were
+// behind it, `relisted` gets the archive listed with it.
+struct Unlock {
+    PasswordState state = PasswordState::Fine;
+    bool relisted = false;
+    Listing listing;
+};
+Unlock unlock(const QString &path, const Listing &listing, const QByteArray &password, Progress *progress);
 
 struct ExtractOptions {
     QString archive;
